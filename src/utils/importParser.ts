@@ -10,10 +10,72 @@ export interface ParsedRow {
   valid: boolean;
 }
 
-const NAME_HEADERS = ['name', 'asset', 'asset name', 'description', 'holding', 'instrument'];
-const VALUE_HEADERS = ['value', 'amount', 'current value', 'market value', 'balance', 'invested value'];
+// --- Header candidates -------------------------------------------------
+// Broad enough to cover generic sheets ("Name", "Value") as well as
+// broker holdings exports like Zerodha/Kite ("Symbol", "Instrument",
+// "Qty.", "Avg. cost", "LTP", "Cur. val").
+
+const NAME_HEADERS = [
+  'name',
+  'asset',
+  'asset name',
+  'description',
+  'holding',
+  'instrument',
+  'symbol',
+  'scrip',
+  'stock',
+  'ticker',
+  'tradingsymbol',
+];
+
+const VALUE_HEADERS = [
+  'value',
+  'amount',
+  'current value',
+  'market value',
+  'balance',
+  'invested value',
+  'cur. val',
+  'cur val',
+  'curval',
+  'closing value',
+  'holding value',
+  'net value',
+];
+
+const QTY_HEADERS = ['qty', 'qty.', 'quantity', 'quantity available', 'shares', 'units'];
+
+const PRICE_HEADERS = [
+  'ltp',
+  'last price',
+  'last traded price',
+  'close price',
+  'closing price',
+  'previous closing price',
+  'cmp',
+  'current price',
+  'market price',
+];
+
+const AVG_PRICE_HEADERS = ['avg. cost', 'avg cost', 'average price', 'avg. price', 'avg price', 'buy price'];
+
 const CLASS_HEADERS = ['class', 'asset class', 'category', 'type'];
 const CURRENCY_HEADERS = ['currency', 'ccy'];
+
+// Header names that only ever show up in broker holdings exports. If we
+// see one of these and there's no explicit asset-class column, we can
+// safely assume every row in the sheet is an equity holding.
+const EQUITY_EXPORT_SIGNALS = [
+  'isin',
+  'ltp',
+  'tradingsymbol',
+  'quantity available',
+  'avg. cost',
+  'avg cost',
+  'cur. val',
+  'cur val',
+];
 
 const CLASS_KEYWORD_MAP: Record<string, AssetClass> = {
   equity: 'equity',
@@ -48,10 +110,10 @@ function findHeaderKey(headers: string[], candidates: string[]): string | undefi
   return headers.find((h) => candidates.includes(normalizeHeader(h)));
 }
 
-function guessAssetClass(value: unknown): AssetClass {
-  if (typeof value !== 'string') return 'other';
+function guessAssetClass(value: unknown): AssetClass | undefined {
+  if (typeof value !== 'string') return undefined;
   const key = value.trim().toLowerCase();
-  return CLASS_KEYWORD_MAP[key] ?? 'other';
+  return CLASS_KEYWORD_MAP[key];
 }
 
 function toNumber(value: unknown): number {
@@ -68,6 +130,12 @@ function toNumber(value: unknown): number {
  * Reads a File (CSV or Excel) and returns parsed rows with best-effort
  * column mapping. Works for .csv, .xlsx, and .xls since SheetJS handles
  * all three the same way.
+ *
+ * Handles two shapes of data:
+ *  1. Generic sheets with an explicit Value column (e.g. "Value", "Amount").
+ *  2. Broker holdings exports (e.g. Zerodha/Kite) that only give Qty +
+ *     a price column (LTP, or Avg. cost as a fallback) — in which case
+ *     the value is computed as Qty x Price.
  */
 export async function parseSpreadsheetFile(file: File): Promise<ParsedRow[]> {
   const buffer = await file.arrayBuffer();
@@ -79,15 +147,33 @@ export async function parseSpreadsheetFile(file: File): Promise<ParsedRow[]> {
   if (rows.length === 0) return [];
 
   const headers = Object.keys(rows[0]);
+  const normalizedHeaders = headers.map(normalizeHeader);
+
   const nameKey = findHeaderKey(headers, NAME_HEADERS);
   const valueKey = findHeaderKey(headers, VALUE_HEADERS);
   const classKey = findHeaderKey(headers, CLASS_HEADERS);
   const currencyKey = findHeaderKey(headers, CURRENCY_HEADERS);
+  const qtyKey = findHeaderKey(headers, QTY_HEADERS);
+  const priceKey = findHeaderKey(headers, PRICE_HEADERS) ?? findHeaderKey(headers, AVG_PRICE_HEADERS);
+
+  // No asset-class column at all, but the sheet clearly looks like a
+  // broker holdings export -> treat every row as equity by default.
+  const looksLikeEquityExport =
+    !classKey && normalizedHeaders.some((h) => EQUITY_EXPORT_SIGNALS.includes(h));
 
   return rows.map((raw) => {
     const name = nameKey ? String(raw[nameKey] ?? '').trim() : '';
-    const value = valueKey ? toNumber(raw[valueKey]) : 0;
-    const assetClass = classKey ? guessAssetClass(raw[classKey]) : 'other';
+
+    let value = valueKey ? toNumber(raw[valueKey]) : 0;
+    if (value <= 0 && qtyKey && priceKey) {
+      const qty = toNumber(raw[qtyKey]);
+      const price = toNumber(raw[priceKey]);
+      if (qty > 0 && price > 0) value = qty * price;
+    }
+
+    const detectedClass = classKey ? guessAssetClass(raw[classKey]) : undefined;
+    const assetClass: AssetClass = detectedClass ?? (looksLikeEquityExport ? 'equity' : 'other');
+
     const currency = currencyKey ? String(raw[currencyKey] ?? 'INR').trim() || 'INR' : 'INR';
 
     return {
