@@ -32,8 +32,16 @@ const NAME_HEADERS = [
   'symbol',
   'scrip',
   'stock',
+  'stock name',
   'ticker',
   'tradingsymbol',
+  'trading symbol',
+  'company',
+  'company name',
+  'scheme',
+  'scheme name',
+  'fund',
+  'fund name',
 ];
 
 const VALUE_HEADERS = [
@@ -49,9 +57,22 @@ const VALUE_HEADERS = [
   'closing value',
   'holding value',
   'net value',
+  'current val.',
+  'present value',
+  'total value',
 ];
 
-const QTY_HEADERS = ['qty', 'qty.', 'quantity', 'quantity available', 'shares', 'units'];
+const QTY_HEADERS = [
+  'qty',
+  'qty.',
+  'quantity',
+  'quantity available',
+  'net quantity',
+  'shares',
+  'units',
+  'no. of units',
+  'no of units',
+];
 
 const PRICE_HEADERS = [
   'ltp',
@@ -62,16 +83,66 @@ const PRICE_HEADERS = [
   'previous closing price',
   'cmp',
   'current price',
+  'current nav',
+  'nav',
   'market price',
 ];
 
-const AVG_PRICE_HEADERS = ['avg. cost', 'avg cost', 'average price', 'avg. price', 'avg price', 'buy price'];
+const AVG_PRICE_HEADERS = [
+  'avg. cost',
+  'avg cost',
+  'average price',
+  'avg. price',
+  'avg price',
+  'buy price',
+  'average buy price',
+  'avg buy price',
+  'purchase price',
+  'purchase nav',
+];
 
-const INVESTED_HEADERS = ['invested', 'invested value', 'invested amt', 'invested amount', 'cost value', 'book value'];
+const INVESTED_HEADERS = [
+  'invested',
+  'invested value',
+  'invested amt',
+  'invested amount',
+  'cost value',
+  'book value',
+  'buy value',
+  'purchase value',
+  'principal value',
+  'principal',
+];
 
-const PNL_HEADERS = ['p&l', 'pnl', 'p & l', 'profit/loss', 'profit or loss', 'unrealized p&l', 'gain/loss'];
+const PNL_HEADERS = [
+  'p&l',
+  'pnl',
+  'p & l',
+  'profit/loss',
+  'profit or loss',
+  'unrealized p&l',
+  'unrealised p&l',
+  'unrealized gain/loss',
+  'unrealised gain/loss',
+  'gain/loss',
+  'total gain/loss',
+];
 
-const PNL_PERCENT_HEADERS = ['p&l %', 'pnl %', 'p&l pct', 'p&l percent', 'return %', 'returns %', 'gain %'];
+const PNL_PERCENT_HEADERS = [
+  'p&l %',
+  'pnl %',
+  'p&l pct',
+  'p&l pct.',
+  'p&l percent',
+  'unrealized p&l pct.',
+  'unrealised p&l pct.',
+  'unrealised p&l %',
+  'unrealized p&l %',
+  'return %',
+  'returns %',
+  'gain %',
+  'net change %',
+];
 
 const CLASS_HEADERS = ['class', 'asset class', 'category', 'type'];
 const CURRENCY_HEADERS = ['currency', 'ccy'];
@@ -83,12 +154,34 @@ const EQUITY_EXPORT_SIGNALS = [
   'isin',
   'ltp',
   'tradingsymbol',
+  'trading symbol',
   'quantity available',
   'avg. cost',
   'avg cost',
   'cur. val',
   'cur val',
+  'closing price',
+  'closing value',
+  'buy value',
+  'average buy price',
 ];
+
+// Every header candidate across all the maps above, used to score which
+// row in a raw sheet is most likely the real header row (broker exports
+// like Zerodha Console / Groww put a title + date range above the table).
+const ALL_HEADER_CANDIDATES = new Set([
+  ...NAME_HEADERS,
+  ...VALUE_HEADERS,
+  ...QTY_HEADERS,
+  ...PRICE_HEADERS,
+  ...AVG_PRICE_HEADERS,
+  ...INVESTED_HEADERS,
+  ...PNL_HEADERS,
+  ...PNL_PERCENT_HEADERS,
+  ...CLASS_HEADERS,
+  ...CURRENCY_HEADERS,
+  'isin',
+]);
 
 const CLASS_KEYWORD_MAP: Record<string, AssetClass> = {
   equity: 'stock',
@@ -128,7 +221,42 @@ const CLASS_KEYWORD_MAP: Record<string, AssetClass> = {
 };
 
 function normalizeHeader(h: string) {
-  return h.trim().toLowerCase();
+  return h.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+// Broker holdings exports (Zerodha Console, Groww, etc.) often place a
+// report title, account name, and/or "as of <date>" line above the real
+// table header. If we naively treat row 1 as the header, every column
+// name ends up being blank/garbage and the whole file fails to import.
+// So instead we scan the first few rows of the sheet and pick whichever
+// one looks the most like a real header row (i.e. has the most cells
+// that match a known column name).
+function detectHeaderRowIndex(aoa: unknown[][]): number {
+  const maxScan = Math.min(aoa.length, 25);
+  let bestIdx = 0;
+  let bestScore = -1;
+
+  for (let i = 0; i < maxScan; i++) {
+    const row = aoa[i];
+    if (!row || row.length === 0) continue;
+
+    const cells = row.map((c) => (typeof c === 'string' ? normalizeHeader(c) : ''));
+    const filledCells = cells.filter((c) => c.length > 0);
+    if (filledCells.length < 2) continue;
+
+    const matches = filledCells.filter((c) => ALL_HEADER_CANDIDATES.has(c)).length;
+    if (matches === 0) continue;
+
+    // Prefer more matches; break ties by preferring rows with fewer
+    // "extra" unmatched cells (closer to a clean header row).
+    const score = matches * 10 + Math.min(filledCells.length, 10);
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = i;
+    }
+  }
+
+  return bestScore >= 0 ? bestIdx : 0;
 }
 
 function findHeaderKey(headers: string[], candidates: string[]): string | undefined {
@@ -165,9 +293,36 @@ function toNumber(value: unknown): number {
 export async function parseSpreadsheetFile(file: File): Promise<ParsedRow[]> {
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: 'array' });
-  const firstSheetName = workbook.SheetNames[0];
-  const sheet = workbook.Sheets[firstSheetName];
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
+
+  // Broker exports sometimes put the actual holdings on a sheet other
+  // than the first (e.g. a "Summary" sheet first, "Holdings" second), and
+  // the real header row is often a few rows down (title/date lines above
+  // it). Try each sheet, detect its header row, and use the first sheet
+  // that yields at least one usable data row.
+  let rows: Record<string, unknown>[] = [];
+
+  for (const sheetName of workbook.SheetNames) {
+    const sheet = workbook.Sheets[sheetName];
+    const aoa = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' });
+    if (aoa.length === 0) continue;
+
+    const headerRowIndex = detectHeaderRowIndex(aoa);
+    const candidateRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+      defval: '',
+      range: headerRowIndex,
+    });
+
+    // Drop blank spacer rows and footer/notes rows that have no data in
+    // any recognizable column.
+    const cleaned = candidateRows.filter((r) =>
+      Object.values(r).some((v) => String(v ?? '').trim().length > 0)
+    );
+
+    if (cleaned.length > 0) {
+      rows = cleaned;
+      break;
+    }
+  }
 
   if (rows.length === 0) return [];
 
