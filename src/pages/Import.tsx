@@ -215,18 +215,18 @@ export default function Import() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Import</h1>
-        <p className="text-slate-500 text-sm mt-1">Bulk import assets, income &amp; expenses</p>
+        <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Import</h1>
+        <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Bulk import assets, income &amp; expenses</p>
       </div>
 
       {status === 'idle' && (
-        <div className="flex bg-slate-100 rounded-xl p-1 gap-1 max-w-sm">
+        <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 gap-1 max-w-sm">
           <button
             onClick={() => setImportTab('broker')}
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
               importTab === 'broker'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
+                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
             }`}
           >
             Import from Broker
@@ -235,8 +235,8 @@ export default function Import() {
             onClick={() => setImportTab('standard')}
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
               importTab === 'standard'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
+                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
             }`}
           >
             Standard Import
@@ -246,8 +246,8 @@ export default function Import() {
 
       {status === 'idle' && importTab === 'broker' && (
         <>
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4">
-            <h3 className="font-semibold text-slate-900">Select Broker</h3>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
+            <h3 className="font-semibold text-slate-900 dark:text-white">Select Broker</h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
               {BROKERS.map((b) => (
                 <button
@@ -255,8 +255,8 @@ export default function Import() {
                   onClick={() => setSelectedBroker(b)}
                   className={`flex items-center gap-2 border rounded-xl px-3 py-3 text-sm font-medium transition-colors ${
                     selectedBroker.key === b.key
-                      ? 'border-brand-500 bg-brand-50 text-brand-700'
-                      : 'border-slate-200 text-slate-700 hover:border-brand-300'
+                      ? 'border-brand-500 dark:border-brand-600 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300'
+                      : 'border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:border-brand-300 dark:hover:border-brand-600'
                   }`}
                 >
                   <span
@@ -271,12 +271,12 @@ export default function Import() {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-5">
-            <h3 className="font-semibold text-slate-900">How to Export from {selectedBroker.name}</h3>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-5">
+            <h3 className="font-semibold text-slate-900 dark:text-white">How to Export from {selectedBroker.name}</h3>
             {selectedBroker.steps.map((s) => (
               <div key={s.title}>
-                <p className="text-sm font-semibold text-slate-800 mb-2">{s.title}</p>
-                <ol className="list-decimal list-inside space-y-1 text-sm text-slate-600">
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-2">{s.title}</p>
+                <ol className="list-decimal list-inside space-y-1 text-sm text-slate-600 dark:text-slate-300">
                   {s.items.map((item, i) => (
                     <li key={i}>{item}</li>
                   ))}
@@ -289,13 +289,13 @@ export default function Import() {
             onDragOver={(e) => e.preventDefault()}
             onDrop={onDrop}
             onClick={() => fileInputRef.current?.click()}
-            className="bg-white rounded-2xl border-2 border-dashed border-slate-300 hover:border-brand-400 transition-colors p-12 flex flex-col items-center justify-center gap-3 cursor-pointer text-center"
+            className="bg-white dark:bg-slate-900 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-brand-400 dark:hover:border-brand-600 transition-colors p-12 flex flex-col items-center justify-center gap-3 cursor-pointer text-center"
           >
-            <UploadCloud className="text-brand-500" size={36} />
-            <p className="text-sm font-medium text-slate-700">
+            <UploadCloud className="text-brand-500 dark:text-brand-300" size={36} />
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
               Drop your {selectedBroker.name} export here, or click to browse
             </p>
-            <p className="text-xs text-slate-400">Supports .csv, .xlsx, .xls</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500">Supports .csv, .xlsx, .xls</p>
             <input
               ref={fileInputRef}
               type="file"
@@ -312,10 +312,10 @@ export default function Import() {
 
       {status === 'idle' && importTab === 'standard' && (
         <>
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
             <div className="flex-1">
-              <p className="text-sm font-medium text-slate-800">New to importing?</p>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-sm font-medium text-slate-800 dark:text-slate-100">New to importing?</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
                 Download a starter template with sample mutual funds, stocks, gold, and fixed
                 deposits — fill it in and drop it back here.
               </p>
@@ -323,7 +323,7 @@ export default function Import() {
             <div className="flex gap-2 shrink-0">
               <button
                 onClick={() => exportToCsv('aurafin-import-template', IMPORT_TEMPLATE_ROWS)}
-                className="flex items-center gap-1.5 border border-slate-200 hover:border-brand-400 hover:text-brand-600 text-slate-600 px-3 py-2 rounded-lg text-xs font-medium"
+                className="flex items-center gap-1.5 border border-slate-200 dark:border-slate-800 hover:border-brand-400 dark:hover:border-brand-600 hover:text-brand-600 dark:hover:text-brand-300 text-slate-600 dark:text-slate-300 px-3 py-2 rounded-lg text-xs font-medium"
               >
                 <FileText size={14} />
                 CSV Template
@@ -332,7 +332,7 @@ export default function Import() {
                 onClick={() =>
                   exportToXlsx('aurafin-import-template', IMPORT_TEMPLATE_ROWS, 'Holdings')
                 }
-                className="flex items-center gap-1.5 border border-slate-200 hover:border-brand-400 hover:text-brand-600 text-slate-600 px-3 py-2 rounded-lg text-xs font-medium"
+                className="flex items-center gap-1.5 border border-slate-200 dark:border-slate-800 hover:border-brand-400 dark:hover:border-brand-600 hover:text-brand-600 dark:hover:text-brand-300 text-slate-600 dark:text-slate-300 px-3 py-2 rounded-lg text-xs font-medium"
               >
                 <FileSpreadsheet size={14} />
                 Excel Template
@@ -344,13 +344,13 @@ export default function Import() {
             onDragOver={(e) => e.preventDefault()}
             onDrop={onDrop}
             onClick={() => fileInputRef.current?.click()}
-            className="bg-white rounded-2xl border-2 border-dashed border-slate-300 hover:border-brand-400 transition-colors p-12 flex flex-col items-center justify-center gap-3 cursor-pointer text-center"
+            className="bg-white dark:bg-slate-900 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-brand-400 dark:hover:border-brand-600 transition-colors p-12 flex flex-col items-center justify-center gap-3 cursor-pointer text-center"
           >
-            <UploadCloud className="text-brand-500" size={36} />
-            <p className="text-sm font-medium text-slate-700">
+            <UploadCloud className="text-brand-500 dark:text-brand-300" size={36} />
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
               Drop a CSV or Excel file here, or click to browse
             </p>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-400 dark:text-slate-500">
               Supports .csv, .xlsx, .xls — mutual funds, stocks, gold, FDs and more. Columns like
               Name, Value, Asset Class, and Currency are auto-detected
             </p>
@@ -369,17 +369,17 @@ export default function Import() {
       )}
 
       {status === 'parsing' && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 text-sm">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center text-slate-400 dark:text-slate-500 text-sm">
           Reading {fileName}...
         </div>
       )}
 
       {status === 'error' && (
-        <div className="bg-white rounded-2xl border border-red-200 p-6 flex items-start gap-3">
-          <AlertCircle className="text-red-500 shrink-0" size={20} />
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-red-200 p-6 flex items-start gap-3">
+          <AlertCircle className="text-red-500 dark:text-red-400 shrink-0" size={20} />
           <div>
-            <p className="text-sm font-medium text-red-600">{errorMsg}</p>
-            <button onClick={reset} className="text-xs text-brand-600 font-medium mt-2">
+            <p className="text-sm font-medium text-red-600 dark:text-red-400">{errorMsg}</p>
+            <button onClick={reset} className="text-xs text-brand-600 dark:text-brand-300 font-medium mt-2">
               Try another file
             </button>
           </div>
@@ -387,9 +387,9 @@ export default function Import() {
       )}
 
       {status === 'done' && (
-        <div className="bg-white rounded-2xl border border-brand-200 p-8 text-center">
-          <CheckCircle2 className="text-brand-500 mx-auto mb-3" size={36} />
-          <p className="text-sm font-medium text-slate-800">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-brand-200 dark:border-brand-700 p-8 text-center">
+          <CheckCircle2 className="text-brand-500 dark:text-brand-300 mx-auto mb-3" size={36} />
+          <p className="text-sm font-medium text-slate-800 dark:text-slate-100">
             Imported {validRows.length} assets worth {formatCurrency(totalValue)}
           </p>
           <button
@@ -403,21 +403,21 @@ export default function Import() {
 
       {(status === 'ready' || status === 'saving') && (
         <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center justify-between text-sm">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 flex items-center justify-between text-sm">
             <div>
-              <span className="font-medium text-slate-800">{fileName}</span>
-              <span className="text-slate-400 ml-2">
+              <span className="font-medium text-slate-800 dark:text-slate-100">{fileName}</span>
+              <span className="text-slate-400 dark:text-slate-500 ml-2">
                 {validRows.length} of {rows.length} rows ready · {formatCurrency(totalValue)} total
               </span>
             </div>
-            <button onClick={reset} className="text-xs text-slate-400 hover:text-slate-600">
+            <button onClick={reset} className="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300">
               Cancel
             </button>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-slate-500 text-left">
+              <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-left">
                 <tr>
                   <th className="px-4 py-3 font-medium">Name</th>
                   <th className="px-4 py-3 font-medium">Asset Class</th>
@@ -431,13 +431,13 @@ export default function Import() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {rows.map((r, i) => (
-                  <tr key={i} className={r.valid ? '' : 'bg-red-50/40'}>
-                    <td className="px-4 py-3 text-slate-800">{r.name || '—'}</td>
+                  <tr key={i} className={r.valid ? '' : 'bg-red-50/40 dark:bg-red-900/30'}>
+                    <td className="px-4 py-3 text-slate-800 dark:text-slate-100">{r.name || '—'}</td>
                     <td className="px-4 py-3">
                       <select
                         value={r.assetClass}
                         onChange={(e) => updateRowClass(i, e.target.value as AssetClass)}
-                        className="border border-slate-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
                       >
                         {ASSET_TAXONOMY.map((cat) => (
                           <optgroup key={cat.key} label={cat.label}>
@@ -450,22 +450,22 @@ export default function Import() {
                         ))}
                       </select>
                     </td>
-                    <td className="px-4 py-3 text-slate-500">
+                    <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
                       {r.investedValue ? formatPreciseCurrency(r.investedValue, r.currency) : '—'}
                     </td>
-                    <td className="px-4 py-3 text-slate-800">
+                    <td className="px-4 py-3 text-slate-800 dark:text-slate-100">
                       {r.currentPrice
                         ? formatPreciseCurrency(r.currentPrice, r.currency)
                         : r.quantity && r.quantity > 0 && r.value > 0
                           ? formatPreciseCurrency(r.value / r.quantity, r.currency)
                           : '—'}
                     </td>
-                    <td className="px-4 py-3 text-slate-800">
+                    <td className="px-4 py-3 text-slate-800 dark:text-slate-100">
                       {r.value > 0 ? formatCurrency(r.value, r.currency) : '—'}
                     </td>
                     <td className="px-4 py-3">
                       {r.pnl !== undefined ? (
-                        <span className={r.pnl >= 0 ? 'text-brand-600' : 'text-red-500'}>
+                        <span className={r.pnl >= 0 ? 'text-brand-600 dark:text-brand-300' : 'text-red-500 dark:text-red-400'}>
                           {r.pnl >= 0 ? '+' : ''}
                           {formatPreciseCurrency(r.pnl, r.currency)}
                           {r.pnlPercent !== undefined && (
@@ -479,16 +479,16 @@ export default function Import() {
                         '—'
                       )}
                     </td>
-                    <td className="px-4 py-3 text-slate-500">{r.currency}</td>
+                    <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{r.currency}</td>
                     <td className="px-4 py-3">
                       {r.valid ? (
-                        <span className="text-xs text-brand-600">Ready</span>
+                        <span className="text-xs text-brand-600 dark:text-brand-300">Ready</span>
                       ) : (
-                        <span className="text-xs text-red-500">Skipped</span>
+                        <span className="text-xs text-red-500 dark:text-red-400">Skipped</span>
                       )}
                       <button
                         onClick={() => removeRow(i)}
-                        className="text-xs text-slate-400 hover:text-slate-600 ml-3"
+                        className="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 ml-3"
                       >
                         Remove
                       </button>

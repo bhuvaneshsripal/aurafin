@@ -46,11 +46,13 @@ body {
 /* ---- Mobile performance & touch tuning (120fps target) ---- */
 html {
   -webkit-tap-highlight-color: transparent;
-  overscroll-behavior-y: none;
 }
 
 body {
-  overscroll-behavior-y: none;
+  /* NOTE: don't set overscroll-behavior-y: none here — it silently disables
+     the browser's native pull-to-refresh gesture on mobile Chrome/Safari.
+     `auto` (the default) keeps that working while individual scrollable
+     overlays (modals, sheets) can still opt out with their own rule. */
   touch-action: manipulation;
 }
 

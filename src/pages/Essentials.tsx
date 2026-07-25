@@ -15,11 +15,11 @@ export default function Essentials() {
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
-        <h1 className="text-3xl font-bold text-slate-900">Essentials</h1>
-        <p className="text-slate-500 text-base mt-1">A quick health check, and the goals you're working toward.</p>
+        <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Essentials</h1>
+        <p className="text-slate-500 dark:text-slate-400 text-base mt-1">A quick health check, and the goals you're working toward.</p>
       </div>
 
-      <div className="flex gap-2 border-b border-slate-200">
+      <div className="flex gap-2 border-b border-slate-200 dark:border-slate-800">
         {(
           [
             ['health', 'Financial Health'],
@@ -31,8 +31,8 @@ export default function Essentials() {
             onClick={() => setTab(key)}
             className={`px-4 py-2.5 text-base font-medium border-b-2 -mb-px transition-colors ${
               tab === key
-                ? 'border-brand-600 text-brand-700'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
+                ? 'border-brand-600 dark:border-brand-500 text-brand-700 dark:text-brand-300'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
             }`}
           >
             {label}
@@ -70,8 +70,8 @@ function HealthCheck() {
         </p>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4">
-        <h2 className="text-lg font-semibold text-slate-800">Your Financial Snapshot</h2>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
+        <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Your Financial Snapshot</h2>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Age">
             <input
@@ -119,15 +119,15 @@ function HealthCheck() {
       </div>
 
       {saved && score !== null && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6">
-          <h2 className="text-lg font-semibold text-slate-800 mb-3">Your Score</h2>
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
+          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-3">Your Score</h2>
           <div className="flex items-center gap-6">
-            <div className="text-4xl font-bold text-brand-600">{score}</div>
+            <div className="text-4xl font-bold text-brand-600 dark:text-brand-300">{score}</div>
             <div className="flex-1">
-              <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+              <div className="w-full h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                 <div className="h-full bg-brand-600 rounded-full" style={{ width: `${score}%` }} />
               </div>
-              <p className="text-sm text-slate-500 mt-2">
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
                 You're saving roughly {savingsRate}% of your income each month.
                 {savingsRate !== null && savingsRate < 20 && ' Aiming for 20%+ is a solid target.'}
               </p>
@@ -159,7 +159,7 @@ function GoalsTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-base text-slate-500">{goals.length} active goals</p>
+        <p className="text-base text-slate-500 dark:text-slate-400">{goals.length} active goals</p>
         <button
           onClick={() => {
             setEditing(null);
@@ -175,28 +175,28 @@ function GoalsTab() {
         {goals.map((g) => {
           const pct = Math.min(100, Math.round((g.currentAmount / g.targetAmount) * 100));
           return (
-            <div key={g.id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+            <div key={g.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="font-semibold text-slate-800 text-lg">{g.name}</h3>
+                <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-lg">{g.name}</h3>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => {
                       setEditing(g);
                       setModalOpen(true);
                     }}
-                    className="text-slate-400 hover:text-brand-600"
+                    className="text-slate-400 dark:text-slate-500 hover:text-brand-600 dark:hover:text-brand-300"
                   >
                     <Pencil size={16} />
                   </button>
-                  <button onClick={() => handleDelete(g.id)} className="text-slate-400 hover:text-red-500">
+                  <button onClick={() => handleDelete(g.id)} className="text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400">
                     <Trash2 size={16} />
                   </button>
                 </div>
               </div>
-              <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden mb-2">
+              <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mb-2">
                 <div className="h-full bg-brand-600 rounded-full" style={{ width: `${pct}%` }} />
               </div>
-              <div className="flex items-center justify-between text-sm text-slate-500">
+              <div className="flex items-center justify-between text-sm text-slate-500 dark:text-slate-400">
                 <span>{formatCurrency(g.currentAmount, g.currency)} saved</span>
                 <span>{pct}% of {formatCurrency(g.targetAmount, g.currency)}</span>
               </div>
@@ -204,7 +204,7 @@ function GoalsTab() {
           );
         })}
         {goals.length === 0 && (
-          <div className="col-span-full bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-400">
+          <div className="col-span-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-10 text-center text-slate-400 dark:text-slate-500">
             No goals yet. Set a retirement corpus, emergency fund, or education target.
           </div>
         )}
@@ -266,11 +266,11 @@ function GoalForm({ initial, onSave }: { initial: Goal | null; onSave: (g: Goal)
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-sm font-medium text-slate-500 mb-1 block">{label}</span>
+      <span className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1 block">{label}</span>
       {children}
     </label>
   );
 }
 
 const inputClass =
-  'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-brand-500';
+  'w-full border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-brand-500';

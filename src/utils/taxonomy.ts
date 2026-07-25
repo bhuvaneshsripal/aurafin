@@ -223,5 +223,12 @@ export const DEPOSIT_LIKE_CLASSES = new Set<AssetClass>([
 /** The Recurring Deposit class additionally shows a "Monthly Installment" field. */
 export const RECURRING_DEPOSIT_CLASSES = new Set<AssetClass>(['recurring_deposit']);
 
+/**
+ * Physical-metal classes tracked by weight. These get a "Purchases" list
+ * (grams + amount per buy) instead of the plain Quantity/Avg. Cost fields —
+ * buying more later just adds another lot, and totals are summed automatically.
+ */
+export const WEIGHT_TRACKED_CLASSES = new Set<AssetClass>(['gold', 'silver', 'platinum']);
+
 /** SIP gets its own dedicated form (fund/symbol, initial + recurring amount, start date, SIP date) instead of the generic symbol/quantity/avg-cost fields. */
 export const SIP_CLASSES = new Set<AssetClass>(['sip']);

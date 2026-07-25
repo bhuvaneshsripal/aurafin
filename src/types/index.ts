@@ -95,6 +95,12 @@ export interface Asset {
   sipDay?: number;
   /** Manual display order in the Wealth grid (lower = shown first). Set by the move up/down buttons. */
   order?: number;
+  /**
+   * Individual purchase lots for weight-tracked commodities (Gold / Silver / Platinum).
+   * Each time more is bought, a new lot is appended instead of overwriting the total —
+   * `quantity` (grams) and `investedValue` are then derived by summing all lots.
+   */
+  purchaseLots?: { id: string; date?: string; grams: number; amount: number }[];
 }
 
 export interface Liability {

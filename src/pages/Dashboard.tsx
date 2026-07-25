@@ -53,6 +53,8 @@ export default function Dashboard() {
     (s, a) => s + (resolveAssetValues(a, livePrices).invested ?? a.value),
     0
   );
+  const netWorthPnl = totalAssets - investedAssetsTotal;
+  const netWorthPnlPercent = investedAssetsTotal > 0 ? (netWorthPnl / investedAssetsTotal) * 100 : 0;
 
   const thisMonth = new Date().toISOString().slice(0, 7);
   const monthIncome = transactions
@@ -76,9 +78,23 @@ export default function Dashboard() {
           </p>
           {hasWealth ? (
             <>
-              <span className="font-display text-3xl sm:text-4xl font-semibold text-slate-900 dark:text-white block mt-2 break-words">
-                {maskPreciseAmount(netWorth, 'INR', privacyMode)}
-              </span>
+              <div className="flex items-center gap-2.5 flex-wrap mt-2">
+                <span className="font-display text-3xl sm:text-4xl font-semibold text-slate-900 dark:text-white break-words">
+                  {maskPreciseAmount(netWorth, 'INR', privacyMode)}
+                </span>
+                {!privacyMode && investedAssetsTotal > 0 && (
+                  <span
+                    className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${
+                      netWorthPnl >= 0
+                        ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-300'
+                        : 'bg-red-50 dark:bg-red-900/30 text-red-500'
+                    }`}
+                  >
+                    {netWorthPnl >= 0 ? '+' : ''}
+                    {netWorthPnlPercent.toFixed(1)}% overall
+                  </span>
+                )}
+              </div>
               <MiniTrend />
             </>
           ) : (

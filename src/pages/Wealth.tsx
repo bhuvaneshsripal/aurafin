@@ -48,6 +48,7 @@ import {
   DEPOSIT_LIKE_CLASSES,
   RECURRING_DEPOSIT_CLASSES,
   SIP_CLASSES,
+  WEIGHT_TRACKED_CLASSES,
   type CategoryDef,
 } from '../utils/taxonomy';
 import {
@@ -840,7 +841,10 @@ function AssetsTab({
                       ) : null;
                     })()}
                   </td>
-                  <td className="px-4 py-3.5 text-right text-slate-600">{a.quantity ?? '—'}</td>
+                  <td className="px-4 py-3.5 text-right text-slate-600">
+                    {a.quantity ?? '—'}
+                    {a.quantity !== undefined && WEIGHT_TRACKED_CLASSES.has(a.assetClass) ? ' g' : ''}
+                  </td>
                   <td className="px-4 py-3.5 text-right text-slate-600">
                     {a.avgCost !== undefined ? formatPreciseCurrency(a.avgCost, a.currency) : '—'}
                   </td>
@@ -1024,6 +1028,57 @@ function AssetDetailsForm({
     initial?.sipFrequency ?? 'monthly'
   );
   const [sipDay, setSipDay] = useState(initial?.sipDay?.toString() ?? '');
+
+  // --- Weight-tracked purchases (Gold / Silver / Platinum) ---------------
+  // Each buy is its own lot (grams + amount); totals are summed below.
+  // An older gold entry with no lots yet but existing quantity/investedValue
+  // is backfilled as a single lot so no data is lost.
+  const [purchaseLots, setPurchaseLots] = useState<
+    { id: string; date?: string; grams: string; amount: string }[]
+  >(() => {
+    if (initial?.purchaseLots?.length) {
+      return initial.purchaseLots.map((l) => ({
+        id: l.id,
+        date: l.date,
+        grams: l.grams?.toString() ?? '',
+        amount: l.amount?.toString() ?? '',
+      }));
+    }
+    if (WEIGHT_TRACKED_CLASSES.has(startClass) && (initial?.quantity || initial?.investedValue)) {
+      return [
+        {
+          id: crypto.randomUUID(),
+          date: initial?.startDate,
+          grams: initial?.quantity?.toString() ?? '',
+          amount: initial?.investedValue?.toString() ?? '',
+        },
+      ];
+    }
+    return WEIGHT_TRACKED_CLASSES.has(startClass) ? [{ id: crypto.randomUUID(), grams: '', amount: '' }] : [];
+  });
+  const isWeightTracked = WEIGHT_TRACKED_CLASSES.has(assetClass);
+  const totalGrams = purchaseLots.reduce((sum, l) => sum + (Number(l.grams) || 0), 0);
+  const totalPurchaseAmount = purchaseLots.reduce((sum, l) => sum + (Number(l.amount) || 0), 0);
+
+  const addPurchaseLot = () =>
+    setPurchaseLots((rows) => [...rows, { id: crypto.randomUUID(), grams: '', amount: '' }]);
+  const removePurchaseLot = (id: string) =>
+    setPurchaseLots((rows) => (rows.length > 1 ? rows.filter((r) => r.id !== id) : rows));
+  const updatePurchaseLot = (id: string, patch: Partial<{ date: string; grams: string; amount: string }>) =>
+    setPurchaseLots((rows) => rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+
+  // Quantity (grams) and Invested always mirror the lot totals — they're
+  // pure sums, never hand-typed for weight-tracked assets. Current Value
+  // defaults to the total paid but is left alone once the person edits it,
+  // so today's market rate can differ from cost without being overwritten.
+  const valueTouchedRef = useRef(false);
+  useEffect(() => {
+    if (!isWeightTracked) return;
+    setQuantity(totalGrams > 0 ? String(totalGrams) : '');
+    setInvestedValue(totalPurchaseAmount > 0 ? String(totalPurchaseAmount) : '');
+    if (!valueTouchedRef.current) setValue(totalPurchaseAmount > 0 ? String(totalPurchaseAmount) : '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isWeightTracked, totalGrams, totalPurchaseAmount]);
 
   // Whether the person tried to save at least once — required-field errors
   // only show up after this, so the form doesn't look "broken" on first view.
@@ -1249,6 +1304,16 @@ function AssetDetailsForm({
       sipDay: sipDay ? Number(sipDay) : undefined,
       order: initial?.order,
       updatedAt: Date.now(),
+      purchaseLots: isWeightTracked
+        ? purchaseLots
+            .filter((l) => Number(l.grams) > 0 || Number(l.amount) > 0)
+            .map((l) => ({
+              id: l.id,
+              date: l.date || undefined,
+              grams: Number(l.grams) || 0,
+              amount: Number(l.amount) || 0,
+            }))
+        : undefined,
     });
   };
 
@@ -1288,7 +1353,73 @@ function AssetDetailsForm({
           </p>
         </Field>
       )}
-      {SYMBOL_ENABLED_CLASSES.has(assetClass) && !SIP_CLASSES.has(assetClass) && (
+      {isWeightTracked && (
+        <div className="space-y-3 border border-slate-100 bg-slate-50/60 rounded-xl p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-slate-700">Purchases</p>
+            <p className="text-xs text-slate-500">
+              Total: <span className="font-semibold text-brand-700">{totalGrams || 0} g</span>
+              {' · '}
+              {formatPreciseCurrency(totalPurchaseAmount, currency)}
+            </p>
+          </div>
+          <div className="space-y-2">
+            {purchaseLots.map((lot, i) => (
+              <div key={lot.id} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
+                <Field label={i === 0 ? 'Date' : ''}>
+                  <input
+                    type="date"
+                    value={lot.date ?? ''}
+                    onChange={(e) => updatePurchaseLot(lot.id, { date: e.target.value })}
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label={i === 0 ? 'Grams' : ''}>
+                  <input
+                    type="number"
+                    step="any"
+                    value={lot.grams}
+                    onChange={(e) => updatePurchaseLot(lot.id, { grams: e.target.value })}
+                    className={inputClass}
+                    placeholder="e.g. 10"
+                  />
+                </Field>
+                <Field label={i === 0 ? 'Amount Paid' : ''}>
+                  <input
+                    type="number"
+                    step="any"
+                    value={lot.amount}
+                    onChange={(e) => updatePurchaseLot(lot.id, { amount: e.target.value })}
+                    className={inputClass}
+                    placeholder="e.g. 65000"
+                  />
+                </Field>
+                <button
+                  type="button"
+                  onClick={() => removePurchaseLot(lot.id)}
+                  disabled={purchaseLots.length === 1}
+                  className="h-[42px] w-[42px] shrink-0 flex items-center justify-center border border-slate-200 rounded-lg text-slate-400 hover:text-red-500 hover:border-red-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                  title="Remove this purchase"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={addPurchaseLot}
+            className="flex items-center gap-1.5 text-sm text-brand-600 hover:text-brand-700 font-medium"
+          >
+            <Plus size={16} /> Add another purchase
+          </button>
+          <p className="text-xs text-slate-400">
+            Bought more later? Come back to Edit and add another purchase row — grams and amount add
+            up automatically.
+          </p>
+        </div>
+      )}
+      {SYMBOL_ENABLED_CLASSES.has(assetClass) && !SIP_CLASSES.has(assetClass) && !isWeightTracked && (
         <div className="grid grid-cols-3 gap-3">
           <Field label="Symbol (for live price)">
             <input value={symbol} onChange={(e) => setSymbol(e.target.value)} className={inputClass} placeholder="RELIANCE" />
@@ -1527,10 +1658,18 @@ function AssetDetailsForm({
               type="number"
               step="any"
               value={value}
-              onChange={(e) => setValue(e.target.value)}
+              onChange={(e) => {
+                valueTouchedRef.current = true;
+                setValue(e.target.value);
+              }}
               className={`${inputClass} ${attemptedSubmit && valueMissing ? errorInputClass : ''}`}
               placeholder="0"
             />
+          )}
+          {isWeightTracked && (
+            <p className="text-xs text-slate-400 mt-1">
+              Defaults to total amount paid ({formatPreciseCurrency(totalPurchaseAmount, currency)}) — edit if today's market value is different.
+            </p>
           )}
           {isSip && fundIsLinked && !liveValueLoading && !liveValueError && (
             <p className="text-xs text-slate-400 mt-1">Calculated from the fund's live NAV × units bought each installment.</p>
@@ -1543,13 +1682,22 @@ function AssetDetailsForm({
           )}
           {!isSip && attemptedSubmit && valueMissing && <p className={errorTextClass}>Current Value is required.</p>}
         </Field>
-        <Field label={SIP_CLASSES.has(assetClass) ? 'Initial Investment Amount' : 'Invested (optional)'}>
+        <Field
+          label={
+            SIP_CLASSES.has(assetClass)
+              ? 'Initial Investment Amount'
+              : isWeightTracked
+                ? 'Invested (auto, from purchases)'
+                : 'Invested (optional)'
+          }
+        >
           <input
             type="number"
             step="any"
             value={investedValue}
-            onChange={(e) => setInvestedValue(e.target.value)}
-            className={inputClass}
+            readOnly={isWeightTracked}
+            onChange={(e) => !isWeightTracked && setInvestedValue(e.target.value)}
+            className={`${inputClass} ${isWeightTracked ? 'bg-slate-50 text-slate-600 cursor-not-allowed' : ''}`}
             placeholder={SIP_CLASSES.has(assetClass) ? '0' : 'Auto: Qty × Avg'}
           />
         </Field>
