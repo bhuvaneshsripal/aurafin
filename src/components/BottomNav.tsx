@@ -14,15 +14,16 @@ import {
   MessageSquarePlus,
   X,
 } from 'lucide-react';
+import QuickAddMenu from './QuickAddMenu';
 
 const primaryLinks = [
   { to: '/', label: 'Overview', icon: LayoutDashboard },
   { to: '/wealth', label: 'Wealth', icon: Wallet },
   { to: '/transactions', label: 'Money', icon: Receipt },
-  { to: '/essentials', label: 'Essentials', icon: Target },
 ];
 
 const moreLinks = [
+  { to: '/essentials', label: 'Essentials', icon: Target },
   { to: '/import', label: 'Import', icon: FileUp },
   { to: '/calculators', label: 'Calculators', icon: Calculator },
   { to: '/whats-new', label: "What's New", icon: Sparkles },
@@ -38,8 +39,13 @@ export default function BottomNav() {
 
   return (
     <>
+      {/* Floating quick-add action button, sits just above the bottom nav */}
+      <div className="md:hidden fixed right-4 z-40" style={{ bottom: 'calc(64px + env(safe-area-inset-bottom) + 12px)' }}>
+        <QuickAddMenu variant="fab" />
+      </div>
+
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 pb-[env(safe-area-inset-bottom)]">
-        <div className="grid grid-cols-5">
+        <div className="grid grid-cols-4">
           {primaryLinks.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
@@ -47,7 +53,7 @@ export default function BottomNav() {
               end={to === '/'}
               onClick={() => setMoreOpen(false)}
               className={({ isActive }) =>
-                `flex flex-col items-center justify-center gap-1 py-2.5 text-[11px] font-medium transition-colors ${
+                `tap-scale flex flex-col items-center justify-center gap-1 py-2.5 text-[11px] font-medium transition-colors ${
                   isActive
                     ? 'text-brand-600 dark:text-brand-300'
                     : 'text-slate-500 dark:text-slate-400'
@@ -61,7 +67,7 @@ export default function BottomNav() {
 
           <button
             onClick={() => setMoreOpen(true)}
-            className={`flex flex-col items-center justify-center gap-1 py-2.5 text-[11px] font-medium transition-colors ${
+            className={`tap-scale flex flex-col items-center justify-center gap-1 py-2.5 text-[11px] font-medium transition-colors ${
               isMoreActive
                 ? 'text-brand-600 dark:text-brand-300'
                 : 'text-slate-500 dark:text-slate-400'
@@ -75,12 +81,12 @@ export default function BottomNav() {
 
       {moreOpen && (
         <div
-          className="md:hidden fixed inset-0 z-50 bg-slate-900/40 flex items-end"
+          className="animate-backdrop-in md:hidden fixed inset-0 z-50 bg-slate-900/40 flex items-end"
           onClick={() => setMoreOpen(false)}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full bg-white dark:bg-slate-900 rounded-t-2xl pb-[env(safe-area-inset-bottom)] max-h-[75vh] overflow-y-auto"
+            className="animate-sheet-in w-full bg-white dark:bg-slate-900 rounded-t-2xl pb-[env(safe-area-inset-bottom)] max-h-[75vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between px-5 pt-4 pb-2">
               <h3 className="text-base font-semibold text-slate-900 dark:text-white">More</h3>
@@ -98,7 +104,7 @@ export default function BottomNav() {
                   to={to}
                   onClick={() => setMoreOpen(false)}
                   className={({ isActive }) =>
-                    `flex flex-col items-center justify-center gap-2 rounded-xl px-2 py-4 text-xs font-medium text-center transition-colors ${
+                    `tap-scale flex flex-col items-center justify-center gap-2 rounded-xl px-2 py-4 text-xs font-medium text-center transition-colors ${
                       isActive
                         ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300'
                         : 'bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300'

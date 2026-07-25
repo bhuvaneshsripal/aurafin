@@ -20,7 +20,7 @@ import { ASSET_TAXONOMY } from '../utils/taxonomy';
 
 type QuickAction = 'expense' | 'income' | 'transfer' | 'asset' | 'liability' | 'snapshot' | null;
 
-export default function QuickAddMenu() {
+export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'desktop' | 'fab' }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [active, setActive] = useState<QuickAction>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -38,18 +38,36 @@ export default function QuickAddMenu() {
     setMenuOpen(false);
   };
 
+  const isFab = variant === 'fab';
+
   return (
     <>
-      <div className="relative" ref={ref}>
+      <div className={isFab ? 'relative' : 'relative'} ref={ref}>
         <button
           onClick={() => setMenuOpen((o) => !o)}
-          className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2.5 rounded-lg text-base font-medium"
+          aria-label="Quick add"
+          className={
+            isFab
+              ? 'tap-scale flex items-center justify-center bg-brand-600 hover:bg-brand-700 text-white h-14 w-14 rounded-full shadow-lg shadow-brand-900/20'
+              : 'tap-scale flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2.5 rounded-lg text-base font-medium'
+          }
         >
-          <Plus size={18} /> Add <ChevronDown size={16} />
+          {isFab ? <Plus size={24} /> : (
+            <>
+              <Plus size={18} /> Add <ChevronDown size={16} />
+            </>
+          )}
         </button>
 
         {menuOpen && (
-          <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden z-30">
+          <div
+            className={
+              isFab
+                ? 'animate-menu-in absolute bottom-full right-0 mb-3 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden z-30'
+                : 'animate-menu-in absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden z-30'
+            }
+            style={isFab ? { transformOrigin: 'bottom right' } : undefined}
+          >
             <p className="px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
               Cashflow
             </p>

@@ -42,3 +42,90 @@ body {
 .font-display {
   font-family: var(--font-display);
 }
+
+/* ---- Mobile performance & touch tuning (120fps target) ---- */
+html {
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+body {
+  overscroll-behavior-y: none;
+  touch-action: manipulation;
+}
+
+button,
+a {
+  touch-action: manipulation;
+}
+
+/* GPU-composited (transform/opacity only) animations — avoids layout/paint jank */
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -6px, 0) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.animate-menu-in {
+  animation: menu-in 140ms cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: top right;
+  will-change: transform, opacity;
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translate3d(0, 100%, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.animate-sheet-in {
+  animation: sheet-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-backdrop-in {
+  animation: backdrop-in 150ms ease-out;
+}
+
+@keyframes fab-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.animate-fab-in {
+  animation: fab-in 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity;
+}
+
+/* Snappy, GPU-friendly tap feedback */
+.tap-scale {
+  transition: transform 100ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+.tap-scale:active {
+  transform: scale(0.94);
+}
