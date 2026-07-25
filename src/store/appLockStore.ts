@@ -2,7 +2,6 @@ import { create } from 'zustand';
 
 const PIN_KEY = 'aurafin-pin';
 const ENABLED_KEY = 'aurafin-lock-enabled';
-const HIDDEN_AT_KEY = 'aurafin-lock-hidden-at';
 
 // Auto-lock after this long in the background.
 const AUTO_LOCK_MS = 60_000;
@@ -22,28 +21,42 @@ function getStoredPin() {
   return localStorage.getItem(PIN_KEY);
 }
 
+// In-memory only (NOT localStorage). A real page refresh/close always gets a
+// brand new JS module instance, so this always starts at `null` — a reload
+// can never read a stale "was hidden" timestamp from a previous session and
+// falsely trigger the lock. It only tracks time spent hidden *within the
+// same still-running tab/app instance* (e.g. switching apps briefly on
+// mobile, or minimizing the browser), which is the actual "left the app and
+// came back" case we want to guard.
+let hiddenAt: number | null = null;
+let listenerAttached = false;
+
 export const useAppLockStore = create<AppLockState>((set, get) => ({
   enabled: localStorage.getItem(ENABLED_KEY) === 'true' && !!getStoredPin(),
-  // Not locked on a fresh page load/refresh — only re-locks after being
-  // backgrounded (tab hidden) for longer than AUTO_LOCK_MS. See init().
+  // Never locked on a fresh page load/refresh — only re-locks after being
+  // backgrounded for longer than AUTO_LOCK_MS while the app instance stayed
+  // alive. See init().
   locked: false,
   pinAttemptError: null,
 
   init: () => {
     const enabled = localStorage.getItem(ENABLED_KEY) === 'true' && !!getStoredPin();
     set({ enabled, locked: false });
+    hiddenAt = null;
+
+    if (listenerAttached) return;
+    listenerAttached = true;
 
     document.addEventListener('visibilitychange', () => {
       const { enabled } = get();
       if (!enabled) return;
       if (document.visibilityState === 'hidden') {
-        localStorage.setItem(HIDDEN_AT_KEY, String(Date.now()));
+        hiddenAt = Date.now();
       } else {
-        const hiddenAt = Number(localStorage.getItem(HIDDEN_AT_KEY) ?? 0);
         if (hiddenAt && Date.now() - hiddenAt > AUTO_LOCK_MS) {
           set({ locked: true });
         }
-        localStorage.removeItem(HIDDEN_AT_KEY);
+        hiddenAt = null;
       }
     });
   },
@@ -57,7 +70,7 @@ export const useAppLockStore = create<AppLockState>((set, get) => ({
   disable: () => {
     localStorage.removeItem(PIN_KEY);
     localStorage.removeItem(ENABLED_KEY);
-    localStorage.removeItem(HIDDEN_AT_KEY);
+    hiddenAt = null;
     set({ enabled: false, locked: false, pinAttemptError: null });
   },
 
