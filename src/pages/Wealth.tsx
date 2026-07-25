@@ -222,7 +222,7 @@ function useOutsideClose(onClose: () => void) {
 
 function TabNav({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   return (
-    <div className="flex gap-2 border-b border-slate-200">
+    <div className="flex gap-2 border-b border-slate-200 dark:border-slate-800 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
       {(
         [
           ['assets', 'Assets'],
@@ -234,10 +234,10 @@ function TabNav({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
         <button
           key={key}
           onClick={() => setTab(key)}
-          className={`px-4 py-2.5 text-base font-medium border-b-2 -mb-px transition-colors ${
+          className={`shrink-0 whitespace-nowrap px-3.5 sm:px-4 py-2.5 text-sm sm:text-base font-medium border-b-2 -mb-px transition-colors ${
             tab === key
-              ? 'border-brand-600 text-brand-700'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
+              ? 'border-brand-600 text-brand-700 dark:text-brand-300'
+              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
           }`}
         >
           {label}
@@ -364,31 +364,31 @@ function TotalStatCard({
 }) {
   const positive = pnl >= 0;
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-6">
-      <p className="text-xs font-semibold tracking-wide text-slate-400 mb-5">{title}</p>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6">
+      <p className="text-xs font-semibold tracking-wide text-slate-400 mb-4 sm:mb-5">{title}</p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
         <div>
           <p className="text-xs font-medium text-slate-400 mb-1">INVESTED</p>
-          <p className="text-2xl font-bold text-slate-900">
+          <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white break-words">
             {privacyMode ? '••••••' : formatPreciseCurrency(invested, currency)}
           </p>
         </div>
         <div>
           <p className="text-xs font-medium text-slate-400 mb-1">CURRENT VALUE</p>
-          <p className="text-2xl font-bold text-slate-900">
+          <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white break-words">
             {privacyMode ? '••••••' : formatPreciseCurrency(currentValue, currency)}
           </p>
         </div>
         <div>
           <p className="text-xs font-medium text-slate-400 mb-1">P&L</p>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className={`text-2xl font-bold ${positive ? 'text-brand-600' : 'text-red-500'}`}>
+            <span className={`text-xl sm:text-2xl font-bold break-words ${positive ? 'text-brand-600 dark:text-brand-300' : 'text-red-500'}`}>
               {privacyMode ? '••••••' : `${positive ? '+' : ''}${formatPreciseCurrency(pnl, currency)}`}
             </span>
             {!privacyMode && (
               <span
                 className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                  positive ? 'bg-brand-50 text-brand-600' : 'bg-red-50 text-red-500'
+                  positive ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-300' : 'bg-red-50 dark:bg-red-900/30 text-red-500'
                 }`}
               >
                 {positive ? '+' : ''}
@@ -604,32 +604,32 @@ function AssetsTab({
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Assets</h2>
-          <p className="text-slate-500 text-sm mt-0.5">{assets.length} assets</p>
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Assets</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">{assets.length} assets</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative">
+          <div className="relative flex-1 min-w-[140px] sm:flex-none">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search..."
-              className="pl-9 pr-3 py-2 border-2 border-slate-300 rounded-lg text-sm w-40 sm:w-48 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+              className="pl-9 pr-3 py-2 border-2 border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg text-sm w-full sm:w-48 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
             />
           </div>
-          <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
+          <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden shrink-0">
             <button
               onClick={() => setViewMode('grid')}
               className={`h-9 w-9 flex items-center justify-center ${
-                viewMode === 'grid' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:bg-slate-50'
+                viewMode === 'grid' ? 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-white' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
               <LayoutGrid size={16} />
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`h-9 w-9 flex items-center justify-center border-l border-slate-200 ${
-                viewMode === 'list' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:bg-slate-50'
+              className={`h-9 w-9 flex items-center justify-center border-l border-slate-200 dark:border-slate-700 ${
+                viewMode === 'list' ? 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-white' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
               <ListIcon size={16} />
@@ -639,13 +639,13 @@ function AssetsTab({
             onClick={handleExport}
             disabled={assets.length === 0}
             title="Export CSV"
-            className="h-9 w-9 flex items-center justify-center border border-slate-200 hover:bg-slate-50 disabled:opacity-40 text-slate-500 rounded-lg"
+            className="h-9 w-9 flex items-center justify-center border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 text-slate-500 dark:text-slate-400 rounded-lg shrink-0"
           >
             <Download size={16} />
           </button>
           <button
             onClick={onAdd}
-            className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-base font-medium"
+            className="w-full sm:w-auto justify-center flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-base font-medium"
           >
             <Plus size={18} /> Add Asset
           </button>
@@ -695,7 +695,7 @@ function AssetsTab({
       />
 
       {filtered.length === 0 && (
-        <div className="bg-white rounded-2xl border border-slate-200 px-4 py-10 text-center text-slate-400">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 px-4 py-10 text-center text-slate-400">
           {assets.length === 0 ? 'No assets yet. Add your first one to get started.' : 'No assets match your search.'}
         </div>
       )}
@@ -1077,7 +1077,7 @@ function LiabilitiesTab({
         </div>
         <button
           onClick={onAdd}
-          className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-base font-medium"
+          className="w-full sm:w-auto justify-center flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-base font-medium"
         >
           <Plus size={18} /> Add Liability
         </button>

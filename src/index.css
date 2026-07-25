@@ -129,3 +129,13 @@ a {
 .tap-scale:active {
   transform: scale(0.94);
 }
+
+/* Horizontal scroll containers (mobile tab bars, etc.) without a visible scrollbar */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

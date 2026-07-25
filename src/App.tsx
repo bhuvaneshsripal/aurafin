@@ -31,7 +31,7 @@ function AppShell() {
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Topbar />
-        <main className="flex-1 p-6 pb-24 md:p-8 max-w-6xl mx-auto w-full">
+        <main className="flex-1 p-4 pb-36 sm:p-6 sm:pb-36 md:p-8 md:pb-8 max-w-6xl mx-auto w-full">
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/wealth" element={<Wealth />} />
