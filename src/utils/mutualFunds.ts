@@ -3,6 +3,32 @@ import type { SipInstallmentPoint } from './assetValues';
 /** mfapi.in — free, no-key Indian mutual fund NAV API, proxied in dev via vite.config.ts */
 const MF_BASE = '/api/mf';
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * mfapi.in is a free, community-run API with no uptime guarantee — a single
+ * request can time out or get rate-limited even when the fund/scheme code
+ * is perfectly valid. Retry a couple of times with a short backoff before
+ * giving up, so a transient hiccup doesn't show as "couldn't fetch" to the
+ * user for no real reason.
+ */
+async function fetchJsonWithRetry(url: string, retries = 2): Promise<unknown | null> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) return await res.json();
+      // Retry on rate-limit / transient server errors; don't bother for 4xx like a bad code.
+      if (res.status !== 429 && res.status < 500) return null;
+    } catch {
+      // network error — fall through to retry
+    }
+    if (attempt < retries) await sleep(400 * (attempt + 1));
+  }
+  return null;
+}
+
 export interface MfSearchResult {
   schemeCode: number;
   schemeName: string;
@@ -32,21 +58,15 @@ export interface FundNavHistory {
 export async function searchMutualFunds(query: string): Promise<MfSearchResult[] | null> {
   const q = query.trim();
   if (q.length < 3) return [];
-  try {
-    const res = await fetch(`${MF_BASE}/search?q=${encodeURIComponent(q)}`);
-    if (!res.ok) return null;
-    const json = await res.json();
-    if (!Array.isArray(json)) return null;
-    return json
-      .filter((r: unknown): r is { schemeCode: number | string; schemeName: string } => {
-        const rec = r as Record<string, unknown> | null;
-        return !!rec && rec.schemeCode !== undefined && typeof rec.schemeName === 'string';
-      })
-      .slice(0, 20)
-      .map((r) => ({ schemeCode: Number(r.schemeCode), schemeName: r.schemeName }));
-  } catch {
-    return null;
-  }
+  const json = await fetchJsonWithRetry(`${MF_BASE}/search?q=${encodeURIComponent(q)}`);
+  if (!Array.isArray(json)) return null;
+  return json
+    .filter((r: unknown): r is { schemeCode: number | string; schemeName: string } => {
+      const rec = r as Record<string, unknown> | null;
+      return !!rec && rec.schemeCode !== undefined && typeof rec.schemeName === 'string';
+    })
+    .slice(0, 20)
+    .map((r) => ({ schemeCode: Number(r.schemeCode), schemeName: r.schemeName }));
 }
 
 const navCache = new Map<number, FundNavHistory>();
@@ -56,34 +76,33 @@ export async function fetchFundNavHistory(schemeCode: number): Promise<FundNavHi
   const cached = navCache.get(schemeCode);
   if (cached) return cached;
 
-  try {
-    const res = await fetch(`${MF_BASE}/${schemeCode}`);
-    if (!res.ok) return null;
-    const json = await res.json();
-    const rows: unknown[] = Array.isArray(json?.data) ? json.data : [];
-    const history: NavPoint[] = rows
-      .map((r) => {
-        const rec = r as Record<string, unknown>;
-        return { date: String(rec.date), nav: Number(rec.nav) };
-      })
-      .filter((r) => Number.isFinite(r.nav) && r.nav > 0)
-      .reverse(); // mfapi.in returns newest first
+  const json = await fetchJsonWithRetry(`${MF_BASE}/${schemeCode}`);
+  if (!json || typeof json !== 'object') return null;
 
-    if (history.length === 0) return null;
-    const latest = history[history.length - 1];
+  const rows: unknown[] = Array.isArray((json as { data?: unknown }).data)
+    ? (json as { data: unknown[] }).data
+    : [];
+  const history: NavPoint[] = rows
+    .map((r) => {
+      const rec = r as Record<string, unknown>;
+      return { date: String(rec.date), nav: Number(rec.nav) };
+    })
+    .filter((r) => Number.isFinite(r.nav) && r.nav > 0)
+    .reverse(); // mfapi.in returns newest first
 
-    const result: FundNavHistory = {
-      schemeCode,
-      schemeName: typeof json?.meta?.scheme_name === 'string' ? json.meta.scheme_name : '',
-      latestNav: latest.nav,
-      latestDate: latest.date,
-      history,
-    };
-    navCache.set(schemeCode, result);
-    return result;
-  } catch {
-    return null;
-  }
+  if (history.length === 0) return null;
+  const latest = history[history.length - 1];
+  const meta = (json as { meta?: { scheme_name?: unknown } }).meta;
+
+  const result: FundNavHistory = {
+    schemeCode,
+    schemeName: typeof meta?.scheme_name === 'string' ? meta.scheme_name : '',
+    latestNav: latest.nav,
+    latestDate: latest.date,
+    history,
+  };
+  navCache.set(schemeCode, result);
+  return result;
 }
 
 function parseDdMmYyyy(d: string): number {
