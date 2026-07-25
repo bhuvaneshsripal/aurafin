@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { useAppLockStore } from '../store/appLockStore';
 import { auth } from '../firebase/config';
 import { CURRENCIES } from '../utils/currency';
+import { sendSharedAccessInvite, isInviteEmailConfigured } from '../utils/otp';
 import Modal from '../components/Modal';
 
 type Tab = 'account' | 'preferences' | 'profiles' | 'billing' | 'data';
@@ -380,6 +381,7 @@ interface SharedInvite {
   id: string;
   email: string;
   role: 'view' | 'full';
+  status: 'sent' | 'failed';
 }
 
 function sharedAccessKey(uid: string | undefined) {
@@ -399,13 +401,14 @@ function SharedAccessCard() {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'view' | 'full'>('view');
   const [error, setError] = useState('');
+  const [sending, setSending] = useState(false);
 
   const persist = (next: SharedInvite[]) => {
     setInvites(next);
     localStorage.setItem(storageKey, JSON.stringify(next));
   };
 
-  const sendInvite = () => {
+  const sendInvite = async () => {
     setError('');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setError('Enter a valid email address.');
@@ -415,9 +418,22 @@ function SharedAccessCard() {
       setError('This person already has access.');
       return;
     }
-    persist([...invites, { id: crypto.randomUUID(), email, role }]);
-    setEmail('');
-    setRole('view');
+
+    setSending(true);
+    try {
+      await sendSharedAccessInvite({
+        inviteeEmail: email,
+        inviterEmail: user?.email ?? '',
+        role,
+      });
+      persist([...invites, { id: crypto.randomUUID(), email, role, status: 'sent' }]);
+      setEmail('');
+      setRole('view');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send the invite.');
+    } finally {
+      setSending(false);
+    }
   };
 
   const removeInvite = (id: string) => {
@@ -455,12 +471,18 @@ function SharedAccessCard() {
         </select>
         <button
           onClick={sendInvite}
-          className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap"
+          disabled={sending}
+          className="bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap"
         >
-          Send Invite
+          {sending ? 'Sending...' : 'Send Invite'}
         </button>
       </div>
       {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
+      {!isInviteEmailConfigured() && (
+        <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
+          Invite emails aren&apos;t configured yet on this deployment (see .env.example).
+        </p>
+      )}
 
       {invites.length > 0 && (
         <div className="mt-4 space-y-2">
@@ -472,7 +494,7 @@ function SharedAccessCard() {
               <div>
                 <p className="text-sm text-slate-800 dark:text-slate-100">{invite.email}</p>
                 <p className="text-xs text-slate-400 dark:text-slate-500">
-                  {invite.role === 'view' ? 'View Only' : 'Full Access'}
+                  {invite.role === 'view' ? 'View Only' : 'Full Access'} &middot; Invite emailed
                 </p>
               </div>
               <button

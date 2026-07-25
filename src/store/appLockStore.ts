@@ -22,26 +22,24 @@ function getStoredPin() {
 }
 
 // In-memory only (NOT localStorage). A real page refresh/close always gets a
-// brand new JS module instance, so this always starts at `null` — a reload
-// can never read a stale "was hidden" timestamp from a previous session and
-// falsely trigger the lock. It only tracks time spent hidden *within the
-// same still-running tab/app instance* (e.g. switching apps briefly on
-// mobile, or minimizing the browser), which is the actual "left the app and
-// came back" case we want to guard.
+// brand new JS module instance, so this always starts at `null`.
 let hiddenAt: number | null = null;
 let listenerAttached = false;
 
 export const useAppLockStore = create<AppLockState>((set, get) => ({
   enabled: localStorage.getItem(ENABLED_KEY) === 'true' && !!getStoredPin(),
-  // Never locked on a fresh page load/refresh — only re-locks after being
-  // backgrounded for longer than AUTO_LOCK_MS while the app instance stayed
-  // alive. See init().
-  locked: false,
+  // Locked by default whenever the lock is enabled, so a fresh page load —
+  // including fully closing and reopening an installed PWA — always requires
+  // the PIN. See init().
+  locked: localStorage.getItem(ENABLED_KEY) === 'true' && !!getStoredPin(),
   pinAttemptError: null,
 
   init: () => {
     const enabled = localStorage.getItem(ENABLED_KEY) === 'true' && !!getStoredPin();
-    set({ enabled, locked: false });
+    // Every fresh mount of the app (including reopening a closed installed
+    // PWA, which always re-runs this module from scratch) should require
+    // the PIN again if lock is enabled.
+    set({ enabled, locked: enabled });
     hiddenAt = null;
 
     if (listenerAttached) return;

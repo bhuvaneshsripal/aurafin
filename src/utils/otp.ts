@@ -49,6 +49,50 @@ export async function sendPinResetOtp(email: string) {
   }
 }
 
+// Shared Access invite email — reuses the same EmailJS account as the PIN
+// reset flow above, but points at its own template (so the wording can say
+// "X invited you to Aurafin" instead of "here's your OTP"). Add
+// VITE_EMAILJS_INVITE_TEMPLATE_ID to .env with a template that expects
+// {{to_email}}, {{inviter_email}}, {{role}} variables.
+const EMAILJS_INVITE_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_INVITE_TEMPLATE_ID as
+  | string
+  | undefined;
+
+export function isInviteEmailConfigured() {
+  return !!(EMAILJS_SERVICE_ID && EMAILJS_INVITE_TEMPLATE_ID && EMAILJS_PUBLIC_KEY);
+}
+
+export async function sendSharedAccessInvite(params: {
+  inviteeEmail: string;
+  inviterEmail: string;
+  role: 'view' | 'full';
+}) {
+  if (!isInviteEmailConfigured()) {
+    throw new Error(
+      'Invite emails aren\u2019t set up yet. Add VITE_EMAILJS_INVITE_TEMPLATE_ID (and the other EmailJS variables) to your .env file \u2014 see .env.example.'
+    );
+  }
+
+  const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      service_id: EMAILJS_SERVICE_ID,
+      template_id: EMAILJS_INVITE_TEMPLATE_ID,
+      user_id: EMAILJS_PUBLIC_KEY,
+      template_params: {
+        to_email: params.inviteeEmail,
+        inviter_email: params.inviterEmail,
+        role: params.role === 'full' ? 'Full Access' : 'View Only',
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error('Could not send the invite email. Please try again in a moment.');
+  }
+}
+
 export function verifyPinResetOtp(email: string, code: string): boolean {
   const raw = sessionStorage.getItem(OTP_KEY);
   if (!raw) return false;
