@@ -67,6 +67,12 @@ export interface Asset {
   updatedAt: number;
   /** NSE/BSE trading symbol (e.g. RELIANCE, TCS) for live price lookup. */
   symbol?: string;
+  /**
+   * ISIN, if the import source provided one (e.g. Groww exports). Used to
+   * resolve the correct NSE/BSE trading symbol for live prices when the
+   * source only gave a full company name instead of a ticker.
+   */
+  isin?: string;
   /** Number of shares/units held. */
   quantity?: number;
   /** Average buy price per unit. */

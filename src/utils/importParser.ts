@@ -9,6 +9,7 @@ export interface ParsedRow {
   currency: string;
   valid: boolean;
   symbol?: string;
+  isin?: string;
   quantity?: number;
   avgCost?: number;
   currentPrice?: number;
@@ -146,6 +147,7 @@ const PNL_PERCENT_HEADERS = [
 
 const CLASS_HEADERS = ['class', 'asset class', 'category', 'type'];
 const CURRENCY_HEADERS = ['currency', 'ccy'];
+const ISIN_HEADERS = ['isin', 'isin code', 'isin no', 'isin no.'];
 
 // Header names that only ever show up in broker holdings exports. If we
 // see one of these and there's no explicit asset-class column, we can
@@ -180,7 +182,7 @@ const ALL_HEADER_CANDIDATES = new Set([
   ...PNL_PERCENT_HEADERS,
   ...CLASS_HEADERS,
   ...CURRENCY_HEADERS,
-  'isin',
+  ...ISIN_HEADERS,
 ]);
 
 const CLASS_KEYWORD_MAP: Record<string, AssetClass> = {
@@ -340,6 +342,7 @@ export async function parseSpreadsheetFile(file: File): Promise<ParsedRow[]> {
   const investedKey = findHeaderKey(headers, INVESTED_HEADERS);
   const pnlKey = findHeaderKey(headers, PNL_HEADERS);
   const pnlPercentKey = findHeaderKey(headers, PNL_PERCENT_HEADERS);
+  const isinKey = findHeaderKey(headers, ISIN_HEADERS);
 
   // No asset-class column at all, but the sheet clearly looks like a
   // broker holdings export -> treat every row as equity by default.
@@ -387,6 +390,7 @@ export async function parseSpreadsheetFile(file: File): Promise<ParsedRow[]> {
     }
 
     const hasSymbol = looksLikeEquityExport || assetClass === 'stock';
+    const isin = isinKey ? String(raw[isinKey] ?? '').trim().toUpperCase() : '';
 
     return {
       raw,
@@ -396,6 +400,7 @@ export async function parseSpreadsheetFile(file: File): Promise<ParsedRow[]> {
       currency,
       valid: name.length > 0 && value > 0,
       symbol: hasSymbol && symbol ? symbol : undefined,
+      isin: hasSymbol && isin ? isin : undefined,
       quantity: quantity && quantity > 0 ? quantity : undefined,
       avgCost: avgCost && avgCost > 0 ? avgCost : undefined,
       currentPrice: currentPrice && currentPrice > 0 ? currentPrice : undefined,
@@ -417,6 +422,7 @@ export function rowsToAssets(rows: ParsedRow[]): Asset[] {
       currency: r.currency,
       updatedAt: Date.now(),
       symbol: r.symbol,
+      isin: r.isin,
       quantity: r.quantity,
       avgCost: r.avgCost,
       investedValue: r.investedValue,

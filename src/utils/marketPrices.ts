@@ -1,10 +1,22 @@
 /** Yahoo Finance chart endpoint — proxied in dev via vite.config.ts */
 const QUOTE_BASE = '/api/market/chart';
+/** Yahoo Finance symbol-search endpoint — proxied in dev via vite.config.ts */
+const SEARCH_BASE = '/api/market/v1/finance/search';
 
 export interface LiveQuote {
   symbol: string;
   price: number;
   currency: string;
+}
+
+/** Something we need a live price for, identified however the import gave it to us. */
+export interface PriceLookup {
+  /** The key the result should be stored under (usually asset.symbol, uppercased). */
+  key: string;
+  /** ISIN, if known — the most reliable way to resolve a real ticker. */
+  isin?: string;
+  /** Full name, used as a last-resort search query if there's no ISIN. */
+  name?: string;
 }
 
 /** Normalize a broker symbol to Yahoo Finance NSE ticker. */
@@ -14,7 +26,50 @@ export function toYahooSymbol(symbol: string): string {
   return `${clean}.NS`;
 }
 
-async function fetchQuote(yahooSymbol: string): Promise<LiveQuote | null> {
+/**
+ * A real NSE/BSE trading symbol never contains whitespace (e.g. RELIANCE,
+ * M&M, TATASTEEL). Some import sources (Groww) give the full company name
+ * instead (e.g. "ADANI TOTAL GAS LIMITED"), which can't be turned into a
+ * Yahoo ticker directly and needs a symbol-search lookup instead.
+ */
+export function looksLikeTicker(symbol: string): boolean {
+  const trimmed = symbol.trim();
+  return trimmed.length > 0 && !/\s/.test(trimmed);
+}
+
+// In-memory cache from ISIN/name -> resolved Yahoo symbol, so we only hit
+// the search endpoint once per session instead of on every 60s poll.
+const resolvedSymbolCache = new Map<string, string | null>();
+
+/** Resolve a real Yahoo/NSE ticker from an ISIN or company name via symbol search. */
+async function searchYahooSymbol(query: string): Promise<string | null> {
+  const cacheKey = query.trim().toUpperCase();
+  if (resolvedSymbolCache.has(cacheKey)) return resolvedSymbolCache.get(cacheKey) ?? null;
+
+  let resolved: string | null = null;
+  try {
+    const res = await fetch(`${SEARCH_BASE}?q=${encodeURIComponent(query)}`);
+    if (res.ok) {
+      const json = await res.json();
+      const quotes: { symbol?: string; quoteType?: string; exchDisp?: string }[] =
+        json?.quotes ?? [];
+      const equities = quotes.filter(
+        (q) => q.symbol && (q.quoteType === 'EQUITY' || q.quoteType === undefined)
+      );
+      // Prefer NSE (.NS) over BSE (.BO) over anything else.
+      const nse = equities.find((q) => q.symbol?.endsWith('.NS'));
+      const bse = equities.find((q) => q.symbol?.endsWith('.BO'));
+      resolved = (nse ?? bse ?? equities[0])?.symbol ?? null;
+    }
+  } catch {
+    resolved = null;
+  }
+
+  resolvedSymbolCache.set(cacheKey, resolved);
+  return resolved;
+}
+
+async function fetchQuote(yahooSymbol: string): Promise<{ price: number } | null> {
   try {
     const res = await fetch(
       `${QUOTE_BASE}/${encodeURIComponent(yahooSymbol)}?interval=1d&range=1d`
@@ -26,30 +81,53 @@ async function fetchQuote(yahooSymbol: string): Promise<LiveQuote | null> {
     const price = meta?.regularMarketPrice ?? meta?.previousClose;
     if (typeof price !== 'number' || !Number.isFinite(price)) return null;
 
-    const rawSymbol = yahooSymbol.replace(/\.(NS|BO)$/, '');
-    return {
-      symbol: rawSymbol,
-      price,
-      currency: meta?.currency ?? 'INR',
-    };
+    return { price };
   } catch {
     return null;
   }
 }
 
-/** Fetch live prices for multiple NSE symbols (batched, deduplicated). */
-export async function fetchLivePrices(symbols: string[]): Promise<Map<string, number>> {
-  const unique = [...new Set(symbols.map((s) => s.trim().toUpperCase()).filter(Boolean))];
+/**
+ * Fetch live prices for a batch of holdings. Each lookup is keyed by
+ * whatever identifier the caller wants the result stored under (usually
+ * asset.symbol). If that identifier isn't a real trading symbol (e.g. a
+ * Groww export gave a full company name), we resolve the actual ticker
+ * first via ISIN, then via name, before fetching the quote.
+ */
+export async function fetchLivePrices(lookups: PriceLookup[]): Promise<Map<string, number>> {
   const results = new Map<string, number>();
+
+  // Dedupe by key so we don't fetch the same holding twice.
+  const unique = new Map<string, PriceLookup>();
+  for (const l of lookups) {
+    const key = l.key.trim().toUpperCase();
+    if (key) unique.set(key, { ...l, key });
+  }
+
+  const entries = [...unique.values()];
 
   // Yahoo has no batch endpoint — fetch in small parallel groups.
   const batchSize = 5;
-  for (let i = 0; i < unique.length; i += batchSize) {
-    const batch = unique.slice(i, i + batchSize);
-    const quotes = await Promise.all(batch.map((s) => fetchQuote(toYahooSymbol(s))));
-    quotes.forEach((q) => {
-      if (q) results.set(q.symbol, q.price);
-    });
+  for (let i = 0; i < entries.length; i += batchSize) {
+    const batch = entries.slice(i, i + batchSize);
+    await Promise.all(
+      batch.map(async (lookup) => {
+        let yahooSymbol: string | null = null;
+
+        if (looksLikeTicker(lookup.key)) {
+          yahooSymbol = toYahooSymbol(lookup.key);
+        } else if (lookup.isin) {
+          yahooSymbol = await searchYahooSymbol(lookup.isin);
+          if (!yahooSymbol && lookup.name) yahooSymbol = await searchYahooSymbol(lookup.name);
+        } else if (lookup.name) {
+          yahooSymbol = await searchYahooSymbol(lookup.name);
+        }
+
+        if (!yahooSymbol) return;
+        const quote = await fetchQuote(yahooSymbol);
+        if (quote) results.set(lookup.key, quote.price);
+      })
+    );
   }
 
   return results;

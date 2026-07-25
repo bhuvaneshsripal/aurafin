@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLivePricesStore } from '../store/livePricesStore';
-import { fetchLivePrices } from '../utils/marketPrices';
+import { fetchLivePrices, type PriceLookup } from '../utils/marketPrices';
 
 const REFRESH_MS = 60_000;
 
@@ -15,22 +15,27 @@ export function useLivePrices() {
   const setLoading = useLivePricesStore((s) => s.setLoading);
   const fetching = useRef(false);
 
-  const symbolKey = assets
-    .filter((a) => a.symbol && a.quantity && a.quantity > 0)
-    .map((a) => a.symbol!)
+  const equityAssets = assets.filter((a) => a.symbol && a.quantity && a.quantity > 0);
+  // Key off symbol+isin so a newly-added ISIN (e.g. after a re-import) triggers a refresh.
+  const lookupKey = equityAssets
+    .map((a) => `${a.symbol}|${a.isin ?? ''}`)
     .sort()
-    .join('|');
+    .join(',');
 
   useEffect(() => {
-    if (!symbolKey) return;
+    if (!lookupKey) return;
 
     const refresh = async () => {
       if (fetching.current) return;
       fetching.current = true;
       setLoading(true);
       try {
-        const symbols = symbolKey.split('|');
-        const priceMap = await fetchLivePrices(symbols);
+        const lookups: PriceLookup[] = equityAssets.map((a) => ({
+          key: a.symbol!,
+          isin: a.isin,
+          name: a.name,
+        }));
+        const priceMap = await fetchLivePrices(lookups);
         const prices: Record<string, number> = {};
         priceMap.forEach((price, symbol) => {
           prices[symbol] = price;
@@ -47,5 +52,6 @@ export function useLivePrices() {
     refresh();
     const id = setInterval(refresh, REFRESH_MS);
     return () => clearInterval(id);
-  }, [symbolKey, setPrices, setLoading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lookupKey, setPrices, setLoading]);
 }
