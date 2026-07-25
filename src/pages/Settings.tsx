@@ -1,7 +1,8 @@
-import { useState, type ReactNode } from 'react';
-import { updateProfile, updatePassword } from 'firebase/auth';
-import { Lock, Smartphone, Users, Check } from 'lucide-react';
+import { useState, useEffect, type ReactNode } from 'react';
+import { updateProfile, updatePassword, linkWithCredential, EmailAuthProvider } from 'firebase/auth';
+import { Lock, Smartphone, Users, Check, ShieldCheck, Trash2 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import { useAppLockStore } from '../store/appLockStore';
 import { auth } from '../firebase/config';
 import { CURRENCIES } from '../utils/currency';
 import Modal from '../components/Modal';
@@ -78,6 +79,8 @@ function PersonalInfoCard() {
 }
 
 function SetPasswordCard() {
+  const user = useAuthStore((s) => s.user);
+  const hasPasswordProvider = user?.providerData.some((p) => p.providerId === 'password') ?? false;
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -86,11 +89,19 @@ function SetPasswordCard() {
   const valid = newPassword.length >= 8 && newPassword === confirmPassword;
 
   const save = async () => {
-    if (!auth.currentUser || !valid) return;
+    if (!auth.currentUser || !auth.currentUser.email || !valid) return;
     setStatus('saving');
     setError('');
     try {
-      await updatePassword(auth.currentUser, newPassword);
+      if (hasPasswordProvider) {
+        // Already has a password credential — just change it.
+        await updatePassword(auth.currentUser, newPassword);
+      } else {
+        // Google-only account so far — link an email/password credential so
+        // they can also sign in with email + password from now on.
+        const credential = EmailAuthProvider.credential(auth.currentUser.email, newPassword);
+        await linkWithCredential(auth.currentUser, credential);
+      }
       setStatus('saved');
       setNewPassword('');
       setConfirmPassword('');
@@ -101,7 +112,9 @@ function SetPasswordCard() {
       setError(
         code === 'auth/requires-recent-login'
           ? 'Please sign out and sign in again before changing your password.'
-          : 'Could not set password. Please try again.'
+          : code === 'auth/credential-already-in-use' || code === 'auth/email-already-in-use'
+            ? 'This email is already linked to another sign-in method.'
+            : 'Could not set password. Please try again.'
       );
     }
   };
@@ -110,7 +123,9 @@ function SetPasswordCard() {
     <Card>
       <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Set Password</h2>
       <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
-        Set a password so you can also sign in with email and password, in addition to Google.
+        {hasPasswordProvider
+          ? 'Update the password you use to sign in with email and password.'
+          : 'Set a password so you can also sign in with email and password, in addition to Google.'}
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
@@ -147,10 +162,11 @@ function SetPasswordCard() {
 }
 
 function AppLockCard() {
+  const { enabled, setPin, disable } = useAppLockStore();
   const [open, setOpen] = useState(false);
-  const [pin, setPin] = useState('');
+  const [confirmDisable, setConfirmDisable] = useState(false);
+  const [pin, setPinInput] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
-  const [pinSet, setPinSet] = useState(() => !!localStorage.getItem('aurafin-pin'));
   const [pinError, setPinError] = useState('');
 
   const savePin = () => {
@@ -162,10 +178,9 @@ function AppLockCard() {
       setPinError('PINs do not match.');
       return;
     }
-    localStorage.setItem('aurafin-pin', pin);
-    setPinSet(true);
+    setPin(pin);
     setOpen(false);
-    setPin('');
+    setPinInput('');
     setConfirmPin('');
     setPinError('');
   };
@@ -181,13 +196,40 @@ function AppLockCard() {
           </p>
         </div>
       </div>
-      <button
-        onClick={() => setOpen(true)}
-        className="mt-4 flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
-      >
-        <Lock size={16} />
-        {pinSet ? 'Change PIN' : 'Set Up PIN'}
-      </button>
+
+      {enabled && (
+        <div className="flex items-center gap-1.5 mt-4">
+          <ShieldCheck size={16} className="text-brand-600" />
+          <span className="text-sm font-medium text-brand-600">App Lock is enabled</span>
+        </div>
+      )}
+
+      <div className="flex gap-3 mt-4">
+        {enabled ? (
+          <>
+            <button
+              onClick={() => setConfirmDisable(true)}
+              className="bg-cream-100 dark:bg-slate-800 border border-cream-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-cream-200 dark:hover:bg-slate-700"
+            >
+              Disable Lock
+            </button>
+            <button
+              onClick={() => setOpen(true)}
+              className="bg-cream-100 dark:bg-slate-800 border border-cream-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-cream-200 dark:hover:bg-slate-700"
+            >
+              Change PIN
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={() => setOpen(true)}
+            className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+          >
+            <Lock size={16} />
+            Set Up PIN
+          </button>
+        )}
+      </div>
 
       <Modal open={open} onClose={() => setOpen(false)} title="Set Up App Lock">
         <div className="space-y-4">
@@ -198,7 +240,7 @@ function AppLockCard() {
               inputMode="numeric"
               maxLength={4}
               value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+              onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
               className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm tracking-widest focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
           </div>
@@ -222,22 +264,54 @@ function AppLockCard() {
           </button>
         </div>
       </Modal>
+
+      <Modal open={confirmDisable} onClose={() => setConfirmDisable(false)} title="Disable App Lock?">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            Anyone with access to this device will be able to open Aurafin without a PIN.
+          </p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setConfirmDisable(false)}
+              className="flex-1 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                disable();
+                setConfirmDisable(false);
+              }}
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg text-sm font-medium"
+            >
+              Disable
+            </button>
+          </div>
+        </div>
+      </Modal>
     </Card>
   );
 }
 
 function InstallAppCard() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [installed, setInstalled] = useState(false);
+  const [installed, setInstalled] = useState(
+    () => window.matchMedia?.('(display-mode: standalone)').matches ?? false
+  );
 
-  useState(() => {
+  useEffect(() => {
     const handler = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
     };
+    const onInstalled = () => setInstalled(true);
     window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  });
+    window.addEventListener('appinstalled', onInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler);
+      window.removeEventListener('appinstalled', onInstalled);
+    };
+  }, []);
 
   const showPrompt = async () => {
     if (!deferredPrompt) return;
@@ -253,45 +327,103 @@ function InstallAppCard() {
         <Smartphone size={20} className="text-slate-700 dark:text-slate-300 shrink-0 mt-0.5" />
         <div>
           <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Install App</h2>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-            Add Aurafin to your home screen for instant access. Opens like a native app with no browser tabs.
-          </p>
+          {installed ? (
+            <p className="text-xs text-brand-600 mt-1 flex items-center gap-1">
+              <Check size={13} /> Aurafin is installed as an app on this device
+            </p>
+          ) : (
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+              Add Aurafin to your home screen for instant access. Opens like a native app with no browser
+              tabs.
+            </p>
+          )}
         </div>
       </div>
 
-      <div className="mt-4 space-y-2.5">
-        <div className="flex items-center gap-2.5 text-sm text-slate-600 dark:text-slate-300">
-          <span className="flex items-center justify-center h-5 w-5 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-medium text-slate-500 dark:text-slate-400 shrink-0">
-            1
-          </span>
-          Open the browser menu
-        </div>
-        <div className="flex items-center gap-2.5 text-sm text-slate-600 dark:text-slate-300">
-          <span className="flex items-center justify-center h-5 w-5 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-medium text-slate-500 dark:text-slate-400 shrink-0">
-            2
-          </span>
-          Choose <span className="font-medium text-slate-800 dark:text-slate-100">Install app</span> or{' '}
-          <span className="font-medium text-slate-800 dark:text-slate-100">Add to Home Screen</span>
-        </div>
-      </div>
+      {!installed && (
+        <>
+          <div className="mt-4 space-y-2.5">
+            <div className="flex items-center gap-2.5 text-sm text-slate-600 dark:text-slate-300">
+              <span className="flex items-center justify-center h-5 w-5 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-medium text-slate-500 dark:text-slate-400 shrink-0">
+                1
+              </span>
+              Open the browser menu
+            </div>
+            <div className="flex items-center gap-2.5 text-sm text-slate-600 dark:text-slate-300">
+              <span className="flex items-center justify-center h-5 w-5 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-medium text-slate-500 dark:text-slate-400 shrink-0">
+                2
+              </span>
+              Choose <span className="font-medium text-slate-800 dark:text-slate-100">Install app</span> or{' '}
+              <span className="font-medium text-slate-800 dark:text-slate-100">Add to Home Screen</span>
+            </div>
+          </div>
 
-      <button
-        onClick={showPrompt}
-        disabled={!deferredPrompt}
-        className="mt-4 border border-slate-200 dark:border-slate-700 disabled:opacity-50 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
-      >
-        {installed ? 'Installed' : 'Show Install Prompt'}
-      </button>
-      {!deferredPrompt && !installed && (
-        <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
-          Your browser will show its own install option when available, or use the steps above.
-        </p>
+          <button
+            onClick={showPrompt}
+            disabled={!deferredPrompt}
+            className="mt-4 border border-slate-200 dark:border-slate-700 disabled:opacity-50 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+          >
+            Show Install Prompt
+          </button>
+          {!deferredPrompt && (
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
+              Your browser will show its own install option when available, or use the steps above.
+            </p>
+          )}
+        </>
       )}
     </Card>
   );
 }
 
+interface SharedInvite {
+  id: string;
+  email: string;
+  role: 'view' | 'full';
+}
+
+function sharedAccessKey(uid: string | undefined) {
+  return `aurafin-shared-access-${uid ?? 'anon'}`;
+}
+
 function SharedAccessCard() {
+  const user = useAuthStore((s) => s.user);
+  const storageKey = sharedAccessKey(user?.uid);
+  const [invites, setInvites] = useState<SharedInvite[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(storageKey) ?? '[]');
+    } catch {
+      return [];
+    }
+  });
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<'view' | 'full'>('view');
+  const [error, setError] = useState('');
+
+  const persist = (next: SharedInvite[]) => {
+    setInvites(next);
+    localStorage.setItem(storageKey, JSON.stringify(next));
+  };
+
+  const sendInvite = () => {
+    setError('');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError('Enter a valid email address.');
+      return;
+    }
+    if (invites.some((i) => i.email.toLowerCase() === email.toLowerCase())) {
+      setError('This person already has access.');
+      return;
+    }
+    persist([...invites, { id: crypto.randomUUID(), email, role }]);
+    setEmail('');
+    setRole('view');
+  };
+
+  const removeInvite = (id: string) => {
+    persist(invites.filter((i) => i.id !== id));
+  };
+
   return (
     <Card>
       <div className="flex gap-3">
@@ -304,9 +436,56 @@ function SharedAccessCard() {
           </p>
         </div>
       </div>
-      <button className="mt-4 w-full flex items-center gap-2 justify-center border border-dashed border-brand-300 dark:border-brand-700 bg-brand-50/50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300 px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-brand-50 dark:hover:bg-brand-900/30">
-        Upgrade to Pro to share your data with up to 5 people
-      </button>
+
+      <div className="mt-4 flex flex-col sm:flex-row gap-3">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="their.email@example.com"
+          className="flex-1 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
+        />
+        <select
+          value={role}
+          onChange={(e) => setRole(e.target.value as 'view' | 'full')}
+          className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+        >
+          <option value="view">View Only</option>
+          <option value="full">Full Access</option>
+        </select>
+        <button
+          onClick={sendInvite}
+          className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap"
+        >
+          Send Invite
+        </button>
+      </div>
+      {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
+
+      {invites.length > 0 && (
+        <div className="mt-4 space-y-2">
+          {invites.map((invite) => (
+            <div
+              key={invite.id}
+              className="flex items-center justify-between border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2"
+            >
+              <div>
+                <p className="text-sm text-slate-800 dark:text-slate-100">{invite.email}</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500">
+                  {invite.role === 'view' ? 'View Only' : 'Full Access'}
+                </p>
+              </div>
+              <button
+                onClick={() => removeInvite(invite.id)}
+                className="text-slate-400 hover:text-red-500 p-1"
+                aria-label={`Remove ${invite.email}`}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </Card>
   );
 }
