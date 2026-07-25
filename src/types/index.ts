@@ -81,6 +81,8 @@ export interface Asset {
   institution?: string;
   /** Annual interest rate (%), used for FDs, RDs, bonds, PPF, etc. */
   interestRate?: number;
+  /** Start / booking date (ISO yyyy-mm-dd), used for FDs, RDs, bonds, etc. */
+  startDate?: string;
   /** Maturity date (ISO yyyy-mm-dd), used for FDs, RDs, bonds, etc. */
   maturityDate?: string;
   /** Monthly installment amount — used for Recurring Deposits. */

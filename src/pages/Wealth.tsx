@@ -113,14 +113,24 @@ function AddWealthPage({
 
   const handleSaveAsset = async (asset: Asset) => {
     if (!user) return;
-    await upsertDoc(user.uid, 'assets', asset);
-    onClose();
+    try {
+      await upsertDoc(user.uid, 'assets', asset);
+      onClose();
+    } catch (err) {
+      console.error('Failed to save asset', err);
+      alert('Could not save this asset. Please check your connection and try again.');
+    }
   };
 
   const handleSaveLiability = async (liability: Liability) => {
     if (!user) return;
-    await upsertDoc(user.uid, 'liabilities', liability);
-    onClose();
+    try {
+      await upsertDoc(user.uid, 'liabilities', liability);
+      onClose();
+    } catch (err) {
+      console.error('Failed to save liability', err);
+      alert('Could not save this liability. Please check your connection and try again.');
+    }
   };
 
   const noun = entryType === 'asset' ? 'Asset' : 'Liability';
@@ -469,8 +479,13 @@ function AssetsTab({
 
   const handleSave = async (asset: Asset) => {
     if (!user) return;
-    await upsertDoc(user.uid, 'assets', asset);
-    setModalOpen(false);
+    try {
+      await upsertDoc(user.uid, 'assets', asset);
+      setModalOpen(false);
+    } catch (err) {
+      console.error('Failed to save asset', err);
+      alert('Could not save this asset. Please check your connection and try again.');
+    }
   };
 
   const handleExport = () => {
@@ -870,6 +885,7 @@ function AssetDetailsForm({
   const [investedValue, setInvestedValue] = useState(initial?.investedValue?.toString() ?? '');
   const [institution, setInstitution] = useState(initial?.institution ?? '');
   const [interestRate, setInterestRate] = useState(initial?.interestRate?.toString() ?? '');
+  const [startDate, setStartDate] = useState(initial?.startDate ?? '');
   const [maturityDate, setMaturityDate] = useState(initial?.maturityDate ?? '');
   const [monthlyInstallment, setMonthlyInstallment] = useState(
     initial?.monthlyInstallment?.toString() ?? ''
@@ -912,6 +928,7 @@ function AssetDetailsForm({
           : undefined,
       institution: institution.trim() || undefined,
       interestRate: interestRate ? Number(interestRate) : undefined,
+      startDate: startDate || undefined,
       maturityDate: maturityDate || undefined,
       monthlyInstallment: monthlyInstallment ? Number(monthlyInstallment) : undefined,
       updatedAt: Date.now(),
@@ -984,6 +1001,14 @@ function AssetDetailsForm({
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-3">
+            <Field label="Start Date">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className={inputClass}
+              />
+            </Field>
             <Field label="Maturity Date">
               <input
                 type="date"
@@ -992,7 +1017,9 @@ function AssetDetailsForm({
                 className={inputClass}
               />
             </Field>
-            {RECURRING_DEPOSIT_CLASSES.has(assetClass) && (
+          </div>
+          {RECURRING_DEPOSIT_CLASSES.has(assetClass) && (
+            <div className="grid grid-cols-2 gap-3">
               <Field label="Monthly Installment">
                 <input
                   type="number"
@@ -1003,8 +1030,8 @@ function AssetDetailsForm({
                   placeholder="0"
                 />
               </Field>
-            )}
-          </div>
+            </div>
+          )}
           {estimatedMaturityValue !== undefined && (
             <p className="text-xs text-slate-500">
               Est. maturity value:{' '}
@@ -1061,8 +1088,13 @@ function LiabilitiesTab({
 
   const handleSave = async (liability: Liability) => {
     if (!user) return;
-    await upsertDoc(user.uid, 'liabilities', liability);
-    setModalOpen(false);
+    try {
+      await upsertDoc(user.uid, 'liabilities', liability);
+      setModalOpen(false);
+    } catch (err) {
+      console.error('Failed to save liability', err);
+      alert('Could not save this liability. Please check your connection and try again.');
+    }
   };
 
   return (

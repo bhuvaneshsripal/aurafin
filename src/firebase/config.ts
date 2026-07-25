@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore } from 'firebase/firestore';
 import { isSupported, getAnalytics, type Analytics } from 'firebase/analytics';
 
 // Fill these in with your own Firebase project credentials.
@@ -19,7 +19,13 @@ const firebaseConfig = {
 
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+// ignoreUndefinedProperties is important here: every asset/liability form
+// (e.g. optional fields like interest rate, invested value, maturity date)
+// saves with several fields set to `undefined` when left blank. Firestore's
+// default setDoc() throws on `undefined` values, which made "Save" silently
+// fail (the promise rejected before setModalOpen(false) ran) whenever any
+// optional field was empty.
+export const db = initializeFirestore(app, { ignoreUndefinedProperties: true });
 export const googleProvider = new GoogleAuthProvider();
 
 // Analytics only works in a browser that supports it (and is a no-op
