@@ -68,7 +68,8 @@ export default function Sidebar() {
         px-4 py-6
       "
     >
-      <div className="px-2 mb-8">
+      <div className="px-2 mb-8 flex items-center gap-2.5">
+        <img src="/logo-icon.png" alt="Aurafin" className="w-8 h-8 rounded-lg shrink-0" />
         <span className="font-display text-2xl font-semibold text-brand-800 dark:text-brand-200 tracking-tight">
           Aurafin<span className="text-brand-500">.</span>
         </span>

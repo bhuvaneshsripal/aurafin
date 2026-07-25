@@ -1,5 +1,11 @@
 import { useRef, useState } from 'react';
-import { UploadCloud, CheckCircle2, AlertCircle, FileSpreadsheet, FileText } from 'lucide-react';
+import {
+  UploadCloud,
+  CheckCircle2,
+  AlertCircle,
+  FileSpreadsheet,
+  FileText,
+} from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { bulkUpsertDocs } from '../hooks/useFirestoreSync';
 import { parseSpreadsheetFile, rowsToAssets, type ParsedRow } from '../utils/importParser';
@@ -8,8 +14,139 @@ import { ASSET_TAXONOMY } from '../utils/taxonomy';
 import { exportToCsv, exportToXlsx, IMPORT_TEMPLATE_ROWS } from '../utils/exportCsv';
 import type { AssetClass } from '../types';
 
+interface Broker {
+  key: string;
+  name: string;
+  initial: string;
+  color: string;
+  steps: { title: string; items: string[] }[];
+}
+
+function genericSteps(name: string): { title: string; items: string[] }[] {
+  return [
+    {
+      title: `Export from ${name}`,
+      items: [
+        `Login to your ${name} account`,
+        'Go to your Portfolio or Holdings page',
+        'Look for an export/download option (CSV or Excel)',
+        'Upload the downloaded file below',
+      ],
+    },
+  ];
+}
+
+const BROKERS: Broker[] = [
+  {
+    key: 'zerodha',
+    name: 'Zerodha',
+    initial: 'Z',
+    color: '#387ed1',
+    steps: [
+      {
+        title: 'Option 1: Kite Web (CSV)',
+        items: [
+          'Login to kite.zerodha.com',
+          'Go to Holdings',
+          'Click the download icon to download the CSV file',
+          'Upload the downloaded file below',
+        ],
+      },
+      {
+        title: 'Option 2: Console (XLSX)',
+        items: [
+          'Login to console.zerodha.com',
+          'Go to Portfolio → Holdings',
+          'Click Export',
+          'Upload the downloaded file below',
+        ],
+      },
+    ],
+  },
+  {
+    key: 'groww',
+    name: 'Groww',
+    initial: 'G',
+    color: '#00d09c',
+    steps: [
+      {
+        title: 'Export from Groww',
+        items: [
+          'Open the Groww app or website',
+          'Go to Stocks / Mutual Funds → Holdings',
+          'Tap the export/download icon',
+          'Upload the downloaded file below',
+        ],
+      },
+    ],
+  },
+  {
+    key: 'indmoney',
+    name: 'INDmoney',
+    initial: 'I',
+    color: '#00b386',
+    steps: genericSteps('INDmoney'),
+  },
+  { key: 'upstox', name: 'Upstox', initial: 'U', color: '#5e2b97', steps: genericSteps('Upstox') },
+  {
+    key: 'icici',
+    name: 'ICICI Direct',
+    initial: 'I',
+    color: '#e2711d',
+    steps: genericSteps('ICICI Direct'),
+  },
+  { key: 'cdsl', name: 'CDSL', initial: 'C', color: '#1e40af', steps: genericSteps('CDSL') },
+  { key: 'angelone', name: 'Angel One', initial: 'A', color: '#e64a19', steps: genericSteps('Angel One') },
+  { key: 'aionion', name: 'Aionion', initial: 'A', color: '#16a34a', steps: genericSteps('Aionion') },
+  {
+    key: 'chola',
+    name: 'Chola Securities',
+    initial: '+',
+    color: '#7c3aed',
+    steps: genericSteps('Chola Securities'),
+  },
+  { key: 'mstock', name: 'mstock', initial: 'M', color: '#ea580c', steps: genericSteps('mstock') },
+  { key: '5paisa', name: '5paisa', initial: '5p', color: '#0891b2', steps: genericSteps('5paisa') },
+  { key: 'vested', name: 'Vested', initial: 'V', color: '#059669', steps: genericSteps('Vested') },
+  {
+    key: 'tickertape',
+    name: 'Tickertape',
+    initial: 'T',
+    color: '#d97706',
+    steps: genericSteps('Tickertape'),
+  },
+  { key: 'stockal', name: 'Stockal', initial: 'St', color: '#dc2626', steps: genericSteps('Stockal') },
+  {
+    key: 'ibkr',
+    name: 'Interactive Brokers',
+    initial: 'IB',
+    color: '#b91c1c',
+    steps: genericSteps('Interactive Brokers'),
+  },
+  { key: 'kuvera', name: 'Kuvera', initial: 'K', color: '#7c3aed', steps: genericSteps('Kuvera') },
+  {
+    key: 'mfcentral',
+    name: 'MFCentral CAS',
+    initial: 'M',
+    color: '#1d4ed8',
+    steps: [
+      {
+        title: 'Export your CAS from MFCentral',
+        items: [
+          'Login to mfcentral.com',
+          'Go to Statements → Consolidated Account Statement',
+          'Request and download your CAS (PDF/XLSX)',
+          'Upload the downloaded file below',
+        ],
+      },
+    ],
+  },
+];
+
 export default function Import() {
   const user = useAuthStore((s) => s.user);
+  const [importTab, setImportTab] = useState<'broker' | 'standard'>('broker');
+  const [selectedBroker, setSelectedBroker] = useState<Broker>(BROKERS[0]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState('');
   const [rows, setRows] = useState<ParsedRow[]>([]);
@@ -78,13 +215,102 @@ export default function Import() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Import Assets</h1>
-        <p className="text-slate-500 text-sm mt-1">
-          Upload a CSV or Excel file to bulk-add assets to your portfolio.
-        </p>
+        <h1 className="text-2xl font-semibold text-slate-900">Import</h1>
+        <p className="text-slate-500 text-sm mt-1">Bulk import assets, income &amp; expenses</p>
       </div>
 
       {status === 'idle' && (
+        <div className="flex bg-slate-100 rounded-xl p-1 gap-1 max-w-sm">
+          <button
+            onClick={() => setImportTab('broker')}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+              importTab === 'broker'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            Import from Broker
+          </button>
+          <button
+            onClick={() => setImportTab('standard')}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+              importTab === 'standard'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            Standard Import
+          </button>
+        </div>
+      )}
+
+      {status === 'idle' && importTab === 'broker' && (
+        <>
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4">
+            <h3 className="font-semibold text-slate-900">Select Broker</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+              {BROKERS.map((b) => (
+                <button
+                  key={b.key}
+                  onClick={() => setSelectedBroker(b)}
+                  className={`flex items-center gap-2 border rounded-xl px-3 py-3 text-sm font-medium transition-colors ${
+                    selectedBroker.key === b.key
+                      ? 'border-brand-500 bg-brand-50 text-brand-700'
+                      : 'border-slate-200 text-slate-700 hover:border-brand-300'
+                  }`}
+                >
+                  <span
+                    className="h-6 w-6 rounded-md flex items-center justify-center text-white text-xs font-bold shrink-0"
+                    style={{ backgroundColor: b.color }}
+                  >
+                    {b.initial}
+                  </span>
+                  <span className="truncate">{b.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-5">
+            <h3 className="font-semibold text-slate-900">How to Export from {selectedBroker.name}</h3>
+            {selectedBroker.steps.map((s) => (
+              <div key={s.title}>
+                <p className="text-sm font-semibold text-slate-800 mb-2">{s.title}</p>
+                <ol className="list-decimal list-inside space-y-1 text-sm text-slate-600">
+                  {s.items.map((item, i) => (
+                    <li key={i}>{item}</li>
+                  ))}
+                </ol>
+              </div>
+            ))}
+          </div>
+
+          <div
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={onDrop}
+            onClick={() => fileInputRef.current?.click()}
+            className="bg-white rounded-2xl border-2 border-dashed border-slate-300 hover:border-brand-400 transition-colors p-12 flex flex-col items-center justify-center gap-3 cursor-pointer text-center"
+          >
+            <UploadCloud className="text-brand-500" size={36} />
+            <p className="text-sm font-medium text-slate-700">
+              Drop your {selectedBroker.name} export here, or click to browse
+            </p>
+            <p className="text-xs text-slate-400">Supports .csv, .xlsx, .xls</p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleFile(file);
+              }}
+            />
+          </div>
+        </>
+      )}
+
+      {status === 'idle' && importTab === 'standard' && (
         <>
           <div className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
             <div className="flex-1">

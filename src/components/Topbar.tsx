@@ -31,8 +31,11 @@ export default function Topbar() {
   return (
     <>
       <div className="flex items-center justify-between md:justify-end gap-2 sm:gap-3 px-4 sm:px-6 md:px-8 py-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-        <span className="md:hidden font-display text-lg font-semibold text-brand-800 dark:text-brand-200 tracking-tight">
-          Aurafin<span className="text-brand-500">.</span>
+        <span className="md:hidden flex items-center gap-2">
+          <img src="/logo-icon.png" alt="Aurafin" className="w-6 h-6 rounded-md" />
+          <span className="font-display text-lg font-semibold text-brand-800 dark:text-brand-200 tracking-tight">
+            Aurafin<span className="text-brand-500">.</span>
+          </span>
         </span>
 
         <div className="flex items-center gap-1 sm:gap-3 overflow-x-auto">

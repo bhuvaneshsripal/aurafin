@@ -7,15 +7,133 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
+import {
+  ArrowLeft,
+  TrendingUp,
+  Calendar,
+  Coins,
+  LineChart as LineChartIcon,
+  Landmark,
+  Wallet,
+  PiggyBank,
+  type LucideIcon,
+} from 'lucide-react';
 import { formatCurrency } from '../utils/currency';
 
-type CalcTab = 'sip' | 'lumpsum' | 'fd';
+type CalcKey = 'xirr' | 'sip' | 'lumpsum' | 'cagr' | 'emi' | 'swp' | 'retirement' | 'fd';
+
+interface CalcDef {
+  key: CalcKey;
+  label: string;
+  description: string;
+  icon: LucideIcon;
+  soon?: boolean;
+}
+
+interface CalcGroup {
+  title: string;
+  items: CalcDef[];
+}
+
+const GROUPS: CalcGroup[] = [
+  {
+    title: 'Returns',
+    items: [
+      {
+        key: 'xirr',
+        label: 'XIRR Calculator',
+        description: 'Annualized return on SIPs and irregular investments.',
+        icon: LineChartIcon,
+      },
+      {
+        key: 'sip',
+        label: 'SIP Calculator',
+        description: 'Project the future value of a monthly SIP, with optional step-up.',
+        icon: Calendar,
+      },
+      {
+        key: 'lumpsum',
+        label: 'Lumpsum Calculator',
+        description: 'Growth of a one-time investment over time.',
+        icon: Coins,
+      },
+      {
+        key: 'cagr',
+        label: 'CAGR Calculator',
+        description: 'Compound annual growth rate between two values.',
+        icon: TrendingUp,
+      },
+    ],
+  },
+  {
+    title: 'Loans',
+    items: [
+      {
+        key: 'emi',
+        label: 'EMI Calculator',
+        description: 'Monthly instalment, total interest, and principal breakup.',
+        icon: Landmark,
+      },
+    ],
+  },
+  {
+    title: 'Planning',
+    items: [
+      {
+        key: 'swp',
+        label: 'SWP with Inflation',
+        description: 'How long your corpus lasts with inflation-linked withdrawals.',
+        icon: Wallet,
+      },
+      {
+        key: 'retirement',
+        label: 'Retirement Calculator',
+        description: 'The corpus you need and the SIP to reach it.',
+        icon: PiggyBank,
+      },
+      {
+        key: 'fd',
+        label: 'FD Calculator',
+        description: 'Maturity value of a fixed deposit.',
+        icon: Coins,
+      },
+    ],
+  },
+];
+
+const ALL_CALCS = GROUPS.flatMap((g) => g.items);
 
 export default function Calculators() {
-  const [tab, setTab] = useState<CalcTab>('sip');
+  const [active, setActive] = useState<CalcKey | null>(null);
+  const activeCalc = ALL_CALCS.find((c) => c.key === active);
+
+  if (activeCalc) {
+    return (
+      <div className="space-y-6 max-w-4xl">
+        <button
+          onClick={() => setActive(null)}
+          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-brand-600"
+        >
+          <ArrowLeft size={16} /> Back to Calculators
+        </button>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">{activeCalc.label}</h1>
+          <p className="text-slate-500 text-sm mt-1">{activeCalc.description}</p>
+        </div>
+        {active === 'xirr' && <XirrCalculator />}
+        {active === 'sip' && <SipCalculator />}
+        {active === 'lumpsum' && <LumpsumCalculator />}
+        {active === 'cagr' && <CagrCalculator />}
+        {active === 'emi' && <EmiCalculator />}
+        {active === 'swp' && <SwpCalculator />}
+        {active === 'retirement' && <RetirementCalculator />}
+        {active === 'fd' && <FdCalculator />}
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-8 max-w-4xl">
       <div>
         <h1 className="text-3xl font-bold text-slate-900">Calculators</h1>
         <p className="text-slate-500 text-base mt-1">
@@ -23,31 +141,46 @@ export default function Calculators() {
         </p>
       </div>
 
-      <div className="flex gap-2 border-b border-slate-200">
-        {(
-          [
-            ['sip', 'SIP'],
-            ['lumpsum', 'Lumpsum'],
-            ['fd', 'Fixed Deposit'],
-          ] as [CalcTab, string][]
-        ).map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`px-4 py-2.5 text-base font-medium border-b-2 -mb-px transition-colors ${
-              tab === key
-                ? 'border-brand-600 text-brand-700'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'sip' && <SipCalculator />}
-      {tab === 'lumpsum' && <LumpsumCalculator />}
-      {tab === 'fd' && <FdCalculator />}
+      {GROUPS.map((group) => (
+        <div key={group.title} className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            {group.title}
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {group.items.map((c) => {
+              const Icon = c.icon;
+              return (
+                <button
+                  key={c.key}
+                  disabled={c.soon}
+                  onClick={() => !c.soon && setActive(c.key)}
+                  className={`text-left bg-white rounded-2xl border border-slate-200 p-5 flex items-start gap-4 transition-colors ${
+                    c.soon
+                      ? 'opacity-60 cursor-not-allowed'
+                      : 'hover:border-brand-400 hover:bg-brand-50/40'
+                  }`}
+                >
+                  <div className="h-10 w-10 rounded-xl bg-brand-50 flex items-center justify-center text-brand-600 shrink-0">
+                    <Icon size={20} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-slate-900">{c.label}</p>
+                      {c.soon && (
+                        <span className="text-[10px] font-medium bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">
+                          Soon
+                        </span>
+                      )}
+                      {!c.soon && <span className="text-slate-300 ml-auto">→</span>}
+                    </div>
+                    <p className="text-sm text-slate-500 mt-0.5">{c.description}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -241,6 +374,492 @@ function FdCalculator() {
           <h2 className="text-lg font-semibold text-slate-800">Projected Value</h2>
           <p className="text-sm text-slate-500">Maturity Value</p>
           <p className="text-2xl font-bold text-brand-600">{formatCurrency(maturity)}</p>
+        </>
+      }
+      chartData={chartData}
+    />
+  );
+}
+
+function CagrCalculator() {
+  const [initial, setInitial] = useState('100000');
+  const [final, setFinal] = useState('200000');
+  const [years, setYears] = useState('5');
+
+  const { cagr, chartData } = useMemo(() => {
+    const I = Number(initial) || 0;
+    const F = Number(final) || 0;
+    const n = Number(years) || 0;
+    const rate = I > 0 && n > 0 ? Math.pow(F / I, 1 / n) - 1 : 0;
+    const data: { year: number; value: number }[] = [];
+    for (let year = 0; year <= n; year++) {
+      data.push({ year, value: Math.round(I * Math.pow(1 + rate, year)) });
+    }
+    return { cagr: rate * 100, chartData: data };
+  }, [initial, final, years]);
+
+  return (
+    <CalcShell
+      inputs={
+        <>
+          <h2 className="text-lg font-semibold text-slate-800">CAGR Details</h2>
+          <Field label="Initial Value">
+            <input type="number" value={initial} onChange={(e) => setInitial(e.target.value)} className={inputClass} />
+          </Field>
+          <Field label="Final Value">
+            <input type="number" value={final} onChange={(e) => setFinal(e.target.value)} className={inputClass} />
+          </Field>
+          <Field label="Duration (Years)">
+            <input type="number" value={years} onChange={(e) => setYears(e.target.value)} className={inputClass} />
+          </Field>
+        </>
+      }
+      result={
+        <>
+          <h2 className="text-lg font-semibold text-slate-800">Result</h2>
+          <p className="text-sm text-slate-500">Compound Annual Growth Rate</p>
+          <p className="text-2xl font-bold text-brand-600">
+            {Number.isFinite(cagr) ? cagr.toFixed(2) : '0.00'}%
+          </p>
+        </>
+      }
+      chartData={chartData}
+    />
+  );
+}
+
+function EmiCalculator() {
+  const [principal, setPrincipal] = useState('2500000');
+  const [rate, setRate] = useState('9');
+  const [years, setYears] = useState('20');
+
+  const { emi, totalInterest, totalPayment, chartData } = useMemo(() => {
+    const P = Number(principal) || 0;
+    const annualRate = Number(rate) || 0;
+    const n = (Number(years) || 0) * 12;
+    const r = annualRate / 12 / 100;
+    const monthlyEmi = r > 0 && n > 0 ? (P * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1) : 0;
+    const total = monthlyEmi * n;
+    const interest = total - P;
+
+    const data: { year: number; value: number }[] = [];
+    let balance = P;
+    data.push({ year: 0, value: Math.round(balance) });
+    for (let year = 1; year <= Number(years); year++) {
+      for (let m = 0; m < 12; m++) {
+        const interestPortion = balance * r;
+        const principalPortion = monthlyEmi - interestPortion;
+        balance = Math.max(0, balance - principalPortion);
+      }
+      data.push({ year, value: Math.round(balance) });
+    }
+
+    return {
+      emi: Math.round(monthlyEmi),
+      totalInterest: Math.round(interest),
+      totalPayment: Math.round(total),
+      chartData: data,
+    };
+  }, [principal, rate, years]);
+
+  return (
+    <CalcShell
+      inputs={
+        <>
+          <h2 className="text-lg font-semibold text-slate-800">Loan Details</h2>
+          <Field label="Loan Amount">
+            <input type="number" value={principal} onChange={(e) => setPrincipal(e.target.value)} className={inputClass} />
+          </Field>
+          <Field label="Interest Rate (% p.a.)">
+            <input type="number" value={rate} onChange={(e) => setRate(e.target.value)} className={inputClass} />
+          </Field>
+          <Field label="Tenure (Years)">
+            <input type="number" value={years} onChange={(e) => setYears(e.target.value)} className={inputClass} />
+          </Field>
+        </>
+      }
+      result={
+        <>
+          <h2 className="text-lg font-semibold text-slate-800">EMI Breakup</h2>
+          <div className="grid grid-cols-1 gap-4">
+            <div>
+              <p className="text-sm text-slate-500">Monthly EMI</p>
+              <p className="text-xl font-bold text-brand-600">{formatCurrency(emi)}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-slate-500">Total Interest</p>
+                <p className="text-lg font-semibold text-slate-900">{formatCurrency(totalInterest)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-slate-500">Total Payment</p>
+                <p className="text-lg font-semibold text-slate-900">{formatCurrency(totalPayment)}</p>
+              </div>
+            </div>
+          </div>
+          <p className="text-xs text-slate-400">Remaining loan balance by year, below.</p>
+        </>
+      }
+      chartData={chartData}
+    />
+  );
+}
+
+interface Cashflow {
+  id: number;
+  date: string;
+  amount: string;
+}
+
+function xirrRate(cashflows: { date: Date; amount: number }[]): number | null {
+  if (cashflows.length < 2) return null;
+  const t0 = cashflows[0].date.getTime();
+  const years = cashflows.map((c) => (c.date.getTime() - t0) / (365 * 24 * 3600 * 1000));
+
+  const npv = (rate: number) =>
+    cashflows.reduce((sum, c, i) => sum + c.amount / Math.pow(1 + rate, years[i]), 0);
+  const dnpv = (rate: number) =>
+    cashflows.reduce(
+      (sum, c, i) => sum - (years[i] * c.amount) / Math.pow(1 + rate, years[i] + 1),
+      0
+    );
+
+  let rate = 0.1;
+  for (let i = 0; i < 100; i++) {
+    const f = npv(rate);
+    const df = dnpv(rate);
+    if (Math.abs(df) < 1e-10) break;
+    const next = rate - f / df;
+    if (!Number.isFinite(next)) break;
+    if (Math.abs(next - rate) < 1e-7) {
+      rate = next;
+      break;
+    }
+    rate = next;
+  }
+  return Number.isFinite(rate) ? rate : null;
+}
+
+function XirrCalculator() {
+  const today = new Date().toISOString().slice(0, 10);
+  const [flows, setFlows] = useState<Cashflow[]>([{ id: 1, date: today, amount: '-100000' }]);
+  const [currentValue, setCurrentValue] = useState('130000');
+  const [currentDate, setCurrentDate] = useState(today);
+
+  const addFlow = () => {
+    setFlows((prev) => [...prev, { id: Date.now(), date: today, amount: '-10000' }]);
+  };
+  const removeFlow = (id: number) => setFlows((prev) => prev.filter((f) => f.id !== id));
+  const updateFlow = (id: number, patch: Partial<Cashflow>) =>
+    setFlows((prev) => prev.map((f) => (f.id === id ? { ...f, ...patch } : f)));
+
+  const rate = useMemo(() => {
+    const cfs = [
+      ...flows
+        .filter((f) => f.date && Number(f.amount))
+        .map((f) => ({ date: new Date(f.date), amount: Number(f.amount) })),
+      { date: new Date(currentDate), amount: Number(currentValue) || 0 },
+    ].sort((a, b) => a.date.getTime() - b.date.getTime());
+    return xirrRate(cfs);
+  }, [flows, currentValue, currentDate]);
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4">
+        <h2 className="text-lg font-semibold text-slate-800">Cash Flows</h2>
+        <p className="text-xs text-slate-400 -mt-2">
+          Enter each investment as a negative amount on the date you invested.
+        </p>
+        {flows.map((f) => (
+          <div key={f.id} className="flex items-center gap-2">
+            <input
+              type="date"
+              value={f.date}
+              onChange={(e) => updateFlow(f.id, { date: e.target.value })}
+              className={inputClass}
+            />
+            <input
+              type="number"
+              value={f.amount}
+              onChange={(e) => updateFlow(f.id, { amount: e.target.value })}
+              className={inputClass}
+              placeholder="Amount"
+            />
+            <button
+              onClick={() => removeFlow(f.id)}
+              disabled={flows.length === 1}
+              className="text-slate-400 hover:text-red-500 disabled:opacity-30 shrink-0 text-sm px-2"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        <button onClick={addFlow} className="text-sm font-medium text-brand-600 hover:text-brand-700">
+          + Add cash flow
+        </button>
+
+        <div className="pt-2 border-t border-slate-100 space-y-3">
+          <Field label="Current Value (positive)">
+            <input
+              type="number"
+              value={currentValue}
+              onChange={(e) => setCurrentValue(e.target.value)}
+              className={inputClass}
+            />
+          </Field>
+          <Field label="As of Date">
+            <input
+              type="date"
+              value={currentDate}
+              onChange={(e) => setCurrentDate(e.target.value)}
+              className={inputClass}
+            />
+          </Field>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4">
+        <h2 className="text-lg font-semibold text-slate-800">Result</h2>
+        <p className="text-sm text-slate-500">Annualized Return (XIRR)</p>
+        <p className="text-2xl font-bold text-brand-600">
+          {rate !== null ? `${(rate * 100).toFixed(2)}%` : '—'}
+        </p>
+        <p className="text-xs text-slate-400">
+          Based on the timing and size of each cash flow entered, plus the current value.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function SwpCalculator() {
+  const [corpus, setCorpus] = useState('5000000');
+  const [withdrawal, setWithdrawal] = useState('30000');
+  const [returnRate, setReturnRate] = useState('8');
+  const [inflation, setInflation] = useState('6');
+
+  const { chartData, lastsYears, depleted, endingBalance } = useMemo(() => {
+    const P = Number(corpus) || 0;
+    const monthlyReturn = (Number(returnRate) || 0) / 12 / 100;
+    const annualInflation = (Number(inflation) || 0) / 100;
+    const MAX_YEARS = 50;
+
+    let balance = P;
+    let monthlyWithdrawal = Number(withdrawal) || 0;
+    const data: { year: number; value: number }[] = [{ year: 0, value: Math.round(balance) }];
+    let yearsLasted = MAX_YEARS;
+    let ranOut = false;
+
+    outer: for (let year = 1; year <= MAX_YEARS; year++) {
+      for (let m = 0; m < 12; m++) {
+        balance = balance * (1 + monthlyReturn) - monthlyWithdrawal;
+        if (balance <= 0) {
+          balance = 0;
+          yearsLasted = year - 1 + (m + 1) / 12;
+          ranOut = true;
+          data.push({ year: Math.round(yearsLasted * 10) / 10, value: 0 });
+          break outer;
+        }
+      }
+      data.push({ year, value: Math.round(balance) });
+      monthlyWithdrawal = monthlyWithdrawal * (1 + annualInflation);
+    }
+
+    return {
+      chartData: data,
+      lastsYears: Math.round(yearsLasted * 10) / 10,
+      depleted: ranOut,
+      endingBalance: Math.round(balance),
+    };
+  }, [corpus, withdrawal, returnRate, inflation]);
+
+  return (
+    <CalcShell
+      inputs={
+        <>
+          <h2 className="text-lg font-semibold text-slate-800">Withdrawal Plan</h2>
+          <Field label="Starting Corpus">
+            <input type="number" value={corpus} onChange={(e) => setCorpus(e.target.value)} className={inputClass} />
+          </Field>
+          <Field label="Monthly Withdrawal (today's value)">
+            <input
+              type="number"
+              value={withdrawal}
+              onChange={(e) => setWithdrawal(e.target.value)}
+              className={inputClass}
+            />
+          </Field>
+          <Field label="Expected Annual Return (%)">
+            <input
+              type="number"
+              value={returnRate}
+              onChange={(e) => setReturnRate(e.target.value)}
+              className={inputClass}
+            />
+          </Field>
+          <Field label="Inflation Rate (%, withdrawal grows each year)">
+            <input
+              type="number"
+              value={inflation}
+              onChange={(e) => setInflation(e.target.value)}
+              className={inputClass}
+            />
+          </Field>
+        </>
+      }
+      result={
+        <>
+          <h2 className="text-lg font-semibold text-slate-800">Result</h2>
+          {depleted ? (
+            <>
+              <p className="text-sm text-slate-500">Corpus lasts</p>
+              <p className="text-2xl font-bold text-brand-600">{lastsYears} years</p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-slate-500">Balance after 50 years</p>
+              <p className="text-2xl font-bold text-brand-600">{formatCurrency(endingBalance)}</p>
+              <p className="text-xs text-slate-400">
+                Your corpus outlasts the 50-year projection window at this withdrawal rate.
+              </p>
+            </>
+          )}
+        </>
+      }
+      chartData={chartData}
+    />
+  );
+}
+
+function RetirementCalculator() {
+  const [currentAge, setCurrentAge] = useState('30');
+  const [retireAge, setRetireAge] = useState('60');
+  const [lifeExpectancy, setLifeExpectancy] = useState('85');
+  const [monthlyExpense, setMonthlyExpense] = useState('50000');
+  const [inflation, setInflation] = useState('6');
+  const [preReturn, setPreReturn] = useState('12');
+  const [postReturn, setPostReturn] = useState('7');
+  const [currentSavings, setCurrentSavings] = useState('500000');
+
+  const { corpusNeeded, requiredSip, chartData } = useMemo(() => {
+    const age = Number(currentAge) || 0;
+    const rAge = Number(retireAge) || 0;
+    const life = Number(lifeExpectancy) || 0;
+    const yearsToRetirement = Math.max(0, rAge - age);
+    const yearsInRetirement = Math.max(0, life - rAge);
+    const g = (Number(inflation) || 0) / 100;
+    const preR = (Number(preReturn) || 0) / 100;
+    const postR = (Number(postReturn) || 0) / 100;
+
+    // Monthly expense projected to the retirement date.
+    const expenseAtRetirement = (Number(monthlyExpense) || 0) * 12 * Math.pow(1 + g, yearsToRetirement);
+
+    // Present value (at retirement) of a growing annuity of expenses through retirement.
+    let corpus: number;
+    if (yearsInRetirement <= 0) {
+      corpus = 0;
+    } else if (Math.abs(postR - g) < 1e-9) {
+      corpus = expenseAtRetirement * yearsInRetirement;
+    } else {
+      const ratio = Math.pow((1 + g) / (1 + postR), yearsInRetirement);
+      corpus = (expenseAtRetirement * (1 - ratio)) / (postR - g);
+    }
+
+    // Future value of current savings by retirement.
+    const fvCurrentSavings = (Number(currentSavings) || 0) * Math.pow(1 + preR, yearsToRetirement);
+    const shortfall = Math.max(0, corpus - fvCurrentSavings);
+
+    // Monthly SIP required to reach the shortfall by retirement.
+    const n = yearsToRetirement * 12;
+    const i = preR / 12;
+    let sip = 0;
+    if (n > 0) {
+      const factor = i > 0 ? ((Math.pow(1 + i, n) - 1) / i) * (1 + i) : n;
+      sip = factor > 0 ? shortfall / factor : 0;
+    }
+
+    // Corpus balance during retirement (depletion chart).
+    const data: { year: number; value: number }[] = [];
+    let balance = corpus;
+    let expense = expenseAtRetirement / 12;
+    data.push({ year: 0, value: Math.round(balance) });
+    for (let year = 1; year <= yearsInRetirement; year++) {
+      for (let m = 0; m < 12; m++) {
+        balance = balance * (1 + postR / 12) - expense;
+      }
+      data.push({ year, value: Math.round(Math.max(0, balance)) });
+      expense = expense * (1 + g);
+    }
+
+    return { corpusNeeded: Math.round(corpus), requiredSip: Math.round(sip), chartData: data };
+  }, [currentAge, retireAge, lifeExpectancy, monthlyExpense, inflation, preReturn, postReturn, currentSavings]);
+
+  return (
+    <CalcShell
+      inputs={
+        <>
+          <h2 className="text-lg font-semibold text-slate-800">Your Plan</h2>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Current Age">
+              <input type="number" value={currentAge} onChange={(e) => setCurrentAge(e.target.value)} className={inputClass} />
+            </Field>
+            <Field label="Retirement Age">
+              <input type="number" value={retireAge} onChange={(e) => setRetireAge(e.target.value)} className={inputClass} />
+            </Field>
+          </div>
+          <Field label="Life Expectancy (Age)">
+            <input
+              type="number"
+              value={lifeExpectancy}
+              onChange={(e) => setLifeExpectancy(e.target.value)}
+              className={inputClass}
+            />
+          </Field>
+          <Field label="Current Monthly Expense">
+            <input
+              type="number"
+              value={monthlyExpense}
+              onChange={(e) => setMonthlyExpense(e.target.value)}
+              className={inputClass}
+            />
+          </Field>
+          <Field label="Current Savings (towards retirement)">
+            <input
+              type="number"
+              value={currentSavings}
+              onChange={(e) => setCurrentSavings(e.target.value)}
+              className={inputClass}
+            />
+          </Field>
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="Inflation (%)">
+              <input type="number" value={inflation} onChange={(e) => setInflation(e.target.value)} className={inputClass} />
+            </Field>
+            <Field label="Pre-retirement Return (%)">
+              <input type="number" value={preReturn} onChange={(e) => setPreReturn(e.target.value)} className={inputClass} />
+            </Field>
+            <Field label="Post-retirement Return (%)">
+              <input type="number" value={postReturn} onChange={(e) => setPostReturn(e.target.value)} className={inputClass} />
+            </Field>
+          </div>
+        </>
+      }
+      result={
+        <>
+          <h2 className="text-lg font-semibold text-slate-800">Result</h2>
+          <div className="grid grid-cols-1 gap-4">
+            <div>
+              <p className="text-sm text-slate-500">Corpus Needed at Retirement</p>
+              <p className="text-xl font-bold text-brand-600">{formatCurrency(corpusNeeded)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-slate-500">Monthly SIP Required</p>
+              <p className="text-xl font-bold text-slate-900">{formatCurrency(requiredSip)}</p>
+            </div>
+          </div>
+          <p className="text-xs text-slate-400">
+            Corpus balance through retirement, assuming expenses keep rising with inflation, below.
+          </p>
         </>
       }
       chartData={chartData}
