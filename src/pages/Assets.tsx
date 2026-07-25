@@ -101,7 +101,7 @@ export default function Assets() {
 
 function AssetForm({ initial, onSave }: { initial: Asset | null; onSave: (a: Asset) => void }) {
   const [name, setName] = useState(initial?.name ?? '');
-  const [assetClass, setAssetClass] = useState<AssetClass>(initial?.assetClass ?? 'equity');
+  const [assetClass, setAssetClass] = useState<AssetClass>(initial?.assetClass ?? 'stock');
   const [value, setValue] = useState(initial?.value?.toString() ?? '');
   const [currency, setCurrency] = useState(initial?.currency ?? 'INR');
 
