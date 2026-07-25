@@ -30,11 +30,16 @@ export default function Topbar() {
 
   return (
     <>
-      <div className="flex items-center justify-end gap-3 px-6 md:px-8 py-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+      <div className="flex items-center justify-between md:justify-end gap-2 sm:gap-3 px-4 sm:px-6 md:px-8 py-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <span className="md:hidden font-display text-lg font-semibold text-brand-800 dark:text-brand-200 tracking-tight">
+          Aurafin<span className="text-brand-500">.</span>
+        </span>
+
+        <div className="flex items-center gap-1 sm:gap-3 overflow-x-auto">
         <button
           onClick={toggleTheme}
           title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          className="h-10 w-10 flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+          className="h-10 w-10 flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
         >
           {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
         </button>
@@ -42,12 +47,12 @@ export default function Topbar() {
         <button
           onClick={togglePrivacy}
           title={privacyMode ? 'Show amounts' : 'Hide amounts'}
-          className="h-10 w-10 flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+          className="h-10 w-10 flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
         >
           {privacyMode ? <EyeOff size={20} /> : <Eye size={20} />}
         </button>
 
-        <div className="relative" ref={notifRef}>
+        <div className="relative shrink-0" ref={notifRef}>
           <button
             onClick={() => setNotifOpen((o) => !o)}
             className="h-10 w-10 flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -55,7 +60,7 @@ export default function Topbar() {
             <Bell size={20} />
           </button>
           {notifOpen && (
-            <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden z-20">
+            <div className="absolute right-0 mt-2 w-72 max-w-[90vw] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden z-20">
               <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
                 <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Notifications</p>
               </div>
@@ -64,11 +69,13 @@ export default function Topbar() {
           )}
         </div>
 
-        <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1" />
+        <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1 shrink-0" />
 
-        <QuickAddMenu />
+        <div className="shrink-0">
+          <QuickAddMenu />
+        </div>
 
-        <div className="relative" ref={profileRef}>
+        <div className="relative shrink-0" ref={profileRef}>
           <button
             onClick={() => setProfileOpen((o) => !o)}
             className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -105,6 +112,7 @@ export default function Topbar() {
               </button>
             </div>
           )}
+        </div>
         </div>
       </div>
 

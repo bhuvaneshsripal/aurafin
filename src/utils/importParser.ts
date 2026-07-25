@@ -8,6 +8,13 @@ export interface ParsedRow {
   assetClass: AssetClass;
   currency: string;
   valid: boolean;
+  symbol?: string;
+  quantity?: number;
+  avgCost?: number;
+  currentPrice?: number;
+  investedValue?: number;
+  pnl?: number;
+  pnlPercent?: number;
 }
 
 // --- Header candidates -------------------------------------------------
@@ -60,6 +67,12 @@ const PRICE_HEADERS = [
 
 const AVG_PRICE_HEADERS = ['avg. cost', 'avg cost', 'average price', 'avg. price', 'avg price', 'buy price'];
 
+const INVESTED_HEADERS = ['invested', 'invested value', 'invested amt', 'invested amount', 'cost value', 'book value'];
+
+const PNL_HEADERS = ['p&l', 'pnl', 'p & l', 'profit/loss', 'profit or loss', 'unrealized p&l', 'gain/loss'];
+
+const PNL_PERCENT_HEADERS = ['p&l %', 'pnl %', 'p&l pct', 'p&l percent', 'return %', 'returns %', 'gain %'];
+
 const CLASS_HEADERS = ['class', 'asset class', 'category', 'type'];
 const CURRENCY_HEADERS = ['currency', 'ccy'];
 
@@ -78,28 +91,40 @@ const EQUITY_EXPORT_SIGNALS = [
 ];
 
 const CLASS_KEYWORD_MAP: Record<string, AssetClass> = {
-  equity: 'equity',
-  stock: 'equity',
-  stocks: 'equity',
-  shares: 'equity',
-  mutual: 'mutual_fund',
-  mf: 'mutual_fund',
-  'mutual fund': 'mutual_fund',
-  fund: 'mutual_fund',
-  'real estate': 'real_estate',
-  property: 'real_estate',
-  realestate: 'real_estate',
+  equity: 'stock',
+  stock: 'stock',
+  stocks: 'stock',
+  shares: 'stock',
+  etf: 'etf',
+  mutual: 'equity_mutual_fund',
+  mf: 'equity_mutual_fund',
+  'mutual fund': 'equity_mutual_fund',
+  fund: 'equity_mutual_fund',
+  'index fund': 'index_fund',
+  sip: 'sip',
+  'real estate': 'residential_property',
+  property: 'residential_property',
+  realestate: 'residential_property',
   gold: 'gold',
-  sgb: 'gold',
-  epf: 'epf_ppf',
-  ppf: 'epf_ppf',
+  silver: 'silver',
+  sgb: 'sovereign_gold_bond',
+  epf: 'epf',
+  ppf: 'ppf',
+  vpf: 'vpf',
   nps: 'nps',
+  bond: 'government_bond',
+  'government bond': 'government_bond',
+  'corporate bond': 'corporate_bond',
   fd: 'fixed_deposit',
   'fixed deposit': 'fixed_deposit',
   deposit: 'fixed_deposit',
-  crypto: 'crypto',
-  bitcoin: 'crypto',
+  rd: 'recurring_deposit',
+  'recurring deposit': 'recurring_deposit',
+  crypto: 'crypto_coin',
+  bitcoin: 'crypto_coin',
+  nft: 'nft',
   cash: 'cash',
+  savings: 'cash',
 };
 
 function normalizeHeader(h: string) {
@@ -154,7 +179,12 @@ export async function parseSpreadsheetFile(file: File): Promise<ParsedRow[]> {
   const classKey = findHeaderKey(headers, CLASS_HEADERS);
   const currencyKey = findHeaderKey(headers, CURRENCY_HEADERS);
   const qtyKey = findHeaderKey(headers, QTY_HEADERS);
-  const priceKey = findHeaderKey(headers, PRICE_HEADERS) ?? findHeaderKey(headers, AVG_PRICE_HEADERS);
+  const ltpKey = findHeaderKey(headers, PRICE_HEADERS);
+  const avgPriceKey = findHeaderKey(headers, AVG_PRICE_HEADERS);
+  const priceKey = ltpKey ?? avgPriceKey;
+  const investedKey = findHeaderKey(headers, INVESTED_HEADERS);
+  const pnlKey = findHeaderKey(headers, PNL_HEADERS);
+  const pnlPercentKey = findHeaderKey(headers, PNL_PERCENT_HEADERS);
 
   // No asset-class column at all, but the sheet clearly looks like a
   // broker holdings export -> treat every row as equity by default.
@@ -163,18 +193,45 @@ export async function parseSpreadsheetFile(file: File): Promise<ParsedRow[]> {
 
   return rows.map((raw) => {
     const name = nameKey ? String(raw[nameKey] ?? '').trim() : '';
+    const symbol = nameKey && nameKey !== 'name' && nameKey !== 'asset' && nameKey !== 'asset name'
+      ? name.toUpperCase()
+      : name.toUpperCase();
+
+    const quantity = qtyKey ? toNumber(raw[qtyKey]) : undefined;
+    const avgCost = avgPriceKey ? toNumber(raw[avgPriceKey]) : undefined;
+    const currentPrice = ltpKey ? toNumber(raw[ltpKey]) : undefined;
 
     let value = valueKey ? toNumber(raw[valueKey]) : 0;
-    if (value <= 0 && qtyKey && priceKey) {
-      const qty = toNumber(raw[qtyKey]);
+    if (value <= 0 && quantity && quantity > 0 && currentPrice && currentPrice > 0) {
+      value = quantity * currentPrice;
+    } else if (value <= 0 && quantity && quantity > 0 && priceKey) {
       const price = toNumber(raw[priceKey]);
-      if (qty > 0 && price > 0) value = qty * price;
+      if (price > 0) value = quantity * price;
     }
 
     const detectedClass = classKey ? guessAssetClass(raw[classKey]) : undefined;
-    const assetClass: AssetClass = detectedClass ?? (looksLikeEquityExport ? 'equity' : 'other');
+    const assetClass: AssetClass = detectedClass ?? (looksLikeEquityExport ? 'stock' : 'other');
 
     const currency = currencyKey ? String(raw[currencyKey] ?? 'INR').trim() || 'INR' : 'INR';
+
+    // Invested value: prefer explicit column, else Qty x Avg. cost (full decimal precision).
+    let investedValue = investedKey ? toNumber(raw[investedKey]) : 0;
+    if (investedValue <= 0 && quantity && quantity > 0 && avgCost && avgCost > 0) {
+      investedValue = quantity * avgCost;
+    }
+
+    // P&L: prefer an explicit column, else derive from value - invested.
+    let pnl = pnlKey ? toNumber(raw[pnlKey]) : undefined;
+    if (pnl === undefined && investedValue > 0 && value > 0) {
+      pnl = value - investedValue;
+    }
+
+    let pnlPercent = pnlPercentKey ? toNumber(raw[pnlPercentKey]) : undefined;
+    if (pnlPercent === undefined && pnl !== undefined && investedValue > 0) {
+      pnlPercent = (pnl / investedValue) * 100;
+    }
+
+    const hasSymbol = looksLikeEquityExport || assetClass === 'stock';
 
     return {
       raw,
@@ -183,6 +240,13 @@ export async function parseSpreadsheetFile(file: File): Promise<ParsedRow[]> {
       assetClass,
       currency,
       valid: name.length > 0 && value > 0,
+      symbol: hasSymbol && symbol ? symbol : undefined,
+      quantity: quantity && quantity > 0 ? quantity : undefined,
+      avgCost: avgCost && avgCost > 0 ? avgCost : undefined,
+      currentPrice: currentPrice && currentPrice > 0 ? currentPrice : undefined,
+      investedValue: investedValue > 0 ? investedValue : undefined,
+      pnl,
+      pnlPercent,
     };
   });
 }
@@ -197,5 +261,11 @@ export function rowsToAssets(rows: ParsedRow[]): Asset[] {
       value: r.value,
       currency: r.currency,
       updatedAt: Date.now(),
+      symbol: r.symbol,
+      quantity: r.quantity,
+      avgCost: r.avgCost,
+      investedValue: r.investedValue,
+      pnl: r.pnl,
+      pnlPercent: r.pnlPercent,
     }));
 }

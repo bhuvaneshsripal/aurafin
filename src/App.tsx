@@ -8,8 +8,10 @@ import { useTransactionsStore } from './store/transactionsStore';
 import { useSnapshotsStore } from './store/snapshotsStore';
 import { useUiStore } from './store/uiStore';
 import { useFirestoreCollectionSync } from './hooks/useFirestoreSync';
+import { useLivePrices } from './hooks/useLivePrices';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
+import BottomNav from './components/BottomNav';
 import Dashboard from './pages/Dashboard';
 import Wealth from './pages/Wealth';
 import Essentials from './pages/Essentials';
@@ -17,6 +19,9 @@ import Transactions from './pages/Transactions';
 import Import from './pages/Import';
 import Calculators from './pages/Calculators';
 import Settings from './pages/Settings';
+import WhatsNew from './pages/WhatsNew';
+import InstallApp from './pages/InstallApp';
+import Feedback from './pages/Feedback';
 import Login from './pages/Login';
 import type { Asset, Liability, Goal, Transaction, Snapshot } from './types';
 
@@ -26,7 +31,7 @@ function AppShell() {
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Topbar />
-        <main className="flex-1 p-6 md:p-8 max-w-6xl mx-auto w-full">
+        <main className="flex-1 p-6 pb-24 md:p-8 max-w-6xl mx-auto w-full">
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/wealth" element={<Wealth />} />
@@ -35,12 +40,21 @@ function AppShell() {
             <Route path="/import" element={<Import />} />
             <Route path="/calculators" element={<Calculators />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/whats-new" element={<WhatsNew />} />
+            <Route path="/install" element={<InstallApp />} />
+            <Route path="/feedback" element={<Feedback />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
       </div>
+      <BottomNav />
     </div>
   );
+}
+
+function LivePriceSync() {
+  useLivePrices();
+  return null;
 }
 
 function DataSync() {
@@ -83,6 +97,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <DataSync />
+      <LivePriceSync />
       <AppShell />
     </BrowserRouter>
   );

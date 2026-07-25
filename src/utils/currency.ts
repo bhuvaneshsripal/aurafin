@@ -1,15 +1,34 @@
 export const CURRENCIES = ['INR', 'USD', 'EUR', 'GBP', 'SGD', 'AED', 'AUD', 'CAD', 'JPY'] as const;
 
-export function formatCurrency(value: number, currency: string = 'INR') {
+export interface FormatCurrencyOptions {
+  /** Decimal places to show. Defaults to 0 for whole amounts, use 2 for invested/price. */
+  fractionDigits?: number;
+}
+
+export function formatCurrency(
+  value: number,
+  currency: string = 'INR',
+  options?: FormatCurrencyOptions
+) {
+  const fractionDigits = options?.fractionDigits ?? 0;
   try {
     return new Intl.NumberFormat(currency === 'INR' ? 'en-IN' : 'en-US', {
       style: 'currency',
       currency,
-      maximumFractionDigits: 0,
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
     }).format(value);
   } catch {
-    return `${currency} ${value.toLocaleString()}`;
+    return `${currency} ${value.toLocaleString(undefined, {
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+    })}`;
   }
+}
+
+/** Invested amounts, avg cost, and live prices — always show paise/cents. */
+export function formatPreciseCurrency(value: number, currency: string = 'INR') {
+  return formatCurrency(value, currency, { fractionDigits: 2 });
 }
 
 export function formatCompact(value: number, currency: string = 'INR') {
@@ -17,28 +36,6 @@ export function formatCompact(value: number, currency: string = 'INR') {
   return formatted;
 }
 
-export const ASSET_CLASS_LABELS: Record<string, string> = {
-  equity: 'Equity',
-  mutual_fund: 'Mutual Funds',
-  real_estate: 'Real Estate',
-  gold: 'Gold & SGBs',
-  epf_ppf: 'EPF & PPF',
-  nps: 'NPS',
-  fixed_deposit: 'Fixed Deposits',
-  crypto: 'Crypto',
-  cash: 'Cash',
-  other: 'Other',
-};
-
-export const ASSET_CLASS_COLORS: Record<string, string> = {
-  equity: '#16a35d',
-  mutual_fund: '#22c274',
-  real_estate: '#4ade93',
-  gold: '#f5b942',
-  epf_ppf: '#3b82f6',
-  nps: '#8b5cf6',
-  fixed_deposit: '#06b6d4',
-  crypto: '#f97316',
-  cash: '#94a3b8',
-  other: '#64748b',
-};
+// Asset-class labels/colors now live in ./taxonomy.ts (full 39-type taxonomy).
+// Re-exported here so existing imports from '../utils/currency' keep working.
+export { ASSET_CLASS_LABELS, ASSET_CLASS_COLORS } from './taxonomy';

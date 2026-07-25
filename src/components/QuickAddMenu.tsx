@@ -15,11 +15,10 @@ import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { upsertDoc } from '../hooks/useFirestoreSync';
 import Modal from './Modal';
 import type { Asset, AssetClass, Liability, Snapshot, Transaction, TransactionType } from '../types';
-import { ASSET_CLASS_LABELS, CURRENCIES } from '../utils/currency';
+import { CURRENCIES } from '../utils/currency';
+import { ASSET_TAXONOMY } from '../utils/taxonomy';
 
 type QuickAction = 'expense' | 'income' | 'transfer' | 'asset' | 'liability' | 'snapshot' | null;
-
-const ASSET_CLASSES = Object.keys(ASSET_CLASS_LABELS) as AssetClass[];
 
 export default function QuickAddMenu() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -242,7 +241,7 @@ function TransferForm({ onDone }: { onDone: () => void }) {
 function AssetForm({ onDone }: { onDone: () => void }) {
   const user = useAuthStore((s) => s.user);
   const [name, setName] = useState('');
-  const [assetClass, setAssetClass] = useState<AssetClass>('equity');
+  const [assetClass, setAssetClass] = useState<AssetClass>('stock');
   const [value, setValue] = useState('');
   const [currency, setCurrency] = useState('INR');
 
@@ -267,10 +266,14 @@ function AssetForm({ onDone }: { onDone: () => void }) {
       </Field>
       <Field label="Asset Class">
         <select value={assetClass} onChange={(e) => setAssetClass(e.target.value as AssetClass)} className={inputClass}>
-          {ASSET_CLASSES.map((c) => (
-            <option key={c} value={c}>
-              {ASSET_CLASS_LABELS[c]}
-            </option>
+          {ASSET_TAXONOMY.map((cat) => (
+            <optgroup key={cat.key} label={cat.label}>
+              {cat.types.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
       </Field>

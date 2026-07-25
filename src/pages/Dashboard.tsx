@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronUp, Scale, ArrowLeftRight, TrendingUp, Target } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -12,20 +13,46 @@ import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useTransactionsStore } from '../store/transactionsStore';
 import { useGoalsStore } from '../store/goalsStore';
+import { useLivePricesStore } from '../store/livePricesStore';
+import { useUiStore } from '../store/uiStore';
 import Amount from '../components/Amount';
-import { ASSET_CLASS_LABELS, formatCurrency } from '../utils/currency';
+import { ASSET_CLASS_LABELS, formatCurrency, formatPreciseCurrency } from '../utils/currency';
+import { resolveAssetValues } from '../utils/assetValues';
 
-const INVESTMENT_CLASSES = new Set(['equity', 'mutual_fund', 'crypto']);
+const INVESTMENT_CLASSES = new Set([
+  'stock',
+  'etf',
+  'equity_mutual_fund',
+  'index_fund',
+  'hybrid_mutual_fund',
+  'sip',
+  'international_equity',
+  'ipo_pre_ipo',
+  'esop_rsu',
+  'equity_other',
+  'crypto_coin',
+  'nft',
+]);
 
 export default function Dashboard() {
   const assets = useAssetsStore((s) => s.assets);
   const liabilities = useLiabilitiesStore((s) => s.liabilities);
   const transactions = useTransactionsStore((s) => s.transactions);
   const goals = useGoalsStore((s) => s.goals);
+  const livePrices = useLivePricesStore((s) => s.prices);
+  const privacyMode = useUiStore((s) => s.privacyMode);
 
-  const totalAssets = assets.reduce((s, a) => s + a.value, 0);
+  const totalAssets = assets.reduce(
+    (s, a) => s + resolveAssetValues(a, livePrices).value,
+    0
+  );
   const totalLiabilities = liabilities.reduce((s, l) => s + l.outstanding, 0);
   const netWorth = totalAssets - totalLiabilities;
+
+  const investedAssetsTotal = assets.reduce(
+    (s, a) => s + (resolveAssetValues(a, livePrices).invested ?? a.value),
+    0
+  );
 
   const thisMonth = new Date().toISOString().slice(0, 7);
   const monthIncome = transactions
@@ -49,7 +76,9 @@ export default function Dashboard() {
           </p>
           {hasWealth ? (
             <>
-              <Amount value={netWorth} className="font-display text-4xl font-semibold text-slate-900 dark:text-white block mt-2" />
+              <span className="font-display text-3xl sm:text-4xl font-semibold text-slate-900 dark:text-white block mt-2 break-words">
+                {privacyMode ? '••••••' : formatPreciseCurrency(netWorth, 'INR')}
+              </span>
               <MiniTrend />
             </>
           ) : (
@@ -65,49 +94,65 @@ export default function Dashboard() {
         </div>
 
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Cashflow</p>
-            <RangePills />
-          </div>
-          {hasCashflow ? (
-            <div className="grid grid-cols-2 gap-4 mt-4">
-              <div>
-                <p className="text-sm text-slate-500">Income</p>
-                <Amount value={monthIncome} className="font-display text-2xl font-semibold text-brand-700 dark:text-brand-300 block" />
-              </div>
-              <div>
-                <p className="text-sm text-slate-500">Expenses</p>
-                <Amount value={monthExpense} className="font-display text-2xl font-semibold text-orange-500 block" />
-              </div>
-            </div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+            Invested · <span className="text-slate-400">₹ INR</span>
+          </p>
+          {hasWealth ? (
+            <span className="font-display text-3xl sm:text-4xl font-semibold text-slate-900 dark:text-white block mt-2 break-words">
+              {privacyMode ? '••••••' : formatPreciseCurrency(investedAssetsTotal, 'INR')}
+            </span>
           ) : (
-            <div className="mt-6 text-center">
-              <p className="text-slate-400 text-sm mb-3">No income or spending logged in this window.</p>
-              <span className="text-sm font-medium text-brand-700 dark:text-brand-300">
-                Add income → <span className="text-slate-300 mx-1">·</span> Add expense →
-              </span>
+            <div className="mt-4 mb-8">
+              <MaskedDots />
             </div>
           )}
         </div>
       </div>
 
-      <Section title="Wealth" icon={Scale} summary={<Amount value={netWorth} />}>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Cashflow</p>
+          <RangePills />
+        </div>
+        {hasCashflow ? (
+          <div className="grid grid-cols-2 gap-4 mt-4">
+            <div>
+              <p className="text-sm text-slate-500">Income</p>
+              <Amount value={monthIncome} className="font-display text-2xl font-semibold text-brand-700 dark:text-brand-300 block" />
+            </div>
+            <div>
+              <p className="text-sm text-slate-500">Expenses</p>
+              <Amount value={monthExpense} className="font-display text-2xl font-semibold text-orange-500 block" />
+            </div>
+          </div>
+        ) : (
+          <div className="mt-6 text-center">
+            <p className="text-slate-400 text-sm mb-3">No income or spending logged in this window.</p>
+            <span className="text-sm font-medium text-brand-700 dark:text-brand-300">
+              Add income → <span className="text-slate-300 mx-1">·</span> Add expense →
+            </span>
+          </div>
+        )}
+      </div>
+
+      <Section title="Wealth" icon={Scale} iconColor="text-indigo-500" summary={<Amount value={netWorth} />}>
         <WealthSummary assets={assets} liabilities={liabilities} totalAssets={totalAssets} totalLiabilities={totalLiabilities} />
       </Section>
 
       <Section
         title="Cashflow"
         icon={ArrowLeftRight}
+        iconColor="text-violet-500"
         summary={<Amount value={monthIncome - monthExpense} />}
       >
         <CashflowSummary income={monthIncome} expense={monthExpense} transactions={transactions} />
       </Section>
 
-      <Section title="Investments" icon={TrendingUp} summary={<Amount value={totalInvestments} />}>
+      <Section title="Investments" icon={TrendingUp} iconColor="text-brand-600" summary={<Amount value={totalInvestments} />}>
         <InvestmentsSummary investments={investments} />
       </Section>
 
-      <Section title="Goals" icon={Target} summary={`${goals.length}`}>
+      <Section title="Goals" icon={Target} iconColor="text-orange-500" summary={`${goals.length}`}>
         <GoalsSummary goals={goals} />
       </Section>
     </div>
@@ -117,15 +162,17 @@ export default function Dashboard() {
 function Section({
   title,
   icon: Icon,
+  iconColor = 'text-brand-600',
   summary,
   children,
 }: {
   title: string;
   icon: typeof Scale;
+  iconColor?: string;
   summary: React.ReactNode;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
       <button
@@ -134,7 +181,7 @@ function Section({
       >
         <div className="flex items-center gap-2 text-slate-800 dark:text-slate-100">
           {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-          <Icon size={18} className="text-brand-600" />
+          <Icon size={18} className={iconColor} />
           <span className="font-semibold text-base">{title}</span>
         </div>
         <span className="font-semibold text-slate-900 dark:text-white">{summary}</span>
@@ -241,22 +288,45 @@ function InvestmentsSummary({
 }: {
   investments: ReturnType<typeof useAssetsStore.getState>['assets'];
 }) {
+  const livePrices = useLivePricesStore((s) => s.prices);
+  const privacyMode = useUiStore((s) => s.privacyMode);
+
   if (investments.length === 0) {
     return (
       <EmptyState text="Add equity, mutual fund, or crypto assets in Wealth to see them here." />
     );
   }
-  const sorted = [...investments].sort((a, b) => b.value - a.value).slice(0, 4);
+  const sorted = [...investments].sort((a, b) => b.value - a.value);
+  const visible = sorted.slice(0, 4);
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      {sorted.map((a) => (
-        <div key={a.id} className="border border-slate-100 dark:border-slate-800 rounded-xl p-4">
-          <p className="font-medium text-slate-800 dark:text-slate-100">{a.name}</p>
-          <Amount value={a.value} currency={a.currency} className="text-lg font-semibold text-slate-900 dark:text-white block" />
-          <p className="text-xs text-slate-400 mt-1">{ASSET_CLASS_LABELS[a.assetClass]}</p>
-        </div>
-      ))}
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {visible.map((a) => {
+          const { invested } = resolveAssetValues(a, livePrices);
+          return (
+            <div key={a.id} className="border border-slate-100 dark:border-slate-800 rounded-xl p-4">
+              <p className="font-medium text-slate-800 dark:text-slate-100">{a.name}</p>
+              <span className="text-lg font-semibold text-slate-900 dark:text-white block">
+                {privacyMode
+                  ? '••••••'
+                  : invested !== undefined
+                    ? formatPreciseCurrency(invested, a.currency)
+                    : formatPreciseCurrency(a.value, a.currency)}
+              </span>
+              <p className="text-xs text-slate-400 mt-1">{ASSET_CLASS_LABELS[a.assetClass]}</p>
+            </div>
+          );
+        })}
+      </div>
+      {sorted.length > visible.length && (
+        <Link
+          to="/wealth"
+          className="inline-block text-sm font-medium text-brand-700 dark:text-brand-300 hover:underline"
+        >
+          View more →
+        </Link>
+      )}
     </div>
   );
 }

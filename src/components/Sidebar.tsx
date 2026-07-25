@@ -7,6 +7,9 @@ import {
   Settings,
   FileUp,
   Calculator,
+  Sparkles,
+  Smartphone,
+  MessageSquarePlus,
 } from 'lucide-react';
 
 const mainLinks = [
@@ -19,10 +22,24 @@ const mainLinks = [
 const toolLinks = [
   { to: '/import', label: 'Import', icon: FileUp },
   { to: '/calculators', label: 'Calculators', icon: Calculator },
+  { to: '/whats-new', label: "What's New", icon: Sparkles },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
-function NavItem({ to, label, icon: Icon }: { to: string; label: string; icon: typeof LayoutDashboard }) {
+const bottomLinks = [
+  { to: '/install', label: 'Install App', icon: Smartphone },
+  { to: '/feedback', label: 'Feedback', icon: MessageSquarePlus },
+];
+
+function NavItem({
+  to,
+  label,
+  icon: Icon,
+}: {
+  to: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+}) {
   return (
     <NavLink
       to={to}
@@ -43,7 +60,14 @@ function NavItem({ to, label, icon: Icon }: { to: string; label: string; icon: t
 
 export default function Sidebar() {
   return (
-    <aside className="hidden md:flex md:flex-col w-72 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 h-screen sticky top-0 px-4 py-6">
+    <aside
+      className="
+        hidden md:flex md:sticky top-0 left-0
+        flex-col w-72 shrink-0 h-screen
+        border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900
+        px-4 py-6
+      "
+    >
       <div className="px-2 mb-8">
         <span className="font-display text-2xl font-semibold text-brand-800 dark:text-brand-200 tracking-tight">
           Aurafin<span className="text-brand-500">.</span>
@@ -68,6 +92,26 @@ export default function Sidebar() {
       </div>
 
       <div className="flex-1" />
+
+      <nav className="flex flex-col gap-1 pt-2 border-t border-slate-100 dark:border-slate-800">
+        {bottomLinks.map((link) => (
+          <NavItem key={link.to} {...link} />
+        ))}
+      </nav>
+
+      <div className="px-3 pt-3 mt-2 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-400 dark:text-slate-500">
+        <p>
+          Developed by Bhuvanesh S ·{' '}
+          <a
+            href="https://www.linkedin.com/in/bhuvaneshs07"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-brand-600 dark:text-brand-400 hover:underline font-medium"
+          >
+            Contact us
+          </a>
+        </p>
+      </div>
     </aside>
   );
 }

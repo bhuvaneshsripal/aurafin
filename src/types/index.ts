@@ -1,14 +1,61 @@
 export type AssetClass =
-  | 'equity'
-  | 'mutual_fund'
-  | 'real_estate'
-  | 'gold'
-  | 'epf_ppf'
-  | 'nps'
+  // Equity (10 types)
+  | 'stock'
+  | 'etf'
+  | 'equity_mutual_fund'
+  | 'index_fund'
+  | 'hybrid_mutual_fund'
+  | 'sip'
+  | 'international_equity'
+  | 'ipo_pre_ipo'
+  | 'esop_rsu'
+  | 'equity_other'
+  // Debt (17 types)
   | 'fixed_deposit'
-  | 'crypto'
+  | 'recurring_deposit'
+  | 'ppf'
+  | 'epf'
+  | 'vpf'
+  | 'nps'
+  | 'government_bond'
+  | 'corporate_bond'
+  | 'sovereign_gold_bond'
+  | 'debt_mutual_fund'
+  | 'treasury_bill'
+  | 'nsc'
+  | 'kvp'
+  | 'scss'
+  | 'sukanya_samriddhi'
+  | 'post_office_td'
+  | 'debenture'
+  // Real Estate (2 types)
+  | 'residential_property'
+  | 'commercial_property'
+  // Commodities (4 types)
+  | 'gold'
+  | 'silver'
+  | 'platinum'
+  | 'other_commodity'
+  // Cash & Savings (1 type)
   | 'cash'
+  // Crypto (2 types)
+  | 'crypto_coin'
+  | 'nft'
+  // Alternatives (2 types)
+  | 'private_equity_startup'
+  | 'collectibles_art'
+  // Other (1 type)
   | 'other';
+
+export type LiabilityClass =
+  | 'home_loan'
+  | 'personal_loan'
+  | 'car_loan'
+  | 'education_loan'
+  | 'gold_loan'
+  | 'credit_card'
+  | 'line_of_credit'
+  | 'other_liability';
 
 export interface Asset {
   id: string;
@@ -18,11 +65,32 @@ export interface Asset {
   currency: string;
   notes?: string;
   updatedAt: number;
+  /** NSE/BSE trading symbol (e.g. RELIANCE, TCS) for live price lookup. */
+  symbol?: string;
+  /** Number of shares/units held. */
+  quantity?: number;
+  /** Average buy price per unit. */
+  avgCost?: number;
+  /** Original amount invested / cost basis, if known. */
+  investedValue?: number;
+  /** Absolute profit (positive) or loss (negative) = value - investedValue. */
+  pnl?: number;
+  /** P&L expressed as a percentage of investedValue. */
+  pnlPercent?: number;
+  /** Bank / AMC / issuer name — used for deposits, bonds, and similar instruments. */
+  institution?: string;
+  /** Annual interest rate (%), used for FDs, RDs, bonds, PPF, etc. */
+  interestRate?: number;
+  /** Maturity date (ISO yyyy-mm-dd), used for FDs, RDs, bonds, etc. */
+  maturityDate?: string;
+  /** Monthly installment amount — used for Recurring Deposits. */
+  monthlyInstallment?: number;
 }
 
 export interface Liability {
   id: string;
   name: string;
+  liabilityClass?: LiabilityClass;
   outstanding: number;
   currency: string;
   emi?: number;

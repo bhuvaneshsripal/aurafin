@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
-import { UploadCloud, CheckCircle2, AlertCircle } from 'lucide-react';
+import { UploadCloud, CheckCircle2, AlertCircle, FileSpreadsheet, FileText } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { bulkUpsertDocs } from '../hooks/useFirestoreSync';
 import { parseSpreadsheetFile, rowsToAssets, type ParsedRow } from '../utils/importParser';
-import { ASSET_CLASS_LABELS } from '../utils/currency';
-import { formatCurrency } from '../utils/currency';
+import { formatCurrency, formatPreciseCurrency } from '../utils/currency';
+import { ASSET_TAXONOMY } from '../utils/taxonomy';
+import { exportToCsv, exportToXlsx, IMPORT_TEMPLATE_ROWS } from '../utils/exportCsv';
 import type { AssetClass } from '../types';
 
 export default function Import() {
@@ -84,31 +85,61 @@ export default function Import() {
       </div>
 
       {status === 'idle' && (
-        <div
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={onDrop}
-          onClick={() => fileInputRef.current?.click()}
-          className="bg-white rounded-2xl border-2 border-dashed border-slate-300 hover:border-brand-400 transition-colors p-12 flex flex-col items-center justify-center gap-3 cursor-pointer text-center"
-        >
-          <UploadCloud className="text-brand-500" size={36} />
-          <p className="text-sm font-medium text-slate-700">
-            Drop a CSV or Excel file here, or click to browse
-          </p>
-          <p className="text-xs text-slate-400">
-            Supports .csv, .xlsx, .xls — columns like Name, Value, Asset Class, and Currency are
-            auto-detected
-          </p>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,.xlsx,.xls"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleFile(file);
-            }}
-          />
-        </div>
+        <>
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+            <div className="flex-1">
+              <p className="text-sm font-medium text-slate-800">New to importing?</p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Download a starter template with sample mutual funds, stocks, gold, and fixed
+                deposits — fill it in and drop it back here.
+              </p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={() => exportToCsv('aurafin-import-template', IMPORT_TEMPLATE_ROWS)}
+                className="flex items-center gap-1.5 border border-slate-200 hover:border-brand-400 hover:text-brand-600 text-slate-600 px-3 py-2 rounded-lg text-xs font-medium"
+              >
+                <FileText size={14} />
+                CSV Template
+              </button>
+              <button
+                onClick={() =>
+                  exportToXlsx('aurafin-import-template', IMPORT_TEMPLATE_ROWS, 'Holdings')
+                }
+                className="flex items-center gap-1.5 border border-slate-200 hover:border-brand-400 hover:text-brand-600 text-slate-600 px-3 py-2 rounded-lg text-xs font-medium"
+              >
+                <FileSpreadsheet size={14} />
+                Excel Template
+              </button>
+            </div>
+          </div>
+
+          <div
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={onDrop}
+            onClick={() => fileInputRef.current?.click()}
+            className="bg-white rounded-2xl border-2 border-dashed border-slate-300 hover:border-brand-400 transition-colors p-12 flex flex-col items-center justify-center gap-3 cursor-pointer text-center"
+          >
+            <UploadCloud className="text-brand-500" size={36} />
+            <p className="text-sm font-medium text-slate-700">
+              Drop a CSV or Excel file here, or click to browse
+            </p>
+            <p className="text-xs text-slate-400">
+              Supports .csv, .xlsx, .xls — mutual funds, stocks, gold, FDs and more. Columns like
+              Name, Value, Asset Class, and Currency are auto-detected
+            </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleFile(file);
+              }}
+            />
+          </div>
+        </>
       )}
 
       {status === 'parsing' && (
@@ -164,7 +195,10 @@ export default function Import() {
                 <tr>
                   <th className="px-4 py-3 font-medium">Name</th>
                   <th className="px-4 py-3 font-medium">Asset Class</th>
-                  <th className="px-4 py-3 font-medium">Value</th>
+                  <th className="px-4 py-3 font-medium">Invested</th>
+                  <th className="px-4 py-3 font-medium">Current Price</th>
+                  <th className="px-4 py-3 font-medium">Current Value</th>
+                  <th className="px-4 py-3 font-medium">P&L</th>
                   <th className="px-4 py-3 font-medium">Currency</th>
                   <th className="px-4 py-3 font-medium"></th>
                 </tr>
@@ -179,15 +213,45 @@ export default function Import() {
                         onChange={(e) => updateRowClass(i, e.target.value as AssetClass)}
                         className="border border-slate-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
                       >
-                        {Object.entries(ASSET_CLASS_LABELS).map(([key, label]) => (
-                          <option key={key} value={key}>
-                            {label}
-                          </option>
+                        {ASSET_TAXONOMY.map((cat) => (
+                          <optgroup key={cat.key} label={cat.label}>
+                            {cat.types.map((t) => (
+                              <option key={t.value} value={t.value}>
+                                {t.label}
+                              </option>
+                            ))}
+                          </optgroup>
                         ))}
                       </select>
                     </td>
+                    <td className="px-4 py-3 text-slate-500">
+                      {r.investedValue ? formatPreciseCurrency(r.investedValue, r.currency) : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-slate-800">
+                      {r.currentPrice
+                        ? formatPreciseCurrency(r.currentPrice, r.currency)
+                        : r.quantity && r.quantity > 0 && r.value > 0
+                          ? formatPreciseCurrency(r.value / r.quantity, r.currency)
+                          : '—'}
+                    </td>
                     <td className="px-4 py-3 text-slate-800">
                       {r.value > 0 ? formatCurrency(r.value, r.currency) : '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      {r.pnl !== undefined ? (
+                        <span className={r.pnl >= 0 ? 'text-brand-600' : 'text-red-500'}>
+                          {r.pnl >= 0 ? '+' : ''}
+                          {formatPreciseCurrency(r.pnl, r.currency)}
+                          {r.pnlPercent !== undefined && (
+                            <span className="text-xs ml-1">
+                              ({r.pnl >= 0 ? '+' : ''}
+                              {r.pnlPercent.toFixed(2)}%)
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        '—'
+                      )}
                     </td>
                     <td className="px-4 py-3 text-slate-500">{r.currency}</td>
                     <td className="px-4 py-3">
