@@ -24,13 +24,14 @@ function getStoredPin() {
 
 export const useAppLockStore = create<AppLockState>((set, get) => ({
   enabled: localStorage.getItem(ENABLED_KEY) === 'true' && !!getStoredPin(),
-  // Locked as soon as the app boots, if a PIN is set — matches "opening the app" requiring the PIN.
-  locked: localStorage.getItem(ENABLED_KEY) === 'true' && !!getStoredPin(),
+  // Not locked on a fresh page load/refresh — only re-locks after being
+  // backgrounded (tab hidden) for longer than AUTO_LOCK_MS. See init().
+  locked: false,
   pinAttemptError: null,
 
   init: () => {
     const enabled = localStorage.getItem(ENABLED_KEY) === 'true' && !!getStoredPin();
-    set({ enabled, locked: enabled });
+    set({ enabled, locked: false });
 
     document.addEventListener('visibilitychange', () => {
       const { enabled } = get();
