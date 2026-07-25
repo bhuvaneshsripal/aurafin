@@ -10,6 +10,7 @@ import { useUiStore } from './store/uiStore';
 import { useAppLockStore } from './store/appLockStore';
 import { useFirestoreCollectionSync } from './hooks/useFirestoreSync';
 import { useLivePrices } from './hooks/useLivePrices';
+import { useLiveSipValues } from './hooks/useLiveSipValues';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
 import BottomNav from './components/BottomNav';
@@ -66,6 +67,7 @@ function AppShell() {
 
 function LivePriceSync() {
   useLivePrices();
+  useLiveSipValues();
   return null;
 }
 

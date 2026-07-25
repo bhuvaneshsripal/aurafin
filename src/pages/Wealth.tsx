@@ -459,6 +459,7 @@ function AssetsTab({
 }) {
   const assets = useAssetsStore((s) => s.assets);
   const livePrices = useLivePricesStore((s) => s.prices);
+  const sipValues = useLivePricesStore((s) => s.sipValues);
   const user = useAuthStore((s) => s.user);
   const privacyMode = useUiStore((s) => s.privacyMode);
   const [modalOpen, setModalOpen] = useState(false);
@@ -534,7 +535,7 @@ function AssetsTab({
     exportToCsv(
       'assets',
       assets.map((a) => {
-        const { invested, currentPrice, value, pnl, pnlPercent } = resolveAssetValues(a, livePrices);
+        const { invested, currentPrice, value, pnl, pnlPercent } = resolveAssetValues(a, livePrices, sipValues);
         return {
           Name: a.name,
           Symbol: a.symbol ?? '',
@@ -566,10 +567,10 @@ function AssetsTab({
     })
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.updatedAt - b.updatedAt);
 
-  const totalValue = assets.reduce((s, a) => s + resolveAssetValues(a, livePrices).value, 0);
+  const totalValue = assets.reduce((s, a) => s + resolveAssetValues(a, livePrices, sipValues).value, 0);
 
   const rows = filtered.map((a) => {
-    const computed = resolveAssetValues(a, livePrices);
+    const computed = resolveAssetValues(a, livePrices, sipValues);
     const alloc = totalValue > 0 ? (computed.value / totalValue) * 100 : 0;
     return { asset: a, ...computed, alloc };
   });
@@ -925,7 +926,7 @@ function AssetsTab({
       ) : filtered.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {filtered.map((a, idx) => {
-              const { value, pnl, pnlPercent } = resolveAssetValues(a, livePrices);
+              const { value, pnl, pnlPercent } = resolveAssetValues(a, livePrices, sipValues);
               const { maturityAmount, isMatured } = computeMaturityInfo(a);
               return (
                 <div key={a.id} className="bg-white rounded-2xl border border-slate-200 p-4">

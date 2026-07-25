@@ -1,5 +1,5 @@
 import type { Asset } from '../types';
-import { resolveLivePrice } from '../store/livePricesStore';
+import { resolveLivePrice, resolveSipLiveValue, type SipLiveEntry } from '../store/livePricesStore';
 
 export interface ResolvedAssetValues {
   invested: number | undefined;
@@ -10,15 +10,26 @@ export interface ResolvedAssetValues {
   isLive: boolean;
 }
 
-/** Compute display values for an asset, applying live LTP when available. */
+/**
+ * Compute display values for an asset, applying live prices when available.
+ * `sipValues` holds the auto-calculated Current Value for linked SIPs
+ * (refreshed in the background by useLiveSipValues), keyed by mfapi.in
+ * scheme code — the same value the SIP edit form computes on the fly, kept
+ * current everywhere the asset is shown instead of only while editing.
+ */
 export function resolveAssetValues(
   asset: Asset,
-  livePrices: Record<string, number>
+  livePrices: Record<string, number>,
+  sipValues: Record<string, SipLiveEntry> = {}
 ): ResolvedAssetValues {
+  const isSipLinked = asset.assetClass === 'sip' && !!asset.symbol && /^\d+$/.test(asset.symbol);
+  const liveSip = isSipLinked ? resolveSipLiveValue(asset.symbol, sipValues) : undefined;
+
   const livePrice = resolveLivePrice(asset.symbol, livePrices);
-  const isLive = livePrice !== undefined;
+  const isLive = liveSip !== undefined || livePrice !== undefined;
 
   const currentPrice =
+    liveSip?.latestNav ??
     livePrice ??
     (asset.quantity && asset.quantity > 0 ? asset.value / asset.quantity : undefined);
 
@@ -30,9 +41,10 @@ export function resolveAssetValues(
           ? asset.quantity * asset.avgCost
           : undefined));
 
-  const value =
-    isLive && asset.quantity && asset.quantity > 0
-      ? asset.quantity * livePrice!
+  const value = liveSip
+    ? liveSip.value
+    : livePrice !== undefined && asset.quantity && asset.quantity > 0
+      ? asset.quantity * livePrice
       : asset.value;
 
   const pnl = invested !== undefined ? value - invested : asset.pnl;

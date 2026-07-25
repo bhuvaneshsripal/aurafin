@@ -40,17 +40,18 @@ export default function Dashboard() {
   const transactions = useTransactionsStore((s) => s.transactions);
   const goals = useGoalsStore((s) => s.goals);
   const livePrices = useLivePricesStore((s) => s.prices);
+  const sipValues = useLivePricesStore((s) => s.sipValues);
   const privacyMode = useUiStore((s) => s.privacyMode);
 
   const totalAssets = assets.reduce(
-    (s, a) => s + resolveAssetValues(a, livePrices).value,
+    (s, a) => s + resolveAssetValues(a, livePrices, sipValues).value,
     0
   );
   const totalLiabilities = liabilities.reduce((s, l) => s + l.outstanding, 0);
   const netWorth = totalAssets - totalLiabilities;
 
   const investedAssetsTotal = assets.reduce(
-    (s, a) => s + (resolveAssetValues(a, livePrices).invested ?? a.value),
+    (s, a) => s + (resolveAssetValues(a, livePrices, sipValues).invested ?? a.value),
     0
   );
   const netWorthPnl = totalAssets - investedAssetsTotal;
@@ -305,6 +306,7 @@ function InvestmentsSummary({
   investments: ReturnType<typeof useAssetsStore.getState>['assets'];
 }) {
   const livePrices = useLivePricesStore((s) => s.prices);
+  const sipValues = useLivePricesStore((s) => s.sipValues);
   const privacyMode = useUiStore((s) => s.privacyMode);
 
   if (investments.length === 0) {
@@ -319,7 +321,7 @@ function InvestmentsSummary({
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {visible.map((a) => {
-          const { invested } = resolveAssetValues(a, livePrices);
+          const { invested } = resolveAssetValues(a, livePrices, sipValues);
           return (
             <div key={a.id} className="border border-slate-100 dark:border-slate-800 rounded-xl p-4">
               <p className="font-medium text-slate-800 dark:text-slate-100">{a.name}</p>
