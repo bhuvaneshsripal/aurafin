@@ -31,6 +31,15 @@ export default defineConfig({
         // even offline. Firebase/auth calls always go to the network.
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
         navigateFallback: '/index.html',
+        // Without these, a tab left open across a redeploy keeps its old
+        // service worker (and its old cached chunk list) until every tab is
+        // fully closed — so clicking into a lazy-loaded route like Wealth
+        // tries to fetch a JS chunk that no longer exists on the new
+        // deployment and the page goes blank. This makes a new deploy take
+        // over open tabs right away instead.
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/api/market'),

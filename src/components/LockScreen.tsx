@@ -19,8 +19,13 @@ export default function LockScreen() {
     (value?: string) => {
       const candidate = value ?? pin;
       if (candidate.length !== 4) return;
-      const ok = unlock(candidate);
-      if (!ok) setPinInput('');
+      unlock(candidate);
+      // Clear either way — on success there's nothing left to show, and on
+      // failure the field already resets. Otherwise LockScreen (which stays
+      // mounted and just renders null while unlocked) would still be
+      // holding the last 4 digits next time it re-locks, so the dots would
+      // look pre-filled and further digits would silently do nothing.
+      setPinInput('');
     },
     [pin, unlock]
   );
@@ -43,6 +48,16 @@ export default function LockScreen() {
   const pressBackspace = () => {
     setPinInput((p) => p.slice(0, -1));
   };
+
+  // Whenever the screen (re)locks — including auto-lock after returning from
+  // the background, not just the initial mount — make sure the box starts
+  // empty rather than showing whatever was last typed.
+  useEffect(() => {
+    if (locked) {
+      setPinInput('');
+      setMode('pin');
+    }
+  }, [locked]);
 
   // Physical keyboard support (desktop/laptop)
   useEffect(() => {
