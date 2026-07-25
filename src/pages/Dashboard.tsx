@@ -16,7 +16,7 @@ import { useGoalsStore } from '../store/goalsStore';
 import { useLivePricesStore } from '../store/livePricesStore';
 import { useUiStore } from '../store/uiStore';
 import Amount from '../components/Amount';
-import { ASSET_CLASS_LABELS, formatCurrency, formatPreciseCurrency } from '../utils/currency';
+import { ASSET_CLASS_LABELS, formatCurrency, maskPreciseAmount } from '../utils/currency';
 import { resolveAssetValues } from '../utils/assetValues';
 
 const INVESTMENT_CLASSES = new Set([
@@ -77,7 +77,7 @@ export default function Dashboard() {
           {hasWealth ? (
             <>
               <span className="font-display text-3xl sm:text-4xl font-semibold text-slate-900 dark:text-white block mt-2 break-words">
-                {privacyMode ? '••••••' : formatPreciseCurrency(netWorth, 'INR')}
+                {maskPreciseAmount(netWorth, 'INR', privacyMode)}
               </span>
               <MiniTrend />
             </>
@@ -99,7 +99,7 @@ export default function Dashboard() {
           </p>
           {hasWealth ? (
             <span className="font-display text-3xl sm:text-4xl font-semibold text-slate-900 dark:text-white block mt-2 break-words">
-              {privacyMode ? '••••••' : formatPreciseCurrency(investedAssetsTotal, 'INR')}
+              {maskPreciseAmount(investedAssetsTotal, 'INR', privacyMode)}
             </span>
           ) : (
             <div className="mt-4 mb-8">
@@ -308,11 +308,11 @@ function InvestmentsSummary({
             <div key={a.id} className="border border-slate-100 dark:border-slate-800 rounded-xl p-4">
               <p className="font-medium text-slate-800 dark:text-slate-100">{a.name}</p>
               <span className="text-lg font-semibold text-slate-900 dark:text-white block">
-                {privacyMode
-                  ? '••••••'
-                  : invested !== undefined
-                    ? formatPreciseCurrency(invested, a.currency)
-                    : formatPreciseCurrency(a.value, a.currency)}
+                {maskPreciseAmount(
+                  invested !== undefined ? invested : a.value,
+                  a.currency,
+                  privacyMode
+                )}
               </span>
               <p className="text-xs text-slate-400 mt-1">{ASSET_CLASS_LABELS[a.assetClass]}</p>
             </div>

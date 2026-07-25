@@ -14,7 +14,7 @@ function applyTheme(theme: 'light' | 'dark') {
 
 export const useUiStore = create<UiState>((set, get) => ({
   theme: 'light',
-  privacyMode: false,
+  privacyMode: true,
   initTheme: () => {
     const stored = localStorage.getItem('aurafin-theme');
     const theme: 'light' | 'dark' = stored === 'dark' ? 'dark' : 'light';

@@ -15,6 +15,9 @@ import {
   ChevronDown,
   ArrowUpDown,
   X,
+  Loader2,
+  CheckCircle2,
+  Link2Off,
 } from 'lucide-react';
 import {
   PieChart,
@@ -32,7 +35,7 @@ import { upsertDoc, removeDoc } from '../hooks/useFirestoreSync';
 import { exportToCsv } from '../utils/exportCsv';
 import Modal from '../components/Modal';
 import type { Asset, AssetClass, Liability, LiabilityClass } from '../types';
-import { CURRENCIES, formatPreciseCurrency } from '../utils/currency';
+import { CURRENCIES, formatPreciseCurrency, maskPreciseAmount } from '../utils/currency';
 import {
   ASSET_TAXONOMY,
   LIABILITY_TAXONOMY,
@@ -44,12 +47,24 @@ import {
   SYMBOL_ENABLED_CLASSES,
   DEPOSIT_LIKE_CLASSES,
   RECURRING_DEPOSIT_CLASSES,
+  SIP_CLASSES,
   type CategoryDef,
 } from '../utils/taxonomy';
-import { resolveAssetValues } from '../utils/assetValues';
+import {
+  resolveAssetValues,
+  computeMaturityInfo,
+  computeSipProgress,
+  listSipInstallments,
+} from '../utils/assetValues';
+import {
+  searchMutualFunds,
+  fetchFundNavHistory,
+  computeSipLiveValue,
+  type MfSearchResult,
+} from '../utils/mutualFunds';
 
 type Tab = 'assets' | 'liabilities' | 'networth' | 'allocation';
-type SortKey = 'name' | 'qty' | 'avgCost' | 'perUnit' | 'invested' | 'value' | 'pnl' | 'alloc';
+type SortKey = 'manual' | 'name' | 'qty' | 'avgCost' | 'perUnit' | 'invested' | 'value' | 'pnl' | 'alloc';
 type EntryType = 'asset' | 'liability';
 
 export default function Wealth() {
@@ -373,6 +388,7 @@ function TotalStatCard({
   privacyMode: boolean;
 }) {
   const positive = pnl >= 0;
+  const isMasked = privacyMode && pnl !== 0;
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6">
       <p className="text-xs font-semibold tracking-wide text-slate-400 mb-4 sm:mb-5">{title}</p>
@@ -380,22 +396,22 @@ function TotalStatCard({
         <div>
           <p className="text-xs font-medium text-slate-400 mb-1">INVESTED</p>
           <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white break-words">
-            {privacyMode ? '••••••' : formatPreciseCurrency(invested, currency)}
+            {maskPreciseAmount(invested, currency, privacyMode)}
           </p>
         </div>
         <div>
           <p className="text-xs font-medium text-slate-400 mb-1">CURRENT VALUE</p>
           <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white break-words">
-            {privacyMode ? '••••••' : formatPreciseCurrency(currentValue, currency)}
+            {maskPreciseAmount(currentValue, currency, privacyMode)}
           </p>
         </div>
         <div>
           <p className="text-xs font-medium text-slate-400 mb-1">P&L</p>
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`text-xl sm:text-2xl font-bold break-words ${positive ? 'text-brand-600 dark:text-brand-300' : 'text-red-500'}`}>
-              {privacyMode ? '••••••' : `${positive ? '+' : ''}${formatPreciseCurrency(pnl, currency)}`}
+              {isMasked ? '••••••' : `${positive ? '+' : ''}${formatPreciseCurrency(pnl, currency)}`}
             </span>
-            {!privacyMode && (
+            {!isMasked && (
               <span
                 className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                   positive ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-300' : 'bg-red-50 dark:bg-red-900/30 text-red-500'
@@ -448,9 +464,10 @@ function AssetsTab({
   const [editing, setEditing] = useState<Asset | null>(null);
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
-  const [sortKey, setSortKey] = useState<SortKey>('value');
+  const [sortKey, setSortKey] = useState<SortKey>('manual');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedCurrencies, setSelectedCurrencies] = useState<string[]>([]);
 
   const handleDelete = async (id: string) => {
@@ -466,6 +483,30 @@ function AssetsTab({
       name: `${a.name} (Copy)`,
       updatedAt: Date.now(),
     });
+  };
+
+  /** Manual reorder for the grid view — swaps this asset's position with
+   *  its neighbor above/below. Falls back to each asset's current index
+   *  as its order the first time it's moved. */
+  const handleMove = async (id: string, direction: 'up' | 'down') => {
+    if (!user) return;
+    setSortKey('manual');
+    const ordered = [...assets].sort(
+      (a, b) => (a.order ?? 0) - (b.order ?? 0) || a.updatedAt - b.updatedAt
+    );
+    const idx = ordered.findIndex((a) => a.id === id);
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (idx === -1 || swapIdx < 0 || swapIdx >= ordered.length) return;
+    const current = ordered[idx];
+    const neighbor = ordered[swapIdx];
+    const currentOrder = current.order ?? idx;
+    const neighborOrder = neighbor.order ?? swapIdx;
+    try {
+      await upsertDoc(user.uid, 'assets', { ...current, order: neighborOrder });
+      await upsertDoc(user.uid, 'assets', { ...neighbor, order: currentOrder });
+    } catch (err) {
+      console.error('Failed to reorder assets', err);
+    }
   };
 
   const toggleSort = (key: SortKey) => {
@@ -510,16 +551,19 @@ function AssetsTab({
     );
   };
 
-  const filtered = assets.filter((a) => {
-    const q = search.trim().toLowerCase();
-    const matchesSearch =
-      !q || a.name.toLowerCase().includes(q) || (a.symbol ?? '').toLowerCase().includes(q);
-    const category = ASSET_CLASS_TO_CATEGORY[a.assetClass];
-    const matchesCategory =
-      selectedCategories.length === 0 || (category && selectedCategories.includes(category.key));
-    const matchesCurrency = selectedCurrencies.length === 0 || selectedCurrencies.includes(a.currency);
-    return matchesSearch && matchesCategory && matchesCurrency;
-  });
+  const filtered = assets
+    .filter((a) => {
+      const q = search.trim().toLowerCase();
+      const matchesSearch =
+        !q || a.name.toLowerCase().includes(q) || (a.symbol ?? '').toLowerCase().includes(q);
+      const category = ASSET_CLASS_TO_CATEGORY[a.assetClass];
+      const matchesCategory =
+        selectedCategories.length === 0 || (category && selectedCategories.includes(category.key));
+      const matchesType = selectedTypes.length === 0 || selectedTypes.includes(a.assetClass);
+      const matchesCurrency = selectedCurrencies.length === 0 || selectedCurrencies.includes(a.currency);
+      return matchesSearch && matchesCategory && matchesType && matchesCurrency;
+    })
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.updatedAt - b.updatedAt);
 
   const totalValue = assets.reduce((s, a) => s + resolveAssetValues(a, livePrices).value, 0);
 
@@ -538,42 +582,64 @@ function AssetsTab({
     assets.some((a) => (ASSET_CLASS_TO_CATEGORY[a.assetClass] ?? cat).key === cat.key)
   ).map((cat) => ({ value: cat.key, label: cat.label }));
 
+  const typeOptions = Array.from(
+    new Set(
+      assets
+        .filter((a) => {
+          const category = ASSET_CLASS_TO_CATEGORY[a.assetClass];
+          return (
+            selectedCategories.length === 0 || (category && selectedCategories.includes(category.key))
+          );
+        })
+        .map((a) => a.assetClass)
+    )
+  ).map((cls) => ({ value: cls, label: ASSET_CLASS_LABELS[cls] ?? cls }));
+
   const currencyOptions = Array.from(new Set(assets.map((a) => a.currency))).map((c) => ({
     value: c,
     label: c,
   }));
 
-  const sortedRows = [...rows].sort((a, b) => {
-    const dir = sortDir === 'asc' ? 1 : -1;
-    const getVal = (r: (typeof rows)[number]): string | number => {
-      switch (sortKey) {
-        case 'name':
-          return r.asset.name.toLowerCase();
-        case 'qty':
-          return r.asset.quantity ?? 0;
-        case 'avgCost':
-          return r.asset.avgCost ?? 0;
-        case 'perUnit':
-          return r.currentPrice ?? 0;
-        case 'invested':
-          return r.invested ?? 0;
-        case 'value':
-          return r.value;
-        case 'pnl':
-          return r.pnl ?? 0;
-        case 'alloc':
-          return r.alloc;
-        default:
-          return 0;
-      }
-    };
-    const av = getVal(a);
-    const bv = getVal(b);
-    if (typeof av === 'string' || typeof bv === 'string') {
-      return String(av).localeCompare(String(bv)) * dir;
-    }
-    return (av - bv) * dir;
-  });
+  useEffect(() => {
+    const valid = new Set<string>(typeOptions.map((o) => o.value));
+    setSelectedTypes((prev) => prev.filter((t) => valid.has(t)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCategories.join(',')]);
+
+  const sortedRows =
+    sortKey === 'manual'
+      ? rows
+      : [...rows].sort((a, b) => {
+          const dir = sortDir === 'asc' ? 1 : -1;
+          const getVal = (r: (typeof rows)[number]): string | number => {
+            switch (sortKey) {
+              case 'name':
+                return r.asset.name.toLowerCase();
+              case 'qty':
+                return r.asset.quantity ?? 0;
+              case 'avgCost':
+                return r.asset.avgCost ?? 0;
+              case 'perUnit':
+                return r.currentPrice ?? 0;
+              case 'invested':
+                return r.invested ?? 0;
+              case 'value':
+                return r.value;
+              case 'pnl':
+                return r.pnl ?? 0;
+              case 'alloc':
+                return r.alloc;
+              default:
+                return 0;
+            }
+          };
+          const av = getVal(a);
+          const bv = getVal(b);
+          if (typeof av === 'string' || typeof bv === 'string') {
+            return String(av).localeCompare(String(bv)) * dir;
+          }
+          return (av - bv) * dir;
+        });
 
   const openEdit = (a: Asset) => {
     setEditing(a);
@@ -678,6 +744,13 @@ function AssetsTab({
           onChange={setSelectedCategories}
         />
         <FilterDropdown
+          label="Type"
+          placeholder="Filter by type"
+          options={typeOptions}
+          selected={selectedTypes}
+          onChange={setSelectedTypes}
+        />
+        <FilterDropdown
           label="Tags"
           placeholder="Filter by tag"
           options={[]}
@@ -691,6 +764,14 @@ function AssetsTab({
           selected={selectedCurrencies}
           onChange={setSelectedCurrencies}
         />
+        {sortKey !== 'manual' && viewMode === 'list' && (
+          <button
+            onClick={() => setSortKey('manual')}
+            className="h-[42px] shrink-0 px-3 flex items-center justify-center border border-slate-200 rounded-lg text-sm text-slate-500 hover:bg-slate-50 whitespace-nowrap"
+          >
+            Manual order
+          </button>
+        )}
         <button
           onClick={() => toggleSort(sortKey)}
           title="Flip sort direction"
@@ -731,7 +812,7 @@ function AssetsTab({
                 <SortHeader label="CUR. VAL" sortKeyName="value" align="right" />
                 <SortHeader label="P&L" sortKeyName="pnl" align="right" />
                 <SortHeader label="% ALLOC" sortKeyName="alloc" align="right" />
-                <th className="px-4 py-3 w-28"></th>
+                <th className="px-4 py-3 w-44"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -746,8 +827,18 @@ function AssetsTab({
                       {ASSET_CLASS_LABELS[a.assetClass]}
                       {a.institution ? ` · ${a.institution}` : ''}
                       {a.interestRate ? ` · ${a.interestRate}% p.a.` : ''}
-                      {a.maturityDate ? ` · Matures ${a.maturityDate}` : ''}
+                      {a.maturityDate && !computeMaturityInfo(a).isMatured
+                        ? ` · Matures ${a.maturityDate}`
+                        : ''}
                     </p>
+                    {(() => {
+                      const { maturityAmount, isMatured } = computeMaturityInfo(a);
+                      return maturityAmount !== undefined && !isMatured ? (
+                        <p className="text-xs text-brand-600 font-medium">
+                          Maturity amount: {formatPreciseCurrency(maturityAmount, a.currency)}
+                        </p>
+                      ) : null;
+                    })()}
                   </td>
                   <td className="px-4 py-3.5 text-right text-slate-600">{a.quantity ?? '—'}</td>
                   <td className="px-4 py-3.5 text-right text-slate-600">
@@ -760,7 +851,7 @@ function AssetsTab({
                     {invested !== undefined ? formatPreciseCurrency(invested, a.currency) : '—'}
                   </td>
                   <td className="px-4 py-3.5 text-right font-semibold text-slate-800">
-                    {privacyMode ? '••••••' : formatPreciseCurrency(value, a.currency)}
+                    {maskPreciseAmount(value, a.currency, privacyMode)}
                   </td>
                   <td className="px-4 py-3.5 text-right">
                     {pnl !== undefined ? (
@@ -782,7 +873,23 @@ function AssetsTab({
                   </td>
                   <td className="px-4 py-3.5 text-right text-slate-600">{alloc.toFixed(1)}%</td>
                   <td className="px-4 py-3.5">
-                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => handleMove(a.id, 'up')}
+                        disabled={filtered.findIndex((x) => x.id === a.id) === 0}
+                        title="Move up"
+                        className="text-slate-400 hover:text-brand-600 disabled:opacity-30 disabled:hover:text-slate-400 p-1"
+                      >
+                        <ChevronUp size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleMove(a.id, 'down')}
+                        disabled={filtered.findIndex((x) => x.id === a.id) === filtered.length - 1}
+                        title="Move down"
+                        className="text-slate-400 hover:text-brand-600 disabled:opacity-30 disabled:hover:text-slate-400 p-1"
+                      >
+                        <ChevronDown size={16} />
+                      </button>
                       <button
                         onClick={() => handleDuplicate(a)}
                         title="Duplicate"
@@ -813,8 +920,9 @@ function AssetsTab({
         </div>
       ) : filtered.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map((a) => {
+            {filtered.map((a, idx) => {
               const { value, pnl, pnlPercent } = resolveAssetValues(a, livePrices);
+              const { maturityAmount, isMatured } = computeMaturityInfo(a);
               return (
                 <div key={a.id} className="bg-white rounded-2xl border border-slate-200 p-4">
                   <p className="font-semibold text-slate-800">{a.name}</p>
@@ -822,11 +930,16 @@ function AssetsTab({
                     {ASSET_CLASS_LABELS[a.assetClass]}
                     {a.institution ? ` · ${a.institution}` : ''}
                     {a.interestRate ? ` · ${a.interestRate}% p.a.` : ''}
-                    {a.maturityDate ? ` · Matures ${a.maturityDate}` : ''}
+                    {a.maturityDate && !isMatured ? ` · Matures ${a.maturityDate}` : ''}
                   </p>
                   <p className="text-lg font-semibold text-slate-900">
-                    {privacyMode ? '••••••' : formatPreciseCurrency(value, a.currency)}
+                    {maskPreciseAmount(value, a.currency, privacyMode)}
                   </p>
+                  {maturityAmount !== undefined && !isMatured && (
+                    <p className="text-xs text-brand-600 font-medium mt-0.5">
+                      Maturity amount: {maskPreciseAmount(maturityAmount, a.currency, privacyMode)}
+                    </p>
+                  )}
                   {pnlPercent !== undefined && (
                     <p className={`text-xs font-medium ${pnl! >= 0 ? 'text-brand-600' : 'text-red-500'}`}>
                       {pnl! >= 0 ? '+' : ''}
@@ -834,6 +947,22 @@ function AssetsTab({
                     </p>
                   )}
                   <div className="flex items-center gap-3 mt-3">
+                    <button
+                      onClick={() => handleMove(a.id, 'up')}
+                      disabled={idx === 0}
+                      title="Move up"
+                      className="text-slate-400 hover:text-brand-600 disabled:opacity-30 disabled:hover:text-slate-400"
+                    >
+                      <ChevronUp size={16} />
+                    </button>
+                    <button
+                      onClick={() => handleMove(a.id, 'down')}
+                      disabled={idx === filtered.length - 1}
+                      title="Move down"
+                      className="text-slate-400 hover:text-brand-600 disabled:opacity-30 disabled:hover:text-slate-400"
+                    >
+                      <ChevronDown size={16} />
+                    </button>
                     <button onClick={() => openEdit(a)} className="text-slate-400 hover:text-brand-600">
                       <Pencil size={16} />
                     </button>
@@ -890,19 +1019,203 @@ function AssetDetailsForm({
   const [monthlyInstallment, setMonthlyInstallment] = useState(
     initial?.monthlyInstallment?.toString() ?? ''
   );
+  const [sipAmount, setSipAmount] = useState(initial?.sipAmount?.toString() ?? '');
+  const [sipFrequency, setSipFrequency] = useState<'monthly' | 'quarterly'>(
+    initial?.sipFrequency ?? 'monthly'
+  );
+  const [sipDay, setSipDay] = useState(initial?.sipDay?.toString() ?? '');
 
-  const principalForEstimate = investedValue ? Number(investedValue) : Number(value) || 0;
-  const rateForEstimate = interestRate ? Number(interestRate) : 0;
-  const yearsToMaturity = maturityDate
-    ? (new Date(maturityDate).getTime() - Date.now()) / (365.25 * 24 * 60 * 60 * 1000)
-    : 0;
-  const estimatedMaturityValue =
-    DEPOSIT_LIKE_CLASSES.has(assetClass) && principalForEstimate > 0 && rateForEstimate > 0 && yearsToMaturity > 0
-      ? principalForEstimate * (1 + (rateForEstimate / 100) * yearsToMaturity)
-      : undefined;
+  // Whether the person tried to save at least once — required-field errors
+  // only show up after this, so the form doesn't look "broken" on first view.
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+
+  // --- Fund search (SIP) -------------------------------------------------
+  // `symbol` doubles as the mfapi.in scheme code once a fund is linked
+  // (mirrors how stocks store an NSE ticker in the same field). `fundQuery`
+  // is just the text shown in the search box, which starts out as the
+  // matched fund's name (or the raw legacy symbol for older entries).
+  const initialSymbolIsCode = !!initial?.symbol && /^\d+$/.test(initial.symbol);
+  const [fundQuery, setFundQuery] = useState(initialSymbolIsCode ? '' : initial?.symbol ?? '');
+  const [fundSuggestions, setFundSuggestions] = useState<MfSearchResult[]>([]);
+  const [fundSearchOpen, setFundSearchOpen] = useState(false);
+  const [fundSearchLoading, setFundSearchLoading] = useState(false);
+  const [fundSearchFailed, setFundSearchFailed] = useState(false);
+  const [fundSearchedQuery, setFundSearchedQuery] = useState('');
+  const [matchedFundName, setMatchedFundName] = useState<string | null>(null);
+  const fundQueryTouched = useRef(false);
+
+  // --- Auto-calculated Current Value (SIP) -------------------------------
+  const [liveValueLoading, setLiveValueLoading] = useState(false);
+  const [liveValueError, setLiveValueError] = useState(false);
+  const isSip = SIP_CLASSES.has(assetClass);
+  const fundIsLinked = isSip && /^\d+$/.test(symbol);
+
+  // Resolve the fund name for an already-linked scheme code (edit mode).
+  useEffect(() => {
+    if (!initialSymbolIsCode || !initial?.symbol) return;
+    let cancelled = false;
+    fetchFundNavHistory(Number(initial.symbol)).then((nav) => {
+      if (!cancelled && nav) {
+        setMatchedFundName(nav.schemeName);
+        setFundQuery(nav.schemeName);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Debounced fund search-as-you-type.
+  useEffect(() => {
+    if (!isSip || !fundQueryTouched.current) return;
+    if (fundIsLinked && fundQuery === matchedFundName) return; // just selected, don't re-search
+    const q = fundQuery.trim();
+    if (q.length < 3) {
+      setFundSuggestions([]);
+      return;
+    }
+    setFundSearchLoading(true);
+    const timer = setTimeout(() => {
+      searchMutualFunds(q).then((results) => {
+        setFundSearchLoading(false);
+        setFundSearchedQuery(q);
+        if (results === null) {
+          setFundSearchFailed(true);
+          setFundSuggestions([]);
+        } else {
+          setFundSearchFailed(false);
+          setFundSuggestions(results);
+        }
+        setFundSearchOpen(true);
+      });
+    }, 350);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fundQuery, isSip]);
+
+  const selectFund = (fund: MfSearchResult) => {
+    setSymbol(String(fund.schemeCode));
+    setFundQuery(fund.schemeName);
+    setMatchedFundName(fund.schemeName);
+    setFundSuggestions([]);
+    setFundSearchOpen(false);
+    if (!name.trim()) setName(fund.schemeName);
+  };
+
+  const unlinkFund = () => {
+    setSymbol('');
+    setFundQuery('');
+    setMatchedFundName(null);
+    setLiveValueError(false);
+  };
+
+  // Auto-calculate Current Value for SIPs: buy units at the NAV in effect
+  // on each installment date, then price the total at the latest NAV. Falls
+  // back to "invested so far" when no fund is linked yet or the fetch fails,
+  // so the field is never something the person has to type in themselves.
+  useEffect(() => {
+    if (!isSip) return;
+
+    if (!fundIsLinked) {
+      setLiveValueError(false);
+      setLiveValueLoading(false);
+      const invested = investedValue ? Number(investedValue) : 0;
+      const amount = sipAmount ? Number(sipAmount) : 0;
+      const elapsed =
+        amount > 0 && startDate
+          ? computeSipProgress({
+              id: '',
+              name,
+              assetClass,
+              value: 0,
+              currency,
+              investedValue: invested || undefined,
+              startDate,
+              sipAmount: amount,
+              sipFrequency,
+              sipDay: sipDay ? Number(sipDay) : undefined,
+              updatedAt: 0,
+            }).totalInvested
+          : invested;
+      setValue(elapsed ? String(elapsed) : '');
+      return;
+    }
+
+    const installments = listSipInstallments({
+      startDate: startDate || undefined,
+      sipAmount: sipAmount ? Number(sipAmount) : undefined,
+      sipFrequency,
+      sipDay: sipDay ? Number(sipDay) : undefined,
+      investedValue: investedValue ? Number(investedValue) : undefined,
+    });
+    if (installments.length === 0) {
+      setValue(investedValue || '');
+      return;
+    }
+
+    let cancelled = false;
+    setLiveValueLoading(true);
+    setLiveValueError(false);
+    const timer = setTimeout(() => {
+      fetchFundNavHistory(Number(symbol)).then((nav) => {
+        if (cancelled) return;
+        setLiveValueLoading(false);
+        if (!nav) {
+          setLiveValueError(true);
+          return;
+        }
+        const { value: liveValue } = computeSipLiveValue(installments, nav);
+        setValue(liveValue.toFixed(2));
+      });
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSip, fundIsLinked, symbol, sipAmount, sipFrequency, sipDay, startDate, investedValue]);
+
+  const estimatedMaturityValue = DEPOSIT_LIKE_CLASSES.has(assetClass)
+    ? computeMaturityInfo({
+        id: initial?.id ?? '',
+        name,
+        assetClass,
+        value: Number(value) || 0,
+        currency,
+        investedValue: investedValue ? Number(investedValue) : undefined,
+        interestRate: interestRate ? Number(interestRate) : undefined,
+        startDate: startDate || undefined,
+        maturityDate: maturityDate || undefined,
+        updatedAt: 0,
+      }).maturityAmount
+    : undefined;
+
+  const sipProgress = SIP_CLASSES.has(assetClass)
+    ? computeSipProgress({
+        id: initial?.id ?? '',
+        name,
+        assetClass,
+        value: Number(value) || 0,
+        currency,
+        investedValue: investedValue ? Number(investedValue) : undefined,
+        startDate: startDate || undefined,
+        sipAmount: sipAmount ? Number(sipAmount) : undefined,
+        sipFrequency,
+        sipDay: sipDay ? Number(sipDay) : undefined,
+        updatedAt: 0,
+      })
+    : undefined;
+
+  const nameMissing = !name.trim();
+  // SIP's Current Value is auto-calculated, so it's never a required
+  // hand-typed field — everything else still needs a value to save.
+  const valueMissing = !isSip && !value.trim();
+  const hasErrors = nameMissing || valueMissing;
 
   const submit = () => {
-    if (!name || !value) return;
+    setAttemptedSubmit(true);
+    if (hasErrors) return;
     const qty = quantity ? Number(quantity) : undefined;
     const avg = avgCost ? Number(avgCost) : undefined;
     const invested = investedValue
@@ -931,6 +1244,10 @@ function AssetDetailsForm({
       startDate: startDate || undefined,
       maturityDate: maturityDate || undefined,
       monthlyInstallment: monthlyInstallment ? Number(monthlyInstallment) : undefined,
+      sipAmount: sipAmount ? Number(sipAmount) : undefined,
+      sipFrequency: SIP_CLASSES.has(assetClass) ? sipFrequency : undefined,
+      sipDay: sipDay ? Number(sipDay) : undefined,
+      order: initial?.order,
       updatedAt: Date.now(),
     });
   };
@@ -946,7 +1263,13 @@ function AssetDetailsForm({
         </button>
       )}
       <Field label="Name">
-        <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} placeholder="e.g. HDFC Flexicap SIP" />
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className={`${inputClass} ${attemptedSubmit && nameMissing ? errorInputClass : ''}`}
+          placeholder="e.g. HDFC Flexicap SIP"
+        />
+        {attemptedSubmit && nameMissing && <p className={errorTextClass}>Name is required.</p>}
       </Field>
       {effectiveCategory && effectiveCategory.types.length > 1 ? (
         <Field label={`${effectiveCategory.label} Type`}>
@@ -965,7 +1288,7 @@ function AssetDetailsForm({
           </p>
         </Field>
       )}
-      {SYMBOL_ENABLED_CLASSES.has(assetClass) && (
+      {SYMBOL_ENABLED_CLASSES.has(assetClass) && !SIP_CLASSES.has(assetClass) && (
         <div className="grid grid-cols-3 gap-3">
           <Field label="Symbol (for live price)">
             <input value={symbol} onChange={(e) => setSymbol(e.target.value)} className={inputClass} placeholder="RELIANCE" />
@@ -976,6 +1299,139 @@ function AssetDetailsForm({
           <Field label="Avg. Cost">
             <input type="number" step="any" value={avgCost} onChange={(e) => setAvgCost(e.target.value)} className={inputClass} placeholder="0.00" />
           </Field>
+        </div>
+      )}
+      {SIP_CLASSES.has(assetClass) && (
+        <div className="space-y-4 border border-slate-100 bg-slate-50/60 rounded-xl p-4">
+          <Field label="Fund Name / Symbol (for live price)">
+            <div className="relative">
+              <input
+                value={fundQuery}
+                onChange={(e) => {
+                  fundQueryTouched.current = true;
+                  setFundQuery(e.target.value);
+                  if (fundIsLinked) setSymbol(''); // typing again un-links the previous match
+                  setMatchedFundName(null);
+                }}
+                onFocus={() => fundSuggestions.length > 0 && setFundSearchOpen(true)}
+                onBlur={() => setTimeout(() => setFundSearchOpen(false), 150)}
+                className={`${inputClass} ${fundIsLinked ? 'pr-9' : ''}`}
+                placeholder="Start typing a fund name, e.g. HDFC Flexicap"
+                autoComplete="off"
+              />
+              {fundSearchLoading && (
+                <Loader2
+                  size={16}
+                  className="animate-spin text-slate-400 absolute right-3 top-1/2 -translate-y-1/2"
+                />
+              )}
+              {!fundSearchLoading && fundIsLinked && (
+                <CheckCircle2
+                  size={16}
+                  className="text-emerald-500 absolute right-3 top-1/2 -translate-y-1/2"
+                />
+              )}
+              {fundSearchOpen && fundSuggestions.length > 0 && (
+                <div className="absolute z-10 mt-1 w-full max-h-64 overflow-auto bg-white border border-slate-200 rounded-lg shadow-lg">
+                  {fundSuggestions.map((f) => (
+                    <button
+                      key={f.schemeCode}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => selectFund(f)}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-brand-50 border-b border-slate-100 last:border-0"
+                    >
+                      {f.schemeName}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {fundSearchOpen &&
+                !fundSearchLoading &&
+                fundSuggestions.length === 0 &&
+                fundQuery.trim() === fundSearchedQuery &&
+                fundQuery.trim().length >= 3 && (
+                  <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg px-3 py-2 text-sm">
+                    {fundSearchFailed ? (
+                      <span className="text-red-500">
+                        Couldn't reach the fund search — check your connection, or restart the dev
+                        server if you just updated the app.
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">
+                        No funds matched "{fundSearchedQuery}". Try the AMC name alone, e.g. "HDFC".
+                      </span>
+                    )}
+                  </div>
+                )}
+            </div>
+            {fundIsLinked ? (
+              <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
+                Linked to {matchedFundName ?? 'this fund'} — Current Value updates automatically.{' '}
+                <button type="button" onClick={unlinkFund} className="text-slate-400 hover:text-slate-600 underline">
+                  unlink
+                </button>
+              </p>
+            ) : (
+              <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
+                <Link2Off size={12} /> Not linked yet — pick a fund from the list to track its live NAV.
+              </p>
+            )}
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="SIP Amount (per installment)">
+              <input
+                type="number"
+                step="any"
+                value={sipAmount}
+                onChange={(e) => setSipAmount(e.target.value)}
+                className={inputClass}
+                placeholder="5000"
+              />
+            </Field>
+            <Field label="Frequency">
+              <select
+                value={sipFrequency}
+                onChange={(e) => setSipFrequency(e.target.value as 'monthly' | 'quarterly')}
+                className={inputClass}
+              >
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Quarterly</option>
+              </select>
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Start Date">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className={inputClass}
+              />
+            </Field>
+            <Field label="SIP Date (day of month)">
+              <input
+                type="number"
+                min={1}
+                max={31}
+                step={1}
+                value={sipDay}
+                onChange={(e) => setSipDay(e.target.value)}
+                className={inputClass}
+                placeholder="e.g. 5"
+              />
+            </Field>
+          </div>
+          {sipProgress && sipProgress.installmentsElapsed > 0 && (
+            <p className="text-xs text-slate-500">
+              Invested so far:{' '}
+              <span className="font-semibold text-brand-700">
+                {formatPreciseCurrency(sipProgress.totalInvested, currency)}
+              </span>{' '}
+              ({sipProgress.installmentsElapsed} installment
+              {sipProgress.installmentsElapsed === 1 ? '' : 's'} since start — updates automatically)
+            </p>
+          )}
         </div>
       )}
       {DEPOSIT_LIKE_CLASSES.has(assetClass) && (
@@ -1034,21 +1490,68 @@ function AssetDetailsForm({
           )}
           {estimatedMaturityValue !== undefined && (
             <p className="text-xs text-slate-500">
-              Est. maturity value:{' '}
+              Maturity amount:{' '}
               <span className="font-semibold text-brand-700">
                 {formatPreciseCurrency(estimatedMaturityValue, currency)}
               </span>{' '}
-              (simple-interest estimate based on rate and maturity date — actual payout may vary)
+              (simple-interest estimate over the full term from start date to maturity date — actual payout may vary)
             </p>
           )}
         </div>
       )}
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Current Value">
-          <input type="number" step="any" value={value} onChange={(e) => setValue(e.target.value)} className={inputClass} placeholder="0" />
+        <Field label={isSip ? 'Current Value (auto)' : 'Current Value'}>
+          {isSip ? (
+            <div className="relative">
+              <input
+                type="text"
+                readOnly
+                value={
+                  liveValueLoading
+                    ? 'Calculating…'
+                    : value
+                      ? formatPreciseCurrency(Number(value), currency)
+                      : '—'
+                }
+                className={`${inputClass} bg-slate-50 text-slate-600 cursor-not-allowed`}
+              />
+              {liveValueLoading && (
+                <Loader2
+                  size={16}
+                  className="animate-spin text-slate-400 absolute right-3 top-1/2 -translate-y-1/2"
+                />
+              )}
+            </div>
+          ) : (
+            <input
+              type="number"
+              step="any"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              className={`${inputClass} ${attemptedSubmit && valueMissing ? errorInputClass : ''}`}
+              placeholder="0"
+            />
+          )}
+          {isSip && fundIsLinked && !liveValueLoading && !liveValueError && (
+            <p className="text-xs text-slate-400 mt-1">Calculated from the fund's live NAV × units bought each installment.</p>
+          )}
+          {isSip && !fundIsLinked && !liveValueLoading && (
+            <p className="text-xs text-slate-400 mt-1">Link a fund above for a live value — using amount invested so far for now.</p>
+          )}
+          {isSip && liveValueError && (
+            <p className={errorTextClass}>Couldn't fetch this fund's live NAV — using amount invested so far instead.</p>
+          )}
+          {!isSip && attemptedSubmit && valueMissing && <p className={errorTextClass}>Current Value is required.</p>}
         </Field>
-        <Field label="Invested (optional)">
-          <input type="number" step="any" value={investedValue} onChange={(e) => setInvestedValue(e.target.value)} className={inputClass} placeholder="Auto: Qty × Avg" />
+        <Field label={SIP_CLASSES.has(assetClass) ? 'Initial Investment Amount' : 'Invested (optional)'}>
+          <input
+            type="number"
+            step="any"
+            value={investedValue}
+            onChange={(e) => setInvestedValue(e.target.value)}
+            className={inputClass}
+            placeholder={SIP_CLASSES.has(assetClass) ? '0' : 'Auto: Qty × Avg'}
+          />
         </Field>
       </div>
       <Field label="Currency">
@@ -1060,6 +1563,11 @@ function AssetDetailsForm({
           ))}
         </select>
       </Field>
+      {attemptedSubmit && hasErrors && (
+        <p className="text-sm text-red-600 text-center">
+          Please fill in the highlighted field{nameMissing && valueMissing ? 's' : ''} before saving.
+        </p>
+      )}
       <button onClick={submit} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-base font-medium">
         Save Asset
       </button>
@@ -1292,17 +1800,17 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <SummaryCard
           label="Assets"
-          value={privacyMode ? '••••••' : formatPreciseCurrency(totalAssets)}
+          value={maskPreciseAmount(totalAssets, 'INR', privacyMode)}
           tone="brand"
         />
         <SummaryCard
           label="Liabilities"
-          value={privacyMode ? '••••••' : formatPreciseCurrency(totalLiabilities)}
+          value={maskPreciseAmount(totalLiabilities, 'INR', privacyMode)}
           tone="red"
         />
         <SummaryCard
           label="Net Worth"
-          value={privacyMode ? '••••••' : formatPreciseCurrency(netWorth)}
+          value={maskPreciseAmount(netWorth, 'INR', privacyMode)}
           tone="slate"
         />
       </div>
@@ -1395,3 +1903,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 const inputClass =
   'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-brand-500';
+
+const errorInputClass = 'border-red-400 focus:ring-red-400';
+const errorTextClass = 'text-xs text-red-500 mt-1';

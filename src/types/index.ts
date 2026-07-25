@@ -87,6 +87,14 @@ export interface Asset {
   maturityDate?: string;
   /** Monthly installment amount — used for Recurring Deposits. */
   monthlyInstallment?: number;
+  /** Per-installment SIP amount — used for the SIP asset class. */
+  sipAmount?: number;
+  /** How often the SIP debits — used for the SIP asset class. */
+  sipFrequency?: 'monthly' | 'quarterly';
+  /** Day of the month (1-31) the SIP debits — used for the SIP asset class. */
+  sipDay?: number;
+  /** Manual display order in the Wealth grid (lower = shown first). Set by the move up/down buttons. */
+  order?: number;
 }
 
 export interface Liability {

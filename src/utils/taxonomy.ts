@@ -222,3 +222,6 @@ export const DEPOSIT_LIKE_CLASSES = new Set<AssetClass>([
 
 /** The Recurring Deposit class additionally shows a "Monthly Installment" field. */
 export const RECURRING_DEPOSIT_CLASSES = new Set<AssetClass>(['recurring_deposit']);
+
+/** SIP gets its own dedicated form (fund/symbol, initial + recurring amount, start date, SIP date) instead of the generic symbol/quantity/avg-cost fields. */
+export const SIP_CLASSES = new Set<AssetClass>(['sip']);

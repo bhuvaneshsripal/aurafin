@@ -11,6 +11,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/market/, ''),
       },
+      '/api/mf': {
+        target: 'https://api.mfapi.in',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/mf/, '/mf'),
+      },
     },
   },
   preview: {
@@ -19,6 +24,11 @@ export default defineConfig({
         target: 'https://query1.finance.yahoo.com',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/market/, ''),
+      },
+      '/api/mf': {
+        target: 'https://api.mfapi.in',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/mf/, '/mf'),
       },
     },
   },

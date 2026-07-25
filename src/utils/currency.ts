@@ -36,6 +36,28 @@ export function formatCompact(value: number, currency: string = 'INR') {
   return formatted;
 }
 
+/**
+ * Renders a currency amount honoring privacy mode — but only masks it when
+ * there's actually something to hide. A zero/empty amount always shows as
+ * "0" (formatted in the right currency) rather than a row of dots, since
+ * there's nothing sensitive to protect there.
+ */
+export function maskAmount(
+  value: number,
+  currency: string = 'INR',
+  privacyMode: boolean,
+  options?: FormatCurrencyOptions
+) {
+  if (privacyMode && value !== 0) {
+    return '••••••';
+  }
+  return formatCurrency(value, currency, options);
+}
+
+export function maskPreciseAmount(value: number, currency: string = 'INR', privacyMode: boolean) {
+  return maskAmount(value, currency, privacyMode, { fractionDigits: 2 });
+}
+
 // Asset-class labels/colors now live in ./taxonomy.ts (full 39-type taxonomy).
 // Re-exported here so existing imports from '../utils/currency' keep working.
 export { ASSET_CLASS_LABELS, ASSET_CLASS_COLORS } from './taxonomy';
