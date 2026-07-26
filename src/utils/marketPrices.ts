@@ -1,6 +1,13 @@
-/** Yahoo Finance chart endpoint — proxied in dev via vite.config.ts */
+/**
+ * Live equity quote endpoint. Tries NSE India's own API first, falls
+ * back to Yahoo Finance automatically if NSE is unavailable — see
+ * api/market/chart/[symbol].js. Proxied in dev via vite.config.ts.
+ */
 const QUOTE_BASE = '/api/market/chart';
-/** Yahoo Finance symbol-search endpoint — proxied in dev via vite.config.ts */
+/**
+ * Symbol-search endpoint (NSE autocomplete, with a Yahoo fallback) —
+ * see api/market/v1/finance/search.js. Proxied in dev via vite.config.ts.
+ */
 const SEARCH_BASE = '/api/market/v1/finance/search';
 
 export interface LiveQuote {
@@ -19,11 +26,13 @@ export interface PriceLookup {
   name?: string;
 }
 
-/** Normalize a broker symbol to Yahoo Finance NSE ticker. */
+/**
+ * Normalize a broker symbol to a bare uppercase ticker. NSE's API takes
+ * plain symbols (no exchange suffix); the server adds .NS itself if it
+ * needs to fall back to Yahoo, so the client doesn't need to guess it.
+ */
 export function toYahooSymbol(symbol: string): string {
-  const clean = symbol.trim().toUpperCase().replace(/\s+/g, '');
-  if (clean.endsWith('.NS') || clean.endsWith('.BO')) return clean;
-  return `${clean}.NS`;
+  return symbol.trim().toUpperCase().replace(/\s+/g, '').replace(/\.(NS|BO)$/i, '');
 }
 
 /**
@@ -69,16 +78,13 @@ async function searchYahooSymbol(query: string): Promise<string | null> {
   return resolved;
 }
 
-async function fetchQuote(yahooSymbol: string): Promise<{ price: number } | null> {
+async function fetchQuote(symbol: string): Promise<{ price: number } | null> {
   try {
-    const res = await fetch(
-      `${QUOTE_BASE}/${encodeURIComponent(yahooSymbol)}?interval=1d&range=1d`
-    );
+    const res = await fetch(`${QUOTE_BASE}/${encodeURIComponent(symbol)}`);
     if (!res.ok) return null;
 
     const json = await res.json();
-    const meta = json?.chart?.result?.[0]?.meta;
-    const price = meta?.regularMarketPrice ?? meta?.previousClose;
+    const price = json?.price;
     if (typeof price !== 'number' || !Number.isFinite(price)) return null;
 
     return { price };
