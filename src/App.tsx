@@ -95,13 +95,15 @@ function DataSync() {
 export default function App() {
   const { user, loading, init } = useAuthStore();
   const initTheme = useUiStore((s) => s.initTheme);
+  const initPrivacy = useUiStore((s) => s.initPrivacy);
   const initLock = useAppLockStore((s) => s.init);
 
   useEffect(() => {
     init();
     initTheme();
+    initPrivacy();
     initLock();
-  }, [init, initTheme, initLock]);
+  }, [init, initTheme, initPrivacy, initLock]);
 
   if (loading) {
     return (

@@ -36,7 +36,7 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
       try {
         const yahooSymbol = /\.(NS|BO)$/i.test(raw) ? raw : `${raw}.NS`
         const upstream = await fetch(
-          `https://query1.finance.yahoo.com/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=1d`,
+          `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=1d`,
           { headers: { 'User-Agent': 'Mozilla/5.0' } }
         )
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

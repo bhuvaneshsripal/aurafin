@@ -18,6 +18,9 @@ import {
   Loader2,
   CheckCircle2,
   Link2Off,
+  Eye,
+  Bell,
+  Tag,
 } from 'lucide-react';
 import {
   PieChart,
@@ -295,23 +298,23 @@ function FilterDropdown({
   };
 
   return (
-    <div className="relative flex-1 min-w-[180px]" ref={ref}>
-      <span className="text-xs font-medium text-slate-500 mb-1 block">{label}</span>
+    <div className="relative w-full min-w-0 sm:flex-1 sm:min-w-[180px]" ref={ref}>
+      <span className="text-xs font-medium text-slate-500 mb-0.5 sm:mb-1 block">{label}</span>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full min-h-[42px] flex items-center justify-between gap-2 border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-left"
+        className="w-full min-h-[38px] sm:min-h-[42px] flex items-center justify-between gap-1.5 border border-slate-200 rounded-lg px-2.5 sm:px-3 py-1 sm:py-1.5 bg-white text-left"
       >
-        <div className="flex items-center gap-1.5 flex-wrap flex-1">
+        <div className="flex items-center gap-1 flex-wrap flex-1 min-w-0">
           {selected.length === 0 ? (
-            <span className="text-slate-400 text-sm">{placeholder}</span>
+            <span className="text-slate-400 text-xs sm:text-sm truncate">{placeholder}</span>
           ) : (
             selected.map((v) => {
               const opt = options.find((o) => o.value === v);
               return (
                 <span
                   key={v}
-                  className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 text-xs font-medium pl-2 pr-1 py-1 rounded-md"
+                  className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 text-[11px] sm:text-xs font-medium pl-2 pr-1 py-0.5 sm:py-1 rounded-md max-w-full truncate"
                 >
                   {opt?.label ?? v}
                   <span
@@ -320,7 +323,7 @@ function FilterDropdown({
                       e.stopPropagation();
                       toggleOption(v);
                     }}
-                    className="hover:bg-slate-200 rounded-sm p-0.5"
+                    className="hover:bg-slate-200 rounded-sm p-0.5 shrink-0"
                   >
                     <X size={12} />
                   </span>
@@ -393,7 +396,7 @@ function TotalStatCard({
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6">
       <p className="text-xs font-semibold tracking-wide text-slate-400 mb-4 sm:mb-5">{title}</p>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-6">
         <div>
           <p className="text-xs font-medium text-slate-400 mb-1">INVESTED</p>
           <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white break-words">
@@ -406,7 +409,7 @@ function TotalStatCard({
             {maskPreciseAmount(currentValue, currency, privacyMode)}
           </p>
         </div>
-        <div>
+        <div className="col-span-2 sm:col-span-1">
           <p className="text-xs font-medium text-slate-400 mb-1">P&L</p>
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`text-xl sm:text-2xl font-bold break-words ${positive ? 'text-brand-600 dark:text-brand-300' : 'text-red-500'}`}>
@@ -471,6 +474,19 @@ function AssetsTab({
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedCurrencies, setSelectedCurrencies] = useState<string[]>([]);
+  const [viewingAsset, setViewingAsset] = useState<Asset | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [tagModalOpen, setTagModalOpen] = useState(false);
+  const [tagDraft, setTagDraft] = useState('');
+
+  const toggleRowSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const handleDelete = async (id: string) => {
     if (!user) return;
@@ -648,6 +664,24 @@ function AssetsTab({
     setModalOpen(true);
   };
 
+  if (viewingAsset) {
+    const live = assets.find((x) => x.id === viewingAsset.id) ?? viewingAsset;
+    return (
+      <AssetDetailPage
+        asset={live}
+        onBack={() => setViewingAsset(null)}
+        onEdit={(a) => {
+          setViewingAsset(null);
+          openEdit(a);
+        }}
+        onDelete={async (id) => {
+          await handleDelete(id);
+          setViewingAsset(null);
+        }}
+      />
+    );
+  }
+
   function SortHeader({
     label,
     sortKeyName,
@@ -738,49 +772,47 @@ function AssetsTab({
       <TabNav tab={tab} setTab={setTab} />
 
       <div className="flex flex-col sm:flex-row sm:items-end gap-3">
-        <FilterDropdown
-          label="Filter"
-          placeholder="Filter by category"
-          options={categoryOptions}
-          selected={selectedCategories}
-          onChange={setSelectedCategories}
-        />
-        <FilterDropdown
-          label="Type"
-          placeholder="Filter by type"
-          options={typeOptions}
-          selected={selectedTypes}
-          onChange={setSelectedTypes}
-        />
-        <FilterDropdown
-          label="Tags"
-          placeholder="Filter by tag"
-          options={[]}
-          selected={[]}
-          onChange={() => {}}
-        />
-        <FilterDropdown
-          label="Currency"
-          placeholder="Filter by currency"
-          options={currencyOptions}
-          selected={selectedCurrencies}
-          onChange={setSelectedCurrencies}
-        />
-        {sortKey !== 'manual' && viewMode === 'list' && (
+        <div className="grid grid-cols-2 gap-2.5 sm:contents">
+          <FilterDropdown
+            label="Filter"
+            placeholder="Category"
+            options={categoryOptions}
+            selected={selectedCategories}
+            onChange={setSelectedCategories}
+          />
+          <FilterDropdown
+            label="Type"
+            placeholder="Type"
+            options={typeOptions}
+            selected={selectedTypes}
+            onChange={setSelectedTypes}
+          />
+          <FilterDropdown label="Tags" placeholder="Tag" options={[]} selected={[]} onChange={() => {}} />
+          <FilterDropdown
+            label="Currency"
+            placeholder="Currency"
+            options={currencyOptions}
+            selected={selectedCurrencies}
+            onChange={setSelectedCurrencies}
+          />
+        </div>
+        <div className="flex items-center gap-2 sm:contents">
+          {sortKey !== 'manual' && viewMode === 'list' && (
+            <button
+              onClick={() => setSortKey('manual')}
+              className="h-[38px] sm:h-[42px] shrink-0 px-3 flex items-center justify-center border border-slate-200 rounded-lg text-sm text-slate-500 hover:bg-slate-50 whitespace-nowrap"
+            >
+              Manual order
+            </button>
+          )}
           <button
-            onClick={() => setSortKey('manual')}
-            className="h-[42px] shrink-0 px-3 flex items-center justify-center border border-slate-200 rounded-lg text-sm text-slate-500 hover:bg-slate-50 whitespace-nowrap"
+            onClick={() => toggleSort(sortKey)}
+            title="Flip sort direction"
+            className="h-[38px] w-[38px] sm:h-[42px] sm:w-[42px] shrink-0 flex items-center justify-center border border-slate-200 rounded-lg text-slate-500 hover:bg-slate-50"
           >
-            Manual order
+            <ArrowUpDown size={16} />
           </button>
-        )}
-        <button
-          onClick={() => toggleSort(sortKey)}
-          title="Flip sort direction"
-          className="h-[42px] w-[42px] shrink-0 flex items-center justify-center border border-slate-200 rounded-lg text-slate-500 hover:bg-slate-50"
-        >
-          <ArrowUpDown size={16} />
-        </button>
+        </div>
       </div>
 
       <TotalStatCard
@@ -800,30 +832,127 @@ function AssetsTab({
 
       {filtered.length > 0 && viewMode === 'list' ? (
         <>
-          {/* Mobile: simplified rows — name, current value, P&L only. Tap a row to edit. */}
+          {/* Mobile: simplified rows — name, current value, P&L only. Tap a row to view details;
+              tap the checkbox (or tap a row while others are selected) to multi-select. */}
           <div className="md:hidden bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
             {sortedRows.map(({ asset: a, value, pnl, pnlPercent }) => (
-              <button
+              <div
                 key={a.id}
-                onClick={() => openEdit(a)}
-                className="w-full flex items-center justify-between gap-3 px-4 py-3.5 text-left active:bg-slate-50"
+                className={`w-full flex items-center gap-3 px-4 py-3.5 active:bg-slate-50 ${
+                  selectedIds.has(a.id) ? 'bg-brand-50/60' : ''
+                }`}
               >
-                <p className="font-semibold text-slate-800 truncate">{a.name}</p>
-                <div className="text-right shrink-0">
-                  <p className="font-semibold text-slate-800">
-                    {maskPreciseAmount(value, a.currency, privacyMode)}
-                  </p>
-                  {pnl !== undefined && (
-                    <p className={`text-xs ${pnl >= 0 ? 'text-brand-600' : 'text-red-500'}`}>
-                      {pnl >= 0 ? '+' : ''}
-                      {formatPreciseCurrency(pnl, a.currency)}
-                      {pnlPercent !== undefined && ` (${pnl >= 0 ? '+' : ''}${pnlPercent.toFixed(1)}%)`}
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(a.id)}
+                  onChange={() => toggleRowSelect(a.id)}
+                  className="h-4 w-4 rounded border-slate-300 shrink-0"
+                />
+                <button
+                  onClick={() => (selectedIds.size > 0 ? toggleRowSelect(a.id) : setViewingAsset(a))}
+                  className="flex-1 flex items-center justify-between gap-3 text-left min-w-0"
+                >
+                  <p className="font-semibold text-slate-800 truncate">{a.name}</p>
+                  <div className="text-right shrink-0">
+                    <p className="font-semibold text-slate-800">
+                      {maskPreciseAmount(value, a.currency, privacyMode)}
                     </p>
-                  )}
-                </div>
-              </button>
+                    {pnl !== undefined && (
+                      <p className={`text-xs ${pnl >= 0 ? 'text-brand-600' : 'text-red-500'}`}>
+                        {pnl >= 0 ? '+' : ''}
+                        {formatPreciseCurrency(pnl, a.currency)}
+                        {pnlPercent !== undefined && ` (${pnl >= 0 ? '+' : ''}${pnlPercent.toFixed(1)}%)`}
+                      </p>
+                    )}
+                  </div>
+                </button>
+              </div>
             ))}
           </div>
+
+          {/* Bottom action bar — appears once one or more rows are checked. */}
+          {selectedIds.size > 0 && (
+            <div className="md:hidden fixed bottom-20 left-4 right-4 z-30">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-lg flex items-center justify-between px-4 py-3">
+                <span className="text-sm font-medium text-slate-700">{selectedIds.size} selected</span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setTagModalOpen(true)}
+                    title="Tag"
+                    className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500"
+                  >
+                    <Tag size={16} />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (selectedIds.size !== 1) {
+                        alert('Select exactly one asset to change it.');
+                        return;
+                      }
+                      const id = Array.from(selectedIds)[0];
+                      const a = assets.find((x) => x.id === id);
+                      if (a) {
+                        setSelectedIds(new Set());
+                        openEdit(a);
+                      }
+                    }}
+                    title="Change asset"
+                    className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500"
+                  >
+                    <LayoutGrid size={16} />
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!confirm(`Delete ${selectedIds.size} selected asset(s)? This can't be undone.`)) return;
+                      for (const id of selectedIds) {
+                        await handleDelete(id);
+                      }
+                      setSelectedIds(new Set());
+                    }}
+                    title="Delete"
+                    className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-red-50 text-red-500"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                  <button
+                    onClick={() => setSelectedIds(new Set())}
+                    title="Clear selection"
+                    className="h-9 w-9 flex items-center justify-center rounded-full bg-brand-600 hover:bg-brand-700 text-white ml-1"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <Modal open={tagModalOpen} onClose={() => setTagModalOpen(false)} title="Add Tag">
+            <div className="space-y-3">
+              <Field label="Tag name">
+                <input
+                  value={tagDraft}
+                  onChange={(e) => setTagDraft(e.target.value)}
+                  placeholder="e.g. Long-term"
+                  className={inputClass}
+                />
+              </Field>
+              <p className="text-xs text-slate-400">
+                Tags aren't part of the asset data model yet — this confirms the action but doesn't
+                persist anything until a `tags` field is added to the schema.
+              </p>
+              <button
+                onClick={() => {
+                  alert(`Tagged ${selectedIds.size} asset(s) as "${tagDraft || 'Untitled'}".`);
+                  setTagDraft('');
+                  setTagModalOpen(false);
+                  setSelectedIds(new Set());
+                }}
+                className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-base font-medium"
+              >
+                Save Tag
+              </button>
+            </div>
+          </Modal>
 
           {/* Desktop/laptop: full table, every column. */}
           <div className="hidden md:block bg-white rounded-2xl border border-slate-200 overflow-x-auto">
@@ -1012,6 +1141,150 @@ function AssetsTab({
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Edit Asset" widthClassName="max-w-xl">
         {editing && <AssetDetailsForm initial={editing} onSave={handleSave} />}
       </Modal>
+    </div>
+  );
+}
+
+/**
+ * Full-page asset detail view shown when a row is tapped in the mobile list.
+ * Note: ISIN / sector / geography aren't in the current `Asset` type, so they're
+ * read defensively via an `any` cast and only rendered when present — extend the
+ * schema with those fields to have them show up here for real.
+ */
+function AssetDetailPage({
+  asset,
+  onBack,
+  onEdit,
+  onDelete,
+}: {
+  asset: Asset;
+  onBack: () => void;
+  onEdit: (a: Asset) => void;
+  onDelete: (id: string) => void;
+}) {
+  const livePrices = useLivePricesStore((s) => s.prices);
+  const sipValues = useLivePricesStore((s) => s.sipValues);
+  const privacyMode = useUiStore((s) => s.privacyMode);
+  const extra = asset as unknown as {
+    isin?: string;
+    sector?: string;
+    geography?: string;
+    notes?: string;
+  };
+
+  const { invested, value, pnl, pnlPercent } = resolveAssetValues(asset, livePrices, sipValues);
+  const category = ASSET_CLASS_TO_CATEGORY[asset.assetClass];
+  const positive = (pnl ?? 0) >= 0;
+
+  const notesLine = [
+    extra.isin ? `ISIN: ${extra.isin}` : null,
+    extra.sector ? `Sector: ${extra.sector.toUpperCase()}` : null,
+    pnl !== undefined
+      ? `P&L: ${pnl >= 0 ? '+' : ''}${formatPreciseCurrency(pnl, asset.currency)}${
+          pnlPercent !== undefined ? ` (${pnl >= 0 ? '+' : ''}${pnlPercent.toFixed(4)}%)` : ''
+        }`
+      : null,
+    extra.notes ?? null,
+  ]
+    .filter(Boolean)
+    .join(' | ');
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end gap-4 text-slate-400">
+        <Eye size={20} />
+        <Bell size={20} />
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button onClick={onBack} className="p-2 -ml-2 rounded-lg hover:bg-slate-100 text-slate-500 shrink-0">
+          <ArrowLeft size={18} />
+        </button>
+        <div className="flex-1 min-w-0">
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 uppercase truncate">{asset.name}</h2>
+          <p className="text-slate-400 text-sm">{category?.label ?? ASSET_CLASS_LABELS[asset.assetClass]}</p>
+        </div>
+        <button
+          onClick={() => onEdit(asset)}
+          title="Edit"
+          className="h-9 w-9 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 shrink-0"
+        >
+          <Pencil size={16} />
+        </button>
+        <button
+          onClick={() => {
+            if (confirm(`Delete ${asset.name}? This can't be undone.`)) onDelete(asset.id);
+          }}
+          title="Delete"
+          className="h-9 w-9 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50 shrink-0"
+        >
+          <Trash2 size={16} />
+        </button>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200 p-5">
+        <div className="flex items-start justify-between gap-3">
+          <span className="inline-block bg-blue-50 text-blue-600 text-xs font-medium px-2.5 py-1 rounded-full">
+            {category?.label ?? ASSET_CLASS_LABELS[asset.assetClass]}
+          </span>
+          <div className="text-right">
+            <p className="text-xs text-slate-400 font-medium">INVESTED</p>
+            <p className="text-base font-semibold text-slate-800">
+              {formatPreciseCurrency(invested ?? value, asset.currency)}
+            </p>
+          </div>
+        </div>
+        <p className="text-3xl font-bold text-slate-900 mt-3">
+          {maskPreciseAmount(value, asset.currency, privacyMode)}
+        </p>
+        {pnl !== undefined && (
+          <p className={`flex items-center gap-1 text-sm font-medium mt-1 ${positive ? 'text-brand-600' : 'text-red-500'}`}>
+            {positive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+            {positive ? '+' : ''}
+            {formatPreciseCurrency(pnl, asset.currency)}
+            {pnlPercent !== undefined && ` (${positive ? '+' : ''}${pnlPercent.toFixed(1)}%)`}
+          </p>
+        )}
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200 p-5">
+        <p className="text-xs font-semibold tracking-wide text-slate-400 mb-4">DETAILS</p>
+        <div className="grid grid-cols-2 gap-y-4 gap-x-4">
+          <DetailField label="PRODUCT TYPE" value={ASSET_CLASS_LABELS[asset.assetClass]} />
+          <DetailField label="CURRENCY" value={asset.currency} />
+          {asset.quantity !== undefined && (
+            <DetailField
+              label="QUANTITY"
+              value={`${asset.quantity}${WEIGHT_TRACKED_CLASSES.has(asset.assetClass) ? ' g' : ''}`}
+            />
+          )}
+          {asset.avgCost !== undefined && (
+            <DetailField label="PURCHASE PRICE" value={formatPreciseCurrency(asset.avgCost, asset.currency)} />
+          )}
+          {extra.geography && <DetailField label="GEOGRAPHY" value={extra.geography} />}
+          {asset.institution && <DetailField label="INSTITUTION" value={asset.institution} />}
+          {asset.interestRate !== undefined && (
+            <DetailField label="INTEREST RATE" value={`${asset.interestRate}% p.a.`} />
+          )}
+          {asset.maturityDate && <DetailField label="MATURITY DATE" value={asset.maturityDate} />}
+        </div>
+      </div>
+
+      {notesLine && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-5">
+          <p className="text-xs font-semibold tracking-wide text-slate-400 mb-3">NOTES</p>
+          <p className="text-sm text-slate-600 leading-relaxed">{notesLine}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DetailField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs text-slate-400 mb-1">{label}</p>
+      <p className="text-sm font-medium text-slate-800">{value}</p>
     </div>
   );
 }
