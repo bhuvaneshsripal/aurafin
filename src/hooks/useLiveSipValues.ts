@@ -51,7 +51,7 @@ export function useLiveSipValues() {
         for (const asset of sipAssets) {
           const installments = listSipInstallments(asset);
           if (installments.length === 0) continue;
-          const nav = await fetchFundNavHistory(Number(asset.symbol));
+          const nav = await fetchFundNavHistory(Number(asset.symbol), asset.startDate);
           if (!nav) continue;
           const { value, units } = computeSipLiveValue(installments, nav);
           sipValues[asset.symbol as string] = { value, units, latestNav: nav.latestNav };

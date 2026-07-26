@@ -73,7 +73,7 @@ export async function searchMutualFunds(query: string): Promise<MfSearchResult[]
     .map((r) => ({ schemeCode: Number(r.schemeCode), schemeName: r.schemeName }));
 }
 
-const navCache = new Map<number, FundNavHistory>();
+const navCache = new Map<string, FundNavHistory>();
 
 // NAV only updates once a day (after market close), so a same-day cached
 // copy is never actually stale. Persisting it means a refresh — or a
@@ -86,9 +86,9 @@ interface StoredNav {
   data: FundNavHistory;
 }
 
-function readStoredNav(schemeCode: number): StoredNav | null {
+function readStoredNav(key: string): StoredNav | null {
   try {
-    const raw = localStorage.getItem(NAV_STORAGE_PREFIX + schemeCode);
+    const raw = localStorage.getItem(NAV_STORAGE_PREFIX + key);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as StoredNav;
     if (!parsed?.data?.history?.length) return null;
@@ -98,10 +98,10 @@ function readStoredNav(schemeCode: number): StoredNav | null {
   }
 }
 
-function writeStoredNav(schemeCode: number, data: FundNavHistory) {
+function writeStoredNav(key: string, data: FundNavHistory) {
   try {
     localStorage.setItem(
-      NAV_STORAGE_PREFIX + schemeCode,
+      NAV_STORAGE_PREFIX + key,
       JSON.stringify({ fetchedAt: Date.now(), data } satisfies StoredNav)
     );
   } catch {
@@ -109,30 +109,60 @@ function writeStoredNav(schemeCode: number, data: FundNavHistory) {
   }
 }
 
+function toIsoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
 /**
- * Fetch full NAV history for a scheme. Cached in-memory for the session and
- * in localStorage across refreshes; a same-day cached copy is returned
- * without hitting the network at all, and if a fresh fetch fails, we fall
- * back to whatever's cached (even if a bit stale) rather than surfacing an
- * error for what's usually just a transient hiccup.
+ * Fetch NAV history for a scheme, narrowed to what's actually needed.
+ *
+ * Without `sinceIsoDate`, this pulls a fund's ENTIRE history since
+ * inception — for an old fund that's 20+ years of daily data, a payload
+ * large/slow enough to time out even when the fund and the API are both
+ * fine. Pass the earliest date you need priced (e.g. a SIP's start date)
+ * and this fetches only from a short buffer before it, which is both much
+ * faster and much less likely to hit the free API's rate limits.
+ *
+ * Cached in-memory for the session and in localStorage across refreshes;
+ * a same-day cached copy is returned without hitting the network at all,
+ * and if a fresh fetch fails, this falls back to whatever's cached (even
+ * if a bit stale) rather than surfacing an error for what's usually just
+ * a transient hiccup.
  */
-export async function fetchFundNavHistory(schemeCode: number): Promise<FundNavHistory | null> {
-  const memCached = navCache.get(schemeCode);
+export async function fetchFundNavHistory(
+  schemeCode: number,
+  sinceIsoDate?: string
+): Promise<FundNavHistory | null> {
+  // Round to the month so nearby start dates (or the same SIP re-saved a
+  // day later) share one cache entry instead of each re-fetching.
+  const rangeKey = sinceIsoDate ? sinceIsoDate.slice(0, 7) : 'full';
+  const cacheKey = `${schemeCode}:${rangeKey}`;
+
+  const memCached = navCache.get(cacheKey);
   if (memCached) return memCached;
 
-  const stored = readStoredNav(schemeCode);
+  const stored = readStoredNav(cacheKey);
   if (stored && Date.now() - stored.fetchedAt < NAV_STORAGE_MAX_AGE_MS) {
-    navCache.set(schemeCode, stored.data);
+    navCache.set(cacheKey, stored.data);
     return stored.data;
   }
 
-  const json = await fetchJsonWithRetry(`${MF_BASE}/${schemeCode}`);
+  let url = `${MF_BASE}/${schemeCode}`;
+  if (sinceIsoDate) {
+    const start = new Date(sinceIsoDate);
+    start.setDate(start.getDate() - 15); // buffer to guarantee a NAV on/before the exact date
+    const end = new Date();
+    end.setDate(end.getDate() + 1); // buffer for timezone edge cases around "today"
+    url += `?startDate=${toIsoDate(start)}&endDate=${toIsoDate(end)}`;
+  }
+
+  const json = await fetchJsonWithRetry(url);
   if (!json || typeof json !== 'object') {
     // Fetch failed — fall back to whatever we have cached, even if stale,
     // rather than showing "couldn't fetch" when yesterday's NAV is still
     // a perfectly reasonable value to show.
     if (stored) {
-      navCache.set(schemeCode, stored.data);
+      navCache.set(cacheKey, stored.data);
       return stored.data;
     }
     return null;
@@ -151,7 +181,7 @@ export async function fetchFundNavHistory(schemeCode: number): Promise<FundNavHi
 
   if (history.length === 0) {
     if (stored) {
-      navCache.set(schemeCode, stored.data);
+      navCache.set(cacheKey, stored.data);
       return stored.data;
     }
     return null;
@@ -166,8 +196,8 @@ export async function fetchFundNavHistory(schemeCode: number): Promise<FundNavHi
     latestDate: latest.date,
     history,
   };
-  navCache.set(schemeCode, result);
-  writeStoredNav(schemeCode, result);
+  navCache.set(cacheKey, result);
+  writeStoredNav(cacheKey, result);
   return result;
 }
 

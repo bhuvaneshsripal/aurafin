@@ -154,13 +154,13 @@ export default function LockScreen() {
 
           <div className="w-full max-w-[300px] mx-auto flex flex-col items-center">
             {/* Keypad */}
-            <div className="grid grid-cols-3 gap-3 w-full max-w-[240px]">
+            <div className="grid grid-cols-3 gap-4 w-full max-w-[300px]">
               {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => (
                 <button
                   key={d}
                   type="button"
                   onClick={() => pressDigit(d)}
-                  className="aspect-square rounded-xl bg-cream-200/70 dark:bg-slate-800 text-lg font-semibold text-slate-900 dark:text-white active:scale-95 active:bg-cream-300 dark:active:bg-slate-700 transition-transform"
+                  className="aspect-square rounded-2xl bg-cream-200/70 dark:bg-slate-800 text-2xl font-semibold text-slate-900 dark:text-white active:scale-95 active:bg-cream-300 dark:active:bg-slate-700 transition-transform"
                 >
                   {d}
                 </button>
@@ -169,16 +169,16 @@ export default function LockScreen() {
               <button
                 type="button"
                 onClick={() => pressDigit('0')}
-                className="aspect-square rounded-xl bg-cream-200/70 dark:bg-slate-800 text-lg font-semibold text-slate-900 dark:text-white active:scale-95 active:bg-cream-300 dark:active:bg-slate-700 transition-transform"
+                className="aspect-square rounded-2xl bg-cream-200/70 dark:bg-slate-800 text-2xl font-semibold text-slate-900 dark:text-white active:scale-95 active:bg-cream-300 dark:active:bg-slate-700 transition-transform"
               >
                 0
               </button>
               <button
                 type="button"
                 onClick={pressBackspace}
-                className="aspect-square rounded-xl bg-cream-200/70 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-300 active:scale-95 active:bg-cream-300 dark:active:bg-slate-700 transition-transform"
+                className="aspect-square rounded-2xl bg-cream-200/70 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-300 active:scale-95 active:bg-cream-300 dark:active:bg-slate-700 transition-transform"
               >
-                <Delete size={18} />
+                <Delete size={24} />
               </button>
             </div>
 

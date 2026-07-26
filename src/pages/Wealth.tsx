@@ -1110,7 +1110,7 @@ function AssetDetailsForm({
   useEffect(() => {
     if (!initialSymbolIsCode || !initial?.symbol) return;
     let cancelled = false;
-    fetchFundNavHistory(Number(initial.symbol)).then((nav) => {
+    fetchFundNavHistory(Number(initial.symbol), initial.startDate).then((nav) => {
       if (!cancelled && nav) {
         setMatchedFundName(nav.schemeName);
         setFundQuery(nav.schemeName);
@@ -1214,7 +1214,7 @@ function AssetDetailsForm({
     setLiveValueLoading(true);
     setLiveValueError(false);
     const timer = setTimeout(() => {
-      fetchFundNavHistory(Number(symbol)).then((nav) => {
+      fetchFundNavHistory(Number(symbol), startDate || undefined).then((nav) => {
         if (cancelled) return;
         setLiveValueLoading(false);
         if (!nav) {
