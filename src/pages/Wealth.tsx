@@ -71,6 +71,17 @@ type Tab = 'assets' | 'liabilities' | 'networth' | 'allocation';
 type SortKey = 'manual' | 'name' | 'qty' | 'avgCost' | 'perUnit' | 'invested' | 'value' | 'pnl' | 'alloc';
 type EntryType = 'asset' | 'liability';
 
+/**
+ * Renders a weight-tracked quantity (grams) safely. Rounds to 4 decimal
+ * places (0.1 mg precision) so older records saved before that rounding was
+ * applied at write-time — e.g. "0.454099999999999995" from floating-point
+ * addition — never render their raw float, and trims trailing zeros so
+ * "5.0000" shows as "5".
+ */
+function formatGrams(qty: number): string {
+  return (Math.round(qty * 10000) / 10000).toString();
+}
+
 export default function Wealth() {
   const [tab, setTab] = useState<Tab>('assets');
   const [addFlow, setAddFlow] = useState<EntryType | null>(null);
@@ -1006,8 +1017,11 @@ function AssetsTab({
                     })()}
                   </td>
                   <td className="px-4 py-3.5 text-right text-slate-600">
-                    {a.quantity ?? '—'}
-                    {a.quantity !== undefined && WEIGHT_TRACKED_CLASSES.has(a.assetClass) ? ' g' : ''}
+                    {a.quantity !== undefined
+                      ? WEIGHT_TRACKED_CLASSES.has(a.assetClass)
+                        ? `${formatGrams(a.quantity)} g`
+                        : a.quantity
+                      : '—'}
                   </td>
                   <td className="px-4 py-3.5 text-right text-slate-600">
                     {a.avgCost !== undefined ? formatPreciseCurrency(a.avgCost, a.currency) : '—'}
@@ -1262,7 +1276,11 @@ function AssetDetailPage({
           {asset.quantity !== undefined && (
             <DetailField
               label="QUANTITY"
-              value={`${asset.quantity}${WEIGHT_TRACKED_CLASSES.has(asset.assetClass) ? ' g' : ''}`}
+              value={
+                WEIGHT_TRACKED_CLASSES.has(asset.assetClass)
+                  ? `${formatGrams(asset.quantity)} g`
+                  : `${asset.quantity}`
+              }
             />
           )}
           {asset.avgCost !== undefined && (
@@ -1366,7 +1384,11 @@ function AssetDetailsForm({
     return WEIGHT_TRACKED_CLASSES.has(startClass) ? [{ id: crypto.randomUUID(), grams: '', amount: '' }] : [];
   });
   const isWeightTracked = WEIGHT_TRACKED_CLASSES.has(assetClass);
-  const totalGrams = purchaseLots.reduce((sum, l) => sum + (Number(l.grams) || 0), 0);
+  // Round to 4 decimal places (0.1 mg precision — plenty for jewellery/coins)
+  // to avoid floating-point addition artifacts like 0.454099999999999995.
+  const totalGrams = Math.round(
+    purchaseLots.reduce((sum, l) => sum + (Number(l.grams) || 0), 0) * 10000
+  ) / 10000;
   const totalPurchaseAmount = purchaseLots.reduce((sum, l) => sum + (Number(l.amount) || 0), 0);
 
   const addPurchaseLot = () =>
@@ -1647,7 +1669,14 @@ function AssetDetailsForm({
       </Field>
       {effectiveCategory && effectiveCategory.types.length > 1 ? (
         <Field label={`${effectiveCategory.label} Type`}>
-          <select value={assetClass} onChange={(e) => setAssetClass(e.target.value as AssetClass)} className={inputClass}>
+          <select
+            value={assetClass}
+            onChange={(e) => setAssetClass(e.target.value as AssetClass)}
+            className={`${inputClass} bg-white text-slate-700`}
+          >
+            {!effectiveCategory.types.some((t) => t.value === assetClass) && (
+              <option value={assetClass}>{ASSET_CLASS_LABELS[assetClass] ?? assetClass}</option>
+            )}
             {effectiveCategory.types.map((t) => (
               <option key={t.value} value={t.value}>
                 {t.label}
@@ -1658,13 +1687,13 @@ function AssetDetailsForm({
       ) : (
         <Field label="Asset Type">
           <p className="text-sm font-medium text-slate-700 border border-slate-200 rounded-lg px-3 py-2.5 bg-slate-50">
-            {ASSET_CLASS_LABELS[assetClass]}
+            {ASSET_CLASS_LABELS[assetClass] ?? assetClass ?? 'Unknown'}
           </p>
         </Field>
       )}
       {isWeightTracked && (
         <div className="space-y-3 border border-slate-100 bg-slate-50/60 rounded-xl p-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <p className="text-sm font-medium text-slate-700">Purchases</p>
             <p className="text-xs text-slate-500">
               Total: <span className="font-semibold text-brand-700">{totalGrams || 0} g</span>

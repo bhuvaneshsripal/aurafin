@@ -83,7 +83,7 @@ export default function Dashboard() {
                 <span className="font-display text-3xl sm:text-4xl font-semibold text-slate-900 dark:text-white break-words">
                   {maskPreciseAmount(netWorth, 'INR', privacyMode)}
                 </span>
-                {!privacyMode && investedAssetsTotal > 0 && (
+                {investedAssetsTotal > 0 && (
                   <span
                     className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${
                       netWorthPnl >= 0
