@@ -18,6 +18,15 @@ interface LivePricesState {
   setPrices: (prices: Record<string, number>) => void;
   setSipValues: (sipValues: Record<string, SipLiveEntry>) => void;
   setLoading: (loading: boolean) => void;
+  /** Live 24K gold rate (₹/gram) polled by useLiveGoldPrice whenever the
+   *  person holds a Gold asset — see src/utils/goldPrice.ts. */
+  goldPricePerGram: number | null;
+  goldPriceAsOf: number | null;
+  goldPriceLoading: boolean;
+  goldPriceError: boolean;
+  setGoldPrice: (pricePerGram: number, asOf: number) => void;
+  setGoldPriceLoading: (loading: boolean) => void;
+  setGoldPriceError: (error: boolean) => void;
 }
 
 export const useLivePricesStore = create<LivePricesState>((set) => ({
@@ -29,6 +38,14 @@ export const useLivePricesStore = create<LivePricesState>((set) => ({
   setSipValues: (sipValues) =>
     set((s) => ({ sipValues: { ...s.sipValues, ...sipValues }, lastUpdated: Date.now() })),
   setLoading: (loading) => set({ loading }),
+  goldPricePerGram: null,
+  goldPriceAsOf: null,
+  goldPriceLoading: false,
+  goldPriceError: false,
+  setGoldPrice: (goldPricePerGram, goldPriceAsOf) =>
+    set({ goldPricePerGram, goldPriceAsOf, goldPriceLoading: false, goldPriceError: false }),
+  setGoldPriceLoading: (goldPriceLoading) => set({ goldPriceLoading }),
+  setGoldPriceError: (goldPriceError) => set({ goldPriceError }),
 }));
 
 /** Resolve live LTP for a symbol, falling back to stored avg or computed price. */
