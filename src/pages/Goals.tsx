@@ -1,17 +1,35 @@
 import { useState } from 'react';
-import { Plus, Trash2, Pencil } from 'lucide-react';
+import { Plus, Trash2, Pencil, Scale } from 'lucide-react';
 import { useGoalsStore } from '../store/goalsStore';
 import { useAuthStore } from '../store/authStore';
+import { useAssetsStore } from '../store/assetsStore';
+import { useLiabilitiesStore } from '../store/liabilitiesStore';
+import { useLivePricesStore } from '../store/livePricesStore';
 import { upsertDoc, removeDoc } from '../hooks/useFirestoreSync';
 import Modal from '../components/Modal';
 import type { Goal } from '../types';
 import { CURRENCIES, formatCurrency } from '../utils/currency';
+import { resolveAssetValues } from '../utils/assetValues';
 
 export default function Goals() {
   const goals = useGoalsStore((s) => s.goals);
   const user = useAuthStore((s) => s.user);
+  const assets = useAssetsStore((s) => s.assets);
+  const liabilities = useLiabilitiesStore((s) => s.liabilities);
+  const livePrices = useLivePricesStore((s) => s.prices);
+  const sipValues = useLivePricesStore((s) => s.sipValues);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Goal | null>(null);
+
+  // Same calc Dashboard uses for the headline Net Worth figure — kept in
+  // sync here so a goal linked to Net Worth always shows the live number,
+  // not whatever was typed in when the goal was created.
+  const totalAssets = assets.reduce(
+    (s, a) => s + resolveAssetValues(a, livePrices, sipValues).value,
+    0
+  );
+  const totalLiabilities = liabilities.reduce((s, l) => s + l.outstanding, 0);
+  const netWorth = totalAssets - totalLiabilities;
 
   const handleDelete = async (id: string) => {
     if (!user) return;
@@ -44,12 +62,21 @@ export default function Goals() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {goals.map((g) => {
-          const pct = Math.min(100, Math.round((g.currentAmount / g.targetAmount) * 100));
+          const currentAmount = g.linkedToNetWorth ? netWorth : g.currentAmount;
+          const pct =
+            g.targetAmount > 0 ? Math.min(100, Math.max(0, Math.round((currentAmount / g.targetAmount) * 100))) : 0;
           return (
             <div key={g.id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="font-semibold text-slate-800">{g.name}</h3>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <h3 className="font-semibold text-slate-800 truncate">{g.name}</h3>
+                  {g.linkedToNetWorth && (
+                    <span className="flex items-center gap-1 shrink-0 text-[10px] font-medium uppercase tracking-wide bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded-full">
+                      <Scale size={10} /> Net Worth
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
                   <button
                     onClick={() => {
                       setEditing(g);
@@ -68,7 +95,9 @@ export default function Goals() {
                 <div className="h-full bg-brand-600 rounded-full" style={{ width: `${pct}%` }} />
               </div>
               <div className="flex items-center justify-between text-xs text-slate-500">
-                <span>{formatCurrency(g.currentAmount, g.currency)} saved</span>
+                <span>
+                  {formatCurrency(currentAmount, g.currency)} {g.linkedToNetWorth ? '(net worth)' : 'saved'}
+                </span>
                 <span>{pct}% of {formatCurrency(g.targetAmount, g.currency)}</span>
               </div>
             </div>
@@ -93,6 +122,7 @@ function GoalForm({ initial, onSave }: { initial: Goal | null; onSave: (g: Goal)
   const [targetAmount, setTargetAmount] = useState(initial?.targetAmount?.toString() ?? '');
   const [currentAmount, setCurrentAmount] = useState(initial?.currentAmount?.toString() ?? '0');
   const [currency, setCurrency] = useState(initial?.currency ?? 'INR');
+  const [linkedToNetWorth, setLinkedToNetWorth] = useState(initial?.linkedToNetWorth ?? false);
 
   const submit = () => {
     if (!name || !targetAmount) return;
@@ -102,6 +132,7 @@ function GoalForm({ initial, onSave }: { initial: Goal | null; onSave: (g: Goal)
       targetAmount: Number(targetAmount),
       currentAmount: Number(currentAmount || 0),
       currency,
+      linkedToNetWorth,
     });
   };
 
@@ -130,15 +161,34 @@ function GoalForm({ initial, onSave }: { initial: Goal | null; onSave: (g: Goal)
           </select>
         </Field>
       </div>
-      <Field label="Current Progress">
+
+      <label className="flex items-start gap-3 border border-slate-200 rounded-lg px-3 py-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={linkedToNetWorth}
+          onChange={(e) => setLinkedToNetWorth(e.target.checked)}
+          className="mt-0.5 h-4 w-4 accent-brand-600"
+        />
+        <span>
+          <span className="block text-sm font-medium text-slate-700">Track automatically with Net Worth</span>
+          <span className="block text-xs text-slate-400 mt-0.5">
+            Progress will use your live Net Worth (total assets − total liabilities) from the Dashboard
+            instead of a number you enter manually.
+          </span>
+        </span>
+      </label>
+
+      <Field label={linkedToNetWorth ? 'Current Progress (auto — from Net Worth)' : 'Current Progress'}>
         <input
           type="number"
           value={currentAmount}
           onChange={(e) => setCurrentAmount(e.target.value)}
           className={inputClass}
           placeholder="0"
+          disabled={linkedToNetWorth}
         />
       </Field>
+
       <button onClick={submit} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2 rounded-lg text-sm font-medium">
         Save Goal
       </button>

@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { initializeFirestore } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentSingleTabManager } from 'firebase/firestore';
 import { isSupported, getAnalytics, type Analytics } from 'firebase/analytics';
 
 // Fill these in with your own Firebase project credentials.
@@ -25,7 +25,17 @@ export const auth = getAuth(app);
 // default setDoc() throws on `undefined` values, which made "Save" silently
 // fail (the promise rejected before setModalOpen(false) ran) whenever any
 // optional field was empty.
-export const db = initializeFirestore(app, { ignoreUndefinedProperties: true });
+//
+// localCache: persistentLocalCache turns on IndexedDB-backed offline
+// persistence — on a refresh, onSnapshot() listeners resolve instantly from
+// the local cache (no more waiting on a fresh network round-trip before the
+// screen shows data) and then reconcile with the server in the background.
+// This is what was making every page look stuck on "Loading..." after a
+// refresh.
+export const db = initializeFirestore(app, {
+  ignoreUndefinedProperties: true,
+  localCache: persistentLocalCache({ tabManager: persistentSingleTabManager({}) }),
+});
 export const googleProvider = new GoogleAuthProvider();
 
 // Analytics only works in a browser that supports it (and is a no-op

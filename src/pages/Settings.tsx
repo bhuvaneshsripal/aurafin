@@ -1,11 +1,12 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { updateProfile, updatePassword, linkWithCredential, EmailAuthProvider } from 'firebase/auth';
-import { Lock, Smartphone, Users, Check, ShieldCheck, Trash2 } from 'lucide-react';
+import { Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useAppLockStore } from '../store/appLockStore';
 import { auth } from '../firebase/config';
 import { CURRENCIES } from '../utils/currency';
 import { sendSharedAccessInvite, isInviteEmailConfigured } from '../utils/otp';
+import { deleteAllUserData } from '../hooks/useFirestoreSync';
 import Modal from '../components/Modal';
 
 type Tab = 'account' | 'preferences' | 'profiles' | 'billing' | 'data';
@@ -564,14 +565,93 @@ function BillingTab() {
 }
 
 function DataTab() {
+  const user = useAuthStore((s) => s.user);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [status, setStatus] = useState<'idle' | 'deleting' | 'error'>('idle');
+
+  const closeModal = () => {
+    setConfirmOpen(false);
+    setConfirmText('');
+    setStatus('idle');
+  };
+
+  const handleDeleteAll = async () => {
+    if (!user || confirmText !== 'DELETE') return;
+    setStatus('deleting');
+    try {
+      await deleteAllUserData(user.uid);
+      closeModal();
+    } catch {
+      setStatus('error');
+    }
+  };
+
   return (
-    <Card>
-      <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Data</h2>
-      <p className="text-xs text-slate-400 dark:text-slate-500">
-        Your data is stored in your own Firebase project. Export or delete it any time from the Firebase
-        console, or wire up export/delete buttons here later.
-      </p>
-    </Card>
+    <>
+      <Card>
+        <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Data</h2>
+        <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
+          Your data is stored in your own Firebase project. You can export it any time from the Firebase
+          console, or permanently remove everything you've entered in Aurafin below.
+        </p>
+
+        <div className="flex gap-3 border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/20 rounded-xl p-4">
+          <AlertTriangle size={20} className="text-red-500 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-red-600 dark:text-red-400">Delete all data</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Permanently removes every asset, liability, goal, transaction, and snapshot in your
+              account. Your login itself is not deleted — you'll stay signed in with an empty account.
+              This cannot be undone.
+            </p>
+            <button
+              onClick={() => setConfirmOpen(true)}
+              className="mt-3 flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium"
+            >
+              <Trash2 size={16} />
+              Delete All Data
+            </button>
+          </div>
+        </div>
+      </Card>
+
+      <Modal open={confirmOpen} onClose={closeModal} title="Delete all data?">
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+          This will permanently delete <strong>all</strong> assets, liabilities, goals, transactions,
+          and snapshots for <strong>{user?.email}</strong>. This action cannot be undone.
+        </p>
+        <label className="block mb-4">
+          <span className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">
+            Type <strong>DELETE</strong> to confirm
+          </span>
+          <input
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            placeholder="DELETE"
+            className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+          />
+        </label>
+        {status === 'error' && (
+          <p className="text-xs text-red-500 mb-4">Something went wrong. Please try again.</p>
+        )}
+        <div className="flex gap-3">
+          <button
+            onClick={closeModal}
+            className="flex-1 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleDeleteAll}
+            disabled={confirmText !== 'DELETE' || status === 'deleting'}
+            className="flex-1 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white py-2.5 rounded-lg text-sm font-medium"
+          >
+            {status === 'deleting' ? 'Deleting...' : 'Delete Everything'}
+          </button>
+        </div>
+      </Modal>
+    </>
   );
 }
 

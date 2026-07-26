@@ -126,6 +126,10 @@ export interface Goal {
   currentAmount: number;
   currency: string;
   targetDate?: string;
+  /** When true, progress is computed live from the dashboard's Net Worth
+   *  (total assets − total liabilities) instead of the manually entered
+   *  currentAmount. */
+  linkedToNetWorth?: boolean;
 }
 
 export type TransactionType = 'income' | 'expense';

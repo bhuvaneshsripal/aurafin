@@ -46,7 +46,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     // fire whenever it does resolve and log them back in automatically.
     setTimeout(() => {
       if (!resolved) set({ loading: false });
-    }, 6000);
+    }, 2500);
   },
   loginWithGoogle: async () => {
     await signInWithPopup(auth, googleProvider);

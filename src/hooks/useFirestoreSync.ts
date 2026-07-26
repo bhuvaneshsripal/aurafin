@@ -1,7 +1,10 @@
 import { useEffect } from 'react';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, writeBatch, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuthStore } from '../store/authStore';
+
+/** Every subcollection kept under users/{uid} that DataSync listens to. */
+const ALL_USER_COLLECTIONS = ['assets', 'liabilities', 'goals', 'transactions', 'snapshots'] as const;
 
 /**
  * Generic two-way sync between a Firestore subcollection at
@@ -59,4 +62,26 @@ export async function bulkUpsertDocs<T extends { id: string }>(
 export async function removeDoc(uid: string, collectionName: string, id: string) {
   const ref = doc(db, 'users', uid, collectionName, id);
   await deleteDoc(ref);
+}
+
+/**
+ * Wipes every asset, liability, goal, transaction, and snapshot doc under
+ * users/{uid}. Used by Settings > Data > "Delete all data". The live
+ * onSnapshot listeners in DataSync pick up the deletions automatically and
+ * clear out the local stores, so there's nothing else to reset by hand.
+ */
+export async function deleteAllUserData(uid: string) {
+  for (const collectionName of ALL_USER_COLLECTIONS) {
+    const colRef = collection(db, 'users', uid, collectionName);
+    const snap = await getDocs(colRef);
+    if (snap.empty) continue;
+
+    const chunkSize = 450;
+    const docs = snap.docs;
+    for (let i = 0; i < docs.length; i += chunkSize) {
+      const batch = writeBatch(db);
+      docs.slice(i, i + chunkSize).forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+  }
 }
