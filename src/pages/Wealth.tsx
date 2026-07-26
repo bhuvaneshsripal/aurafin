@@ -799,7 +799,34 @@ function AssetsTab({
       )}
 
       {filtered.length > 0 && viewMode === 'list' ? (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-x-auto">
+        <>
+          {/* Mobile: simplified rows — name, current value, P&L only. Tap a row to edit. */}
+          <div className="md:hidden bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
+            {sortedRows.map(({ asset: a, value, pnl, pnlPercent }) => (
+              <button
+                key={a.id}
+                onClick={() => openEdit(a)}
+                className="w-full flex items-center justify-between gap-3 px-4 py-3.5 text-left active:bg-slate-50"
+              >
+                <p className="font-semibold text-slate-800 truncate">{a.name}</p>
+                <div className="text-right shrink-0">
+                  <p className="font-semibold text-slate-800">
+                    {maskPreciseAmount(value, a.currency, privacyMode)}
+                  </p>
+                  {pnl !== undefined && (
+                    <p className={`text-xs ${pnl >= 0 ? 'text-brand-600' : 'text-red-500'}`}>
+                      {pnl >= 0 ? '+' : ''}
+                      {formatPreciseCurrency(pnl, a.currency)}
+                      {pnlPercent !== undefined && ` (${pnl >= 0 ? '+' : ''}${pnlPercent.toFixed(1)}%)`}
+                    </p>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {/* Desktop/laptop: full table, every column. */}
+          <div className="hidden md:block bg-white rounded-2xl border border-slate-200 overflow-x-auto">
           <table className="w-full text-sm min-w-[900px]">
             <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
               <tr>
@@ -922,7 +949,8 @@ function AssetsTab({
               ))}
             </tbody>
           </table>
-        </div>
+          </div>
+        </>
       ) : filtered.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {filtered.map((a, idx) => {
