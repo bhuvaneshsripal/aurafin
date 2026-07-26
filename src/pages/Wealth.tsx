@@ -415,16 +415,14 @@ function TotalStatCard({
             <span className={`text-xl sm:text-2xl font-bold break-words ${positive ? 'text-brand-600 dark:text-brand-300' : 'text-red-500'}`}>
               {isMasked ? '••••••' : `${positive ? '+' : ''}${formatPreciseCurrency(pnl, currency)}`}
             </span>
-            {!isMasked && (
-              <span
-                className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                  positive ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-300' : 'bg-red-50 dark:bg-red-900/30 text-red-500'
-                }`}
-              >
-                {positive ? '+' : ''}
-                {pnlPercent.toFixed(1)}%
-              </span>
-            )}
+            <span
+              className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                positive ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-300' : 'bg-red-50 dark:bg-red-900/30 text-red-500'
+              }`}
+            >
+              {positive ? '+' : ''}
+              {pnlPercent.toFixed(1)}%
+            </span>
           </div>
         </div>
       </div>
@@ -478,6 +476,14 @@ function AssetsTab({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [tagModalOpen, setTagModalOpen] = useState(false);
   const [tagDraft, setTagDraft] = useState('');
+  const setHideFab = useUiStore((s) => s.setHideFab);
+
+  // The bulk-selection bar and the global "+" FAB sit in the same bottom-right
+  // corner on mobile — hide the FAB while the bar is up so they don't overlap.
+  useEffect(() => {
+    setHideFab(selectedIds.size > 0);
+    return () => setHideFab(false);
+  }, [selectedIds.size, setHideFab]);
 
   const toggleRowSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -859,8 +865,9 @@ function AssetsTab({
                     </p>
                     {pnl !== undefined && (
                       <p className={`text-xs ${pnl >= 0 ? 'text-brand-600' : 'text-red-500'}`}>
-                        {pnl >= 0 ? '+' : ''}
-                        {formatPreciseCurrency(pnl, a.currency)}
+                        {privacyMode && pnl !== 0
+                          ? '••••••'
+                          : `${pnl >= 0 ? '+' : ''}${formatPreciseCurrency(pnl, a.currency)}`}
                         {pnlPercent !== undefined && ` (${pnl >= 0 ? '+' : ''}${pnlPercent.toFixed(1)}%)`}
                       </p>
                     )}

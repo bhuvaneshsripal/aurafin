@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import QuickAddMenu from './QuickAddMenu';
+import { useUiStore } from '../store/uiStore';
 
 const primaryLinks = [
   { to: '/', label: 'Overview', icon: LayoutDashboard },
@@ -36,13 +37,18 @@ export default function BottomNav() {
   const [moreOpen, setMoreOpen] = useState(false);
   const location = useLocation();
   const isMoreActive = moreLinks.some((l) => l.to === location.pathname);
+  const hideFab = useUiStore((s) => s.hideFab);
 
   return (
     <>
-      {/* Floating quick-add action button, sits just above the bottom nav */}
-      <div className="md:hidden fixed right-4 z-40" style={{ bottom: 'calc(64px + env(safe-area-inset-bottom) + 12px)' }}>
-        <QuickAddMenu variant="fab" />
-      </div>
+      {/* Floating quick-add action button, sits just above the bottom nav.
+          Hidden when a page's own bottom toolbar (e.g. bulk-selection
+          actions on Wealth) is occupying the same corner. */}
+      {!hideFab && (
+        <div className="md:hidden fixed right-4 z-40" style={{ bottom: 'calc(64px + env(safe-area-inset-bottom) + 12px)' }}>
+          <QuickAddMenu variant="fab" />
+        </div>
+      )}
 
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 pb-[env(safe-area-inset-bottom)]">
         <div className="grid grid-cols-4">

@@ -4,10 +4,15 @@ interface UiState {
   theme: 'light' | 'dark';
   /** true = amounts hidden ("eye" closed), false = amounts revealed ("eye" open). */
   privacyMode: boolean;
+  /** When true, the global floating "+" add button hides itself — used by
+   * pages that show their own bottom toolbar (e.g. bulk-selection actions)
+   * in the same corner, so the two don't overlap. */
+  hideFab: boolean;
   toggleTheme: () => void;
   togglePrivacy: () => void;
   initTheme: () => void;
   initPrivacy: () => void;
+  setHideFab: (hide: boolean) => void;
 }
 
 function applyTheme(theme: 'light' | 'dark') {
@@ -32,6 +37,8 @@ function clearAutoHideTimer() {
 export const useUiStore = create<UiState>((set, get) => ({
   theme: 'light',
   privacyMode: true,
+  hideFab: false,
+  setHideFab: (hide) => set({ hideFab: hide }),
   initTheme: () => {
     const stored = localStorage.getItem('aurafin-theme');
     const theme: 'light' | 'dark' = stored === 'dark' ? 'dark' : 'light';
