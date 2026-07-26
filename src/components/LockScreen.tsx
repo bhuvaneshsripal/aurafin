@@ -116,23 +116,22 @@ export default function LockScreen() {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-cream-100 dark:bg-slate-950 px-6 py-8 overflow-y-auto">
-      <div className="w-full max-w-[300px] text-center flex flex-col items-center">
-        <img
-          src="/logo-icon.png"
-          alt="Aurafin"
-          className="h-14 w-14 rounded-2xl object-cover mb-4 shadow-sm"
-        />
-
-        {mode === 'pin' && (
-          <>
+    <div className="fixed inset-0 z-[100] flex flex-col bg-cream-100 dark:bg-slate-950 px-6 pt-12 pb-8 overflow-y-auto">
+      {mode === 'pin' ? (
+        <>
+          <div className="w-full max-w-[300px] mx-auto text-center flex flex-col items-center">
+            <img
+              src="/logo-icon.png"
+              alt="Aurafin"
+              className="h-14 w-14 rounded-2xl object-cover mb-4 shadow-sm"
+            />
             <h1 className="font-display text-xl font-bold text-slate-900 dark:text-white mb-1">
               Aurafin is Locked
             </h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">Enter your 4-digit PIN</p>
 
             {/* PIN dots */}
-            <div className="flex items-center justify-center gap-3 mb-6">
+            <div className="flex items-center justify-center gap-3">
               {[0, 1, 2, 3].map((i) => (
                 <span
                   key={i}
@@ -145,8 +144,15 @@ export default function LockScreen() {
               ))}
             </div>
 
-            {pinAttemptError && <p className="text-sm text-red-500 -mt-3 mb-4">{pinAttemptError}</p>}
+            {pinAttemptError && <p className="text-sm text-red-500 mt-3">{pinAttemptError}</p>}
+          </div>
 
+          {/* Spacer — pushes the keypad toward the bottom of the screen so
+              it's within comfortable thumb-reach one-handed, instead of
+              floating in the exact vertical middle of a tall phone screen. */}
+          <div className="flex-1 min-h-6" />
+
+          <div className="w-full max-w-[300px] mx-auto flex flex-col items-center">
             {/* Keypad */}
             <div className="grid grid-cols-3 gap-3 w-full max-w-[240px]">
               {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => (
@@ -189,77 +195,85 @@ export default function LockScreen() {
                 Email reset isn't configured yet on this deployment.
               </p>
             )}
-          </>
-        )}
+          </div>
+        </>
+      ) : (
+        <div className="m-auto w-full max-w-[300px] text-center flex flex-col items-center">
+          <img
+            src="/logo-icon.png"
+            alt="Aurafin"
+            className="h-14 w-14 rounded-2xl object-cover mb-4 shadow-sm"
+          />
 
-        {mode === 'otp-sent' && (
-          <>
-            <h1 className="text-xl font-semibold text-slate-900 dark:text-white mb-1">Check your email</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-              We sent a 6-digit code to {user?.email}
-            </p>
-            <input
-              inputMode="numeric"
-              maxLength={6}
-              autoFocus
-              value={otpCode}
-              onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-              placeholder="000000"
-              className="w-full text-center text-2xl tracking-[0.4em] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-3 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500"
-            />
-            {otpError && <p className="text-sm text-red-500 mt-2">{otpError}</p>}
-            <button
-              onClick={verifyOtp}
-              disabled={otpCode.length !== 6}
-              className="w-full mt-4 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white py-2.5 rounded-lg text-sm font-medium"
-            >
-              Verify Code
-            </button>
-            <button
-              onClick={() => setMode('pin')}
-              className="text-sm text-slate-500 dark:text-slate-400 font-medium mt-4"
-            >
-              Back
-            </button>
-          </>
-        )}
-
-        {mode === 'reset' && (
-          <>
-            <ShieldCheck size={20} className="text-brand-600 mx-auto mb-2" />
-            <h1 className="text-xl font-semibold text-slate-900 dark:text-white mb-1">Set a new PIN</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">Choose a new 4-digit PIN</p>
-            <div className="space-y-3">
+          {mode === 'otp-sent' && (
+            <>
+              <h1 className="text-xl font-semibold text-slate-900 dark:text-white mb-1">Check your email</h1>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+                We sent a 6-digit code to {user?.email}
+              </p>
               <input
-                type="password"
                 inputMode="numeric"
-                maxLength={4}
+                maxLength={6}
                 autoFocus
-                value={newPin}
-                onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
-                placeholder="New PIN"
-                className="w-full text-center text-2xl tracking-[0.5em] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-3 placeholder:text-sm placeholder:tracking-normal placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                placeholder="000000"
+                className="w-full text-center text-2xl tracking-[0.4em] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-3 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
-              <input
-                type="password"
-                inputMode="numeric"
-                maxLength={4}
-                value={confirmPin}
-                onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
-                placeholder="Confirm PIN"
-                className="w-full text-center text-2xl tracking-[0.5em] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-3 placeholder:text-sm placeholder:tracking-normal placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500"
-              />
-            </div>
-            {otpError && <p className="text-sm text-red-500 mt-2">{otpError}</p>}
-            <button
-              onClick={resetPin}
-              className="w-full mt-4 bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-sm font-medium"
-            >
-              Save New PIN
-            </button>
-          </>
-        )}
-      </div>
+              {otpError && <p className="text-sm text-red-500 mt-2">{otpError}</p>}
+              <button
+                onClick={verifyOtp}
+                disabled={otpCode.length !== 6}
+                className="w-full mt-4 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white py-2.5 rounded-lg text-sm font-medium"
+              >
+                Verify Code
+              </button>
+              <button
+                onClick={() => setMode('pin')}
+                className="text-sm text-slate-500 dark:text-slate-400 font-medium mt-4"
+              >
+                Back
+              </button>
+            </>
+          )}
+
+          {mode === 'reset' && (
+            <>
+              <ShieldCheck size={20} className="text-brand-600 mx-auto mb-2" />
+              <h1 className="text-xl font-semibold text-slate-900 dark:text-white mb-1">Set a new PIN</h1>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">Choose a new 4-digit PIN</p>
+              <div className="space-y-3 w-full">
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  autoFocus
+                  value={newPin}
+                  onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
+                  placeholder="New PIN"
+                  className="w-full text-center text-2xl tracking-[0.5em] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-3 placeholder:text-sm placeholder:tracking-normal placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={confirmPin}
+                  onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
+                  placeholder="Confirm PIN"
+                  className="w-full text-center text-2xl tracking-[0.5em] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-3 placeholder:text-sm placeholder:tracking-normal placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
+              {otpError && <p className="text-sm text-red-500 mt-2">{otpError}</p>}
+              <button
+                onClick={resetPin}
+                className="w-full mt-4 bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-sm font-medium"
+              >
+                Save New PIN
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

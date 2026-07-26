@@ -10,21 +10,25 @@ function sleep(ms: number) {
 /**
  * mfapi.in is a free, community-run API with no uptime guarantee — a single
  * request can time out or get rate-limited even when the fund/scheme code
- * is perfectly valid. Retry a couple of times with a short backoff before
- * giving up, so a transient hiccup doesn't show as "couldn't fetch" to the
- * user for no real reason.
+ * is perfectly valid. Retry a few times with backoff, and give each attempt
+ * a hard timeout so a slow/hanging response (common on Vercel's serverless
+ * proxy under load) fails fast enough to retry instead of stalling the UI.
  */
-async function fetchJsonWithRetry(url: string, retries = 2): Promise<unknown | null> {
+async function fetchJsonWithRetry(url: string, retries = 3, timeoutMs = 8000): Promise<unknown | null> {
   for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: controller.signal });
       if (res.ok) return await res.json();
       // Retry on rate-limit / transient server errors; don't bother for 4xx like a bad code.
       if (res.status !== 429 && res.status < 500) return null;
     } catch {
-      // network error — fall through to retry
+      // network error, abort, or timeout — fall through to retry
+    } finally {
+      clearTimeout(timer);
     }
-    if (attempt < retries) await sleep(400 * (attempt + 1));
+    if (attempt < retries) await sleep(500 * (attempt + 1));
   }
   return null;
 }
@@ -71,13 +75,68 @@ export async function searchMutualFunds(query: string): Promise<MfSearchResult[]
 
 const navCache = new Map<number, FundNavHistory>();
 
-/** Fetch full NAV history for a scheme (cached in-memory for the session). */
+// NAV only updates once a day (after market close), so a same-day cached
+// copy is never actually stale. Persisting it means a refresh — or a
+// transient mfapi.in hiccup — doesn't lose today's already-fetched data.
+const NAV_STORAGE_PREFIX = 'aurafin-nav-';
+const NAV_STORAGE_MAX_AGE_MS = 20 * 60 * 60 * 1000; // 20h — comfortably under a day
+
+interface StoredNav {
+  fetchedAt: number;
+  data: FundNavHistory;
+}
+
+function readStoredNav(schemeCode: number): StoredNav | null {
+  try {
+    const raw = localStorage.getItem(NAV_STORAGE_PREFIX + schemeCode);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredNav;
+    if (!parsed?.data?.history?.length) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredNav(schemeCode: number, data: FundNavHistory) {
+  try {
+    localStorage.setItem(
+      NAV_STORAGE_PREFIX + schemeCode,
+      JSON.stringify({ fetchedAt: Date.now(), data } satisfies StoredNav)
+    );
+  } catch {
+    // Storage full/unavailable — the in-memory cache still covers this session.
+  }
+}
+
+/**
+ * Fetch full NAV history for a scheme. Cached in-memory for the session and
+ * in localStorage across refreshes; a same-day cached copy is returned
+ * without hitting the network at all, and if a fresh fetch fails, we fall
+ * back to whatever's cached (even if a bit stale) rather than surfacing an
+ * error for what's usually just a transient hiccup.
+ */
 export async function fetchFundNavHistory(schemeCode: number): Promise<FundNavHistory | null> {
-  const cached = navCache.get(schemeCode);
-  if (cached) return cached;
+  const memCached = navCache.get(schemeCode);
+  if (memCached) return memCached;
+
+  const stored = readStoredNav(schemeCode);
+  if (stored && Date.now() - stored.fetchedAt < NAV_STORAGE_MAX_AGE_MS) {
+    navCache.set(schemeCode, stored.data);
+    return stored.data;
+  }
 
   const json = await fetchJsonWithRetry(`${MF_BASE}/${schemeCode}`);
-  if (!json || typeof json !== 'object') return null;
+  if (!json || typeof json !== 'object') {
+    // Fetch failed — fall back to whatever we have cached, even if stale,
+    // rather than showing "couldn't fetch" when yesterday's NAV is still
+    // a perfectly reasonable value to show.
+    if (stored) {
+      navCache.set(schemeCode, stored.data);
+      return stored.data;
+    }
+    return null;
+  }
 
   const rows: unknown[] = Array.isArray((json as { data?: unknown }).data)
     ? (json as { data: unknown[] }).data
@@ -90,7 +149,13 @@ export async function fetchFundNavHistory(schemeCode: number): Promise<FundNavHi
     .filter((r) => Number.isFinite(r.nav) && r.nav > 0)
     .reverse(); // mfapi.in returns newest first
 
-  if (history.length === 0) return null;
+  if (history.length === 0) {
+    if (stored) {
+      navCache.set(schemeCode, stored.data);
+      return stored.data;
+    }
+    return null;
+  }
   const latest = history[history.length - 1];
   const meta = (json as { meta?: { scheme_name?: unknown } }).meta;
 
@@ -102,6 +167,7 @@ export async function fetchFundNavHistory(schemeCode: number): Promise<FundNavHi
     history,
   };
   navCache.set(schemeCode, result);
+  writeStoredNav(schemeCode, result);
   return result;
 }
 

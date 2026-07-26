@@ -4,7 +4,12 @@ import { useLivePricesStore, type SipLiveEntry } from '../store/livePricesStore'
 import { fetchFundNavHistory, computeSipLiveValue } from '../utils/mutualFunds';
 import { listSipInstallments } from '../utils/assetValues';
 
-const REFRESH_MS = 60_000;
+// NAV only updates once a day after market close, so polling every 60s (like
+// equity quotes) just adds needless load against a free, rate-limited API —
+// most of those calls would've hit the persisted cache anyway, but there's
+// no reason to check that often. Every 15 minutes is still more than enough
+// to pick up a fresh NAV the same day it's published.
+const REFRESH_MS = 15 * 60_000;
 
 /**
  * Keeps the auto-calculated Current Value for linked SIPs (mutual fund
@@ -38,21 +43,19 @@ export function useLiveSipValues() {
       if (fetching.current) return;
       fetching.current = true;
       try {
-        const entries = await Promise.all(
-          sipAssets.map(async (asset) => {
-            const installments = listSipInstallments(asset);
-            if (installments.length === 0) return null;
-            const nav = await fetchFundNavHistory(Number(asset.symbol));
-            if (!nav) return null;
-            const { value, units } = computeSipLiveValue(installments, nav);
-            const entry: SipLiveEntry = { value, units, latestNav: nav.latestNav };
-            return [asset.symbol as string, entry] as const;
-          })
-        );
-
         const sipValues: Record<string, SipLiveEntry> = {};
-        for (const e of entries) {
-          if (e) sipValues[e[0]] = e[1];
+        // Sequential with a small stagger — most of these resolve instantly
+        // from the persisted cache anyway, but for the ones that do need a
+        // real network call, firing them all at once is exactly the kind of
+        // burst that trips a free API's rate limiting.
+        for (const asset of sipAssets) {
+          const installments = listSipInstallments(asset);
+          if (installments.length === 0) continue;
+          const nav = await fetchFundNavHistory(Number(asset.symbol));
+          if (!nav) continue;
+          const { value, units } = computeSipLiveValue(installments, nav);
+          sipValues[asset.symbol as string] = { value, units, latestNav: nav.latestNav };
+          await new Promise((r) => setTimeout(r, 150));
         }
         if (Object.keys(sipValues).length > 0) setSipValues(sipValues);
       } catch {

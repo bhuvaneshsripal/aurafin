@@ -878,7 +878,7 @@ function AssetsTab({
                   </td>
                   <td className="px-4 py-3.5 text-right text-slate-600">{alloc.toFixed(1)}%</td>
                   <td className="px-4 py-3.5">
-                    <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center justify-end gap-1.5 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={() => handleMove(a.id, 'up')}
                         disabled={filtered.findIndex((x) => x.id === a.id) === 0}
@@ -981,7 +981,7 @@ function AssetsTab({
           </div>
       ) : null}
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Edit Asset">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Edit Asset" widthClassName="max-w-xl">
         {editing && <AssetDetailsForm initial={editing} onSave={handleSave} />}
       </Modal>
     </div>
@@ -1450,6 +1450,7 @@ function AssetDetailsForm({
                 className={`${inputClass} ${fundIsLinked ? 'pr-9' : ''}`}
                 placeholder="Start typing a fund name, e.g. HDFC Flexicap"
                 autoComplete="off"
+                title={fundQuery}
               />
               {fundSearchLoading && (
                 <Loader2
