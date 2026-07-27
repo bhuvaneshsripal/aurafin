@@ -7,6 +7,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import { useAssetsStore } from '../store/assetsStore';
 import { bulkUpsertDocs } from '../hooks/useFirestoreSync';
 import { parseSpreadsheetFile, rowsToAssets, type ParsedRow } from '../utils/importParser';
 import { formatCurrency, formatPreciseCurrency } from '../utils/currency';
@@ -145,6 +146,7 @@ const BROKERS: Broker[] = [
 
 export default function Import() {
   const user = useAuthStore((s) => s.user);
+  const existingAssets = useAssetsStore((s) => s.assets);
   const [importTab, setImportTab] = useState<'broker' | 'standard'>('broker');
   const [selectedBroker, setSelectedBroker] = useState<Broker>(BROKERS[0]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -154,6 +156,11 @@ export default function Import() {
     'idle'
   );
   const [errorMsg, setErrorMsg] = useState('');
+  // On by default: re-importing the same weekly broker export should update
+  // each holding's price/quantity/value in place, not pile up a duplicate
+  // for every past week's file.
+  const [matchExisting, setMatchExisting] = useState(true);
+  const [importResult, setImportResult] = useState<{ updated: number; added: number } | null>(null);
 
   const handleFile = async (file: File) => {
     setStatus('parsing');
@@ -190,13 +197,15 @@ export default function Import() {
 
   const validRows = rows.filter((r) => r.valid);
   const totalValue = validRows.reduce((s, r) => s + r.value, 0);
+  const preview = rowsToAssets(validRows, existingAssets, matchExisting);
 
   const handleImport = async () => {
     if (!user || validRows.length === 0) return;
     setStatus('saving');
     try {
-      const assets = rowsToAssets(rows);
+      const { assets, updatedCount, addedCount } = rowsToAssets(rows, existingAssets, matchExisting);
       await bulkUpsertDocs(user.uid, 'assets', assets);
+      setImportResult({ updated: updatedCount, added: addedCount });
       setStatus('done');
     } catch (e) {
       setStatus('error');
@@ -209,6 +218,7 @@ export default function Import() {
     setFileName('');
     setStatus('idle');
     setErrorMsg('');
+    setImportResult(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -390,7 +400,13 @@ export default function Import() {
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-brand-200 dark:border-brand-700 p-8 text-center">
           <CheckCircle2 className="text-brand-500 dark:text-brand-300 mx-auto mb-3" size={36} />
           <p className="text-sm font-medium text-slate-800 dark:text-slate-100">
-            Imported {validRows.length} assets worth {formatCurrency(totalValue)}
+            {importResult && importResult.updated > 0
+              ? `Updated ${importResult.updated} existing holding${importResult.updated === 1 ? '' : 's'}${
+                  importResult.added > 0
+                    ? ` and added ${importResult.added} new one${importResult.added === 1 ? '' : 's'}`
+                    : ''
+                }`
+              : `Imported ${validRows.length} assets worth ${formatCurrency(totalValue)}`}
           </p>
           <button
             onClick={reset}
@@ -498,6 +514,34 @@ export default function Import() {
               </tbody>
             </table>
           </div>
+
+          <label className="flex items-start gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-3.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={matchExisting}
+              onChange={(e) => setMatchExisting(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-brand-600 shrink-0"
+            />
+            <span>
+              <span className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+                Update matching holdings instead of duplicating them
+              </span>
+              <span className="block text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                Matches by trading symbol (or name) and asset type. Turn this on before re-importing the
+                same weekly export so prices/quantities refresh in place — turn it off if you actually want
+                a second, separate entry.
+              </span>
+            </span>
+          </label>
+
+          {matchExisting && (preview.updatedCount > 0 || preview.addedCount > 0) && (
+            <p className="text-xs text-slate-500 dark:text-slate-400 px-1">
+              Will update <strong className="text-slate-700 dark:text-slate-200">{preview.updatedCount}</strong>{' '}
+              existing holding{preview.updatedCount === 1 ? '' : 's'} and add{' '}
+              <strong className="text-slate-700 dark:text-slate-200">{preview.addedCount}</strong> new one
+              {preview.addedCount === 1 ? '' : 's'}.
+            </p>
+          )}
 
           <button
             onClick={handleImport}

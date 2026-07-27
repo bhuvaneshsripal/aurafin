@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { initializeFirestore, persistentLocalCache, persistentSingleTabManager } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { isSupported, getAnalytics, type Analytics } from 'firebase/analytics';
 
 // Fill these in with your own Firebase project credentials.
@@ -30,12 +30,31 @@ export const auth = getAuth(app);
 // persistence — on a refresh, onSnapshot() listeners resolve instantly from
 // the local cache (no more waiting on a fresh network round-trip before the
 // screen shows data) and then reconcile with the server in the background.
-// This is what was making every page look stuck on "Loading..." after a
-// refresh.
-export const db = initializeFirestore(app, {
-  ignoreUndefinedProperties: true,
-  localCache: persistentLocalCache({ tabManager: persistentSingleTabManager({}) }),
-});
+//
+// persistentMultipleTabManager (not persistentSingleTabManager) is required
+// here: with a single-tab manager, only the *first* tab/window of the site
+// gets the cache lock — every other tab or window opened afterwards (e.g.
+// leaving the app open while also checking the Vercel dashboard, or simply
+// having two windows open) sits there waiting on a lock that never frees up,
+// which looks exactly like being stuck on "Loading...".
+//
+// initializeFirestore() itself can also throw synchronously in browsers/modes
+// that restrict IndexedDB (private windows, some browsers' strict shields),
+// so this falls back to a plain in-memory Firestore instance rather than
+// crashing the whole app before React even renders.
+function createFirestore() {
+  try {
+    return initializeFirestore(app, {
+      ignoreUndefinedProperties: true,
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    });
+  } catch (err) {
+    console.warn('Firestore offline persistence unavailable, falling back to memory cache.', err);
+    return initializeFirestore(app, { ignoreUndefinedProperties: true });
+  }
+}
+
+export const db = createFirestore();
 export const googleProvider = new GoogleAuthProvider();
 
 // Analytics only works in a browser that supports it (and is a no-op

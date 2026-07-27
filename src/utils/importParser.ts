@@ -411,22 +411,81 @@ export async function parseSpreadsheetFile(file: File): Promise<ParsedRow[]> {
   });
 }
 
-export function rowsToAssets(rows: ParsedRow[]): Asset[] {
-  return rows
+export interface ImportMergeResult {
+  assets: Asset[];
+  /** Rows that matched an existing holding and will overwrite it in place. */
+  updatedCount: number;
+  /** Rows that didn't match anything and will be added as new holdings. */
+  addedCount: number;
+}
+
+function normalizeText(s: string): string {
+  return s.trim().toLowerCase();
+}
+
+/**
+ * Finds the existing asset a given import row should update in place,
+ * instead of being added as a duplicate. Matches by trading symbol first
+ * (most reliable for a weekly broker re-export where prices/quantities
+ * change but the ticker doesn't), falling back to an exact name match —
+ * both scoped to the same asset class so e.g. an "HDFC" stock and an
+ * "HDFC" mutual fund are never confused for each other.
+ */
+export function findMatchingAsset(row: ParsedRow, existingAssets: Asset[]): Asset | undefined {
+  const symbol = row.symbol?.trim().toUpperCase();
+  if (symbol) {
+    const bySymbol = existingAssets.find(
+      (a) => a.assetClass === row.assetClass && a.symbol?.trim().toUpperCase() === symbol
+    );
+    if (bySymbol) return bySymbol;
+  }
+  const name = normalizeText(row.name);
+  return existingAssets.find((a) => a.assetClass === row.assetClass && normalizeText(a.name) === name);
+}
+
+/**
+ * Converts parsed rows into Asset documents ready to save.
+ *
+ * When `existingAssets` is provided and `matchExisting` isn't turned off,
+ * a row that matches a holding already in the portfolio (see
+ * findMatchingAsset) reuses that asset's id — so bulkUpsertDocs() updates
+ * the existing document (fresh value/quantity/avg cost/P&L) instead of
+ * creating a duplicate every time the same weekly export is re-imported.
+ * Fields the CSV doesn't carry (institution, interest rate, notes, etc.)
+ * are preserved from the existing record rather than wiped out.
+ */
+export function rowsToAssets(
+  rows: ParsedRow[],
+  existingAssets: Asset[] = [],
+  matchExisting = true
+): ImportMergeResult {
+  let updatedCount = 0;
+  let addedCount = 0;
+
+  const assets = rows
     .filter((r) => r.valid)
-    .map((r) => ({
-      id: crypto.randomUUID(),
-      name: r.name,
-      assetClass: r.assetClass,
-      value: r.value,
-      currency: r.currency,
-      updatedAt: Date.now(),
-      symbol: r.symbol,
-      isin: r.isin,
-      quantity: r.quantity,
-      avgCost: r.avgCost,
-      investedValue: r.investedValue,
-      pnl: r.pnl,
-      pnlPercent: r.pnlPercent,
-    }));
+    .map((r) => {
+      const match = matchExisting ? findMatchingAsset(r, existingAssets) : undefined;
+      if (match) updatedCount++;
+      else addedCount++;
+
+      return {
+        ...match,
+        id: match?.id ?? crypto.randomUUID(),
+        name: r.name,
+        assetClass: r.assetClass,
+        value: r.value,
+        currency: r.currency,
+        updatedAt: Date.now(),
+        symbol: r.symbol ?? match?.symbol,
+        isin: r.isin ?? match?.isin,
+        quantity: r.quantity ?? match?.quantity,
+        avgCost: r.avgCost ?? match?.avgCost,
+        investedValue: r.investedValue ?? match?.investedValue,
+        pnl: r.pnl ?? match?.pnl,
+        pnlPercent: r.pnlPercent ?? match?.pnlPercent,
+      };
+    });
+
+  return { assets, updatedCount, addedCount };
 }

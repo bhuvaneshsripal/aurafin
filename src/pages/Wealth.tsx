@@ -505,6 +505,9 @@ function AssetsTab({
     });
   };
 
+  const [confirmDeleteAsset, setConfirmDeleteAsset] = useState<Asset | null>(null);
+  const [confirmBulkDeleteOpen, setConfirmBulkDeleteOpen] = useState(false);
+
   const handleDelete = async (id: string) => {
     if (!user) return;
     await removeDoc(user.uid, 'assets', id);
@@ -599,6 +602,11 @@ function AssetsTab({
       return matchesSearch && matchesCategory && matchesType && matchesCurrency;
     })
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.updatedAt - b.updatedAt);
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every((a) => selectedIds.has(a.id));
+  const toggleSelectAll = () => {
+    setSelectedIds(allFilteredSelected ? new Set() : new Set(filtered.map((a) => a.id)));
+  };
 
   const totalValue = assets.reduce((s, a) => s + resolveAssetValues(a, livePrices, sipValues).value, 0);
 
@@ -849,6 +857,15 @@ function AssetsTab({
 
       {filtered.length > 0 && viewMode === 'list' ? (
         <>
+          <div className="md:hidden flex items-center justify-between px-1">
+            <button
+              onClick={toggleSelectAll}
+              className="text-xs font-medium text-brand-600 hover:text-brand-700 py-1"
+            >
+              {allFilteredSelected ? 'Deselect all' : `Select all ${filtered.length}`}
+            </button>
+          </div>
+
           {/* Mobile: simplified rows — name, current value, P&L only. Tap a row to view details;
               tap the checkbox (or tap a row while others are selected) to multi-select. */}
           <div className="md:hidden bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
@@ -888,11 +905,15 @@ function AssetsTab({
             ))}
           </div>
 
-          {/* Bottom action bar — appears once one or more rows are checked. */}
+          {/* Bottom action bar — appears once one or more rows are checked.
+              Sits above BottomNav on mobile, floats bottom-right on desktop
+              (where there's no BottomNav to clash with). */}
           {selectedIds.size > 0 && (
-            <div className="md:hidden fixed bottom-20 left-4 right-4 z-30">
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-lg flex items-center justify-between px-4 py-3">
-                <span className="text-sm font-medium text-slate-700">{selectedIds.size} selected</span>
+            <div className="fixed z-30 bottom-20 left-4 right-4 md:bottom-6 md:left-auto md:right-6 md:w-auto">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-lg flex items-center justify-between gap-4 px-4 py-3">
+                <span className="text-sm font-medium text-slate-700 whitespace-nowrap">
+                  {selectedIds.size} selected
+                </span>
                 <div className="flex items-center gap-1.5">
                   <button
                     onClick={() => setTagModalOpen(true)}
@@ -920,13 +941,7 @@ function AssetsTab({
                     <LayoutGrid size={16} />
                   </button>
                   <button
-                    onClick={async () => {
-                      if (!confirm(`Delete ${selectedIds.size} selected asset(s)? This can't be undone.`)) return;
-                      for (const id of selectedIds) {
-                        await handleDelete(id);
-                      }
-                      setSelectedIds(new Set());
-                    }}
+                    onClick={() => setConfirmBulkDeleteOpen(true)}
                     title="Delete"
                     className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-red-50 text-red-500"
                   >
@@ -978,7 +993,12 @@ function AssetsTab({
             <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
               <tr>
                 <th className="px-4 py-3 w-10">
-                  <input type="checkbox" className="h-4 w-4 rounded border-slate-300" />
+                  <input
+                    type="checkbox"
+                    checked={allFilteredSelected}
+                    onChange={toggleSelectAll}
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
                 </th>
                 <SortHeader label="NAME" sortKeyName="name" />
                 <SortHeader label="QTY" sortKeyName="qty" align="right" />
@@ -995,7 +1015,12 @@ function AssetsTab({
               {sortedRows.map(({ asset: a, invested, currentPrice, value, pnl, pnlPercent, alloc }) => (
                 <tr key={a.id} className="group hover:bg-slate-50/60">
                   <td className="px-4 py-3.5">
-                    <input type="checkbox" className="h-4 w-4 rounded border-slate-300" />
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(a.id)}
+                      onChange={() => toggleRowSelect(a.id)}
+                      className="h-4 w-4 rounded border-slate-300"
+                    />
                   </td>
                   <td className="px-4 py-3.5">
                     <p className="font-semibold text-slate-800">{a.name}</p>
@@ -1087,7 +1112,7 @@ function AssetsTab({
                         <Pencil size={16} />
                       </button>
                       <button
-                        onClick={() => handleDelete(a.id)}
+                        onClick={() => setConfirmDeleteAsset(a)}
                         title="Delete"
                         className="text-slate-400 hover:text-red-500 p-1"
                       >
@@ -1149,7 +1174,7 @@ function AssetsTab({
                     <button onClick={() => openEdit(a)} className="text-slate-400 hover:text-brand-600">
                       <Pencil size={16} />
                     </button>
-                    <button onClick={() => handleDelete(a.id)} className="text-slate-400 hover:text-red-500">
+                    <button onClick={() => setConfirmDeleteAsset(a)} className="text-slate-400 hover:text-red-500">
                       <Trash2 size={16} />
                     </button>
                   </div>
@@ -1161,6 +1186,68 @@ function AssetsTab({
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Edit Asset" widthClassName="max-w-xl">
         {editing && <AssetDetailsForm initial={editing} onSave={handleSave} />}
+      </Modal>
+
+      <Modal
+        open={!!confirmDeleteAsset}
+        onClose={() => setConfirmDeleteAsset(null)}
+        title="Delete this asset?"
+      >
+        <p className="text-sm text-slate-500 mb-6">
+          This will permanently delete <strong>{confirmDeleteAsset?.name}</strong>. This can't be undone.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setConfirmDeleteAsset(null)}
+            className="flex-1 border border-slate-200 text-slate-600 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={async () => {
+              if (confirmDeleteAsset) await handleDelete(confirmDeleteAsset.id);
+              setConfirmDeleteAsset(null);
+            }}
+            className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-lg text-sm font-medium"
+          >
+            Delete
+          </button>
+        </div>
+      </Modal>
+
+      <Modal
+        open={confirmBulkDeleteOpen}
+        onClose={() => setConfirmBulkDeleteOpen(false)}
+        title={`Delete ${selectedIds.size} asset${selectedIds.size === 1 ? '' : 's'}?`}
+      >
+        <p className="text-sm text-slate-500 mb-6">
+          {selectedIds.size === filtered.length && filtered.length === assets.length
+            ? 'This will permanently delete every asset in your portfolio.'
+            : `This will permanently delete the ${selectedIds.size} selected asset${
+                selectedIds.size === 1 ? '' : 's'
+              }.`}{' '}
+          This can't be undone.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setConfirmBulkDeleteOpen(false)}
+            className="flex-1 border border-slate-200 text-slate-600 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={async () => {
+              for (const id of selectedIds) {
+                await handleDelete(id);
+              }
+              setSelectedIds(new Set());
+              setConfirmBulkDeleteOpen(false);
+            }}
+            className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-lg text-sm font-medium"
+          >
+            Delete All Selected
+          </button>
+        </div>
       </Modal>
     </div>
   );
@@ -1186,6 +1273,7 @@ function AssetDetailPage({
   const livePrices = useLivePricesStore((s) => s.prices);
   const sipValues = useLivePricesStore((s) => s.sipValues);
   const privacyMode = useUiStore((s) => s.privacyMode);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const extra = asset as unknown as {
     isin?: string;
     sector?: string;
@@ -1233,15 +1321,36 @@ function AssetDetailPage({
           <Pencil size={16} />
         </button>
         <button
-          onClick={() => {
-            if (confirm(`Delete ${asset.name}? This can't be undone.`)) onDelete(asset.id);
-          }}
+          onClick={() => setConfirmDeleteOpen(true)}
           title="Delete"
           className="h-9 w-9 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50 shrink-0"
         >
           <Trash2 size={16} />
         </button>
       </div>
+
+      <Modal open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)} title="Delete this asset?">
+        <p className="text-sm text-slate-500 mb-6">
+          This will permanently delete <strong>{asset.name}</strong>. This can't be undone.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setConfirmDeleteOpen(false)}
+            className="flex-1 border border-slate-200 text-slate-600 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => {
+              setConfirmDeleteOpen(false);
+              onDelete(asset.id);
+            }}
+            className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-lg text-sm font-medium"
+          >
+            Delete
+          </button>
+        </div>
+      </Modal>
 
       <div className="bg-white rounded-2xl border border-slate-200 p-5">
         <div className="flex items-start justify-between gap-3">
@@ -1667,7 +1776,31 @@ function AssetDetailsForm({
         />
         {attemptedSubmit && nameMissing && <p className={errorTextClass}>Name is required.</p>}
       </Field>
-      {effectiveCategory && effectiveCategory.types.length > 1 ? (
+      {initial ? (
+        <Field label="Asset Type">
+          <select
+            value={assetClass}
+            onChange={(e) => setAssetClass(e.target.value as AssetClass)}
+            className={`${inputClass} bg-white text-slate-700`}
+          >
+            {ASSET_TAXONOMY.map((cat) => (
+              <optgroup key={cat.key} label={cat.label}>
+                {cat.types.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          {ASSET_CLASS_TO_CATEGORY[assetClass]?.key !== effectiveCategory?.key && (
+            <p className="text-xs text-amber-600 mt-1.5">
+              This will move the asset from {effectiveCategory?.label} to{' '}
+              {ASSET_CLASS_TO_CATEGORY[assetClass]?.label}.
+            </p>
+          )}
+        </Field>
+      ) : effectiveCategory && effectiveCategory.types.length > 1 ? (
         <Field label={`${effectiveCategory.label} Type`}>
           <select
             value={assetClass}

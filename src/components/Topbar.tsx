@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Moon, Sun, Eye, EyeOff, Bell, ChevronDown, MoreVertical, Settings as SettingsIcon } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useUiStore } from '../store/uiStore';
@@ -10,6 +10,7 @@ export default function Topbar() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { theme, toggleTheme, privacyMode, togglePrivacy } = useUiStore();
+  const navigate = useNavigate();
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -153,10 +154,13 @@ export default function Topbar() {
 
             {mobileMenuOpen && (
               <div className="animate-menu-in absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden z-30">
-                <Link
-                  to="/settings"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700 active:bg-slate-100 dark:active:bg-slate-600"
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    navigate('/settings');
+                  }}
+                  className="w-full px-4 py-3 border-b border-slate-100 dark:border-slate-700 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700 active:bg-slate-100 dark:active:bg-slate-600 text-left"
                 >
                   {user?.photoURL ? (
                     <img src={user.photoURL} alt="" className="h-9 w-9 rounded-full object-cover shrink-0" referrerPolicy="no-referrer" />
@@ -172,7 +176,7 @@ export default function Topbar() {
                     <p className="text-xs text-slate-400 truncate">{user?.email ?? 'View profile & settings'}</p>
                   </div>
                   <SettingsIcon size={16} className="text-slate-400 shrink-0" />
-                </Link>
+                </button>
 
                 <button
                   onClick={toggleTheme}
