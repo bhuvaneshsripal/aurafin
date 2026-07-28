@@ -21,8 +21,8 @@
   --color-cream-200: #efe9da;
   --color-cream-300: #e4ddc9;
 
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Fraunces", "Iowan Old Style", ui-serif, serif;
+  --font-sans: "Playfair Display", "Fraunces", "Iowan Old Style", ui-serif, serif;
+  --font-display: "Playfair Display", "Fraunces", "Iowan Old Style", ui-serif, serif;
 }
 
 html {
@@ -132,7 +132,15 @@ a {
   transform: scale(0.94);
 }
 
-/* Horizontal scroll containers (mobile tab bars, etc.) without a visible scrollbar */
+/* Sharp, rectangular buttons everywhere — overrides any rounded-* utility */
+button,
+button.rounded-lg,
+button.rounded-xl,
+button.rounded-2xl,
+button.rounded-full,
+button.rounded-md {
+  border-radius: 0 !important;
+}
 .no-scrollbar {
   scrollbar-width: none;
   -ms-overflow-style: none;
