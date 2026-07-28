@@ -96,7 +96,7 @@ export default function InsightsTab() {
                       <Cell key={i} fill={COLORS[i % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                  <Tooltip formatter={(v) => formatCurrency(Number(v) || 0)} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
