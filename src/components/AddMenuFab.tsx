@@ -55,23 +55,25 @@ export default function AddMenuFab({ onSelect }: { onSelect: (type: AddMenuType)
   ];
 
   const renderGroup = (title: string, items: MenuItem[]) => (
-    <div className="py-2">
-      <p className="px-5 pb-1 text-xs font-semibold tracking-wide text-slate-400">
+    <div>
+      <p className="px-1 pb-2 text-xs font-semibold tracking-wide text-slate-400">
         {title}
       </p>
-      {items.map(({ key, label, icon: Icon, iconClass }) => (
-        <button
-          key={key}
-          onClick={() => {
-            setOpen(false);
-            onSelect(key);
-          }}
-          className="flex w-full items-center gap-3 px-5 py-2.5 text-left hover:bg-slate-50"
-        >
-          <Icon size={18} className={iconClass} />
-          <span className="text-base text-slate-800">{label}</span>
-        </button>
-      ))}
+      <div className="flex flex-col gap-2">
+        {items.map(({ key, label, icon: Icon, iconClass }) => (
+          <button
+            key={key}
+            onClick={() => {
+              setOpen(false);
+              onSelect(key);
+            }}
+            className="flex w-full items-center gap-3 rounded-xl bg-white px-4 py-3 text-left shadow-md hover:bg-slate-50"
+          >
+            <Icon size={18} className={iconClass} />
+            <span className="text-base text-slate-800">{label}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 
@@ -87,9 +89,8 @@ export default function AddMenuFab({ onSelect }: { onSelect: (type: AddMenuType)
 
       <div className="fixed bottom-24 right-5 z-50 flex flex-col items-end gap-3">
         {open && (
-          <div className="w-64 rounded-2xl bg-white shadow-xl overflow-hidden">
+          <div className="flex w-64 flex-col gap-4">
             {renderGroup('CASHFLOW', cashflowItems)}
-            <div className="border-t border-slate-100" />
             {renderGroup('WEALTH', wealthItems)}
           </div>
         )}
@@ -97,9 +98,9 @@ export default function AddMenuFab({ onSelect }: { onSelect: (type: AddMenuType)
         <button
           onClick={() => setOpen((o) => !o)}
           aria-label={open ? 'Close add menu' : 'Add'}
-          className="h-14 w-14 rounded-full bg-brand-600 hover:bg-brand-700 text-white flex items-center justify-center shadow-lg"
+          className={`fab-button${open ? ' fab-open' : ''} h-14 w-14 text-white flex items-center justify-center`}
         >
-          {open ? <X size={24} /> : <Plus size={26} />}
+          {open ? <X size={24} className="fab-icon" /> : <Plus size={26} className="fab-icon" />}
         </button>
       </div>
     </>

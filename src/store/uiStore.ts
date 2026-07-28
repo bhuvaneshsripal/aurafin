@@ -23,7 +23,7 @@ function applyTheme(theme: 'light' | 'dark') {
 // page refresh but resets back to hidden the next time the app/tab is
 // actually closed and reopened.
 const REVEAL_KEY = 'aurafin-privacy-revealed-at';
-const REVEAL_TTL_MS = 60_000; // auto re-hide 1 minute after opening the eye
+const REVEAL_TTL_MS = 5 * 60_000; // auto re-hide 5 minutes after opening the eye
 
 let autoHideTimer: ReturnType<typeof setTimeout> | null = null;
 

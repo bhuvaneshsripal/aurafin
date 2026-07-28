@@ -14,5 +14,5 @@ interface AmountProps {
  */
 export default function Amount({ value, currency = 'INR', className }: AmountProps) {
   const privacyMode = useUiStore((s) => s.privacyMode);
-  return <span className={className}>{maskAmount(value, currency, privacyMode)}</span>;
+  return <span className={`font-numeric${className ? ` ${className}` : ''}`}>{maskAmount(value, currency, privacyMode)}</span>;
 }

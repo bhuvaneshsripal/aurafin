@@ -48,11 +48,11 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
           aria-label="Quick add"
           className={
             isFab
-              ? 'tap-scale flex items-center justify-center bg-brand-600 hover:bg-brand-700 text-white h-14 w-14 rounded-full shadow-lg shadow-brand-900/20'
+              ? `fab-button${menuOpen ? ' fab-open' : ''} tap-scale flex items-center justify-center text-white h-14 w-14`
               : 'tap-scale flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2.5 rounded-lg text-base font-medium'
           }
         >
-          {isFab ? <Plus size={24} /> : (
+          {isFab ? <Plus size={24} className="fab-icon" /> : (
             <>
               <Plus size={18} /> Add <ChevronDown size={16} />
             </>
@@ -63,7 +63,7 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
           <div
             className={
               isFab
-                ? 'animate-menu-in absolute bottom-full right-0 mb-3 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden z-30'
+                ? 'animate-menu-in-3d absolute bottom-full right-0 mb-3 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden z-30'
                 : 'animate-menu-in absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden z-30'
             }
             style={isFab ? { transformOrigin: 'bottom right' } : undefined}
@@ -122,7 +122,7 @@ function MenuItem({
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-center gap-3 px-4 py-2.5 text-base text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+      className="menu-row-3d w-full flex items-center gap-3 px-4 py-2.5 text-base text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
     >
       <Icon size={18} className={color} />
       {label}

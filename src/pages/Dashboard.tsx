@@ -80,7 +80,7 @@ export default function Dashboard() {
           {hasWealth ? (
             <>
               <div className="flex items-center gap-2.5 flex-wrap mt-2">
-                <span className="font-display text-3xl sm:text-4xl font-semibold text-slate-900 dark:text-white break-words">
+                <span className="font-numeric text-3xl sm:text-4xl text-slate-900 dark:text-white break-words">
                   {maskPreciseAmount(netWorth, 'INR', privacyMode)}
                 </span>
                 {investedAssetsTotal > 0 && (
@@ -115,7 +115,7 @@ export default function Dashboard() {
             Invested · <span className="text-slate-400">₹ INR</span>
           </p>
           {hasWealth ? (
-            <span className="font-display text-3xl sm:text-4xl font-semibold text-slate-900 dark:text-white block mt-2 break-words">
+            <span className="font-numeric text-3xl sm:text-4xl text-slate-900 dark:text-white block mt-2 break-words">
               {maskPreciseAmount(investedAssetsTotal, 'INR', privacyMode)}
             </span>
           ) : (

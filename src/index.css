@@ -23,6 +23,7 @@
 
   --font-sans: "Playfair Display", "Fraunces", "Iowan Old Style", ui-serif, serif;
   --font-display: "Playfair Display", "Fraunces", "Iowan Old Style", ui-serif, serif;
+  --font-numeric: "Roboto", ui-sans-serif, sans-serif;
 }
 
 html {
@@ -41,6 +42,35 @@ body {
 
 .font-display {
   font-family: var(--font-display);
+}
+
+/* Premium bold numeric styling — applied to all money amounts, scores, and percentages */
+.font-numeric {
+  font-family: var(--font-numeric);
+  font-weight: 700;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: 0.01em;
+}
+
+/* Hero amounts (Net Worth, Invested, etc.) — premium bold with a bright
+   gold-shine finish instead of flat slate/black. */
+.number-premium {
+  font-family: var(--font-numeric);
+  font-weight: 700;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: 0.01em;
+  background: linear-gradient(135deg, #f6c453 0%, #c9932a 45%, #8a6516 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.dark .number-premium {
+  background: linear-gradient(135deg, #ffe08a 0%, #f3c25e 45%, #d79f2e 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
 }
 
 /* ---- Mobile performance & touch tuning (120fps target) ---- */
@@ -77,6 +107,42 @@ a {
   animation: menu-in 140ms cubic-bezier(0.16, 1, 0.3, 1);
   transform-origin: top right;
   will-change: transform, opacity;
+}
+
+/* 3D pop-in for the FAB's quick-add menu card — tilts in with depth,
+   matching the button's own 3D feel, instead of a flat fade/slide. */
+@keyframes menu-in-3d {
+  from {
+    opacity: 0;
+    transform: perspective(900px) rotateX(-18deg) translateY(14px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: perspective(900px) rotateX(0deg) translateY(0) scale(1);
+  }
+}
+
+.animate-menu-in-3d {
+  animation: menu-in-3d 260ms cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: bottom right;
+  will-change: transform, opacity;
+  box-shadow:
+    0 2px 4px rgba(15, 23, 42, 0.06),
+    0 24px 48px rgba(15, 23, 42, 0.22),
+    0 8px 16px rgba(15, 23, 42, 0.12);
+}
+
+/* Each row in that menu lifts slightly on hover for a tactile feel */
+.menu-row-3d {
+  transition: transform 120ms cubic-bezier(0.16, 1, 0.3, 1), background-color 120ms ease;
+}
+
+.menu-row-3d:hover {
+  transform: translateX(2px) scale(1.015);
+}
+
+.menu-row-3d:active {
+  transform: translateX(2px) scale(0.98);
 }
 
 @keyframes sheet-in {
@@ -141,6 +207,52 @@ button.rounded-full,
 button.rounded-md {
   border-radius: 0 !important;
 }
+
+/* Floating Action Button — round, with a tactile 3D "push button" feel.
+   Higher specificity than the plain `button` rule above, so it stays round. */
+.fab-button {
+  border-radius: 9999px !important;
+  background: var(--color-brand-600);
+  box-shadow: 0 2px 8px rgba(22, 58, 44, 0.25);
+  transform: translateY(0);
+  transition: background-color 140ms ease, box-shadow 140ms ease;
+  will-change: box-shadow;
+}
+
+.fab-button:hover {
+  background: var(--color-brand-700);
+  box-shadow: 0 4px 12px rgba(22, 58, 44, 0.3);
+}
+
+.fab-button:active {
+  background: var(--color-brand-800);
+  box-shadow: 0 1px 4px rgba(22, 58, 44, 0.25);
+}
+
+.fab-icon {
+  transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.fab-button.fab-open .fab-icon {
+  transform: rotate(45deg);
+}
+
+/* Smaller round floating buttons (e.g. privacy toggle) — same round exemption,
+   lighter tactile lift since they're secondary controls, not the primary FAB. */
+.mini-fab {
+  border-radius: 9999px !important;
+  transition: transform 140ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 140ms ease;
+}
+
+.mini-fab:hover {
+  transform: translateY(-2px) scale(1.06);
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.18);
+}
+
+.mini-fab:active {
+  transform: translateY(1px) scale(0.95);
+}
+
 .no-scrollbar {
   scrollbar-width: none;
   -ms-overflow-style: none;

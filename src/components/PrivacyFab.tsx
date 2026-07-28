@@ -15,9 +15,9 @@ export default function PrivacyFab() {
       onClick={togglePrivacy}
       title={privacyMode ? 'Show amounts' : 'Hide amounts'}
       className="
-        tap-scale hidden md:flex
+        mini-fab tap-scale hidden md:flex
         fixed bottom-4 right-4 z-30
-        h-9 w-9 items-center justify-center rounded-full
+        h-9 w-9 items-center justify-center
         bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-300
         border border-slate-200 dark:border-slate-700 shadow-md
         hover:bg-slate-50 dark:hover:bg-slate-700
