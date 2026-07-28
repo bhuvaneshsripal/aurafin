@@ -4,7 +4,15 @@ import { db } from '../firebase/config';
 import { useAuthStore } from '../store/authStore';
 
 /** Every subcollection kept under users/{uid} that DataSync listens to. */
-const ALL_USER_COLLECTIONS = ['assets', 'liabilities', 'goals', 'transactions', 'snapshots'] as const;
+const ALL_USER_COLLECTIONS = [
+  'assets',
+  'liabilities',
+  'goals',
+  'transactions',
+  'snapshots',
+  'budgets',
+  'financialProfile',
+] as const;
 
 /**
  * Generic two-way sync between a Firestore subcollection at

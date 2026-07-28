@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { isSupported, getAnalytics, type Analytics } from 'firebase/analytics';
 
@@ -19,6 +19,12 @@ const firebaseConfig = {
 
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+// Explicit, rather than relying on the SDK's implicit default: keeps the
+// signed-in session in IndexedDB/localStorage indefinitely, surviving both
+// a page refresh and fully closing/reopening the browser or installed PWA.
+void setPersistence(auth, browserLocalPersistence).catch((err) => {
+  console.warn('Could not set Firebase Auth persistence, falling back to default.', err);
+});
 // ignoreUndefinedProperties is important here: every asset/liability form
 // (e.g. optional fields like interest rate, invested value, maturity date)
 // saves with several fields set to `undefined` when left blank. Firestore's

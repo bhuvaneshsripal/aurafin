@@ -6,19 +6,23 @@ import { useLiabilitiesStore } from './store/liabilitiesStore';
 import { useGoalsStore } from './store/goalsStore';
 import { useTransactionsStore } from './store/transactionsStore';
 import { useSnapshotsStore } from './store/snapshotsStore';
+import { useBudgetStore } from './store/budgetStore';
+import { useFinancialProfileStore } from './store/financialProfileStore';
 import { useUiStore } from './store/uiStore';
 import { useAppLockStore } from './store/appLockStore';
 import { useFirestoreCollectionSync } from './hooks/useFirestoreSync';
 import { useLivePrices } from './hooks/useLivePrices';
 import { useLiveSipValues } from './hooks/useLiveSipValues';
+import { useLiveGoldPrice } from './hooks/useLiveGoldPrice';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
 import BottomNav from './components/BottomNav';
+import PrivacyFab from './components/PrivacyFab';
 import LockScreen from './components/LockScreen';
 import ErrorBoundary from './components/ErrorBoundary';
 import Login from './pages/Login';
 import { lazyWithRetry } from './utils/lazyWithRetry';
-import type { Asset, Liability, Goal, Transaction, Snapshot } from './types';
+import type { Asset, Liability, Goal, Transaction, Snapshot, BudgetItem, FinancialProfile } from './types';
 
 const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'));
 const Wealth = lazyWithRetry(() => import('./pages/Wealth'));
@@ -66,6 +70,7 @@ function AppShell() {
         </main>
       </div>
       <BottomNav />
+      <PrivacyFab />
     </div>
   );
 }
@@ -73,6 +78,7 @@ function AppShell() {
 function LivePriceSync() {
   useLivePrices();
   useLiveSipValues();
+  useLiveGoldPrice();
   return null;
 }
 
@@ -82,12 +88,16 @@ function DataSync() {
   const setGoals = useGoalsStore((s) => s.setGoals);
   const setTransactions = useTransactionsStore((s) => s.setTransactions);
   const setSnapshots = useSnapshotsStore((s) => s.setSnapshots);
+  const setBudgetItems = useBudgetStore((s) => s.setItems);
+  const setFinancialProfile = useFinancialProfileStore((s) => s.setItems);
 
   useFirestoreCollectionSync<Asset>('assets', setAssets);
   useFirestoreCollectionSync<Liability>('liabilities', setLiabilities);
   useFirestoreCollectionSync<Goal>('goals', setGoals);
   useFirestoreCollectionSync<Transaction>('transactions', setTransactions);
   useFirestoreCollectionSync<Snapshot>('snapshots', setSnapshots);
+  useFirestoreCollectionSync<BudgetItem>('budgets', setBudgetItems);
+  useFirestoreCollectionSync<FinancialProfile>('financialProfile', setFinancialProfile);
 
   return null;
 }

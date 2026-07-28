@@ -133,7 +133,7 @@ export default function Topbar() {
           </div>
         </div>
 
-        {/* Mobile toolbar — only the privacy toggle stays visible, everything else lives in the kebab menu */}
+        {/* Mobile toolbar — eye toggle restored here, plus a second copy floats bottom-right */}
         <div className="flex md:hidden items-center gap-1 shrink-0">
           <button
             onClick={togglePrivacy}

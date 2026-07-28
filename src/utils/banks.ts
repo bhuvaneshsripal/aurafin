@@ -1,0 +1,17 @@
+export const COMMON_BANKS = [
+  'HDFC Bank',
+  'ICICI Bank',
+  'State Bank of India',
+  'Axis Bank',
+  'Kotak Mahindra Bank',
+  'Yes Bank',
+  'IDFC First Bank',
+  'Punjab National Bank',
+  'Bank of Baroda',
+  'Canara Bank',
+  'Union Bank of India',
+  'IndusInd Bank',
+  'Federal Bank',
+  'RBL Bank',
+  'IDBI Bank',
+];

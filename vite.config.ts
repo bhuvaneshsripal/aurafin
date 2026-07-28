@@ -177,6 +177,16 @@ export default defineConfig({
     }),
   ],
   server: {
+    // Pinned so the app always runs at the same origin. Firebase Auth
+    // persistence (and all other localStorage/IndexedDB data) is scoped
+    // per-origin *including the port* — if Vite falls back to a different
+    // port because 5173 was still busy from a previous run, the browser
+    // treats it as a completely different, empty storage bucket and you
+    // get bounced back to the login screen even though nothing is wrong.
+    // `strictPort: true` makes that failure loud (an error) instead of a
+    // silent port hop, so it's easy to notice/kill the stray process.
+    port: 5173,
+    strictPort: true,
     proxy: {
       '/api/mf': {
         target: 'https://api.mfapi.in',

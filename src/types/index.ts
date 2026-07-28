@@ -107,6 +107,16 @@ export interface Asset {
    * `quantity` (grams) and `investedValue` are then derived by summing all lots.
    */
   purchaseLots?: { id: string; date?: string; grams: number; amount: number }[];
+  /** Sub-type shown on the Accounts tab (bank/cash/wallet/broker/other) — display only. */
+  accountType?: 'bank' | 'cash' | 'wallet' | 'broker' | 'other';
+  /** Last 4 digits of the account/card number, for display. */
+  last4?: string;
+  /** Hex colour chosen for this account's icon tile on the Accounts tab. */
+  colour?: string;
+  /** Icon key chosen for this account on the Accounts tab ('auto' = derive from accountType). */
+  icon?: string;
+  /** Date (ISO yyyy-mm-dd) the entered balance is as-of. */
+  balanceAsOf?: string;
 }
 
 export interface Liability {
@@ -117,6 +127,25 @@ export interface Liability {
   currency: string;
   emi?: number;
   updatedAt: number;
+  /** Last 4 digits of the card/account number, for display. */
+  last4?: string;
+  /** Hex colour chosen for this account's icon tile on the Accounts tab. */
+  colour?: string;
+  /** Icon key chosen for this account on the Accounts tab ('auto' = derive from type). */
+  icon?: string;
+  /** Date (ISO yyyy-mm-dd) the entered balance is as-of. */
+  balanceAsOf?: string;
+}
+
+export interface FinancialProfile {
+  /** Always the fixed id 'profile' — this collection only ever holds one doc. */
+  id: string;
+  age?: number;
+  monthlyIncome?: number;
+  monthlyExpense?: number;
+  termCover?: number;
+  healthCover?: number;
+  dependents?: number;
 }
 
 export interface Goal {
@@ -142,6 +171,15 @@ export interface Transaction {
   currency: string;
   date: string;
   note?: string;
+}
+
+export interface BudgetItem {
+  id: string;
+  /** Month key, e.g. "2026-07". */
+  month: string;
+  category: string;
+  amount: number;
+  currency: string;
 }
 
 export interface Snapshot {

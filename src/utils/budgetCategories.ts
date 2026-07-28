@@ -1,0 +1,23 @@
+/** Preset budget categories offered under "Add categories" on the Budget tab. */
+export const BUDGET_CATEGORIES: string[] = [
+  'Housing & Rent',
+  'Food & Dining',
+  'Groceries',
+  'Transport',
+  'Healthcare',
+  'Education',
+  'Insurance',
+  'EMI & Loans',
+  'Entertainment',
+  'Utilities',
+  'Shopping',
+  'Investment',
+  'Travel & Vacations',
+  'Subscriptions',
+  'Personal Care',
+  'Credit Card Payment',
+  'Taxes',
+  'Cash Withdrawal',
+  'Childcare',
+  'Other Expense',
+];

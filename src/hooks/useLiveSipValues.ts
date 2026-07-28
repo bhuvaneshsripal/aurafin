@@ -4,12 +4,12 @@ import { useLivePricesStore, type SipLiveEntry } from '../store/livePricesStore'
 import { fetchFundNavHistory, computeSipLiveValue } from '../utils/mutualFunds';
 import { listSipInstallments } from '../utils/assetValues';
 
-// NAV only updates once a day after market close, so polling every 60s (like
-// equity quotes) just adds needless load against a free, rate-limited API —
-// most of those calls would've hit the persisted cache anyway, but there's
-// no reason to check that often. Every 15 minutes is still more than enough
-// to pick up a fresh NAV the same day it's published.
-const REFRESH_MS = 15 * 60_000;
+// Polled every 60s, same cadence as equities and gold, so all live values
+// refresh in lockstep across the app. Note: mutual fund NAVs are only
+// published once a day after market close, so this won't surface a new
+// number more often than that — but it does mean a freshly-published NAV,
+// or a newly-added/edited SIP, shows up within a minute instead of up to 15.
+const REFRESH_MS = 60_000;
 
 /**
  * Keeps the auto-calculated Current Value for linked SIPs (mutual fund
