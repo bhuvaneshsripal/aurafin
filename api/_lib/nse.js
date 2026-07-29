@@ -33,6 +33,11 @@ async function getNseCookie() {
     typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : [];
   const cookie = cookies.map((c) => c.split(';')[0]).join('; ');
 
+  // TEMP DIAGNOSTIC LOGGING — remove once live-price issue is confirmed/fixed.
+  console.log(
+    `[DIAG nse] cookie handshake: status=${res.status} setCookieCount=${cookies.length} gotCookie=${Boolean(cookie)}`
+  );
+
   if (!cookie) throw new Error('NSE did not return a session cookie');
 
   cachedCookie = cookie;
@@ -60,6 +65,8 @@ async function fetchNseQuote(symbol) {
     }
   );
 
+  console.log(`[DIAG nse] quote-equity(${symbol}): status=${res.status}`);
+
   if (!res.ok) {
     invalidateNseCookie();
     throw new Error(`NSE quote request failed: ${res.status}`);
@@ -67,6 +74,7 @@ async function fetchNseQuote(symbol) {
 
   const data = await res.json();
   const price = data?.priceInfo?.lastPrice;
+  console.log(`[DIAG nse] quote-equity(${symbol}): lastPrice=${price}`);
   if (typeof price !== 'number' || !Number.isFinite(price)) {
     throw new Error('NSE quote response missing lastPrice');
   }
@@ -88,6 +96,8 @@ async function searchNseSymbol(query) {
     }
   );
 
+  console.log(`[DIAG nse] autocomplete(${query}): status=${res.status}`);
+
   if (!res.ok) {
     invalidateNseCookie();
     throw new Error(`NSE search request failed: ${res.status}`);
@@ -95,6 +105,7 @@ async function searchNseSymbol(query) {
 
   const data = await res.json();
   const symbols = Array.isArray(data?.symbols) ? data.symbols : [];
+  console.log(`[DIAG nse] autocomplete(${query}): symbolCount=${symbols.length}`);
   // Normalize to the same { quotes: [{ symbol, quoteType, exchDisp }] } shape
   // the frontend already expects from the old Yahoo search, so the client
   // doesn't need to know which upstream answered.
