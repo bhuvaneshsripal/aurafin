@@ -53,15 +53,21 @@ const resolvedSymbolCache = new Map<string, string | null>();
 /** Resolve a real Yahoo/NSE ticker from an ISIN or company name via symbol search. */
 async function searchYahooSymbol(query: string): Promise<string | null> {
   const cacheKey = query.trim().toUpperCase();
-  if (resolvedSymbolCache.has(cacheKey)) return resolvedSymbolCache.get(cacheKey) ?? null;
+  if (resolvedSymbolCache.has(cacheKey)) {
+    const cached = resolvedSymbolCache.get(cacheKey) ?? null;
+    console.log(`[DIAG client] searchYahooSymbol(${query}): CACHE HIT -> ${cached}`);
+    return cached;
+  }
 
   let resolved: string | null = null;
   try {
     const res = await fetch(`${SEARCH_BASE}?q=${encodeURIComponent(query)}`);
+    console.log(`[DIAG client] searchYahooSymbol(${query}): fetch status=${res.status} ok=${res.ok}`);
     if (res.ok) {
       const json = await res.json();
       const quotes: { symbol?: string; quoteType?: string; exchDisp?: string }[] =
         json?.quotes ?? [];
+      console.log(`[DIAG client] searchYahooSymbol(${query}): raw quotes=`, JSON.stringify(quotes));
       const equities = quotes.filter(
         (q) => q.symbol && (q.quoteType === 'EQUITY' || q.quoteType === undefined)
       );
@@ -70,25 +76,31 @@ async function searchYahooSymbol(query: string): Promise<string | null> {
       const bse = equities.find((q) => q.symbol?.endsWith('.BO'));
       resolved = (nse ?? bse ?? equities[0])?.symbol ?? null;
     }
-  } catch {
+  } catch (err) {
+    console.log(`[DIAG client] searchYahooSymbol(${query}): threw`, err);
     resolved = null;
   }
 
+  console.log(`[DIAG client] searchYahooSymbol(${query}): resolved -> ${resolved}`);
   resolvedSymbolCache.set(cacheKey, resolved);
   return resolved;
 }
 
 async function fetchQuote(symbol: string): Promise<{ price: number } | null> {
+  console.log(`[DIAG client] fetchQuote(${symbol}): calling ${QUOTE_BASE}/${symbol}`);
   try {
     const res = await fetch(`${QUOTE_BASE}/${encodeURIComponent(symbol)}`);
+    console.log(`[DIAG client] fetchQuote(${symbol}): status=${res.status} ok=${res.ok}`);
     if (!res.ok) return null;
 
     const json = await res.json();
     const price = json?.price;
+    console.log(`[DIAG client] fetchQuote(${symbol}): price=${price}`);
     if (typeof price !== 'number' || !Number.isFinite(price)) return null;
 
     return { price };
-  } catch {
+  } catch (err) {
+    console.log(`[DIAG client] fetchQuote(${symbol}): threw`, err);
     return null;
   }
 }
@@ -122,6 +134,7 @@ export async function fetchLivePrices(lookups: PriceLookup[]): Promise<Map<strin
 
         if (looksLikeTicker(lookup.key)) {
           yahooSymbol = toYahooSymbol(lookup.key);
+          console.log(`[DIAG client] ${lookup.key}: looks like ticker -> ${yahooSymbol}`);
         } else if (lookup.isin) {
           yahooSymbol = await searchYahooSymbol(lookup.isin);
           if (!yahooSymbol && lookup.name) yahooSymbol = await searchYahooSymbol(lookup.name);
@@ -129,7 +142,10 @@ export async function fetchLivePrices(lookups: PriceLookup[]): Promise<Map<strin
           yahooSymbol = await searchYahooSymbol(lookup.name);
         }
 
-        if (!yahooSymbol) return;
+        if (!yahooSymbol) {
+          console.log(`[DIAG client] ${lookup.key}: NO yahooSymbol resolved, skipping fetchQuote`);
+          return;
+        }
         const quote = await fetchQuote(yahooSymbol);
         if (quote) results.set(lookup.key, quote.price);
       })
