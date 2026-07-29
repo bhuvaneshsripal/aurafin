@@ -160,7 +160,7 @@ export default function LockScreen() {
                   key={d}
                   type="button"
                   onClick={() => pressDigit(d)}
-                  className="aspect-square rounded-2xl bg-cream-200/70 dark:bg-slate-800 text-2xl font-semibold text-slate-900 dark:text-white active:scale-95 active:bg-cream-300 dark:active:bg-slate-700 transition-transform"
+                  className="aspect-square rounded-2xl bg-transparent border border-slate-900/10 dark:border-white/10 shadow-[0_3px_0_rgba(0,0,0,0.12),0_5px_8px_-3px_rgba(0,0,0,0.18)] dark:shadow-[0_3px_0_rgba(0,0,0,0.6),0_5px_8px_-3px_rgba(0,0,0,0.45)] text-2xl font-semibold text-slate-900 dark:text-white active:translate-y-[3px] active:shadow-[0_0px_0_rgba(0,0,0,0.12),0_1px_2px_-1px_rgba(0,0,0,0.18)] dark:active:shadow-[0_0px_0_rgba(0,0,0,0.6),0_1px_2px_-1px_rgba(0,0,0,0.45)] transition-[transform,box-shadow] duration-100"
                 >
                   {d}
                 </button>
@@ -169,14 +169,14 @@ export default function LockScreen() {
               <button
                 type="button"
                 onClick={() => pressDigit('0')}
-                className="aspect-square rounded-2xl bg-cream-200/70 dark:bg-slate-800 text-2xl font-semibold text-slate-900 dark:text-white active:scale-95 active:bg-cream-300 dark:active:bg-slate-700 transition-transform"
+                className="aspect-square rounded-2xl bg-transparent border border-slate-900/10 dark:border-white/10 shadow-[0_3px_0_rgba(0,0,0,0.12),0_5px_8px_-3px_rgba(0,0,0,0.18)] dark:shadow-[0_3px_0_rgba(0,0,0,0.6),0_5px_8px_-3px_rgba(0,0,0,0.45)] text-2xl font-semibold text-slate-900 dark:text-white active:translate-y-[3px] active:shadow-[0_0px_0_rgba(0,0,0,0.12),0_1px_2px_-1px_rgba(0,0,0,0.18)] dark:active:shadow-[0_0px_0_rgba(0,0,0,0.6),0_1px_2px_-1px_rgba(0,0,0,0.45)] transition-[transform,box-shadow] duration-100"
               >
                 0
               </button>
               <button
                 type="button"
                 onClick={pressBackspace}
-                className="aspect-square rounded-2xl bg-cream-200/70 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-300 active:scale-95 active:bg-cream-300 dark:active:bg-slate-700 transition-transform"
+                className="aspect-square rounded-2xl bg-transparent border border-slate-900/10 dark:border-white/10 shadow-[0_3px_0_rgba(0,0,0,0.12),0_5px_8px_-3px_rgba(0,0,0,0.18)] dark:shadow-[0_3px_0_rgba(0,0,0,0.6),0_5px_8px_-3px_rgba(0,0,0,0.45)] flex items-center justify-center text-slate-500 dark:text-slate-300 active:translate-y-[3px] active:shadow-[0_0px_0_rgba(0,0,0,0.12),0_1px_2px_-1px_rgba(0,0,0,0.18)] dark:active:shadow-[0_0px_0_rgba(0,0,0,0.6),0_1px_2px_-1px_rgba(0,0,0,0.45)] transition-[transform,box-shadow] duration-100"
               >
                 <Delete size={24} />
               </button>

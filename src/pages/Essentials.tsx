@@ -32,7 +32,7 @@ export default function Essentials() {
   const [tab, setTab] = useState<Tab>('health');
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Essentials</h1>
         <p className="text-slate-500 dark:text-slate-400 text-base mt-1">Financial health check</p>
@@ -179,7 +179,7 @@ function HealthCheck() {
 
         {snapshotOpen && (
           <>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <Field label="Age">
                 <input type="number" value={age} onChange={(e) => setAge(e.target.value)} className={inputClass} placeholder="e.g. 28" />
               </Field>
@@ -230,7 +230,7 @@ function HealthCheck() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
             {/* Emergency Fund */}
             <HealthCard title="Emergency Fund" status={efStatus} icon={Shield} iconTone="emergency">
               <StatRow label="LIQUID ASSETS" value={<Amount value={liquidAssets} />} />
@@ -305,7 +305,7 @@ function HealthCheck() {
             </HealthCard>
 
             {/* Debt Ratio */}
-            <HealthCard title="Debt Ratio" status={drStatus} className="sm:col-span-2">
+            <HealthCard title="Debt Ratio" status={drStatus} className="sm:col-span-2 xl:col-span-3">
               <div>
                 <span className="text-3xl font-numeric text-slate-900 dark:text-white">{Math.round(debtRatio * 100)}%</span>
                 <span className="text-slate-500 dark:text-slate-400 text-sm ml-1.5">of assets are debt-funded</span>
@@ -570,7 +570,7 @@ function GoalsTab() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         {goals.map((g) => {
           const current = Math.max(0, netWorth);
           const pct = g.targetAmount > 0 ? Math.min(100, Math.round((current / g.targetAmount) * 100)) : 0;

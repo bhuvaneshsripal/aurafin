@@ -116,11 +116,7 @@ export default function App() {
   }, [init, initTheme, initPrivacy, initLock]);
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-slate-400 text-base">
-        Loading...
-      </div>
-    );
+    return <div className="min-h-screen bg-cream-100 dark:bg-slate-950" />;
   }
 
   if (!user) {

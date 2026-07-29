@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Trash2, Check } from 'lucide-react';
+import { Trash2, Check, Pencil } from 'lucide-react';
 import { useAssetsStore } from '../../store/assetsStore';
 import { useLiabilitiesStore } from '../../store/liabilitiesStore';
 import { useAuthStore } from '../../store/authStore';
@@ -42,6 +42,7 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
   const assets = useAssetsStore((s) => s.assets);
   const liabilities = useLiabilitiesStore((s) => s.liabilities);
   const user = useAuthStore((s) => s.user);
+  const [editingRow, setEditingRow] = useState<AccountRow | null>(null);
 
   const assetAccounts: AccountRow[] = assets
     .filter((a) => a.assetClass === 'cash')
@@ -127,6 +128,55 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
     onOpenChange(false);
   };
 
+  const handleUpdate = async (
+    row: AccountRow,
+    form: {
+      type: AccountType;
+      name: string;
+      institution: string;
+      last4: string;
+      openingBalance: number;
+      currency: string;
+      balanceAsOf: string;
+      colour: string;
+      icon: string;
+    }
+  ) => {
+    if (!user) return;
+    if (row.kind === 'liability') {
+      const liability: Liability = {
+        id: row.id,
+        name: form.name,
+        liabilityClass: 'credit_card',
+        outstanding: form.openingBalance,
+        currency: form.currency,
+        last4: form.last4 || undefined,
+        colour: form.colour,
+        icon: form.icon,
+        balanceAsOf: form.balanceAsOf,
+        updatedAt: Date.now(),
+      };
+      await upsertDoc(user.uid, 'liabilities', liability);
+    } else {
+      const asset: Asset = {
+        id: row.id,
+        name: form.name,
+        assetClass: 'cash',
+        value: form.openingBalance,
+        currency: form.currency,
+        institution: form.institution || undefined,
+        last4: form.last4 || undefined,
+        colour: form.colour,
+        icon: form.icon,
+        accountType: form.type,
+        balanceAsOf: form.balanceAsOf,
+        updatedAt: Date.now(),
+      };
+      await upsertDoc(user.uid, 'assets', asset);
+    }
+    setEditingRow(null);
+  };
+
   return (
     <div className="space-y-4">
       <div>
@@ -167,8 +217,16 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
                 <Amount value={row.value} currency={row.currency} />
               </span>
               <button
+                onClick={() => setEditingRow(row)}
+                className="tap-scale text-slate-300 dark:text-slate-600 hover:text-brand-600 p-1 shrink-0"
+                aria-label="Edit account"
+              >
+                <Pencil size={16} />
+              </button>
+              <button
                 onClick={() => handleDelete(row)}
                 className="tap-scale text-slate-300 dark:text-slate-600 hover:text-red-500 p-1 shrink-0"
+                aria-label="Delete account"
               >
                 <Trash2 size={16} />
               </button>
@@ -193,12 +251,25 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
       <Modal open={open} onClose={() => onOpenChange(false)} title="Add Account" widthClassName="max-w-lg">
         <AccountForm onSave={handleSave} />
       </Modal>
+
+      <Modal open={!!editingRow} onClose={() => setEditingRow(null)} title="Edit Account" widthClassName="max-w-lg">
+        {editingRow && (
+          <AccountForm
+            key={editingRow.id}
+            initial={editingRow}
+            submitLabel="Save Changes"
+            onSave={(form) => handleUpdate(editingRow, form)}
+          />
+        )}
+      </Modal>
     </div>
   );
 }
 
 function AccountForm({
   onSave,
+  initial,
+  submitLabel = 'Save Account',
 }: {
   onSave: (form: {
     type: AccountType;
@@ -211,16 +282,18 @@ function AccountForm({
     colour: string;
     icon: string;
   }) => void;
+  initial?: AccountRow;
+  submitLabel?: string;
 }) {
-  const [type, setType] = useState<AccountType>('bank');
-  const [name, setName] = useState('');
-  const [institution, setInstitution] = useState('');
-  const [last4, setLast4] = useState('');
-  const [openingBalance, setOpeningBalance] = useState('0');
-  const [currency, setCurrency] = useState('INR');
+  const [type, setType] = useState<AccountType>(initial?.accountType ?? 'bank');
+  const [name, setName] = useState(initial?.name ?? '');
+  const [institution, setInstitution] = useState(initial?.institution ?? '');
+  const [last4, setLast4] = useState(initial?.last4 ?? '');
+  const [openingBalance, setOpeningBalance] = useState(initial ? String(initial.value) : '0');
+  const [currency, setCurrency] = useState(initial?.currency ?? 'INR');
   const [balanceAsOf, setBalanceAsOf] = useState(new Date().toISOString().slice(0, 10));
-  const [colour, setColour] = useState(ACCOUNT_COLOURS[0]);
-  const [icon, setIcon] = useState('auto');
+  const [colour, setColour] = useState(initial?.colour ?? ACCOUNT_COLOURS[0]);
+  const [icon, setIcon] = useState(initial?.icon ?? 'auto');
 
   const showBankField = type === 'bank' || type === 'credit_card';
 
@@ -383,7 +456,7 @@ function AccountForm({
       </div>
 
       <button onClick={submit} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-base font-medium">
-        Save Account
+        {submitLabel}
       </button>
     </div>
   );

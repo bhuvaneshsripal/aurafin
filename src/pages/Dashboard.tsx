@@ -13,7 +13,7 @@ import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useTransactionsStore } from '../store/transactionsStore';
 import { useGoalsStore } from '../store/goalsStore';
-import { useLivePricesStore } from '../store/livePricesStore';
+import { useLivePricesStore, useIsLiveDataReady } from '../store/livePricesStore';
 import { useUiStore } from '../store/uiStore';
 import Amount from '../components/Amount';
 import { ASSET_CLASS_LABELS, formatCurrency, maskPreciseAmount } from '../utils/currency';
@@ -42,6 +42,7 @@ export default function Dashboard() {
   const livePrices = useLivePricesStore((s) => s.prices);
   const sipValues = useLivePricesStore((s) => s.sipValues);
   const privacyMode = useUiStore((s) => s.privacyMode);
+  const liveDataReady = useIsLiveDataReady(assets);
 
   const totalAssets = assets.reduce(
     (s, a) => s + resolveAssetValues(a, livePrices, sipValues).value,
@@ -82,26 +83,30 @@ export default function Dashboard() {
             Live prices update every 60 seconds
           </p>
           {hasWealth ? (
-            <>
-              <div className="flex items-center gap-2.5 flex-wrap mt-2">
-                <span className="font-hero-numeric text-4xl sm:text-5xl text-slate-900 dark:text-white break-words">
-                  {maskPreciseAmount(netWorth, 'INR', privacyMode)}
-                </span>
-                {investedAssetsTotal > 0 && (
-                  <span
-                    className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${
-                      netWorthPnl >= 0
-                        ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-300'
-                        : 'bg-red-50 dark:bg-red-900/30 text-red-500'
-                    }`}
-                  >
-                    {netWorthPnl >= 0 ? '+' : ''}
-                    {netWorthPnlPercent.toFixed(1)}% overall
+            liveDataReady ? (
+              <>
+                <div className="flex items-center gap-2.5 flex-wrap mt-2">
+                  <span className="font-hero-numeric text-4xl sm:text-5xl text-slate-900 dark:text-white break-words">
+                    {maskPreciseAmount(netWorth, 'INR', privacyMode)}
                   </span>
-                )}
-              </div>
-              <MiniTrend />
-            </>
+                  {investedAssetsTotal > 0 && (
+                    <span
+                      className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${
+                        netWorthPnl >= 0
+                          ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-300'
+                          : 'bg-red-50 dark:bg-red-900/30 text-red-500'
+                      }`}
+                    >
+                      {netWorthPnl >= 0 ? '+' : ''}
+                      {netWorthPnlPercent.toFixed(1)}% overall
+                    </span>
+                  )}
+                </div>
+                <MiniTrend />
+              </>
+            ) : (
+              <div className="mt-2 h-11 sm:h-12 w-48 rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />
+            )
           ) : (
             <>
               <div className="mt-4 mb-8">
@@ -119,9 +124,13 @@ export default function Dashboard() {
             Invested · <span className="text-slate-400">₹ INR</span>
           </p>
           {hasWealth ? (
-            <span className="font-hero-numeric text-4xl sm:text-5xl text-slate-900 dark:text-white block mt-2 break-words">
-              {maskPreciseAmount(investedAssetsTotal, 'INR', privacyMode)}
-            </span>
+            liveDataReady ? (
+              <span className="font-hero-numeric text-4xl sm:text-5xl text-slate-900 dark:text-white block mt-2 break-words">
+                {maskPreciseAmount(investedAssetsTotal, 'INR', privacyMode)}
+              </span>
+            ) : (
+              <div className="mt-2 h-11 sm:h-12 w-40 rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />
+            )
           ) : (
             <div className="mt-4 mb-8">
               <MaskedDots />
