@@ -16,13 +16,10 @@ async function fetchYahooFallback(rawSymbol) {
     `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=1d`,
     { headers: { 'User-Agent': 'Mozilla/5.0' } }
   );
-  // TEMP DIAGNOSTIC LOGGING — remove once live-price issue is confirmed/fixed.
-  console.log(`[DIAG chart] yahoo fallback(${yahooSymbol}): status=${upstream.status}`);
   if (!upstream.ok) return null;
   const data = await upstream.json();
   const meta = data?.chart?.result?.[0]?.meta;
   const price = meta?.regularMarketPrice ?? meta?.previousClose;
-  console.log(`[DIAG chart] yahoo fallback(${yahooSymbol}): price=${price}`);
   if (typeof price !== 'number' || !Number.isFinite(price)) return null;
   return { price, currency: meta?.currency ?? 'INR' };
 }
@@ -43,8 +40,7 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60');
     res.status(200).json({ symbol: bareSymbol, price: quote.price, currency: quote.currency, source: 'nse' });
     return;
-  } catch (err) {
-    console.log(`[DIAG chart] NSE(${bareSymbol}) threw: ${err instanceof Error ? err.message : err}`);
+  } catch {
     // fall through to Yahoo below
   }
 
@@ -56,8 +52,7 @@ export default async function handler(req, res) {
     }
     res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60');
     res.status(200).json({ symbol: bareSymbol, price: quote.price, currency: quote.currency, source: 'yahoo' });
-  } catch (err) {
-    console.log(`[DIAG chart] yahoo(${symbol}) threw: ${err instanceof Error ? err.message : err}`);
+  } catch {
     res.status(502).json({ error: 'Could not reach NSE or Yahoo Finance' });
   }
 }
