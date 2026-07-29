@@ -176,8 +176,16 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
           );
         })}
         {accounts.length === 0 && (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-10 text-center text-slate-400 dark:text-slate-500 text-sm">
-            No accounts yet. Tap "Add Account" above to add a bank, card, cash, or wallet.
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-14 flex flex-col items-center justify-center text-center gap-4">
+            <p className="text-slate-400 dark:text-slate-500 text-sm">
+              No accounts yet. Add a bank, card, cash, or wallet to get started.
+            </p>
+            <button
+              onClick={() => onOpenChange(true)}
+              className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-lg text-base font-medium"
+            >
+              Add Account
+            </button>
           </div>
         )}
       </div>

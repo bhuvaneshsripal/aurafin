@@ -21,9 +21,10 @@
   --color-cream-200: #efe9da;
   --color-cream-300: #e4ddc9;
 
-  --font-sans: "Playfair Display", "Fraunces", "Iowan Old Style", ui-serif, serif;
-  --font-display: "Playfair Display", "Fraunces", "Iowan Old Style", ui-serif, serif;
-  --font-numeric: "Roboto", ui-sans-serif, sans-serif;
+  --font-sans: "Bodoni Moda", "Iowan Old Style", ui-serif, serif;
+  --font-display: "Bodoni Moda", "Iowan Old Style", ui-serif, serif;
+  --font-numeric: "Bodoni Moda", ui-serif, serif;
+  --font-hero-numeric: "Cormorant Garamond", "Bodoni Moda", ui-serif, serif;
 }
 
 html {
@@ -47,6 +48,18 @@ body {
 /* Premium bold numeric styling — applied to all money amounts, scores, and percentages */
 .font-numeric {
   font-family: var(--font-numeric);
+  font-weight: 700;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: 0.01em;
+}
+
+/* Dashboard hero figures (Net Worth, Invested). Bodoni Moda's stylistic
+   digits (esp. 4 and 7) read poorly at large hero sizes, so these two
+   spots use Cormorant Garamond instead — still a luxury serif, but with
+   clean, unambiguous lining figures. */
+.font-hero-numeric {
+  font-family: var(--font-hero-numeric);
   font-weight: 700;
   font-feature-settings: "tnum" 1, "lnum" 1;
   font-variant-numeric: tabular-nums lining-nums;

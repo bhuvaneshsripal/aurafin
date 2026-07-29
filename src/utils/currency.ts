@@ -17,11 +17,13 @@ export function formatCurrency(
       currency,
       minimumFractionDigits: fractionDigits,
       maximumFractionDigits: fractionDigits,
+      useGrouping: false,
     }).format(value);
   } catch {
     return `${currency} ${value.toLocaleString(undefined, {
       minimumFractionDigits: fractionDigits,
       maximumFractionDigits: fractionDigits,
+      useGrouping: false,
     })}`;
   }
 }

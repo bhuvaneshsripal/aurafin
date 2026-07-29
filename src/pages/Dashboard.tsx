@@ -77,10 +77,14 @@ export default function Dashboard() {
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
             Net Worth · <span className="text-slate-400">₹ INR</span>
           </p>
+          <p className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1.5 mt-0.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
+            Live prices update every 60 seconds
+          </p>
           {hasWealth ? (
             <>
               <div className="flex items-center gap-2.5 flex-wrap mt-2">
-                <span className="font-numeric text-3xl sm:text-4xl text-slate-900 dark:text-white break-words">
+                <span className="font-hero-numeric text-4xl sm:text-5xl text-slate-900 dark:text-white break-words">
                   {maskPreciseAmount(netWorth, 'INR', privacyMode)}
                 </span>
                 {investedAssetsTotal > 0 && (
@@ -115,7 +119,7 @@ export default function Dashboard() {
             Invested · <span className="text-slate-400">₹ INR</span>
           </p>
           {hasWealth ? (
-            <span className="font-numeric text-3xl sm:text-4xl text-slate-900 dark:text-white block mt-2 break-words">
+            <span className="font-hero-numeric text-4xl sm:text-5xl text-slate-900 dark:text-white block mt-2 break-words">
               {maskPreciseAmount(investedAssetsTotal, 'INR', privacyMode)}
             </span>
           ) : (
@@ -170,7 +174,7 @@ export default function Dashboard() {
       </Section>
 
       <Section title="Goals" icon={Target} iconColor="text-orange-500" summary={`${goals.length}`}>
-        <GoalsSummary goals={goals} />
+        <GoalsSummary goals={goals} netWorth={netWorth} />
       </Section>
     </div>
   );
@@ -349,14 +353,21 @@ function InvestmentsSummary({
   );
 }
 
-function GoalsSummary({ goals }: { goals: ReturnType<typeof useGoalsStore.getState>['goals'] }) {
+function GoalsSummary({
+  goals,
+  netWorth,
+}: {
+  goals: ReturnType<typeof useGoalsStore.getState>['goals'];
+  netWorth: number;
+}) {
   if (goals.length === 0) {
     return <EmptyState text="Set a goal in Essentials to track your progress here." />;
   }
+  const current = Math.max(0, netWorth);
   return (
     <div className="space-y-3">
       {goals.slice(0, 4).map((g) => {
-        const pct = Math.min(100, Math.round((g.currentAmount / g.targetAmount) * 100));
+        const pct = g.targetAmount > 0 ? Math.min(100, Math.round((current / g.targetAmount) * 100)) : 0;
         return (
           <div key={g.id}>
             <div className="flex items-center justify-between text-sm mb-1">

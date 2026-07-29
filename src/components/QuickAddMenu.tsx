@@ -390,15 +390,15 @@ function SnapshotForm({ onDone }: { onDone: () => void }) {
       <div className="bg-slate-50 dark:bg-slate-700 rounded-lg p-4 text-sm space-y-1">
         <div className="flex justify-between">
           <span className="text-slate-500">Total Assets</span>
-          <span className="font-medium text-slate-800 dark:text-slate-100">{totalAssets.toLocaleString()}</span>
+          <span className="font-medium text-slate-800 dark:text-slate-100">{totalAssets.toLocaleString(undefined, { useGrouping: false })}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-slate-500">Total Liabilities</span>
-          <span className="font-medium text-slate-800 dark:text-slate-100">{totalLiabilities.toLocaleString()}</span>
+          <span className="font-medium text-slate-800 dark:text-slate-100">{totalLiabilities.toLocaleString(undefined, { useGrouping: false })}</span>
         </div>
         <div className="flex justify-between border-t border-slate-200 dark:border-slate-600 pt-1 mt-1">
           <span className="text-slate-500">Net Worth</span>
-          <span className="font-semibold text-slate-900 dark:text-white">{netWorth.toLocaleString()}</span>
+          <span className="font-semibold text-slate-900 dark:text-white">{netWorth.toLocaleString(undefined, { useGrouping: false })}</span>
         </div>
       </div>
       <button onClick={submit} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-base font-medium">

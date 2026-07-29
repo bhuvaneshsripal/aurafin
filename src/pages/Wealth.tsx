@@ -748,6 +748,10 @@ function AssetsTab({
         <div>
           <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Assets</h2>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">{assets.length} assets</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1.5 mt-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
+            Live prices update every 60 seconds
+          </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="relative flex-1 min-w-[140px] sm:flex-none">
@@ -850,8 +854,18 @@ function AssetsTab({
       />
 
       {filtered.length === 0 && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 px-4 py-10 text-center text-slate-400">
-          {assets.length === 0 ? 'No assets yet. Add your first one to get started.' : 'No assets match your search.'}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 px-4 py-14 flex flex-col items-center justify-center text-center gap-4">
+          <p className="text-slate-400">
+            {assets.length === 0 ? 'No assets yet. Add your first one to get started.' : 'No assets match your search.'}
+          </p>
+          {assets.length === 0 && (
+            <button
+              onClick={onAdd}
+              className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-lg text-base font-medium"
+            >
+              <Plus size={18} /> Add Asset
+            </button>
+          )}
         </div>
       )}
 
@@ -2285,8 +2299,16 @@ function LiabilitiesTab({
             ))}
             {liabilities.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-slate-400">
-                  No liabilities tracked. Add loans or credit lines here.
+                <td colSpan={5} className="px-4 py-14">
+                  <div className="flex flex-col items-center justify-center text-center gap-4">
+                    <p className="text-slate-400">No liabilities tracked. Add loans or credit lines here.</p>
+                    <button
+                      onClick={onAdd}
+                      className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-lg text-base font-medium"
+                    >
+                      <Plus size={18} /> Add Liability
+                    </button>
+                  </div>
                 </td>
               </tr>
             )}

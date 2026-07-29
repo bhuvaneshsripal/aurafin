@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Plus, Trash2, Pencil, Check, ChevronRight, Shield, PiggyBank, Landmark, Pill } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Plus, Trash2, Pencil, Check, ChevronRight, ChevronDown, Shield, PiggyBank, Landmark, Pill } from 'lucide-react';
 import { useGoalsStore } from '../store/goalsStore';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
@@ -75,6 +75,8 @@ function HealthCheck() {
   const [age, setAge] = useState('');
   const [income, setIncome] = useState('');
   const [expense, setExpense] = useState('');
+  const [snapshotOpen, setSnapshotOpen] = useState(false);
+  const autoCollapsedRef = useRef(false);
 
   // Load the saved profile into the form once it arrives.
   useEffect(() => {
@@ -100,6 +102,15 @@ function HealthCheck() {
   };
 
   const hasProfile = !!profile?.monthlyIncome;
+
+  useEffect(() => {
+    if (hasProfile && !autoCollapsedRef.current) {
+      setSnapshotOpen(false);
+      autoCollapsedRef.current = true;
+    } else if (!hasProfile) {
+      setSnapshotOpen(true);
+    }
+  }, [hasProfile]);
 
   // --- Derived figures for the dashboard ---
   const totalAssets = assets.reduce((s, a) => s + resolveAssetValues(a, livePrices, sipValues).value, 0);
@@ -148,31 +159,52 @@ function HealthCheck() {
       )}
 
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
-        <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Your Financial Snapshot</h2>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Age">
-            <input type="number" value={age} onChange={(e) => setAge(e.target.value)} className={inputClass} placeholder="e.g. 28" />
-          </Field>
-          <Field label="Monthly Income">
-            <input type="number" value={income} onChange={(e) => setIncome(e.target.value)} className={inputClass} placeholder="0" />
-          </Field>
-          <Field label="Monthly Expenses">
-            <input type="number" value={expense} onChange={(e) => setExpense(e.target.value)} className={inputClass} placeholder="0" />
-          </Field>
-          <Field label="Monthly Savings">
-            <input
-              value={formatCurrency(monthlySavings)}
-              readOnly
-              className={`${inputClass} bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed`}
-            />
-          </Field>
-        </div>
         <button
-          onClick={handleSaveSnapshot}
-          className="bg-brand-600 hover:bg-brand-700 text-white px-6 py-2.5 rounded-lg text-base font-medium"
+          onClick={() => setSnapshotOpen((v) => !v)}
+          className="w-full flex items-center justify-between text-left"
         >
-          Save
+          <div>
+            <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Your Financial Snapshot</h2>
+            {!snapshotOpen && hasProfile && (
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                Age {age || '—'} · Income <Amount value={monthlyIncome} /> · Expenses <Amount value={monthlyExpense} />
+              </p>
+            )}
+          </div>
+          <ChevronDown
+            size={20}
+            className={`text-slate-400 shrink-0 transition-transform duration-200 ${snapshotOpen ? 'rotate-180' : ''}`}
+          />
         </button>
+
+        {snapshotOpen && (
+          <>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Age">
+                <input type="number" value={age} onChange={(e) => setAge(e.target.value)} className={inputClass} placeholder="e.g. 28" />
+              </Field>
+              <Field label="Monthly Income">
+                <input type="number" value={income} onChange={(e) => setIncome(e.target.value)} className={inputClass} placeholder="0" />
+              </Field>
+              <Field label="Monthly Expenses">
+                <input type="number" value={expense} onChange={(e) => setExpense(e.target.value)} className={inputClass} placeholder="0" />
+              </Field>
+              <Field label="Monthly Savings">
+                <input
+                  value={formatCurrency(monthlySavings)}
+                  readOnly
+                  className={`${inputClass} bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed`}
+                />
+              </Field>
+            </div>
+            <button
+              onClick={handleSaveSnapshot}
+              className="bg-brand-600 hover:bg-brand-700 text-white px-6 py-2.5 rounded-lg text-base font-medium"
+            >
+              Save
+            </button>
+          </>
+        )}
       </div>
 
       {hasProfile && (
@@ -499,8 +531,18 @@ function DependentsRow({ value, onSave }: { value: number; onSave: (v: number) =
 function GoalsTab() {
   const goals = useGoalsStore((s) => s.goals);
   const user = useAuthStore((s) => s.user);
+  const assets = useAssetsStore((s) => s.assets);
+  const liabilities = useLiabilitiesStore((s) => s.liabilities);
+  const livePrices = useLivePricesStore((s) => s.prices);
+  const sipValues = useLivePricesStore((s) => s.sipValues);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Goal | null>(null);
+
+  // Same calc the Dashboard uses for the headline Net Worth figure, so every
+  // goal's progress always reflects the live number — never a stale manual entry.
+  const totalAssets = assets.reduce((s, a) => s + resolveAssetValues(a, livePrices, sipValues).value, 0);
+  const totalLiabilities = liabilities.reduce((s, l) => s + l.outstanding, 0);
+  const netWorth = totalAssets - totalLiabilities;
 
   const handleDelete = async (id: string) => {
     if (!user) return;
@@ -530,7 +572,8 @@ function GoalsTab() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {goals.map((g) => {
-          const pct = Math.min(100, Math.round((g.currentAmount / g.targetAmount) * 100));
+          const current = Math.max(0, netWorth);
+          const pct = g.targetAmount > 0 ? Math.min(100, Math.round((current / g.targetAmount) * 100)) : 0;
           return (
             <div key={g.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
               <div className="flex items-center justify-between mb-2">
@@ -554,15 +597,26 @@ function GoalsTab() {
                 <div className="h-full bg-brand-600 rounded-full" style={{ width: `${pct}%` }} />
               </div>
               <div className="flex items-center justify-between text-sm text-slate-500 dark:text-slate-400">
-                <span>{formatCurrency(g.currentAmount, g.currency)} saved</span>
+                <span>{formatCurrency(current, g.currency)} · from Net Worth</span>
                 <span>{pct}% of {formatCurrency(g.targetAmount, g.currency)}</span>
               </div>
             </div>
           );
         })}
         {goals.length === 0 && (
-          <div className="col-span-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-10 text-center text-slate-400 dark:text-slate-500">
-            No goals yet. Set a retirement corpus, emergency fund, or education target.
+          <div className="col-span-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-14 flex flex-col items-center justify-center text-center gap-4">
+            <p className="text-slate-400 dark:text-slate-500">
+              No goals yet. Set a retirement corpus, emergency fund, or education target.
+            </p>
+            <button
+              onClick={() => {
+                setEditing(null);
+                setModalOpen(true);
+              }}
+              className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-lg text-base font-medium"
+            >
+              <Plus size={18} /> Add Goal
+            </button>
           </div>
         )}
       </div>
@@ -574,10 +628,24 @@ function GoalsTab() {
   );
 }
 
+const GOAL_NAME_SUGGESTIONS = [
+  'Retirement Corpus',
+  'Emergency Fund',
+  'Child Education',
+  'Child Marriage',
+  'Home Down Payment',
+  'Home Renovation',
+  'Car Purchase',
+  'Wedding Fund',
+  'Dream Vacation',
+  'Debt-Free Goal',
+  'Health Emergency Fund',
+  'Business Fund',
+];
+
 function GoalForm({ initial, onSave }: { initial: Goal | null; onSave: (g: Goal) => void }) {
   const [name, setName] = useState(initial?.name ?? '');
   const [targetAmount, setTargetAmount] = useState(initial?.targetAmount?.toString() ?? '');
-  const [currentAmount, setCurrentAmount] = useState(initial?.currentAmount?.toString() ?? '0');
   const [currency, setCurrency] = useState(initial?.currency ?? 'INR');
 
   const submit = () => {
@@ -586,7 +654,7 @@ function GoalForm({ initial, onSave }: { initial: Goal | null; onSave: (g: Goal)
       id: initial?.id ?? crypto.randomUUID(),
       name,
       targetAmount: Number(targetAmount),
-      currentAmount: Number(currentAmount || 0),
+      currentAmount: initial?.currentAmount ?? 0,
       currency,
     });
   };
@@ -594,7 +662,19 @@ function GoalForm({ initial, onSave }: { initial: Goal | null; onSave: (g: Goal)
   return (
     <div className="space-y-4">
       <Field label="Goal Name">
-        <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} placeholder="e.g. Retirement Corpus" />
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className={inputClass}
+          placeholder="e.g. Retirement Corpus"
+          list="goal-name-suggestions"
+          autoComplete="off"
+        />
+        <datalist id="goal-name-suggestions">
+          {GOAL_NAME_SUGGESTIONS.map((suggestion) => (
+            <option key={suggestion} value={suggestion} />
+          ))}
+        </datalist>
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Target Amount">
@@ -610,9 +690,9 @@ function GoalForm({ initial, onSave }: { initial: Goal | null; onSave: (g: Goal)
           </select>
         </Field>
       </div>
-      <Field label="Current Progress">
-        <input type="number" value={currentAmount} onChange={(e) => setCurrentAmount(e.target.value)} className={inputClass} placeholder="0" />
-      </Field>
+      <p className="text-xs text-slate-400 dark:text-slate-500 -mt-1">
+        Progress is calculated automatically from your current Net Worth — no need to update it manually.
+      </p>
       <button onClick={submit} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-base font-medium">
         Save Goal
       </button>
