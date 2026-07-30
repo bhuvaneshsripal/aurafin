@@ -26,6 +26,24 @@
   --font-numeric: Consolas, "SFMono-Regular", Menlo, Monaco, "Liberation Mono", "Courier New", monospace;
   --font-hero-numeric: Consolas, "SFMono-Regular", Menlo, Monaco, "Liberation Mono", "Courier New", monospace;
   --font-luxury: "Playfair Display", "Cormorant Garamond", Georgia, serif;
+
+  /* Dark mode across the app is built on Tailwind's `slate` scale, which
+     has a cool blue undertone (e.g. default slate-900 is #0f172a — a navy,
+     not a black). Overriding the scale here with true, hue-free neutrals
+     (and pushing the darkest steps toward pure black) makes every existing
+     `dark:bg-slate-900`, `border-slate-800`, etc. render as black/charcoal
+     instead of dark blue, with no need to touch each component. */
+  --color-slate-50: #fafafa;
+  --color-slate-100: #f4f4f4;
+  --color-slate-200: #e4e4e4;
+  --color-slate-300: #d1d1d1;
+  --color-slate-400: #a3a3a3;
+  --color-slate-500: #737373;
+  --color-slate-600: #525252;
+  --color-slate-700: #3a3a3a;
+  --color-slate-800: #202020;
+  --color-slate-900: #121212;
+  --color-slate-950: #000000;
 }
 
 html {
@@ -48,7 +66,7 @@ body {
 }
 
 .dark body {
-  background-color: #0f1a15;
+  background-color: #000000;
 }
 
 .font-display {
@@ -161,6 +179,33 @@ a {
     0 2px 4px rgba(15, 23, 42, 0.06),
     0 24px 48px rgba(15, 23, 42, 0.22),
     0 8px 16px rgba(15, 23, 42, 0.12);
+}
+
+/* Logo coin-flip — plays once when the app logo/icon is clicked. A true
+   3D rotation (perspective + rotateY) so the coin edge is genuinely
+   visible edge-on mid-flip, with a small weighted bounce on landing. */
+@keyframes logo-coin-flip {
+  0% {
+    transform: perspective(600px) rotateY(0deg) scale(1);
+  }
+  35% {
+    transform: perspective(600px) rotateY(200deg) scale(1.14);
+  }
+  60% {
+    transform: perspective(600px) rotateY(340deg) scale(1.14);
+  }
+  80% {
+    transform: perspective(600px) rotateY(372deg) scale(0.97);
+  }
+  100% {
+    transform: perspective(600px) rotateY(360deg) scale(1);
+  }
+}
+
+.logo-flip {
+  animation: logo-coin-flip 700ms cubic-bezier(0.22, 1, 0.36, 1);
+  transform-style: preserve-3d;
+  will-change: transform;
 }
 
 /* Each row in that menu lifts slightly on hover for a tactile feel */

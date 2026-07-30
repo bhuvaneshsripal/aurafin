@@ -117,7 +117,7 @@ export default function LockScreen() {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col bg-cream-100 dark:bg-slate-950 px-6 pt-12 pb-8 overflow-y-auto">
+    <div className="font-luxury fixed inset-0 z-[100] flex flex-col bg-cream-100 dark:bg-slate-950 px-6 pt-12 pb-8 overflow-y-auto">
       {mode === 'pin' ? (
         <>
           <div className="w-full max-w-[300px] mx-auto text-center flex flex-col items-center">
@@ -126,8 +126,8 @@ export default function LockScreen() {
               alt="Aurafin"
               className="h-14 w-14 rounded-2xl object-cover mb-4 shadow-sm"
             />
-            <h1 className="font-display text-xl font-bold text-slate-900 dark:text-white mb-1">
-              <span className="font-luxury">Aurafin</span> is Locked
+            <h1 className="font-luxury text-xl font-bold text-slate-900 dark:text-white mb-1">
+              Aurafin is Locked
             </h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">Enter your 4-digit PIN</p>
 
@@ -161,7 +161,7 @@ export default function LockScreen() {
                   key={d}
                   type="button"
                   onClick={() => pressDigit(d)}
-                  className="aspect-square rounded-2xl bg-white dark:bg-slate-800 border border-cream-200 dark:border-slate-700 shadow-sm text-2xl font-semibold text-slate-900 dark:text-white active:scale-95 active:bg-cream-50 dark:active:bg-slate-700 transition-transform"
+                  className="keep-round aspect-square rounded-full bg-white dark:bg-slate-800 border border-cream-200 dark:border-slate-700 shadow-sm text-2xl font-semibold text-slate-900 dark:text-white active:scale-95 active:bg-cream-50 dark:active:bg-slate-700 transition-transform"
                 >
                   {d}
                 </button>
@@ -170,14 +170,14 @@ export default function LockScreen() {
               <button
                 type="button"
                 onClick={() => pressDigit('0')}
-                className="aspect-square rounded-2xl bg-white dark:bg-slate-800 border border-cream-200 dark:border-slate-700 shadow-sm text-2xl font-semibold text-slate-900 dark:text-white active:scale-95 active:bg-cream-50 dark:active:bg-slate-700 transition-transform"
+                className="keep-round aspect-square rounded-full bg-white dark:bg-slate-800 border border-cream-200 dark:border-slate-700 shadow-sm text-2xl font-semibold text-slate-900 dark:text-white active:scale-95 active:bg-cream-50 dark:active:bg-slate-700 transition-transform"
               >
                 0
               </button>
               <button
                 type="button"
                 onClick={pressBackspace}
-                className="aspect-square rounded-2xl bg-white dark:bg-slate-800 border border-cream-200 dark:border-slate-700 shadow-sm flex items-center justify-center text-slate-500 dark:text-slate-300 active:scale-95 active:bg-cream-50 dark:active:bg-slate-700 transition-transform"
+                className="keep-round aspect-square rounded-full bg-white dark:bg-slate-800 border border-cream-200 dark:border-slate-700 shadow-sm flex items-center justify-center text-slate-500 dark:text-slate-300 active:scale-95 active:bg-cream-50 dark:active:bg-slate-700 transition-transform"
               >
                 <Delete size={24} />
               </button>

@@ -8,13 +8,15 @@ import {
   sendPasswordResetEmail,
   EmailAuthProvider,
 } from 'firebase/auth';
-import { Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, Crown, Copy, ChevronRight, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil } from 'lucide-react';
+import { Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, Crown, Copy, ChevronRight, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, Camera, X } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import { useAvatarStore } from '../store/avatarStore';
 import { useAppLockStore } from '../store/appLockStore';
 import { useDisplaySettingsStore, FONT_MIN_SCALE, FONT_MAX_SCALE, SCREEN_MIN_SCALE, SCREEN_MAX_SCALE } from '../store/displaySettingsStore';
 import PinBoxInput from '../components/PinBoxInput';
 import { auth } from '../firebase/config';
 import { CURRENCIES } from '../utils/currency';
+import { fileToSquareDataUrl } from '../utils/imageResize';
 import { sendSharedAccessInvite, isInviteEmailConfigured } from '../utils/otp';
 import {
   SECURITY_QUESTIONS,
@@ -22,7 +24,7 @@ import {
   getSecurityQuestion,
   verifySecurityAnswer,
 } from '../utils/securityQuestion';
-import { deleteAllUserData, upsertDoc, removeDoc, assignOrphanDataToProfile, reassignProfileData } from '../hooks/useFirestoreSync';
+import { deleteAllUserData, upsertDoc, removeDoc, saveAvatar, removeAvatar, assignOrphanDataToProfile, reassignProfileData } from '../hooks/useFirestoreSync';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useGoalsStore } from '../store/goalsStore';
@@ -35,6 +37,7 @@ import { PRICING_PLANS, PLAN_LABELS, buildUpiLink, type PricingPlan } from '../c
 import UpiQrCode from '../components/UpiQrCode';
 import type { HouseholdProfile, PremiumStatus } from '../types';
 import Modal from '../components/Modal';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 
 type Tab = 'account' | 'preferences' | 'profiles' | 'billing' | 'data';
 
@@ -50,6 +53,121 @@ function Card({ children }: { children: ReactNode }) {
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
       {children}
+    </div>
+  );
+}
+
+function AvatarEditor() {
+  const user = useAuthStore((s) => s.user);
+  const customUrl = useAvatarStore((s) => s.dataUrl);
+  const setCustomUrl = useAvatarStore((s) => s.setDataUrl);
+
+  const [status, setStatus] = useState<'idle' | 'saving' | 'error'>('idle');
+  const [error, setError] = useState('');
+
+  const displayUrl = customUrl ?? user?.photoURL ?? null;
+  const initial = (user?.displayName ?? user?.email ?? 'A').charAt(0).toUpperCase();
+
+  const handleFile = async (file: File | null) => {
+    if (!file || !user) return;
+    setStatus('saving');
+    setError('');
+    try {
+      const resized = await fileToSquareDataUrl(file);
+      // Reflect it immediately rather than waiting on the round-trip to
+      // Firestore and back through the live listener.
+      setCustomUrl(resized);
+      await saveAvatar(user.uid, resized);
+      setStatus('idle');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update your photo.');
+      setStatus('error');
+    }
+  };
+
+  const handleRemove = async () => {
+    if (!user) return;
+    setStatus('saving');
+    setError('');
+    try {
+      setCustomUrl(null);
+      await removeAvatar(user.uid);
+      setStatus('idle');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not remove your photo.');
+      setStatus('error');
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-4 mb-5">
+      <div className="relative shrink-0">
+        {displayUrl ? (
+          <img
+            src={displayUrl}
+            alt=""
+            referrerPolicy="no-referrer"
+            className="h-16 w-16 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+          />
+        ) : (
+          <div className="h-16 w-16 rounded-full bg-brand-600 text-white flex items-center justify-center text-xl font-semibold">
+            {initial}
+          </div>
+        )}
+
+        <label
+          title="Change photo"
+          className="tap-scale absolute -bottom-0.5 -right-0.5 h-6 w-6 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-center cursor-pointer text-slate-500 dark:text-slate-300 hover:text-brand-600 dark:hover:text-brand-400"
+        >
+          <Camera size={12} />
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            disabled={status === 'saving'}
+            onChange={(e) => {
+              const file = e.target.files?.[0] ?? null;
+              handleFile(file);
+              e.target.value = '';
+            }}
+          />
+        </label>
+      </div>
+
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Profile photo</p>
+        <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+          {status === 'saving' ? 'Saving...' : 'JPG or PNG, square crop applied automatically.'}
+        </p>
+        <div className="flex items-center gap-3 mt-1.5">
+          <label className="text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline cursor-pointer">
+            Change
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              disabled={status === 'saving'}
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null;
+                handleFile(file);
+                e.target.value = '';
+              }}
+            />
+          </label>
+          {customUrl && (
+            <button
+              type="button"
+              onClick={handleRemove}
+              disabled={status === 'saving'}
+              className="flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-green-600 dark:hover:text-green-400 disabled:opacity-50"
+            >
+              <X size={12} />
+              Remove
+            </button>
+          )}
+        </div>
+        {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+      </div>
     </div>
   );
 }
@@ -74,6 +192,7 @@ function PersonalInfoCard() {
   return (
     <Card>
       <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-4">Personal info</h2>
+      <AvatarEditor />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1.5">Display Name</label>
@@ -645,6 +764,13 @@ function SharedAccessCard() {
     persist(invites.filter((i) => i.id !== id));
   };
 
+  const [pendingRemoveInvite, setPendingRemoveInvite] = useState<SharedInvite | null>(null);
+  const confirmRemoveInvite = () => {
+    if (!pendingRemoveInvite) return;
+    removeInvite(pendingRemoveInvite.id);
+    setPendingRemoveInvite(null);
+  };
+
   return (
     <Card>
       <div className="flex gap-3">
@@ -703,8 +829,8 @@ function SharedAccessCard() {
                 </p>
               </div>
               <button
-                onClick={() => removeInvite(invite.id)}
-                className="text-slate-400 hover:text-red-500 p-1"
+                onClick={() => setPendingRemoveInvite(invite)}
+                className="text-slate-400 hover:text-green-600 dark:hover:text-green-400 p-1"
                 aria-label={`Remove ${invite.email}`}
               >
                 <Trash2 size={16} />
@@ -713,6 +839,20 @@ function SharedAccessCard() {
           ))}
         </div>
       )}
+
+      <ConfirmDeleteModal
+        open={!!pendingRemoveInvite}
+        onClose={() => setPendingRemoveInvite(null)}
+        onConfirm={confirmRemoveInvite}
+        title="Remove this person?"
+        description={
+          <>
+            <strong>{pendingRemoveInvite?.email}</strong> will lose access to your Aurafin data. This can't be
+            undone (though you can invite them again later).
+          </>
+        }
+        confirmLabel="Remove"
+      />
     </Card>
   );
 }
@@ -981,6 +1121,13 @@ function ProfilesTab() {
     }
   };
 
+  const [pendingDeleteProfile, setPendingDeleteProfile] = useState<HouseholdProfile | null>(null);
+  const confirmDeleteProfile = async () => {
+    if (!pendingDeleteProfile) return;
+    await handleDelete(pendingDeleteProfile.id);
+    setPendingDeleteProfile(null);
+  };
+
   return (
     <>
       <Card>
@@ -1080,8 +1227,8 @@ function ProfilesTab() {
                   )}
                   {!isDefault && (
                     <button
-                      onClick={() => handleDelete(p.id)}
-                      className="text-slate-300 dark:text-slate-600 hover:text-red-500"
+                      onClick={() => setPendingDeleteProfile(p)}
+                      className="text-slate-300 dark:text-slate-600 hover:text-green-600 dark:hover:text-green-400"
                       aria-label={`Delete ${p.name}`}
                     >
                       <Trash2 size={15} />
@@ -1182,6 +1329,19 @@ function ProfilesTab() {
           </button>
         </div>
       </Modal>
+
+      <ConfirmDeleteModal
+        open={!!pendingDeleteProfile}
+        onClose={() => setPendingDeleteProfile(null)}
+        onConfirm={confirmDeleteProfile}
+        title="Delete this profile?"
+        description={
+          <>
+            This will permanently delete the <strong>{pendingDeleteProfile?.name}</strong> profile. Data already
+            assigned to it will remain but become unassigned. This can't be undone.
+          </>
+        }
+      />
     </>
   );
 }
@@ -1423,7 +1583,7 @@ function DataTab() {
             </p>
             <button
               onClick={() => setConfirmOpen(true)}
-              className="mt-3 flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium"
+              className="mt-3 flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
             >
               <Trash2 size={16} />
               Delete All Data
@@ -1461,7 +1621,7 @@ function DataTab() {
           <button
             onClick={handleDeleteAll}
             disabled={confirmText !== 'DELETE' || status === 'deleting'}
-            className="flex-1 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white py-2.5 rounded-lg text-sm font-medium"
+            className="flex-1 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white py-2.5 rounded-lg text-sm font-medium"
           >
             {status === 'deleting' ? 'Deleting...' : 'Delete Everything'}
           </button>

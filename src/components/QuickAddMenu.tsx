@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Plus,
-  ArrowUpRight,
-  ArrowDownRight,
+  ArrowUpCircle,
+  ArrowDownCircle,
   ArrowLeftRight,
   Layers,
   Landmark,
@@ -71,8 +71,8 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
             <p className="px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
               Cashflow
             </p>
-            <MenuItem icon={ArrowUpRight} color="text-orange-500" label="Expense" onClick={() => open('expense')} />
-            <MenuItem icon={ArrowDownRight} color="text-brand-600" label="Income" onClick={() => open('income')} />
+            <MenuItem icon={ArrowDownCircle} color="text-orange-500" label="Expense" onClick={() => open('expense')} />
+            <MenuItem icon={ArrowUpCircle} color="text-brand-600" label="Income" onClick={() => open('income')} />
             <MenuItem icon={ArrowLeftRight} color="text-sky-500" label="Transfer" onClick={() => open('transfer')} />
 
             <div className="border-t border-slate-100 dark:border-slate-700 mt-1" />

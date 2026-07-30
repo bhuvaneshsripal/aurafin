@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, writeBatch, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuthStore } from '../store/authStore';
+import { useAvatarStore } from '../store/avatarStore';
 
 /** Every subcollection kept under users/{uid} that DataSync listens to. */
 const ALL_USER_COLLECTIONS = [
@@ -82,6 +83,43 @@ export async function bulkUpsertDocs<T extends { id: string }>(
 
 export async function removeDoc(uid: string, collectionName: string, id: string) {
   const ref = doc(db, 'users', uid, collectionName, id);
+  await deleteDoc(ref);
+}
+
+/**
+ * Keeps the custom profile-picture store (avatarStore) in sync with the
+ * single doc at users/{uid}/meta/avatar. Call once near the app root
+ * (alongside the other useFirestoreCollectionSync calls in DataSync).
+ */
+export function useAvatarSync() {
+  const user = useAuthStore((s) => s.user);
+  const setDataUrl = useAvatarStore((s) => s.setDataUrl);
+
+  useEffect(() => {
+    if (!user) {
+      setDataUrl(null);
+      return;
+    }
+    const ref = doc(db, 'users', user.uid, 'meta', 'avatar');
+    const unsub = onSnapshot(
+      ref,
+      (snap) => setDataUrl((snap.data()?.dataUrl as string | undefined) ?? null),
+      () => setDataUrl(null)
+    );
+    return () => unsub();
+  }, [user, setDataUrl]);
+}
+
+/** Save (or overwrite) the user's custom profile picture. */
+export async function saveAvatar(uid: string, dataUrl: string) {
+  const ref = doc(db, 'users', uid, 'meta', 'avatar');
+  await setDoc(ref, { dataUrl }, { merge: true });
+}
+
+/** Remove the custom profile picture, falling back to the Google photo (if
+ *  any) or initials. */
+export async function removeAvatar(uid: string) {
+  const ref = doc(db, 'users', uid, 'meta', 'avatar');
   await deleteDoc(ref);
 }
 

@@ -2,10 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Moon, Sun, Eye, EyeOff, Bell, ChevronDown, MoreVertical, Settings as SettingsIcon, Lock } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import { useAvatarStore } from '../store/avatarStore';
 import { useUiStore } from '../store/uiStore';
 import { useAppLockStore } from '../store/appLockStore';
 import Modal from './Modal';
 import QuickAddMenu from './QuickAddMenu';
+import ProfileSwitcher from './ProfileSwitcher';
+import AppLogo from './AppLogo';
 
 export default function Topbar() {
   const user = useAuthStore((s) => s.user);
@@ -35,16 +38,18 @@ export default function Topbar() {
   }, []);
 
   const initial = (user?.displayName ?? user?.email ?? 'A').charAt(0).toUpperCase();
+  const avatarUrl = useAvatarStore((s) => s.dataUrl) ?? user?.photoURL ?? null;
 
   return (
     <>
-      <div className="flex items-center justify-between gap-2 sm:gap-3 px-4 sm:px-6 md:px-8 py-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+      <div className="flex items-center justify-between gap-2 sm:gap-3 px-4 sm:px-6 md:px-8 py-2 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
         {/* Left: logo + app name (mobile only — desktop shows it in the Sidebar) */}
-        <span className="md:hidden flex items-center gap-2 min-w-0">
-          <img src="/logo-icon.png" alt="Aurafin" className="w-6 h-6 rounded-md shrink-0" />
+        <span className="md:hidden flex items-center gap-1.5 min-w-0">
+          <AppLogo className="w-6 h-6 rounded-md shrink-0" />
           <span className="font-luxury text-lg font-semibold text-brand-800 dark:text-brand-200 tracking-tight truncate">
             Aurafin<span className="text-brand-500">.</span>
           </span>
+          <ProfileSwitcher compact />
           {lockEnabled && (
             <button
               type="button"
@@ -104,10 +109,10 @@ export default function Topbar() {
               onClick={() => setProfileOpen((o) => !o)}
               className="tap-scale flex items-center gap-2 pl-1 pr-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
             >
-              {user?.photoURL ? (
-                <img src={user.photoURL} alt="" className="h-8 w-8 rounded-full object-cover" referrerPolicy="no-referrer" />
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" className="keep-round h-8 w-8 rounded-full object-cover" referrerPolicy="no-referrer" />
               ) : (
-                <div className="h-8 w-8 rounded-full bg-brand-600 text-white flex items-center justify-center text-sm font-semibold">
+                <div className="keep-round h-8 w-8 rounded-full bg-brand-600 text-white flex items-center justify-center text-sm font-semibold">
                   {initial}
                 </div>
               )}
@@ -138,7 +143,7 @@ export default function Topbar() {
                     setProfileOpen(false);
                     setConfirmOpen(true);
                   }}
-                  className="w-full text-left px-4 py-2.5 text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40"
+                  className="w-full text-left px-4 py-2.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40"
                 >
                   Sign Out
                 </button>
@@ -176,10 +181,10 @@ export default function Topbar() {
                   }}
                   className="w-full px-4 py-3 border-b border-slate-100 dark:border-slate-700 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700 active:bg-slate-100 dark:active:bg-slate-600 text-left"
                 >
-                  {user?.photoURL ? (
-                    <img src={user.photoURL} alt="" className="h-9 w-9 rounded-full object-cover shrink-0" referrerPolicy="no-referrer" />
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt="" className="keep-round h-9 w-9 rounded-full object-cover shrink-0" referrerPolicy="no-referrer" />
                   ) : (
-                    <div className="h-9 w-9 rounded-full bg-brand-600 text-white flex items-center justify-center text-sm font-semibold shrink-0">
+                    <div className="keep-round h-9 w-9 rounded-full bg-brand-600 text-white flex items-center justify-center text-sm font-semibold shrink-0">
                       {initial}
                     </div>
                   )}
@@ -218,7 +223,7 @@ export default function Topbar() {
                     setMobileMenuOpen(false);
                     setConfirmOpen(true);
                   }}
-                  className="w-full text-left px-4 py-2.5 text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40"
+                  className="w-full text-left px-4 py-2.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40"
                 >
                   Sign Out
                 </button>
@@ -245,7 +250,7 @@ export default function Topbar() {
           </button>
           <button
             onClick={() => logout()}
-            className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-lg text-sm font-medium"
+            className="flex-1 bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-sm font-medium"
           >
             Sign Out
           </button>

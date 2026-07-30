@@ -1,5 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
   Wallet,
@@ -11,12 +10,10 @@ import {
   Smartphone,
   MessageSquarePlus,
   Lock,
-  Layers,
-  Check,
-  ChevronDown,
 } from 'lucide-react';
 import { useAppLockStore } from '../store/appLockStore';
-import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
+import ProfileSwitcher from './ProfileSwitcher';
+import AppLogo from './AppLogo';
 
 const mainLinks = [
   { to: '/', label: 'Overview', icon: LayoutDashboard },
@@ -63,92 +60,6 @@ function NavItem({
   );
 }
 
-function ProfileSwitcher() {
-  const profiles = useHouseholdProfilesStore((s) => s.profiles);
-  const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
-  const setActiveProfileId = useHouseholdProfilesStore((s) => s.setActiveProfileId);
-  const navigate = useNavigate();
-
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const onClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', onClickOutside);
-    return () => document.removeEventListener('mousedown', onClickOutside);
-  }, []);
-
-  const activeProfile = profiles.find((p) => p.id === activeProfileId) ?? null;
-  const activeLabel = activeProfile ? activeProfile.name : 'All Profiles';
-  const activeColour = activeProfile ? activeProfile.colour : '#94a3b8';
-
-  // Only worth showing once there's actually more than one profile to
-  // switch between — otherwise it's just an inert label.
-  if (profiles.length === 0) return null;
-
-  return (
-    <div className="relative mb-4 px-1.5" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
-      >
-        <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: activeColour }} />
-        <span className="truncate flex-1 text-left">{activeLabel}</span>
-        <ChevronDown size={15} className={`text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-
-      {open && (
-        <div className="animate-menu-in absolute left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden z-30">
-          <button
-            onClick={() => {
-              setActiveProfileId(null);
-              setOpen(false);
-            }}
-            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
-          >
-            <Layers size={15} className="text-slate-400 shrink-0" />
-            <span className="flex-1 text-left">All Profiles</span>
-            {activeProfileId === null && <Check size={15} className="text-brand-600 shrink-0" />}
-          </button>
-
-          <div className="border-t border-slate-100 dark:border-slate-700" />
-
-          {profiles.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => {
-                setActiveProfileId(p.id);
-                setOpen(false);
-              }}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
-            >
-              <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: p.colour }} />
-              <span className="flex-1 text-left truncate">{p.name}</span>
-              {activeProfileId === p.id && <Check size={15} className="text-brand-600 shrink-0" />}
-            </button>
-          ))}
-
-          <div className="border-t border-slate-100 dark:border-slate-700" />
-
-          <button
-            onClick={() => {
-              setOpen(false);
-              navigate('/settings', { state: { tab: 'profiles' } });
-            }}
-            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
-          >
-            <Settings size={15} className="text-slate-400 shrink-0" />
-            Manage Profiles
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function Sidebar() {
   const lockEnabled = useAppLockStore((s) => s.enabled);
   const lockNow = useAppLockStore((s) => s.lockNow);
@@ -163,9 +74,9 @@ export default function Sidebar() {
       "
     >
       <div className="px-1.5 mb-6 flex items-center justify-between gap-2">
-        <span className="flex items-center gap-2 min-w-0">
-          <img src="/logo-icon.png" alt="Aurafin" className="w-6 h-6 rounded-lg shrink-0" />
-          <span className="font-luxury text-lg font-semibold text-brand-800 dark:text-brand-200 tracking-tight">
+        <span className="flex items-center gap-2.5 min-w-0">
+          <AppLogo className="w-9 h-9 rounded-lg shrink-0" />
+          <span className="font-luxury text-2xl font-semibold text-brand-800 dark:text-brand-200 tracking-tight">
             Aurafin<span className="text-brand-500">.</span>
           </span>
         </span>

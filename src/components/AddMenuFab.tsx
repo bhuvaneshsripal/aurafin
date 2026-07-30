@@ -2,8 +2,8 @@ import { useState } from 'react';
 import {
   Plus,
   X,
-  ArrowUpRight,
-  ArrowDownRight,
+  ArrowUpCircle,
+  ArrowDownCircle,
   ArrowLeftRight,
   Layers,
   Landmark,
@@ -21,7 +21,7 @@ export type AddMenuType =
 type MenuItem = {
   key: AddMenuType;
   label: string;
-  icon: typeof ArrowUpRight;
+  icon: typeof ArrowUpCircle;
   iconClass: string;
 };
 
@@ -43,8 +43,8 @@ export default function AddMenuFab({ onSelect }: { onSelect: (type: AddMenuType)
   const [open, setOpen] = useState(false);
 
   const cashflowItems: MenuItem[] = [
-    { key: 'expense', label: 'Expense', icon: ArrowUpRight, iconClass: 'text-orange-500' },
-    { key: 'income', label: 'Income', icon: ArrowDownRight, iconClass: 'text-emerald-700' },
+    { key: 'expense', label: 'Expense', icon: ArrowDownCircle, iconClass: 'text-orange-500' },
+    { key: 'income', label: 'Income', icon: ArrowUpCircle, iconClass: 'text-emerald-700' },
     { key: 'transfer', label: 'Transfer', icon: ArrowLeftRight, iconClass: 'text-sky-500' },
   ];
 

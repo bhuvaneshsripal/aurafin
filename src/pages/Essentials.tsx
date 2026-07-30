@@ -23,6 +23,7 @@ import {
   type RiskLevel,
 } from '../utils/financialHealth';
 import Modal from '../components/Modal';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import Amount from '../components/Amount';
 import type { Goal } from '../types';
 import { CURRENCIES, formatCurrency } from '../utils/currency';
@@ -539,6 +540,7 @@ function GoalsTab() {
   const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Goal | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Goal | null>(null);
 
   const goals = activeProfileId ? allGoals.filter((g) => g.profileId === activeProfileId) : allGoals;
   const assets = activeProfileId ? allAssets.filter((a) => a.profileId === activeProfileId) : allAssets;
@@ -555,6 +557,12 @@ function GoalsTab() {
   const handleDelete = async (id: string) => {
     if (!user) return;
     await removeDoc(user.uid, 'goals', id);
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    await handleDelete(pendingDelete.id);
+    setPendingDelete(null);
   };
 
   const handleSave = async (goal: Goal) => {
@@ -596,7 +604,7 @@ function GoalsTab() {
                   >
                     <Pencil size={16} />
                   </button>
-                  <button onClick={() => handleDelete(g.id)} className="text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400">
+                  <button onClick={() => setPendingDelete(g)} className="text-slate-400 dark:text-slate-500 hover:text-green-600 dark:hover:text-green-400">
                     <Trash2 size={16} />
                   </button>
                 </div>
@@ -632,6 +640,14 @@ function GoalsTab() {
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit Goal' : 'Add Goal'}>
         <GoalForm initial={editing} onSave={handleSave} />
       </Modal>
+
+      <ConfirmDeleteModal
+        open={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={confirmDelete}
+        title="Delete this goal?"
+        description={<>This will permanently delete <strong>{pendingDelete?.name}</strong>. This can't be undone.</>}
+      />
     </div>
   );
 }

@@ -19,6 +19,25 @@ interface AuthState {
   logout: () => Promise<void>;
 }
 
+// Firebase's own local-persistence layer writes a "firebase:authUser:..."
+// key to localStorage the moment someone signs in, and only clears it on
+// sign-out. Its presence means "a session should exist" — so on refresh we
+// can tell apart "definitely never logged in" (safe to show Login almost
+// immediately) from "was logged in, just waiting on Firebase to confirm it"
+// (worth waiting longer, so a slow network doesn't flash the login screen
+// for an already-signed-in person).
+function hasPersistedSession(): boolean {
+  try {
+    return Object.keys(localStorage).some(
+      (key) => key.startsWith('firebase:authUser:') && localStorage.getItem(key)
+    );
+  } catch {
+    // localStorage can throw in some private/locked-down browser modes —
+    // treat that as "unknown", not "definitely no session".
+    return false;
+  }
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   loading: true,
@@ -41,12 +60,18 @@ export const useAuthStore = create<AuthState>((set) => ({
     // Safety net: on some mobile browsers/PWAs (storage restrictions, slow
     // networks, privacy-shield extensions), Firebase's auth-state check can
     // stall and never call back at all. Rather than hang on "Loading…"
-    // forever, fall through to the Login screen after a few seconds — if
-    // the person is actually still signed in, onAuthStateChanged will still
-    // fire whenever it does resolve and log them back in automatically.
+    // forever, fall through eventually — if the person is actually still
+    // signed in, onAuthStateChanged will still fire whenever it does
+    // resolve and log them back in automatically.
+    //
+    // The timeout is longer when a persisted session exists, so a slow
+    // network doesn't cause an already-logged-in person to see the Login
+    // screen flash up before the real auth state arrives — they just see
+    // the loading spinner a little longer instead.
+    const fallbackDelay = hasPersistedSession() ? 12000 : 2500;
     setTimeout(() => {
       if (!resolved) set({ loading: false });
-    }, 2500);
+    }, fallbackDelay);
   },
   loginWithGoogle: async () => {
     await signInWithPopup(auth, googleProvider);

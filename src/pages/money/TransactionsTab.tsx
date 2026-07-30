@@ -6,6 +6,7 @@ import { useHouseholdProfilesStore } from '../../store/householdProfilesStore';
 import { upsertDoc, removeDoc } from '../../hooks/useFirestoreSync';
 import { exportToCsv } from '../../utils/exportCsv';
 import Modal from '../../components/Modal';
+import ConfirmDeleteModal from '../../components/ConfirmDeleteModal';
 import Amount from '../../components/Amount';
 import type { Transaction, TransactionType } from '../../types';
 import { CURRENCIES } from '../../utils/currency';
@@ -20,6 +21,7 @@ export default function TransactionsTab() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalType, setModalType] = useState<TransactionType>('expense');
   const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -36,6 +38,12 @@ export default function TransactionsTab() {
   const handleDelete = async (id: string) => {
     if (!user) return;
     await removeDoc(user.uid, 'transactions', id);
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDeleteId) return;
+    await handleDelete(pendingDeleteId);
+    setPendingDeleteId(null);
   };
 
   const handleSave = async (t: Transaction) => {
@@ -136,8 +144,8 @@ export default function TransactionsTab() {
                 <Amount value={t.amount} currency={t.currency} />
               </span>
               <button
-                onClick={() => handleDelete(t.id)}
-                className="tap-scale text-slate-300 dark:text-slate-600 hover:text-red-500 p-1"
+                onClick={() => setPendingDeleteId(t.id)}
+                className="tap-scale text-slate-300 dark:text-slate-600 hover:text-green-600 dark:hover:text-green-400 p-1"
               >
                 <Trash2 size={16} />
               </button>
@@ -192,7 +200,7 @@ export default function TransactionsTab() {
                   <Amount value={t.amount} currency={t.currency} />
                 </td>
                 <td className="px-4 py-3">
-                  <button onClick={() => handleDelete(t.id)} className="text-slate-400 hover:text-red-500">
+                  <button onClick={() => setPendingDeleteId(t.id)} className="text-slate-400 hover:text-green-600 dark:hover:text-green-400">
                     <Trash2 size={18} />
                   </button>
                 </td>
@@ -226,6 +234,14 @@ export default function TransactionsTab() {
       >
         <TransactionForm initialType={modalType} onSave={handleSave} />
       </Modal>
+
+      <ConfirmDeleteModal
+        open={!!pendingDeleteId}
+        onClose={() => setPendingDeleteId(null)}
+        onConfirm={confirmDelete}
+        title="Delete this transaction?"
+        description="This will permanently delete this transaction. This can't be undone."
+      />
     </div>
   );
 }

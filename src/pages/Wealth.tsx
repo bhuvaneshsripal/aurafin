@@ -38,6 +38,7 @@ import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import { upsertDoc, removeDoc } from '../hooks/useFirestoreSync';
 import { exportToCsv } from '../utils/exportCsv';
 import Modal from '../components/Modal';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import type { Asset, AssetClass, Liability, LiabilityClass } from '../types';
 import { CURRENCIES, formatPreciseCurrency, maskPreciseAmount, isZeroAmount } from '../utils/currency';
 import {
@@ -965,7 +966,7 @@ function AssetsTab({
                   <button
                     onClick={() => setConfirmBulkDeleteOpen(true)}
                     title="Delete"
-                    className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-red-50 text-red-500"
+                    className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-green-50 text-green-600"
                   >
                     <Trash2 size={16} />
                   </button>
@@ -1136,7 +1137,7 @@ function AssetsTab({
                       <button
                         onClick={() => setConfirmDeleteAsset(a)}
                         title="Delete"
-                        className="text-slate-400 hover:text-red-500 p-1"
+                        className="text-slate-400 hover:text-green-600 p-1"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -1196,7 +1197,7 @@ function AssetsTab({
                     <button onClick={() => openEdit(a)} className="text-slate-400 hover:text-brand-600">
                       <Pencil size={16} />
                     </button>
-                    <button onClick={() => setConfirmDeleteAsset(a)} className="text-slate-400 hover:text-red-500">
+                    <button onClick={() => setConfirmDeleteAsset(a)} className="text-slate-400 hover:text-green-600">
                       <Trash2 size={16} />
                     </button>
                   </div>
@@ -1230,7 +1231,7 @@ function AssetsTab({
               if (confirmDeleteAsset) await handleDelete(confirmDeleteAsset.id);
               setConfirmDeleteAsset(null);
             }}
-            className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-lg text-sm font-medium"
+            className="flex-1 bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-sm font-medium"
           >
             Delete
           </button>
@@ -1265,7 +1266,7 @@ function AssetsTab({
               setSelectedIds(new Set());
               setConfirmBulkDeleteOpen(false);
             }}
-            className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-lg text-sm font-medium"
+            className="flex-1 bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-sm font-medium"
           >
             Delete All Selected
           </button>
@@ -1345,7 +1346,7 @@ function AssetDetailPage({
         <button
           onClick={() => setConfirmDeleteOpen(true)}
           title="Delete"
-          className="h-9 w-9 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50 shrink-0"
+          className="h-9 w-9 flex items-center justify-center rounded-lg text-green-600 hover:bg-green-50 shrink-0"
         >
           <Trash2 size={16} />
         </button>
@@ -1367,7 +1368,7 @@ function AssetDetailPage({
               setConfirmDeleteOpen(false);
               onDelete(asset.id);
             }}
-            className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-lg text-sm font-medium"
+            className="flex-1 bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-sm font-medium"
           >
             Delete
           </button>
@@ -1891,7 +1892,7 @@ function AssetDetailsForm({
                   type="button"
                   onClick={() => removePurchaseLot(lot.id)}
                   disabled={purchaseLots.length === 1}
-                  className="h-[42px] w-[42px] shrink-0 flex items-center justify-center border border-slate-200 rounded-lg text-slate-400 hover:text-red-500 hover:border-red-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="h-[42px] w-[42px] shrink-0 flex items-center justify-center border border-slate-200 rounded-lg text-slate-400 hover:text-green-600 hover:border-green-200 disabled:opacity-30 disabled:cursor-not-allowed"
                   title="Remove this purchase"
                 >
                   <Trash2 size={16} />
@@ -2234,10 +2235,17 @@ function LiabilitiesTab({
   const user = useAuthStore((s) => s.user);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Liability | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Liability | null>(null);
 
   const handleDelete = async (id: string) => {
     if (!user) return;
     await removeDoc(user.uid, 'liabilities', id);
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    await handleDelete(pendingDelete.id);
+    setPendingDelete(null);
   };
 
   const handleSave = async (liability: Liability) => {
@@ -2302,7 +2310,7 @@ function LiabilitiesTab({
                     >
                       <Pencil size={18} />
                     </button>
-                    <button onClick={() => handleDelete(l.id)} className="text-slate-400 hover:text-red-500">
+                    <button onClick={() => setPendingDelete(l)} className="text-slate-400 hover:text-green-600">
                       <Trash2 size={18} />
                     </button>
                   </div>
@@ -2331,6 +2339,14 @@ function LiabilitiesTab({
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Edit Liability">
         {editing && <LiabilityDetailsForm initial={editing} onSave={handleSave} />}
       </Modal>
+
+      <ConfirmDeleteModal
+        open={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={confirmDelete}
+        title="Delete this liability?"
+        description={<>This will permanently delete <strong>{pendingDelete?.name}</strong>. This can't be undone.</>}
+      />
     </div>
   );
 }

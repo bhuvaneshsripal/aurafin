@@ -5,6 +5,7 @@ import { useLiabilitiesStore } from '../../store/liabilitiesStore';
 import { useAuthStore } from '../../store/authStore';
 import { upsertDoc, removeDoc } from '../../hooks/useFirestoreSync';
 import Modal from '../../components/Modal';
+import ConfirmDeleteModal from '../../components/ConfirmDeleteModal';
 import Amount from '../../components/Amount';
 import { CURRENCIES } from '../../utils/currency';
 import { COMMON_BANKS } from '../../utils/banks';
@@ -39,6 +40,7 @@ interface AccountsTabProps {
 }
 
 export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
+  const [pendingDelete, setPendingDelete] = useState<AccountRow | null>(null);
   const assets = useAssetsStore((s) => s.assets);
   const liabilities = useLiabilitiesStore((s) => s.liabilities);
   const user = useAuthStore((s) => s.user);
@@ -79,6 +81,12 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
   const handleDelete = async (row: AccountRow) => {
     if (!user) return;
     await removeDoc(user.uid, row.kind === 'asset' ? 'assets' : 'liabilities', row.id);
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    await handleDelete(pendingDelete);
+    setPendingDelete(null);
   };
 
   const handleSave = async (form: {
@@ -167,8 +175,8 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
                 <Amount value={row.value} currency={row.currency} />
               </span>
               <button
-                onClick={() => handleDelete(row)}
-                className="tap-scale text-slate-300 dark:text-slate-600 hover:text-red-500 p-1 shrink-0"
+                onClick={() => setPendingDelete(row)}
+                className="tap-scale text-slate-300 dark:text-slate-600 hover:text-green-600 dark:hover:text-green-400 p-1 shrink-0"
               >
                 <Trash2 size={16} />
               </button>
@@ -193,6 +201,14 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
       <Modal open={open} onClose={() => onOpenChange(false)} title="Add Account" widthClassName="max-w-lg">
         <AccountForm onSave={handleSave} />
       </Modal>
+
+      <ConfirmDeleteModal
+        open={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={confirmDelete}
+        title="Delete this account?"
+        description={<>This will permanently delete <strong>{pendingDelete?.name}</strong>. This can't be undone.</>}
+      />
     </div>
   );
 }
