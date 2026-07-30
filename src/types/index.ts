@@ -191,6 +191,10 @@ export interface HouseholdProfile {
   /** Hex colour for the avatar chip. */
   colour: string;
   createdAt: number;
+  /** Whether this is the account's default profile — the one a fresh
+   *  login on a *new* device should open to, instead of "All Profiles".
+   *  Exactly one profile should have this set at a time. */
+  isDefault?: boolean;
 }
 
 /** Single doc (id: 'status') tracking this account's Premium state.

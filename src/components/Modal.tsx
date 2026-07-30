@@ -19,8 +19,11 @@ export default function Modal({ open, onClose, title, children, widthClassName =
       <div className={`bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full ${widthClassName} p-6 max-h-[90vh] overflow-y-auto`}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{title}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-            <X size={20} />
+          <button
+            onClick={onClose}
+            className="icon-outline-green tap-scale h-8 w-8 flex items-center justify-center"
+          >
+            <X size={16} />
           </button>
         </div>
         {children}

@@ -1,16 +1,22 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 /**
- * The Aurafin coin logo. Clicking it plays a one-shot 3D coin-flip
- * animation (see `.logo-flip` / `logo-coin-flip` in index.css) — a nice
- * little easter egg, similar to clicking a brand mark elsewhere.
+ * The Aurafin coin logo. Plays a one-shot 3D coin-flip animation
+ * (see `.logo-flip` / `logo-coin-flip` in index.css) automatically
+ * every 3 seconds, and also on click — a nice little easter egg,
+ * similar to clicking a brand mark elsewhere.
  *
- * `key={spin}` forces React to remount the <img> on every click so the
- * CSS animation restarts cleanly even on rapid repeat clicks, instead of
- * being a no-op because the class name didn't change.
+ * `key={spin}` forces React to remount the <img> on every trigger so the
+ * CSS animation restarts cleanly even back-to-back, instead of being a
+ * no-op because the class name didn't change.
  */
 export default function AppLogo({ className }: { className?: string }) {
   const [spin, setSpin] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setSpin((s) => s + 1), 3000);
+    return () => clearInterval(id);
+  }, []);
 
   return (
     <img

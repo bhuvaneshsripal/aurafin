@@ -86,7 +86,7 @@ export default function Sidebar() {
             onClick={lockNow}
             title="Lock Aurafin now"
             aria-label="Lock Aurafin now"
-            className="tap-scale h-8 w-8 flex items-center justify-center rounded-full text-slate-400 dark:text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 shrink-0"
+            className="icon-outline-green tap-scale h-8 w-8 flex items-center justify-center shrink-0"
           >
             <Lock size={16} />
           </button>

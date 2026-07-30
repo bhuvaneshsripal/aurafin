@@ -18,8 +18,6 @@ import {
   Loader2,
   CheckCircle2,
   Link2Off,
-  Eye,
-  Bell,
   Tag,
 } from 'lucide-react';
 import {
@@ -1323,11 +1321,6 @@ function AssetDetailPage({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end gap-4 text-slate-400">
-        <Eye size={20} />
-        <Bell size={20} />
-      </div>
-
       <div className="flex items-center gap-3">
         <button onClick={onBack} className="p-2 -ml-2 rounded-lg hover:bg-slate-100 text-slate-500 shrink-0">
           <ArrowLeft size={18} />

@@ -124,6 +124,21 @@ export async function removeAvatar(uid: string) {
 }
 
 /**
+ * Marks one profile as the account's default (the one a fresh login on a
+ * new device should open to) and un-marks every other profile, in a single
+ * batch. This is what makes "Set default" in Settings apply everywhere the
+ * account is signed in, not just on the device that set it.
+ */
+export async function setDefaultProfile(uid: string, allProfileIds: string[], defaultId: string) {
+  const batch = writeBatch(db);
+  allProfileIds.forEach((id) => {
+    const ref = doc(db, 'users', uid, 'profiles', id);
+    batch.set(ref, { isDefault: id === defaultId }, { merge: true });
+  });
+  await batch.commit();
+}
+
+/**
  * Backfill a missing `profileId` on legacy records (assets, liabilities,
  * goals, transactions created before household profiles existed). Only
  * called when there's exactly one profile, since that's the only case

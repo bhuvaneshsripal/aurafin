@@ -208,6 +208,15 @@ a {
   will-change: transform;
 }
 
+/* Continuous version of the same coin flip, used on full-page/route loading
+   screens instead of the one-shot click animation above — keeps looping
+   for as long as the app or a lazy-loaded page is still fetching. */
+.logo-loading-spin {
+  animation: logo-coin-flip 1100ms cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
 /* Each row in that menu lifts slightly on hover for a tactile feel */
 .menu-row-3d {
   transition: transform 120ms cubic-bezier(0.16, 1, 0.3, 1), background-color 120ms ease;
@@ -331,6 +340,31 @@ a {
 
 .mini-fab:active {
   transform: translateY(1px) scale(0.95);
+}
+
+/* Green-outlined circular icon badge — used for secondary/utility icon
+   buttons (profile photo edit, close buttons, small toggles) so they carry
+   a consistent brand accent instead of plain gray. Same round-exemption
+   pattern as .fab-button/.mini-fab above, since the global `* { border-
+   radius: 0 }` rule needs a higher-specificity class to opt back in. */
+.icon-outline-green {
+  border-radius: 9999px !important;
+  border: 2px solid var(--color-brand-500);
+  color: var(--color-brand-600);
+  background: white;
+  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.dark .icon-outline-green {
+  border-color: var(--color-brand-400);
+  color: var(--color-brand-300);
+  background: var(--color-slate-800);
+}
+
+.icon-outline-green:hover {
+  background: var(--color-brand-600);
+  color: white;
+  border-color: var(--color-brand-600);
 }
 
 .no-scrollbar {

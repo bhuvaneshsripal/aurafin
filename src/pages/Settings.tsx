@@ -8,7 +8,7 @@ import {
   sendPasswordResetEmail,
   EmailAuthProvider,
 } from 'firebase/auth';
-import { Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, Crown, Copy, ChevronRight, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, Camera, X } from 'lucide-react';
+import { Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, Crown, Copy, ChevronRight, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, Camera, X, Download, Upload } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
 import { useAppLockStore } from '../store/appLockStore';
@@ -24,11 +24,15 @@ import {
   getSecurityQuestion,
   verifySecurityAnswer,
 } from '../utils/securityQuestion';
-import { deleteAllUserData, upsertDoc, removeDoc, saveAvatar, removeAvatar, assignOrphanDataToProfile, reassignProfileData } from '../hooks/useFirestoreSync';
+import { deleteAllUserData, upsertDoc, removeDoc, saveAvatar, removeAvatar, assignOrphanDataToProfile, reassignProfileData, setDefaultProfile, bulkUpsertDocs } from '../hooks/useFirestoreSync';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useGoalsStore } from '../store/goalsStore';
 import { useTransactionsStore } from '../store/transactionsStore';
+import { useSnapshotsStore } from '../store/snapshotsStore';
+import { useBudgetStore } from '../store/budgetStore';
+import { useFinancialProfileStore } from '../store/financialProfileStore';
+import { buildBackup, downloadBackupJson, readBackupFile, countBackupItems, type AurafinBackup } from '../utils/backup';
 import { useHouseholdProfilesStore, PROFILE_COLOURS } from '../store/householdProfilesStore';
 import { useInstallPromptStore, triggerInstallPrompt } from '../store/installPromptStore';
 import { usePremiumStore, selectIsPremium } from '../store/premiumStore';
@@ -117,9 +121,9 @@ function AvatarEditor() {
 
         <label
           title="Change photo"
-          className="tap-scale absolute -bottom-0.5 -right-0.5 h-6 w-6 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-center cursor-pointer text-slate-500 dark:text-slate-300 hover:text-brand-600 dark:hover:text-brand-400"
+          className="icon-outline-green tap-scale absolute -bottom-1 -right-1 h-8 w-8 shadow-sm flex items-center justify-center cursor-pointer"
         >
-          <Camera size={12} />
+          <Camera size={16} />
           <input
             type="file"
             accept="image/*"
@@ -1079,17 +1083,19 @@ function ProfilesTab() {
 
   const handleAdd = async () => {
     if (!user || !name.trim()) return;
+    const isFirstProfile = profiles.length === 0;
     const profile: HouseholdProfile = {
       id: crypto.randomUUID(),
       name: name.trim(),
       colour,
       createdAt: Date.now(),
+      isDefault: isFirstProfile,
     };
     await upsertDoc(user.uid, 'profiles', profile);
     // Only the very first profile ever created should auto-become active/
     // default. Later ones must be set default explicitly — adding a 2nd,
     // 3rd, etc. profile should never silently bump the current default.
-    if (profiles.length === 0) setActiveProfileId(profile.id);
+    if (isFirstProfile) setActiveProfileId(profile.id);
     setAddOpen(false);
     setName('');
     setColour(PROFILE_COLOURS[0]);
@@ -1108,8 +1114,12 @@ function ProfilesTab() {
     setEditingProfile(null);
   };
 
-  const handleSetDefault = (id: string) => {
+  const handleSetDefault = async (id: string) => {
     setActiveProfileId(id);
+    if (!user) return;
+    // Persisted account-wide (not just this device), so any other device
+    // signing into this account opens straight to this profile too.
+    await setDefaultProfile(user.uid, profiles.map((p) => p.id), id);
   };
 
   const handleDelete = async (id: string) => {
@@ -1546,6 +1556,19 @@ function DataTab() {
   const [confirmText, setConfirmText] = useState('');
   const [status, setStatus] = useState<'idle' | 'deleting' | 'error'>('idle');
 
+  const assets = useAssetsStore((s) => s.assets);
+  const liabilities = useLiabilitiesStore((s) => s.liabilities);
+  const goals = useGoalsStore((s) => s.goals);
+  const transactions = useTransactionsStore((s) => s.transactions);
+  const snapshots = useSnapshotsStore((s) => s.snapshots);
+  const budgets = useBudgetStore((s) => s.items);
+  const financialProfile = useFinancialProfileStore((s) => s.profile);
+  const profiles = useHouseholdProfilesStore((s) => s.profiles);
+
+  const [pendingRestore, setPendingRestore] = useState<AurafinBackup | null>(null);
+  const [restoreError, setRestoreError] = useState('');
+  const [restoreStatus, setRestoreStatus] = useState<'idle' | 'restoring' | 'done'>('idle');
+
   const closeModal = () => {
     setConfirmOpen(false);
     setConfirmText('');
@@ -1563,8 +1586,105 @@ function DataTab() {
     }
   };
 
+  const handleDownloadBackup = () => {
+    const backup = buildBackup({
+      assets,
+      liabilities,
+      goals,
+      transactions,
+      snapshots,
+      budgets,
+      financialProfile,
+      profiles,
+    });
+    downloadBackupJson(backup);
+  };
+
+  const handlePickBackupFile = async (file: File | null) => {
+    if (!file) return;
+    setRestoreError('');
+    try {
+      const backup = await readBackupFile(file);
+      setPendingRestore(backup);
+    } catch (err) {
+      setRestoreError(err instanceof Error ? err.message : "Couldn't read that file.");
+    }
+  };
+
+  const closeRestoreModal = () => {
+    setPendingRestore(null);
+    setRestoreStatus('idle');
+    setRestoreError('');
+  };
+
+  const handleConfirmRestore = async () => {
+    if (!user || !pendingRestore) return;
+    setRestoreStatus('restoring');
+    try {
+      const { data } = pendingRestore;
+      if (data.assets?.length) await bulkUpsertDocs(user.uid, 'assets', data.assets);
+      if (data.liabilities?.length) await bulkUpsertDocs(user.uid, 'liabilities', data.liabilities);
+      if (data.goals?.length) await bulkUpsertDocs(user.uid, 'goals', data.goals);
+      if (data.transactions?.length) await bulkUpsertDocs(user.uid, 'transactions', data.transactions);
+      if (data.snapshots?.length) await bulkUpsertDocs(user.uid, 'snapshots', data.snapshots);
+      if (data.budgets?.length) await bulkUpsertDocs(user.uid, 'budgets', data.budgets);
+      if (data.profiles?.length) await bulkUpsertDocs(user.uid, 'profiles', data.profiles);
+      if (data.financialProfile?.[0]) await upsertDoc(user.uid, 'financialProfile', data.financialProfile[0]);
+      setRestoreStatus('done');
+    } catch {
+      setRestoreError('Something went wrong while restoring. Please try again.');
+      setRestoreStatus('idle');
+    }
+  };
+
   return (
     <>
+      <Card>
+        <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Backup</h2>
+        <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
+          Download everything in your account as a single JSON file, and restore it back into any
+          account later — useful before switching devices or just as a safety copy.
+        </p>
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+            <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Download backup</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Saves all assets, liabilities, goals, transactions, snapshots, budgets, and profiles.
+            </p>
+            <button
+              onClick={handleDownloadBackup}
+              className="mt-3 flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+            >
+              <Download size={16} />
+              Download JSON Backup
+            </button>
+          </div>
+
+          <div className="flex-1 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+            <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Restore from backup</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Adds the items from a backup file into this account. Existing data is kept.
+            </p>
+            <label className="mt-3 inline-flex items-center gap-2 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer">
+              <Upload size={16} />
+              Choose Backup File
+              <input
+                type="file"
+                accept="application/json"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  handlePickBackupFile(file);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+            {restoreError && !pendingRestore && <p className="text-xs text-red-500 mt-2">{restoreError}</p>}
+          </div>
+        </div>
+      </Card>
+
       <Card>
         <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Data</h2>
         <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
@@ -1591,6 +1711,46 @@ function DataTab() {
           </div>
         </div>
       </Card>
+
+      <Modal open={!!pendingRestore} onClose={closeRestoreModal} title="Restore this backup?">
+        {pendingRestore && (
+          <>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+              This backup was made on <strong>{new Date(pendingRestore.exportedAt).toLocaleString()}</strong> and
+              contains <strong>{countBackupItems(pendingRestore)}</strong> item{countBackupItems(pendingRestore) === 1 ? '' : 's'}.
+              They'll be added into <strong>{user?.email}</strong> — anything already in your account stays as is,
+              and items with the same ID as ones already in your account will be overwritten with the backup's version.
+            </p>
+            {restoreError && <p className="text-xs text-red-500 mb-4">{restoreError}</p>}
+            {restoreStatus === 'done' ? (
+              <div className="flex gap-3">
+                <button
+                  onClick={closeRestoreModal}
+                  className="flex-1 bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-sm font-medium"
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-3">
+                <button
+                  onClick={closeRestoreModal}
+                  className="flex-1 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmRestore}
+                  disabled={restoreStatus === 'restoring'}
+                  className="flex-1 bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white py-2.5 rounded-lg text-sm font-medium"
+                >
+                  {restoreStatus === 'restoring' ? 'Restoring...' : 'Restore'}
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </Modal>
 
       <Modal open={confirmOpen} onClose={closeModal} title="Delete all data?">
         <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">

@@ -26,6 +26,7 @@ import PrivacyFab from './components/PrivacyFab';
 import LockScreen from './components/LockScreen';
 import InstallPromptModal from './components/InstallPromptModal';
 import ErrorBoundary from './components/ErrorBoundary';
+import LoadingScreen from './components/LoadingScreen';
 import Login from './pages/Login';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 import type { Asset, Liability, Goal, Transaction, Snapshot, BudgetItem, FinancialProfile, HouseholdProfile, PremiumStatus } from './types';
@@ -42,9 +43,7 @@ const InstallApp = lazyWithRetry(() => import('./pages/InstallApp'));
 const Feedback = lazyWithRetry(() => import('./pages/Feedback'));
 
 function RouteFallback() {
-  return (
-    <div className="flex items-center justify-center py-24 text-slate-400 text-sm">Loading...</div>
-  );
+  return <LoadingScreen fullScreen={false} />;
 }
 
 function AppShell() {
@@ -184,11 +183,7 @@ export default function App() {
   }, [init, initTheme, initPrivacy, initLock, initDisplaySettings]);
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-slate-400 text-base">
-        Loading...
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   if (!user) {

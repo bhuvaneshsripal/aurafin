@@ -96,9 +96,9 @@ export default function BottomNav() {
               <h3 className="text-base font-semibold text-slate-900 dark:text-white">More</h3>
               <button
                 onClick={() => setMoreOpen(false)}
-                className="h-9 w-9 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="icon-outline-green tap-scale h-9 w-9 flex items-center justify-center"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
             <div className="grid grid-cols-3 gap-2 px-5 pb-2 pt-2">

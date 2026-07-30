@@ -18,10 +18,10 @@ export default function InstallPromptModal() {
       >
         <button
           onClick={() => setShowManualPrompt(false)}
-          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+          className="icon-outline-green tap-scale absolute top-4 right-4 h-8 w-8 flex items-center justify-center"
           aria-label="Close"
         >
-          <X size={18} />
+          <X size={16} />
         </button>
 
         <div className="flex items-center gap-3 mb-5">
