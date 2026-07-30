@@ -117,6 +117,9 @@ export interface Asset {
   icon?: string;
   /** Date (ISO yyyy-mm-dd) the entered balance is as-of. */
   balanceAsOf?: string;
+  /** Which household profile (see HouseholdProfile) this asset belongs to.
+   *  Undefined means it isn't assigned to any specific member yet. */
+  profileId?: string;
 }
 
 export interface Liability {
@@ -135,6 +138,8 @@ export interface Liability {
   icon?: string;
   /** Date (ISO yyyy-mm-dd) the entered balance is as-of. */
   balanceAsOf?: string;
+  /** Which household profile this liability belongs to. */
+  profileId?: string;
 }
 
 export interface FinancialProfile {
@@ -159,6 +164,8 @@ export interface Goal {
    *  (total assets − total liabilities) instead of the manually entered
    *  currentAmount. */
   linkedToNetWorth?: boolean;
+  /** Which household profile this goal belongs to. */
+  profileId?: string;
 }
 
 export type TransactionType = 'income' | 'expense';
@@ -171,6 +178,35 @@ export interface Transaction {
   currency: string;
   date: string;
   note?: string;
+  /** Which household profile this transaction belongs to. */
+  profileId?: string;
+}
+
+/** A household member (e.g. "Dad", "Mom", "Kid") whose assets, liabilities,
+ *  goals, and transactions can be viewed separately within one login.
+ *  Free accounts get one profile; adding more requires Premium. */
+export interface HouseholdProfile {
+  id: string;
+  name: string;
+  /** Hex colour for the avatar chip. */
+  colour: string;
+  createdAt: number;
+}
+
+/** Single doc (id: 'status') tracking this account's Premium state.
+ *  Client-side only — see utils/premiumCodes.ts for important caveats
+ *  about what this can and can't actually enforce/secure. */
+export interface PremiumStatus {
+  id: string;
+  isPremium: boolean;
+  /** True if unlocked via the developer master code rather than a normal purchase/code. */
+  isDeveloper?: boolean;
+  /** Which plan was redeemed, if any (developer unlocks don't set this). */
+  planId?: 'monthly' | 'quarterly' | 'lifetime';
+  redeemedCode?: string;
+  redeemedAt?: number;
+  /** Timestamp Premium access ends. Undefined = never expires (lifetime/developer). */
+  expiresAt?: number;
 }
 
 export interface BudgetItem {

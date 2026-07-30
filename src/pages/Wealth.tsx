@@ -34,11 +34,12 @@ import { useLivePricesStore } from '../store/livePricesStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useAuthStore } from '../store/authStore';
 import { useUiStore } from '../store/uiStore';
+import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import { upsertDoc, removeDoc } from '../hooks/useFirestoreSync';
 import { exportToCsv } from '../utils/exportCsv';
 import Modal from '../components/Modal';
 import type { Asset, AssetClass, Liability, LiabilityClass } from '../types';
-import { CURRENCIES, formatPreciseCurrency, maskPreciseAmount } from '../utils/currency';
+import { CURRENCIES, formatPreciseCurrency, maskPreciseAmount, isZeroAmount } from '../utils/currency';
 import {
   ASSET_TAXONOMY,
   LIABILITY_TAXONOMY,
@@ -113,6 +114,7 @@ function AddWealthPage({
   onClose: () => void;
 }) {
   const user = useAuthStore((s) => s.user);
+  const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
   const [entryType, setEntryType] = useState<EntryType>(initialEntryType);
   const [step, setStep] = useState<'category' | 'details'>('category');
   const [categoryKey, setCategoryKey] = useState<string | undefined>();
@@ -144,7 +146,7 @@ function AddWealthPage({
   const handleSaveAsset = async (asset: Asset) => {
     if (!user) return;
     try {
-      await upsertDoc(user.uid, 'assets', asset);
+      await upsertDoc(user.uid, 'assets', asset.profileId ? asset : { ...asset, profileId: activeProfileId ?? undefined });
       onClose();
     } catch (err) {
       console.error('Failed to save asset', err);
@@ -155,7 +157,11 @@ function AddWealthPage({
   const handleSaveLiability = async (liability: Liability) => {
     if (!user) return;
     try {
-      await upsertDoc(user.uid, 'liabilities', liability);
+      await upsertDoc(
+        user.uid,
+        'liabilities',
+        liability.profileId ? liability : { ...liability, profileId: activeProfileId ?? undefined }
+      );
       onClose();
     } catch (err) {
       console.error('Failed to save liability', err);
@@ -403,7 +409,7 @@ function TotalStatCard({
   privacyMode: boolean;
 }) {
   const positive = pnl >= 0;
-  const isMasked = privacyMode && pnl !== 0;
+  const isMasked = privacyMode && !isZeroAmount(pnl, 2);
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6">
       <p className="text-xs font-semibold tracking-wide text-slate-400 mb-4 sm:mb-5">{title}</p>
@@ -469,7 +475,9 @@ function AssetsTab({
   setTab: (t: Tab) => void;
   onAdd: () => void;
 }) {
-  const assets = useAssetsStore((s) => s.assets);
+  const allAssets = useAssetsStore((s) => s.assets);
+  const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
+  const assets = activeProfileId ? allAssets.filter((a) => a.profileId === activeProfileId) : allAssets;
   const livePrices = useLivePricesStore((s) => s.prices);
   const sipValues = useLivePricesStore((s) => s.sipValues);
   const user = useAuthStore((s) => s.user);
@@ -907,7 +915,7 @@ function AssetsTab({
                     </p>
                     {pnl !== undefined && (
                       <p className={`text-xs ${pnl >= 0 ? 'text-brand-600' : 'text-red-500'}`}>
-                        {privacyMode && pnl !== 0
+                        {privacyMode && !isZeroAmount(pnl, 2)
                           ? '••••••'
                           : `${pnl >= 0 ? '+' : ''}${formatPreciseCurrency(pnl, a.currency)}`}
                         {pnlPercent !== undefined && ` (${pnl >= 0 ? '+' : ''}${pnlPercent.toFixed(1)}%)`}
@@ -2218,7 +2226,11 @@ function LiabilitiesTab({
   setTab: (t: Tab) => void;
   onAdd: () => void;
 }) {
-  const liabilities = useLiabilitiesStore((s) => s.liabilities);
+  const allLiabilities = useLiabilitiesStore((s) => s.liabilities);
+  const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
+  const liabilities = activeProfileId
+    ? allLiabilities.filter((l) => l.profileId === activeProfileId)
+    : allLiabilities;
   const user = useAuthStore((s) => s.user);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Liability | null>(null);

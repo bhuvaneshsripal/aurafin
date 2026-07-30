@@ -38,6 +38,15 @@ export function formatCompact(value: number, currency: string = 'INR') {
   return formatted;
 }
 
+/** True if `value` rounds to 0 at the given display precision — guards
+ *  against floating-point residue (e.g. summing/subtracting many decimals
+ *  landing on 0.0000000001 instead of exactly 0) being treated as "real"
+ *  money and masked when it shouldn't be. */
+export function isZeroAmount(value: number, fractionDigits: number = 0) {
+  const factor = 10 ** fractionDigits;
+  return Math.round(value * factor) / factor === 0;
+}
+
 /**
  * Renders a currency amount honoring privacy mode — but only masks it when
  * there's actually something to hide. A zero/empty amount always shows as
@@ -50,7 +59,7 @@ export function maskAmount(
   privacyMode: boolean,
   options?: FormatCurrencyOptions
 ) {
-  if (privacyMode && value !== 0) {
+  if (privacyMode && !isZeroAmount(value, options?.fractionDigits ?? 0)) {
     return '••••••';
   }
   return formatCurrency(value, currency, options);

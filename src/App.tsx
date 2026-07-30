@@ -8,9 +8,14 @@ import { useTransactionsStore } from './store/transactionsStore';
 import { useSnapshotsStore } from './store/snapshotsStore';
 import { useBudgetStore } from './store/budgetStore';
 import { useFinancialProfileStore } from './store/financialProfileStore';
+import { useSyncStatusStore } from './store/syncStatusStore';
+import { useHouseholdProfilesStore } from './store/householdProfilesStore';
+import { usePremiumStore } from './store/premiumStore';
 import { useUiStore } from './store/uiStore';
 import { useAppLockStore } from './store/appLockStore';
-import { useFirestoreCollectionSync } from './hooks/useFirestoreSync';
+import { useDisplaySettingsStore } from './store/displaySettingsStore';
+import { useInstallPromptStore } from './store/installPromptStore';
+import { useFirestoreCollectionSync, assignOrphanDataToProfile } from './hooks/useFirestoreSync';
 import { useLivePrices } from './hooks/useLivePrices';
 import { useLiveSipValues } from './hooks/useLiveSipValues';
 import { useLiveGoldPrice } from './hooks/useLiveGoldPrice';
@@ -19,10 +24,11 @@ import Topbar from './components/Topbar';
 import BottomNav from './components/BottomNav';
 import PrivacyFab from './components/PrivacyFab';
 import LockScreen from './components/LockScreen';
+import InstallPromptModal from './components/InstallPromptModal';
 import ErrorBoundary from './components/ErrorBoundary';
 import Login from './pages/Login';
 import { lazyWithRetry } from './utils/lazyWithRetry';
-import type { Asset, Liability, Goal, Transaction, Snapshot, BudgetItem, FinancialProfile } from './types';
+import type { Asset, Liability, Goal, Transaction, Snapshot, BudgetItem, FinancialProfile, HouseholdProfile, PremiumStatus } from './types';
 
 const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'));
 const Wealth = lazyWithRetry(() => import('./pages/Wealth'));
@@ -47,7 +53,7 @@ function AppShell() {
     <div className="flex min-h-screen bg-cream-100 dark:bg-slate-950">
       <LockScreen />
       <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 app-scale">
         <Topbar />
         <main className="flex-1 p-4 pb-36 sm:p-6 sm:pb-36 md:p-8 md:pb-8 max-w-6xl mx-auto w-full">
           <ErrorBoundary key={location.pathname}>
@@ -71,8 +77,30 @@ function AppShell() {
       </div>
       <BottomNav />
       <PrivacyFab />
+      <InstallPromptModal />
     </div>
   );
+}
+
+function InstallPromptListener() {
+  const setDeferredPrompt = useInstallPromptStore((s) => s.setDeferredPrompt);
+  const setInstalled = useInstallPromptStore((s) => s.setInstalled);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    const onInstalled = () => setInstalled(true);
+    window.addEventListener('beforeinstallprompt', handler);
+    window.addEventListener('appinstalled', onInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler);
+      window.removeEventListener('appinstalled', onInstalled);
+    };
+  }, [setDeferredPrompt, setInstalled]);
+
+  return null;
 }
 
 function LivePriceSync() {
@@ -90,14 +118,51 @@ function DataSync() {
   const setSnapshots = useSnapshotsStore((s) => s.setSnapshots);
   const setBudgetItems = useBudgetStore((s) => s.setItems);
   const setFinancialProfile = useFinancialProfileStore((s) => s.setItems);
+  const setHouseholdProfiles = useHouseholdProfilesStore((s) => s.setProfiles);
+  const setPremiumItems = usePremiumStore((s) => s.setItems);
+  const setAssetsSynced = useSyncStatusStore((s) => s.setAssetsSynced);
+  const setLiabilitiesSynced = useSyncStatusStore((s) => s.setLiabilitiesSynced);
 
-  useFirestoreCollectionSync<Asset>('assets', setAssets);
-  useFirestoreCollectionSync<Liability>('liabilities', setLiabilities);
+  useFirestoreCollectionSync<Asset>('assets', setAssets, setAssetsSynced);
+  useFirestoreCollectionSync<Liability>('liabilities', setLiabilities, setLiabilitiesSynced);
   useFirestoreCollectionSync<Goal>('goals', setGoals);
   useFirestoreCollectionSync<Transaction>('transactions', setTransactions);
   useFirestoreCollectionSync<Snapshot>('snapshots', setSnapshots);
   useFirestoreCollectionSync<BudgetItem>('budgets', setBudgetItems);
   useFirestoreCollectionSync<FinancialProfile>('financialProfile', setFinancialProfile);
+  useFirestoreCollectionSync<HouseholdProfile>('profiles', setHouseholdProfiles);
+  useFirestoreCollectionSync<PremiumStatus>('premium', setPremiumItems);
+
+  // One-time backfill: data created before household profiles existed has
+  // no profileId. While there's exactly one profile, "whose data is this"
+  // is unambiguous, so quietly tag any orphaned records with it. This stops
+  // being safe (and stops running) the moment a second profile is added.
+  const user = useAuthStore((s) => s.user);
+  const profiles = useHouseholdProfilesStore((s) => s.profiles);
+  const assets = useAssetsStore((s) => s.assets);
+  const liabilities = useLiabilitiesStore((s) => s.liabilities);
+  const goals = useGoalsStore((s) => s.goals);
+  const transactions = useTransactionsStore((s) => s.transactions);
+
+  useEffect(() => {
+    if (!user || profiles.length !== 1) return;
+    const soleProfileId = profiles[0].id;
+    assignOrphanDataToProfile(user.uid, 'assets', assets, soleProfileId);
+    assignOrphanDataToProfile(user.uid, 'liabilities', liabilities, soleProfileId);
+    assignOrphanDataToProfile(user.uid, 'goals', goals, soleProfileId);
+    assignOrphanDataToProfile(user.uid, 'transactions', transactions, soleProfileId);
+  }, [user, profiles, assets, liabilities, goals, transactions]);
+
+  // Offline-safe fallback: if the server never confirms (no connection),
+  // don't leave the Net Worth figure in a skeleton state forever — show
+  // whatever the cache has after a few seconds.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setAssetsSynced(false);
+      setLiabilitiesSynced(false);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [setAssetsSynced, setLiabilitiesSynced]);
 
   return null;
 }
@@ -107,16 +172,22 @@ export default function App() {
   const initTheme = useUiStore((s) => s.initTheme);
   const initPrivacy = useUiStore((s) => s.initPrivacy);
   const initLock = useAppLockStore((s) => s.init);
+  const initDisplaySettings = useDisplaySettingsStore((s) => s.init);
 
   useEffect(() => {
     init();
     initTheme();
     initPrivacy();
     initLock();
-  }, [init, initTheme, initPrivacy, initLock]);
+    initDisplaySettings();
+  }, [init, initTheme, initPrivacy, initLock, initDisplaySettings]);
 
   if (loading) {
-    return <div className="min-h-screen bg-cream-100 dark:bg-slate-950" />;
+    return (
+      <div className="min-h-screen flex items-center justify-center text-slate-400 text-base">
+        Loading...
+      </div>
+    );
   }
 
   if (!user) {
@@ -127,6 +198,7 @@ export default function App() {
     <BrowserRouter>
       <DataSync />
       <LivePriceSync />
+      <InstallPromptListener />
       <AppShell />
     </BrowserRouter>
   );

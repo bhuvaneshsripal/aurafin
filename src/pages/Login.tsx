@@ -29,7 +29,7 @@ export default function Login() {
             alt="Aurafin logo"
             className="w-16 h-16 mx-auto mb-3 rounded-2xl shadow-sm"
           />
-          <h1 className="font-display text-4xl font-semibold text-slate-900 mb-2 tracking-tight">
+          <h1 className="font-luxury text-4xl font-semibold text-slate-900 mb-2 tracking-tight">
             Aurafin<span className="text-brand-500">.</span>
           </h1>
           <p className="text-base text-slate-500">Your whole financial picture, in one place.</p>

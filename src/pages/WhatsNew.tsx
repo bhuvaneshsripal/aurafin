@@ -5,7 +5,7 @@ export default function WhatsNew() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-slate-900 dark:text-white">What's New</h1>
-        <p className="text-slate-500 text-base mt-1">Latest updates and improvements to Aurafin.</p>
+        <p className="text-slate-500 text-base mt-1">Latest updates and improvements to <span className="font-luxury">Aurafin</span>.</p>
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 text-center">

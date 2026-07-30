@@ -4,7 +4,7 @@ import { X } from 'lucide-react';
 interface ModalProps {
   open: boolean;
   onClose: () => void;
-  title: string;
+  title: ReactNode;
   children: ReactNode;
   /** Tailwind max-width class for the modal panel. Defaults to 'max-w-md'
    *  — pass a wider one (e.g. 'max-w-xl') for forms with long text fields

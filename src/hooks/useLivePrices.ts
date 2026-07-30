@@ -13,7 +13,6 @@ export function useLivePrices() {
   const assets = useAssetsStore((s) => s.assets);
   const setPrices = useLivePricesStore((s) => s.setPrices);
   const setLoading = useLivePricesStore((s) => s.setLoading);
-  const setEquitiesInitialized = useLivePricesStore((s) => s.setEquitiesInitialized);
   const fetching = useRef(false);
 
   const equityAssets = assets.filter((a) => a.symbol && a.quantity && a.quantity > 0);
@@ -47,7 +46,6 @@ export function useLivePrices() {
         setLoading(false);
       } finally {
         fetching.current = false;
-        setEquitiesInitialized();
       }
     };
 
@@ -55,5 +53,5 @@ export function useLivePrices() {
     const id = setInterval(refresh, REFRESH_MS);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lookupKey, setPrices, setLoading, setEquitiesInitialized]);
+  }, [lookupKey, setPrices, setLoading]);
 }

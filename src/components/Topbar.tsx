@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Moon, Sun, Eye, EyeOff, Bell, ChevronDown, MoreVertical, Settings as SettingsIcon } from 'lucide-react';
+import { Moon, Sun, Eye, EyeOff, Bell, ChevronDown, MoreVertical, Settings as SettingsIcon, Lock } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useUiStore } from '../store/uiStore';
+import { useAppLockStore } from '../store/appLockStore';
 import Modal from './Modal';
 import QuickAddMenu from './QuickAddMenu';
 
@@ -10,6 +11,8 @@ export default function Topbar() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { theme, toggleTheme, privacyMode, togglePrivacy } = useUiStore();
+  const lockEnabled = useAppLockStore((s) => s.enabled);
+  const lockNow = useAppLockStore((s) => s.lockNow);
   const navigate = useNavigate();
 
   const [profileOpen, setProfileOpen] = useState(false);
@@ -39,9 +42,20 @@ export default function Topbar() {
         {/* Left: logo + app name (mobile only — desktop shows it in the Sidebar) */}
         <span className="md:hidden flex items-center gap-2 min-w-0">
           <img src="/logo-icon.png" alt="Aurafin" className="w-6 h-6 rounded-md shrink-0" />
-          <span className="font-display text-lg font-semibold text-brand-800 dark:text-brand-200 tracking-tight truncate">
+          <span className="font-luxury text-lg font-semibold text-brand-800 dark:text-brand-200 tracking-tight truncate">
             Aurafin<span className="text-brand-500">.</span>
           </span>
+          {lockEnabled && (
+            <button
+              type="button"
+              onClick={lockNow}
+              title="Lock Aurafin now"
+              aria-label="Lock Aurafin now"
+              className="tap-scale h-8 w-8 flex items-center justify-center rounded-full text-slate-400 dark:text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 shrink-0 ml-1"
+            >
+              <Lock size={16} />
+            </button>
+          )}
         </span>
 
         {/* Desktop toolbar — unchanged */}
@@ -214,7 +228,11 @@ export default function Topbar() {
         </div>
       </div>
 
-      <Modal open={confirmOpen} onClose={() => setConfirmOpen(false)} title="Sign out of Aurafin?">
+      <Modal
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        title={<>Sign out of <span className="font-luxury">Aurafin</span>?</>}
+      >
         <p className="text-sm text-slate-500 mb-6">
           You'll need to sign in again to see your dashboard. Your data stays saved in the cloud.
         </p>

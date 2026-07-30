@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from 'react';
 import { Plus, Trash2, Download, ChevronDown, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import { useTransactionsStore } from '../../store/transactionsStore';
 import { useAuthStore } from '../../store/authStore';
+import { useHouseholdProfilesStore } from '../../store/householdProfilesStore';
 import { upsertDoc, removeDoc } from '../../hooks/useFirestoreSync';
 import { exportToCsv } from '../../utils/exportCsv';
 import Modal from '../../components/Modal';
@@ -10,8 +11,12 @@ import type { Transaction, TransactionType } from '../../types';
 import { CURRENCIES } from '../../utils/currency';
 
 export default function TransactionsTab() {
-  const transactions = useTransactionsStore((s) => s.transactions);
+  const allTransactions = useTransactionsStore((s) => s.transactions);
   const user = useAuthStore((s) => s.user);
+  const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
+  const transactions = activeProfileId
+    ? allTransactions.filter((t) => t.profileId === activeProfileId)
+    : allTransactions;
   const [modalOpen, setModalOpen] = useState(false);
   const [modalType, setModalType] = useState<TransactionType>('expense');
   const [addMenuOpen, setAddMenuOpen] = useState(false);
@@ -35,7 +40,7 @@ export default function TransactionsTab() {
 
   const handleSave = async (t: Transaction) => {
     if (!user) return;
-    await upsertDoc(user.uid, 'transactions', t);
+    await upsertDoc(user.uid, 'transactions', t.profileId ? t : { ...t, profileId: activeProfileId ?? undefined });
     setModalOpen(false);
   };
 

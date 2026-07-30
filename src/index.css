@@ -21,14 +21,24 @@
   --color-cream-200: #efe9da;
   --color-cream-300: #e4ddc9;
 
-  --font-sans: "Bodoni Moda", "Iowan Old Style", ui-serif, serif;
-  --font-display: "Bodoni Moda", "Iowan Old Style", ui-serif, serif;
-  --font-numeric: "Bodoni Moda", ui-serif, serif;
-  --font-hero-numeric: "Cormorant Garamond", "Bodoni Moda", ui-serif, serif;
+  --font-sans: Consolas, "SFMono-Regular", Menlo, Monaco, "Liberation Mono", "Courier New", monospace;
+  --font-display: Consolas, "SFMono-Regular", Menlo, Monaco, "Liberation Mono", "Courier New", monospace;
+  --font-numeric: Consolas, "SFMono-Regular", Menlo, Monaco, "Liberation Mono", "Courier New", monospace;
+  --font-hero-numeric: Consolas, "SFMono-Regular", Menlo, Monaco, "Liberation Mono", "Courier New", monospace;
+  --font-luxury: "Playfair Display", "Cormorant Garamond", Georgia, serif;
 }
 
 html {
   font-size: 17px;
+}
+
+/* Shrinks the page content area (topbar + routed page) a notch so more
+   fits on screen, while leaving the Sidebar and BottomNav (the actual
+   navigation bar) at their normal size — `zoom` scales layout without
+   touching the root font-size that the nav bars' rem-based sizing reads
+   from, so this stays scoped to the content column only. */
+.app-scale {
+  zoom: var(--app-zoom, 0.9);
 }
 
 body {
@@ -54,15 +64,23 @@ body {
   letter-spacing: 0.01em;
 }
 
-/* Dashboard hero figures (Net Worth, Invested). Bodoni Moda's stylistic
-   digits (esp. 4 and 7) read poorly at large hero sizes, so these two
-   spots use Cormorant Garamond instead — still a luxury serif, but with
-   clean, unambiguous lining figures. */
+/* Dashboard hero figures (Net Worth, Invested). Uses the same Consolas
+   monospace stack as everything else — kept as a separate class so the
+   size/weight can still be tuned independently of body numerics. */
 .font-hero-numeric {
   font-family: var(--font-hero-numeric);
   font-weight: 700;
   font-feature-settings: "tnum" 1, "lnum" 1;
   font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: 0.01em;
+}
+
+/* Reserved for the "Aurafin" brand name wherever it appears in the UI —
+   an elegant serif in place of the app's default monospace, for a more
+   luxury feel. Applied only to the brand word itself, never body copy. */
+.font-luxury {
+  font-family: var(--font-luxury);
+  font-weight: 600;
   letter-spacing: 0.01em;
 }
 
@@ -211,14 +229,18 @@ a {
   transform: scale(0.94);
 }
 
-/* Sharp, rectangular buttons everywhere — overrides any rounded-* utility */
-button,
-button.rounded-lg,
-button.rounded-xl,
-button.rounded-2xl,
-button.rounded-full,
-button.rounded-md {
+/* Sharp, rectangular corners everywhere — cards, modals, inputs, buttons —
+   overrides any rounded-* utility. Specific round exceptions (FAB, mini-fab,
+   the PIN entry boxes/dots on the lock screen) opt back in below with a
+   class selector, which has higher specificity than this universal one. */
+* {
   border-radius: 0 !important;
+}
+
+/* PIN entry boxes on the lock screen — keep round. Higher specificity than
+   the universal rule above, so it wins regardless of source order. */
+.keep-round {
+  border-radius: 9999px !important;
 }
 
 /* Floating Action Button — round, with a tactile 3D "push button" feel.

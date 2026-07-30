@@ -15,7 +15,6 @@ export function useLiveGoldPrice() {
   const setGoldPrice = useLivePricesStore((s) => s.setGoldPrice);
   const setGoldPriceLoading = useLivePricesStore((s) => s.setGoldPriceLoading);
   const setGoldPriceError = useLivePricesStore((s) => s.setGoldPriceError);
-  const setGoldInitialized = useLivePricesStore((s) => s.setGoldInitialized);
   const fetching = useRef(false);
 
   useEffect(() => {
@@ -33,11 +32,10 @@ export function useLiveGoldPrice() {
         setGoldPriceLoading(false);
       }
       fetching.current = false;
-      setGoldInitialized();
     };
 
     refresh();
     const id = setInterval(refresh, REFRESH_MS);
     return () => clearInterval(id);
-  }, [hasGold, setGoldPrice, setGoldPriceLoading, setGoldPriceError, setGoldInitialized]);
+  }, [hasGold, setGoldPrice, setGoldPriceLoading, setGoldPriceError]);
 }

@@ -8,7 +8,6 @@ import {
   MoreHorizontal,
   FileUp,
   Calculator,
-  Sparkles,
   Settings,
   Smartphone,
   MessageSquarePlus,
@@ -27,7 +26,6 @@ const moreLinks = [
   { to: '/essentials', label: 'Essentials', icon: Target },
   { to: '/import', label: 'Import', icon: FileUp },
   { to: '/calculators', label: 'Calculators', icon: Calculator },
-  { to: '/whats-new', label: "What's New", icon: Sparkles },
   { to: '/settings', label: 'Settings', icon: Settings },
   { to: '/install', label: 'Install App', icon: Smartphone },
   { to: '/feedback', label: 'Feedback', icon: MessageSquarePlus },
@@ -45,7 +43,7 @@ export default function BottomNav() {
           Hidden when a page's own bottom toolbar (e.g. bulk-selection
           actions on Wealth) is occupying the same corner. */}
       {!hideFab && (
-        <div className="md:hidden fixed right-4 z-40" style={{ bottom: 'calc(64px + env(safe-area-inset-bottom) + 12px)' }}>
+        <div className="md:hidden fixed right-4 z-40" style={{ bottom: 'calc(56px + env(safe-area-inset-bottom) + 12px)' }}>
           <QuickAddMenu variant="fab" />
         </div>
       )}
@@ -59,27 +57,27 @@ export default function BottomNav() {
               end={to === '/'}
               onClick={() => setMoreOpen(false)}
               className={({ isActive }) =>
-                `tap-scale flex flex-col items-center justify-center gap-1 py-2.5 text-[11px] font-medium transition-colors ${
+                `tap-scale flex flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium transition-colors ${
                   isActive
                     ? 'text-brand-600 dark:text-brand-300'
                     : 'text-slate-500 dark:text-slate-400'
                 }`
               }
             >
-              <Icon size={20} />
+              <Icon size={18} />
               {label}
             </NavLink>
           ))}
 
           <button
             onClick={() => setMoreOpen(true)}
-            className={`tap-scale flex flex-col items-center justify-center gap-1 py-2.5 text-[11px] font-medium transition-colors ${
+            className={`tap-scale flex flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium transition-colors ${
               isMoreActive
                 ? 'text-brand-600 dark:text-brand-300'
                 : 'text-slate-500 dark:text-slate-400'
             }`}
           >
-            <MoreHorizontal size={20} />
+            <MoreHorizontal size={18} />
             More
           </button>
         </div>

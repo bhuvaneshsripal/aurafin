@@ -13,8 +13,10 @@ import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useTransactionsStore } from '../store/transactionsStore';
 import { useGoalsStore } from '../store/goalsStore';
-import { useLivePricesStore, useIsLiveDataReady } from '../store/livePricesStore';
+import { useLivePricesStore } from '../store/livePricesStore';
 import { useUiStore } from '../store/uiStore';
+import { useSyncStatusStore } from '../store/syncStatusStore';
+import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import Amount from '../components/Amount';
 import { ASSET_CLASS_LABELS, formatCurrency, maskPreciseAmount } from '../utils/currency';
 import { resolveAssetValues } from '../utils/assetValues';
@@ -35,14 +37,30 @@ const INVESTMENT_CLASSES = new Set([
 ]);
 
 export default function Dashboard() {
-  const assets = useAssetsStore((s) => s.assets);
-  const liabilities = useLiabilitiesStore((s) => s.liabilities);
-  const transactions = useTransactionsStore((s) => s.transactions);
-  const goals = useGoalsStore((s) => s.goals);
+  const allAssets = useAssetsStore((s) => s.assets);
+  const allLiabilities = useLiabilitiesStore((s) => s.liabilities);
+  const allTransactions = useTransactionsStore((s) => s.transactions);
+  const allGoals = useGoalsStore((s) => s.goals);
   const livePrices = useLivePricesStore((s) => s.prices);
   const sipValues = useLivePricesStore((s) => s.sipValues);
   const privacyMode = useUiStore((s) => s.privacyMode);
-  const liveDataReady = useIsLiveDataReady(assets);
+  const assetsServerConfirmed = useSyncStatusStore((s) => s.assetsServerConfirmed);
+  const liabilitiesServerConfirmed = useSyncStatusStore((s) => s.liabilitiesServerConfirmed);
+  const netWorthReady = assetsServerConfirmed && liabilitiesServerConfirmed;
+
+  const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
+
+  // "All / Household" (activeProfileId === null) shows everything, unfiltered —
+  // this keeps single-profile accounts working exactly as before. Switching to
+  // a specific member only shows what's tagged to them.
+  const assets = activeProfileId ? allAssets.filter((a) => a.profileId === activeProfileId) : allAssets;
+  const liabilities = activeProfileId
+    ? allLiabilities.filter((l) => l.profileId === activeProfileId)
+    : allLiabilities;
+  const transactions = activeProfileId
+    ? allTransactions.filter((t) => t.profileId === activeProfileId)
+    : allTransactions;
+  const goals = activeProfileId ? allGoals.filter((g) => g.profileId === activeProfileId) : allGoals;
 
   const totalAssets = assets.reduce(
     (s, a) => s + resolveAssetValues(a, livePrices, sipValues).value,
@@ -83,7 +101,9 @@ export default function Dashboard() {
             Live prices update every 60 seconds
           </p>
           {hasWealth ? (
-            liveDataReady ? (
+            !netWorthReady ? (
+              <div className="mt-3 h-11 sm:h-12 w-48 rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />
+            ) : (
               <>
                 <div className="flex items-center gap-2.5 flex-wrap mt-2">
                   <span className="font-hero-numeric text-4xl sm:text-5xl text-slate-900 dark:text-white break-words">
@@ -104,15 +124,13 @@ export default function Dashboard() {
                 </div>
                 <MiniTrend />
               </>
-            ) : (
-              <div className="mt-2 h-11 sm:h-12 w-48 rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />
             )
           ) : (
             <>
-              <div className="mt-4 mb-8">
-                <MaskedDots />
-              </div>
-              <a href="#wealth" className="text-sm font-medium text-brand-700 dark:text-brand-300 hover:underline">
+              <span className="font-hero-numeric text-4xl sm:text-5xl text-slate-900 dark:text-white block mt-2 break-words">
+                {maskPreciseAmount(0, 'INR', privacyMode)}
+              </span>
+              <a href="#wealth" className="text-sm font-medium text-brand-700 dark:text-brand-300 hover:underline mt-2 inline-block">
                 Take your first snapshot →
               </a>
             </>
@@ -124,17 +142,17 @@ export default function Dashboard() {
             Invested · <span className="text-slate-400">₹ INR</span>
           </p>
           {hasWealth ? (
-            liveDataReady ? (
+            !netWorthReady ? (
+              <div className="mt-3 h-11 sm:h-12 w-40 rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />
+            ) : (
               <span className="font-hero-numeric text-4xl sm:text-5xl text-slate-900 dark:text-white block mt-2 break-words">
                 {maskPreciseAmount(investedAssetsTotal, 'INR', privacyMode)}
               </span>
-            ) : (
-              <div className="mt-2 h-11 sm:h-12 w-40 rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />
             )
           ) : (
-            <div className="mt-4 mb-8">
-              <MaskedDots />
-            </div>
+            <span className="font-hero-numeric text-4xl sm:text-5xl text-slate-900 dark:text-white block mt-2 break-words">
+              {maskPreciseAmount(0, 'INR', privacyMode)}
+            </span>
           )}
         </div>
       </div>
@@ -389,16 +407,6 @@ function GoalsSummary({
           </div>
         );
       })}
-    </div>
-  );
-}
-
-function MaskedDots() {
-  return (
-    <div className="flex gap-2">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <span key={i} className="h-2.5 w-2.5 rounded-full bg-slate-800 dark:bg-slate-200" />
-      ))}
     </div>
   );
 }

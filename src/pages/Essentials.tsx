@@ -6,6 +6,7 @@ import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useLivePricesStore } from '../store/livePricesStore';
 import { useFinancialProfileStore } from '../store/financialProfileStore';
 import { useAuthStore } from '../store/authStore';
+import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import { upsertDoc, removeDoc } from '../hooks/useFirestoreSync';
 import { resolveAssetValues } from '../utils/assetValues';
 import {
@@ -179,7 +180,7 @@ function HealthCheck() {
 
         {snapshotOpen && (
           <>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <Field label="Age">
                 <input type="number" value={age} onChange={(e) => setAge(e.target.value)} className={inputClass} placeholder="e.g. 28" />
               </Field>
@@ -230,7 +231,7 @@ function HealthCheck() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Emergency Fund */}
             <HealthCard title="Emergency Fund" status={efStatus} icon={Shield} iconTone="emergency">
               <StatRow label="LIQUID ASSETS" value={<Amount value={liquidAssets} />} />
@@ -305,7 +306,7 @@ function HealthCheck() {
             </HealthCard>
 
             {/* Debt Ratio */}
-            <HealthCard title="Debt Ratio" status={drStatus} className="sm:col-span-2 xl:col-span-3">
+            <HealthCard title="Debt Ratio" status={drStatus} className="sm:col-span-2 lg:col-span-3">
               <div>
                 <span className="text-3xl font-numeric text-slate-900 dark:text-white">{Math.round(debtRatio * 100)}%</span>
                 <span className="text-slate-500 dark:text-slate-400 text-sm ml-1.5">of assets are debt-funded</span>
@@ -529,14 +530,21 @@ function DependentsRow({ value, onSave }: { value: number; onSave: (v: number) =
 }
 
 function GoalsTab() {
-  const goals = useGoalsStore((s) => s.goals);
+  const allGoals = useGoalsStore((s) => s.goals);
   const user = useAuthStore((s) => s.user);
-  const assets = useAssetsStore((s) => s.assets);
-  const liabilities = useLiabilitiesStore((s) => s.liabilities);
+  const allAssets = useAssetsStore((s) => s.assets);
+  const allLiabilities = useLiabilitiesStore((s) => s.liabilities);
   const livePrices = useLivePricesStore((s) => s.prices);
   const sipValues = useLivePricesStore((s) => s.sipValues);
+  const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Goal | null>(null);
+
+  const goals = activeProfileId ? allGoals.filter((g) => g.profileId === activeProfileId) : allGoals;
+  const assets = activeProfileId ? allAssets.filter((a) => a.profileId === activeProfileId) : allAssets;
+  const liabilities = activeProfileId
+    ? allLiabilities.filter((l) => l.profileId === activeProfileId)
+    : allLiabilities;
 
   // Same calc the Dashboard uses for the headline Net Worth figure, so every
   // goal's progress always reflects the live number — never a stale manual entry.
@@ -551,7 +559,7 @@ function GoalsTab() {
 
   const handleSave = async (goal: Goal) => {
     if (!user) return;
-    await upsertDoc(user.uid, 'goals', goal);
+    await upsertDoc(user.uid, 'goals', goal.profileId ? goal : { ...goal, profileId: activeProfileId ?? undefined });
     setModalOpen(false);
   };
 
@@ -570,7 +578,7 @@ function GoalsTab() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {goals.map((g) => {
           const current = Math.max(0, netWorth);
           const pct = g.targetAmount > 0 ? Math.min(100, Math.round((current / g.targetAmount) * 100)) : 0;
