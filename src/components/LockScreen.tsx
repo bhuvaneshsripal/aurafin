@@ -9,6 +9,7 @@ export default function LockScreen() {
   const { locked, pinAttemptError, unlock, setPin } = useAppLockStore();
   const user = useAuthStore((s) => s.user);
   const [pin, setPinInput] = useState('');
+  const [shake, setShake] = useState(false);
   const [mode, setMode] = useState<'pin' | 'otp-sent' | 'reset'>('pin');
   const [otpStatus, setOtpStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [otpError, setOtpError] = useState('');
@@ -18,21 +19,35 @@ export default function LockScreen() {
 
   const submitPin = useCallback(
     (value?: string) => {
+      if (shake) return;
       const candidate = value ?? pin;
       if (candidate.length !== 4) return;
-      unlock(candidate);
-      // Clear either way — on success there's nothing left to show, and on
-      // failure the field already resets. Otherwise LockScreen (which stays
-      // mounted and just renders null while unlocked) would still be
-      // holding the last 4 digits next time it re-locks, so the dots would
-      // look pre-filled and further digits would silently do nothing.
-      setPinInput('');
+      const ok = unlock(candidate);
+      if (ok) {
+        setPinInput('');
+        return;
+      }
+      // Wrong PIN: shake with the 4 dots still filled (so the person can see
+      // *what* they typed was rejected), then clear once the shake finishes.
+      if ('vibrate' in navigator) {
+        try {
+          navigator.vibrate(200);
+        } catch {
+          // best-effort haptic only — never block on it
+        }
+      }
+      setShake(true);
+      window.setTimeout(() => {
+        setShake(false);
+        setPinInput('');
+      }, 420);
     },
-    [pin, unlock]
+    [pin, shake, unlock]
   );
 
   const pressDigit = useCallback(
     (digit: string) => {
+      if (shake) return;
       setPinInput((prev) => {
         if (prev.length >= 4) return prev;
         const next = prev + digit;
@@ -43,10 +58,11 @@ export default function LockScreen() {
         return next;
       });
     },
-    [submitPin]
+    [shake, submitPin]
   );
 
   const pressBackspace = () => {
+    if (shake) return;
     setPinInput((p) => p.slice(0, -1));
   };
 
@@ -56,6 +72,7 @@ export default function LockScreen() {
   useEffect(() => {
     if (locked) {
       setPinInput('');
+      setShake(false);
       setMode('pin');
     }
   }, [locked]);
@@ -117,14 +134,18 @@ export default function LockScreen() {
   };
 
   return (
-    <div className="font-luxury fixed inset-0 z-[100] flex flex-col bg-cream-100 dark:bg-slate-950 px-6 pt-12 pb-8 overflow-y-auto">
+    <div className="font-luxury fixed inset-0 z-[100] flex flex-col bg-cream-100 dark:bg-slate-950 px-6 pt-12 pb-8 overflow-y-auto overflow-x-hidden">
+      {/* Soft blurred sandal-toned orbs — purely decorative, they give the
+          glassmorphism keypad below something translucent to sit on top of. */}
+      <div className="pointer-events-none absolute -top-16 -left-16 h-64 w-64 rounded-full bg-sandal-300/40 dark:bg-sandal-600/20 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-0 -right-20 h-72 w-72 rounded-full bg-sandal-400/30 dark:bg-sandal-500/15 blur-3xl" />
       {mode === 'pin' ? (
         <>
           <div className="w-full max-w-[300px] mx-auto text-center flex flex-col items-center">
             <img
               src="/logo-icon.png"
               alt="Aurafin"
-              className="h-14 w-14 rounded-2xl object-cover mb-4 shadow-sm"
+              className="h-14 w-14 rounded-full object-cover mb-4"
             />
             <h1 className="font-luxury text-xl font-bold text-slate-900 dark:text-white mb-1">
               Aurafin is Locked
@@ -132,13 +153,15 @@ export default function LockScreen() {
             <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">Enter your 4-digit PIN</p>
 
             {/* PIN dots */}
-            <div className="flex items-center justify-center gap-3">
+            <div className={`flex items-center justify-center gap-3 ${shake ? 'animate-shake' : ''}`}>
               {[0, 1, 2, 3].map((i) => (
                 <span
                   key={i}
-                  className={`keep-round h-3 w-3 border-2 transition-colors ${
+                  className={`keep-round h-3 w-3 border-2 transition-colors duration-150 ${
                     i < pin.length
-                      ? 'bg-brand-600 border-brand-600'
+                      ? shake
+                        ? 'bg-red-500 border-red-500'
+                        : 'bg-brand-600 border-brand-600'
                       : 'bg-transparent border-slate-300 dark:border-slate-600'
                   }`}
                 />
@@ -161,7 +184,7 @@ export default function LockScreen() {
                   key={d}
                   type="button"
                   onClick={() => pressDigit(d)}
-                  className="keep-round aspect-square rounded-full bg-white dark:bg-slate-800 border border-cream-200 dark:border-slate-700 shadow-sm text-2xl font-semibold text-slate-900 dark:text-white active:scale-95 active:bg-cream-50 dark:active:bg-slate-700 transition-transform"
+                  className="keep-round aspect-square rounded-full backdrop-blur-xl bg-sandal-200/40 dark:bg-sandal-500/15 border border-sandal-100/60 dark:border-sandal-300/20 shadow-[0_4px_16px_-4px_rgba(154,114,62,0.35)] text-2xl font-semibold text-sandal-800 dark:text-sandal-100 active:scale-95 active:bg-sandal-300/50 dark:active:bg-sandal-400/25 transition-all"
                 >
                   {d}
                 </button>
@@ -170,14 +193,14 @@ export default function LockScreen() {
               <button
                 type="button"
                 onClick={() => pressDigit('0')}
-                className="keep-round aspect-square rounded-full bg-white dark:bg-slate-800 border border-cream-200 dark:border-slate-700 shadow-sm text-2xl font-semibold text-slate-900 dark:text-white active:scale-95 active:bg-cream-50 dark:active:bg-slate-700 transition-transform"
+                className="keep-round aspect-square rounded-full backdrop-blur-xl bg-sandal-200/40 dark:bg-sandal-500/15 border border-sandal-100/60 dark:border-sandal-300/20 shadow-[0_4px_16px_-4px_rgba(154,114,62,0.35)] text-2xl font-semibold text-sandal-800 dark:text-sandal-100 active:scale-95 active:bg-sandal-300/50 dark:active:bg-sandal-400/25 transition-all"
               >
                 0
               </button>
               <button
                 type="button"
                 onClick={pressBackspace}
-                className="keep-round aspect-square rounded-full bg-white dark:bg-slate-800 border border-cream-200 dark:border-slate-700 shadow-sm flex items-center justify-center text-slate-500 dark:text-slate-300 active:scale-95 active:bg-cream-50 dark:active:bg-slate-700 transition-transform"
+                className="keep-round aspect-square rounded-full backdrop-blur-xl bg-sandal-200/40 dark:bg-sandal-500/15 border border-sandal-100/60 dark:border-sandal-300/20 shadow-[0_4px_16px_-4px_rgba(154,114,62,0.35)] flex items-center justify-center text-sandal-700 dark:text-sandal-200 active:scale-95 active:bg-sandal-300/50 dark:active:bg-sandal-400/25 transition-all"
               >
                 <Delete size={24} />
               </button>
@@ -203,7 +226,7 @@ export default function LockScreen() {
           <img
             src="/logo-icon.png"
             alt="Aurafin"
-            className="h-14 w-14 rounded-2xl object-cover mb-4 shadow-sm"
+            className="h-14 w-14 rounded-full object-cover mb-4"
           />
 
           {mode === 'otp-sent' && (

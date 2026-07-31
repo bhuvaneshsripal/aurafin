@@ -45,7 +45,7 @@ export default function Topbar() {
       <div className="flex items-center justify-between gap-2 sm:gap-3 px-4 sm:px-6 md:px-8 py-2 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
         {/* Left: logo + app name (mobile only — desktop shows it in the Sidebar) */}
         <span className="md:hidden flex items-center gap-1.5 min-w-0">
-          <AppLogo className="w-6 h-6 rounded-md shrink-0" />
+          <AppLogo className="w-6 h-6 rounded-full shrink-0" />
           <span className="font-luxury text-lg font-semibold text-brand-800 dark:text-brand-200 tracking-tight truncate">
             Aurafin<span className="text-brand-500">.</span>
           </span>

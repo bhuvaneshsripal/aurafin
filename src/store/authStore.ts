@@ -4,19 +4,31 @@ import {
   signInWithPopup,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  getAdditionalUserInfo,
   signOut,
   type User,
 } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase/config';
 
+// Set the moment a brand-new account is created (email/password sign-up, or
+// a Google sign-in Firebase reports as `isNewUser`), and cleared once the
+// onboarding wizard finishes or is skipped. Namespaced per-uid so switching
+// accounts on the same device doesn't leak one person's onboarding state to
+// another.
+function onboardingKey(uid: string) {
+  return `aurafin-needs-onboarding-${uid}`;
+}
+
 interface AuthState {
   user: User | null;
   loading: boolean;
+  needsOnboarding: boolean;
   init: () => void;
   loginWithGoogle: () => Promise<void>;
   loginWithEmail: (email: string, password: string) => Promise<void>;
   registerWithEmail: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  completeOnboarding: () => void;
 }
 
 // Firebase's own local-persistence layer writes a "firebase:authUser:..."
@@ -38,16 +50,21 @@ function hasPersistedSession(): boolean {
   }
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   loading: true,
+  needsOnboarding: false,
   init: () => {
     let resolved = false;
     onAuthStateChanged(
       auth,
       (user) => {
         resolved = true;
-        set({ user, loading: false });
+        set({
+          user,
+          loading: false,
+          needsOnboarding: user ? localStorage.getItem(onboardingKey(user.uid)) === 'true' : false,
+        });
       },
       (error) => {
         // The listener itself failed (rare, but possible on restricted
@@ -74,15 +91,26 @@ export const useAuthStore = create<AuthState>((set) => ({
     }, fallbackDelay);
   },
   loginWithGoogle: async () => {
-    await signInWithPopup(auth, googleProvider);
+    const result = await signInWithPopup(auth, googleProvider);
+    if (getAdditionalUserInfo(result)?.isNewUser) {
+      localStorage.setItem(onboardingKey(result.user.uid), 'true');
+      set({ needsOnboarding: true });
+    }
   },
   loginWithEmail: async (email, password) => {
     await signInWithEmailAndPassword(auth, email, password);
   },
   registerWithEmail: async (email, password) => {
-    await createUserWithEmailAndPassword(auth, email, password);
+    const result = await createUserWithEmailAndPassword(auth, email, password);
+    localStorage.setItem(onboardingKey(result.user.uid), 'true');
+    set({ needsOnboarding: true });
   },
   logout: async () => {
     await signOut(auth);
+  },
+  completeOnboarding: () => {
+    const uid = get().user?.uid;
+    if (uid) localStorage.removeItem(onboardingKey(uid));
+    set({ needsOnboarding: false });
   },
 }));

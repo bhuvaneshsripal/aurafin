@@ -8,7 +8,7 @@ import {
   sendPasswordResetEmail,
   EmailAuthProvider,
 } from 'firebase/auth';
-import { Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, Crown, Copy, ChevronRight, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, Camera, X, Download, Upload } from 'lucide-react';
+import { Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, Crown, Copy, ChevronRight, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, X, Download, Upload } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
 import { useAppLockStore } from '../store/appLockStore';
@@ -16,7 +16,8 @@ import { useDisplaySettingsStore, FONT_MIN_SCALE, FONT_MAX_SCALE, SCREEN_MIN_SCA
 import PinBoxInput from '../components/PinBoxInput';
 import { auth } from '../firebase/config';
 import { CURRENCIES } from '../utils/currency';
-import { fileToSquareDataUrl } from '../utils/imageResize';
+import { loadImageFromFile } from '../utils/imageResize';
+import AvatarCropModal from '../components/AvatarCropModal';
 import { sendSharedAccessInvite, isInviteEmailConfigured } from '../utils/otp';
 import {
   SECURITY_QUESTIONS,
@@ -68,20 +69,35 @@ function AvatarEditor() {
 
   const [status, setStatus] = useState<'idle' | 'saving' | 'error'>('idle');
   const [error, setError] = useState('');
+  const [cropImage, setCropImage] = useState<HTMLImageElement | null>(null);
 
   const displayUrl = customUrl ?? user?.photoURL ?? null;
   const initial = (user?.displayName ?? user?.email ?? 'A').charAt(0).toUpperCase();
 
   const handleFile = async (file: File | null) => {
-    if (!file || !user) return;
+    if (!file) return;
+    setError('');
+    try {
+      const img = await loadImageFromFile(file);
+      // Opens the crop/zoom editor instead of saving immediately — the
+      // person positions and zooms the photo, then confirms.
+      setCropImage(img);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not read that image.');
+      setStatus('error');
+    }
+  };
+
+  const handleCropConfirm = async (dataUrl: string) => {
+    setCropImage(null);
+    if (!user) return;
     setStatus('saving');
     setError('');
     try {
-      const resized = await fileToSquareDataUrl(file);
       // Reflect it immediately rather than waiting on the round-trip to
       // Firestore and back through the live listener.
-      setCustomUrl(resized);
-      await saveAvatar(user.uid, resized);
+      setCustomUrl(dataUrl);
+      await saveAvatar(user.uid, dataUrl);
       setStatus('idle');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update your photo.');
@@ -120,10 +136,10 @@ function AvatarEditor() {
         )}
 
         <label
-          title="Change photo"
+          title="Edit photo"
           className="icon-outline-green tap-scale absolute -bottom-1 -right-1 h-8 w-8 shadow-sm flex items-center justify-center cursor-pointer"
         >
-          <Camera size={16} />
+          <Pencil size={14} />
           <input
             type="file"
             accept="image/*"
@@ -141,7 +157,7 @@ function AvatarEditor() {
       <div className="min-w-0">
         <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Profile photo</p>
         <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-          {status === 'saving' ? 'Saving...' : 'JPG or PNG, square crop applied automatically.'}
+          {status === 'saving' ? 'Saving...' : 'JPG or PNG — drag and zoom to crop after choosing one.'}
         </p>
         <div className="flex items-center gap-3 mt-1.5">
           <label className="text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline cursor-pointer">
@@ -172,22 +188,42 @@ function AvatarEditor() {
         </div>
         {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
       </div>
+
+      <AvatarCropModal
+        open={!!cropImage}
+        image={cropImage}
+        onCancel={() => setCropImage(null)}
+        onConfirm={handleCropConfirm}
+      />
     </div>
   );
 }
 
 function PersonalInfoCard() {
   const user = useAuthStore((s) => s.user);
+  const [editingName, setEditingName] = useState(false);
   const [displayName, setDisplayName] = useState(user?.displayName ?? '');
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  const startEdit = () => {
+    setDisplayName(user?.displayName ?? '');
+    setStatus('idle');
+    setEditingName(true);
+  };
+
+  const cancelEdit = () => {
+    setDisplayName(user?.displayName ?? '');
+    setStatus('idle');
+    setEditingName(false);
+  };
 
   const save = async () => {
     if (!auth.currentUser) return;
     setStatus('saving');
     try {
       await updateProfile(auth.currentUser, { displayName });
-      setStatus('saved');
-      setTimeout(() => setStatus('idle'), 2000);
+      setStatus('idle');
+      setEditingName(false);
     } catch {
       setStatus('error');
     }
@@ -200,11 +236,51 @@ function PersonalInfoCard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1.5">Display Name</label>
-          <input
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-          />
+          {editingName ? (
+            <>
+              <input
+                autoFocus
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') save();
+                  if (e.key === 'Escape') cancelEdit();
+                }}
+                className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+              <div className="flex items-center gap-3 mt-1.5">
+                <button
+                  onClick={save}
+                  disabled={status === 'saving'}
+                  className="text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline disabled:opacity-50"
+                >
+                  {status === 'saving' ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  onClick={cancelEdit}
+                  disabled={status === 'saving'}
+                  className="text-xs font-medium text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+              {status === 'error' && <p className="text-xs text-red-500 mt-1.5">Something went wrong. Please try again.</p>}
+            </>
+          ) : (
+            <div className="flex items-center gap-2 h-[38px]">
+              <span className="text-sm text-slate-800 dark:text-slate-100 truncate">
+                {user?.displayName || <span className="text-slate-400 dark:text-slate-500">Not set</span>}
+              </span>
+              <button
+                onClick={startEdit}
+                title="Edit name"
+                aria-label="Edit name"
+                className="text-slate-300 dark:text-slate-600 hover:text-brand-600 dark:hover:text-brand-400 shrink-0"
+              >
+                <Pencil size={14} />
+              </button>
+            </div>
+          )}
         </div>
         <div>
           <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1.5">Email</label>
@@ -216,16 +292,6 @@ function PersonalInfoCard() {
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5">Email cannot be changed</p>
         </div>
       </div>
-      <button
-        onClick={save}
-        disabled={status === 'saving'}
-        className="mt-4 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium"
-      >
-        {status === 'saving' ? 'Saving...' : status === 'saved' ? 'Saved' : 'Save'}
-      </button>
-      {status === 'error' && (
-        <p className="text-xs text-red-500 mt-2">Something went wrong. Please try again.</p>
-      )}
     </Card>
   );
 }

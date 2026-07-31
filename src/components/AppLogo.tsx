@@ -9,6 +9,14 @@ import { useEffect, useState } from 'react';
  * `key={spin}` forces React to remount the <img> on every trigger so the
  * CSS animation restarts cleanly even back-to-back, instead of being a
  * no-op because the class name didn't change.
+ *
+ * The circular clip lives on this outer, untransformed wrapper (not on the
+ * animated <img> itself). Combining `border-radius` with a 3D
+ * `perspective()/rotateY()` transform on the *same* element makes some
+ * browsers stop clipping correctly mid-animation — the square image box
+ * flashes through during the flip. An `overflow-hidden` ancestor that
+ * never transforms clips its transformed child reliably in every browser,
+ * so the logo always reads as a plain circle with no square edges.
  */
 export default function AppLogo({ className }: { className?: string }) {
   const [spin, setSpin] = useState(0);
@@ -19,11 +27,7 @@ export default function AppLogo({ className }: { className?: string }) {
   }, []);
 
   return (
-    <img
-      key={spin}
-      src="/logo-icon.png"
-      alt="Aurafin"
-      title="Aurafin"
+    <span
       role="button"
       tabIndex={0}
       onClick={() => setSpin((s) => s + 1)}
@@ -33,7 +37,15 @@ export default function AppLogo({ className }: { className?: string }) {
           setSpin((s) => s + 1);
         }
       }}
-      className={`cursor-pointer select-none ${spin > 0 ? 'logo-flip' : ''} ${className ?? ''}`}
-    />
+      className={`inline-block overflow-hidden cursor-pointer select-none ${className ?? ''}`}
+    >
+      <img
+        key={spin}
+        src="/logo-icon.png"
+        alt="Aurafin"
+        title="Aurafin"
+        className={`block h-full w-full object-cover ${spin > 0 ? 'logo-flip' : ''}`}
+      />
+    </span>
   );
 }

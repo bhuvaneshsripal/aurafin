@@ -41,6 +41,7 @@ const Settings = lazyWithRetry(() => import('./pages/Settings'));
 const WhatsNew = lazyWithRetry(() => import('./pages/WhatsNew'));
 const InstallApp = lazyWithRetry(() => import('./pages/InstallApp'));
 const Feedback = lazyWithRetry(() => import('./pages/Feedback'));
+const Onboarding = lazyWithRetry(() => import('./pages/Onboarding'));
 
 function RouteFallback() {
   return <LoadingScreen fullScreen={false} />;
@@ -48,6 +49,25 @@ function RouteFallback() {
 
 function AppShell() {
   const location = useLocation();
+  const needsOnboarding = useAuthStore((s) => s.needsOnboarding);
+
+  // First-time sign-ups/sign-ins get the full-screen onboarding wizard with
+  // none of the normal chrome (sidebar/topbar/bottom nav) — matches how
+  // Login is rendered outside the shell. Any route they try to hit while
+  // onboarding is pending bounces back to /onboarding.
+  if (needsOnboarding) {
+    return (
+      <ErrorBoundary key="onboarding">
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
+            <Route path="/onboarding" element={<Onboarding />} />
+            <Route path="*" element={<Navigate to="/onboarding" replace />} />
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
   return (
     <div className="flex min-h-screen bg-cream-100 dark:bg-slate-950">
       <LockScreen />
@@ -57,19 +77,22 @@ function AppShell() {
         <main className="flex-1 p-4 pb-36 sm:p-6 sm:pb-36 md:p-8 md:pb-8 max-w-6xl mx-auto w-full">
           <ErrorBoundary key={location.pathname}>
             <Suspense fallback={<RouteFallback />}>
-              <Routes>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/wealth" element={<Wealth />} />
-                <Route path="/essentials" element={<Essentials />} />
-                <Route path="/transactions" element={<Transactions />} />
-                <Route path="/import" element={<Import />} />
-                <Route path="/calculators" element={<Calculators />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/whats-new" element={<WhatsNew />} />
-                <Route path="/install" element={<InstallApp />} />
-                <Route path="/feedback" element={<Feedback />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
+              <div key={location.pathname} className="animate-page-in">
+                <Routes>
+                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/wealth" element={<Wealth />} />
+                  <Route path="/essentials" element={<Essentials />} />
+                  <Route path="/transactions" element={<Transactions />} />
+                  <Route path="/import" element={<Import />} />
+                  <Route path="/calculators" element={<Calculators />} />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="/whats-new" element={<WhatsNew />} />
+                  <Route path="/install" element={<InstallApp />} />
+                  <Route path="/feedback" element={<Feedback />} />
+                  <Route path="/onboarding" element={<Navigate to="/" replace />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </div>
             </Suspense>
           </ErrorBoundary>
         </main>

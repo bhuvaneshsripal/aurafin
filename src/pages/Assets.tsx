@@ -4,6 +4,7 @@ import { useAssetsStore } from '../store/assetsStore';
 import { useAuthStore } from '../store/authStore';
 import { upsertDoc, removeDoc } from '../hooks/useFirestoreSync';
 import Modal from '../components/Modal';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import type { Asset, AssetClass } from '../types';
 import { ASSET_CLASS_LABELS, CURRENCIES, formatCurrency } from '../utils/currency';
 
@@ -14,6 +15,8 @@ export default function Assets() {
   const user = useAuthStore((s) => s.user);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Asset | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Asset | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const openNew = () => {
     setEditing(null);
@@ -28,6 +31,17 @@ export default function Assets() {
   const handleDelete = async (id: string) => {
     if (!user) return;
     await removeDoc(user.uid, 'assets', id);
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    try {
+      await handleDelete(pendingDelete.id);
+      setPendingDelete(null);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleSave = async (asset: Asset) => {
@@ -74,7 +88,7 @@ export default function Assets() {
                     <button onClick={() => openEdit(a)} className="text-slate-400 hover:text-brand-600">
                       <Pencil size={16} />
                     </button>
-                    <button onClick={() => handleDelete(a.id)} className="text-slate-400 hover:text-red-500">
+                    <button onClick={() => setPendingDelete(a)} className="text-slate-400 hover:text-red-500">
                       <Trash2 size={16} />
                     </button>
                   </div>
@@ -95,6 +109,15 @@ export default function Assets() {
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit Asset' : 'Add Asset'}>
         <AssetForm initial={editing} onSave={handleSave} />
       </Modal>
+
+      <ConfirmDeleteModal
+        open={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={confirmDelete}
+        busy={deleting}
+        title="Delete this asset?"
+        description={<>This will permanently delete <strong>{pendingDelete?.name}</strong>. This can't be undone.</>}
+      />
     </div>
   );
 }

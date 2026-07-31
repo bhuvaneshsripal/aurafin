@@ -12,7 +12,9 @@ export default function LoadingScreen({ fullScreen = true }: { fullScreen?: bool
         fullScreen ? 'min-h-screen' : 'py-24'
       }`}
     >
-      <img src="/logo-icon.png" alt="Aurafin" className="logo-loading-spin h-12 w-12 rounded-xl shadow-sm" />
+      <span className="h-12 w-12 rounded-full overflow-hidden inline-block">
+        <img src="/logo-icon.png" alt="Aurafin" className="logo-loading-spin block h-full w-full object-cover" />
+      </span>
       <p className="text-sm text-slate-400 dark:text-slate-500">Loading…</p>
     </div>
   );

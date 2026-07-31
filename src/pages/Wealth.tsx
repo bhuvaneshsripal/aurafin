@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Plus,
   Trash2,
@@ -83,11 +84,36 @@ function formatGrams(qty: number): string {
 }
 
 export default function Wealth() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>('assets');
   const [addFlow, setAddFlow] = useState<EntryType | null>(null);
+  const [startCategoryKey, setStartCategoryKey] = useState<string | undefined>();
+
+  // Onboarding's "Add your assets" step hands off a chosen asset category
+  // via navigation state so this page can jump straight into Step 2 of the
+  // add flow instead of making the person pick the category again.
+  useEffect(() => {
+    const startAddAsset = (location.state as { startAddAsset?: string } | null)?.startAddAsset;
+    if (startAddAsset) {
+      setStartCategoryKey(startAddAsset);
+      setAddFlow('asset');
+      navigate(location.pathname, { replace: true, state: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (addFlow) {
-    return <AddWealthPage initialEntryType={addFlow} onClose={() => setAddFlow(null)} />;
+    return (
+      <AddWealthPage
+        initialEntryType={addFlow}
+        initialCategoryKey={startCategoryKey}
+        onClose={() => {
+          setAddFlow(null);
+          setStartCategoryKey(undefined);
+        }}
+      />
+    );
   }
 
   return (
@@ -107,17 +133,23 @@ export default function Wealth() {
 /** Full-page "Add Asset / Add Liability" flow: Step 1 picks a type, Step 2 fills in details. */
 function AddWealthPage({
   initialEntryType,
+  initialCategoryKey,
   onClose,
 }: {
   initialEntryType: EntryType;
+  initialCategoryKey?: string;
   onClose: () => void;
 }) {
   const user = useAuthStore((s) => s.user);
   const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
   const [entryType, setEntryType] = useState<EntryType>(initialEntryType);
-  const [step, setStep] = useState<'category' | 'details'>('category');
-  const [categoryKey, setCategoryKey] = useState<string | undefined>();
-  const [pickedType, setPickedType] = useState<string | undefined>();
+  const [step, setStep] = useState<'category' | 'details'>(initialCategoryKey ? 'details' : 'category');
+  const [categoryKey, setCategoryKey] = useState<string | undefined>(initialCategoryKey);
+  const [pickedType, setPickedType] = useState<string | undefined>(() => {
+    if (!initialCategoryKey) return undefined;
+    const taxonomy = initialEntryType === 'asset' ? ASSET_TAXONOMY : LIABILITY_TAXONOMY;
+    return taxonomy.find((c) => c.key === initialCategoryKey)?.types[0]?.value;
+  });
 
   const taxonomy = entryType === 'asset' ? ASSET_TAXONOMY : LIABILITY_TAXONOMY;
   const category = taxonomy.find((c) => c.key === categoryKey);

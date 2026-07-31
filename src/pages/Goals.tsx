@@ -7,6 +7,7 @@ import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useLivePricesStore } from '../store/livePricesStore';
 import { upsertDoc, removeDoc } from '../hooks/useFirestoreSync';
 import Modal from '../components/Modal';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import type { Goal } from '../types';
 import { CURRENCIES, formatCurrency } from '../utils/currency';
 import { resolveAssetValues } from '../utils/assetValues';
@@ -20,6 +21,8 @@ export default function Goals() {
   const sipValues = useLivePricesStore((s) => s.sipValues);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Goal | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Goal | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Same calc Dashboard uses for the headline Net Worth figure — kept in
   // sync here so a goal linked to Net Worth always shows the live number,
@@ -34,6 +37,17 @@ export default function Goals() {
   const handleDelete = async (id: string) => {
     if (!user) return;
     await removeDoc(user.uid, 'goals', id);
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    try {
+      await handleDelete(pendingDelete.id);
+      setPendingDelete(null);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleSave = async (goal: Goal) => {
@@ -86,7 +100,7 @@ export default function Goals() {
                   >
                     <Pencil size={14} />
                   </button>
-                  <button onClick={() => handleDelete(g.id)} className="text-slate-400 hover:text-red-500">
+                  <button onClick={() => setPendingDelete(g)} className="text-slate-400 hover:text-red-500">
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -113,6 +127,15 @@ export default function Goals() {
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit Goal' : 'Add Goal'}>
         <GoalForm initial={editing} onSave={handleSave} />
       </Modal>
+
+      <ConfirmDeleteModal
+        open={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={confirmDelete}
+        busy={deleting}
+        title="Delete this goal?"
+        description={<>This will permanently delete <strong>{pendingDelete?.name}</strong>. This can't be undone.</>}
+      />
     </div>
   );
 }

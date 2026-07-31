@@ -117,6 +117,8 @@ export interface Asset {
   icon?: string;
   /** Date (ISO yyyy-mm-dd) the entered balance is as-of. */
   balanceAsOf?: string;
+  /** Marks this as the account/card shown as "Default" on the Accounts tab. */
+  isDefaultAccount?: boolean;
   /** Which household profile (see HouseholdProfile) this asset belongs to.
    *  Undefined means it isn't assigned to any specific member yet. */
   profileId?: string;
@@ -138,6 +140,8 @@ export interface Liability {
   icon?: string;
   /** Date (ISO yyyy-mm-dd) the entered balance is as-of. */
   balanceAsOf?: string;
+  /** Marks this as the account/card shown as "Default" on the Accounts tab. */
+  isDefaultAccount?: boolean;
   /** Which household profile this liability belongs to. */
   profileId?: string;
 }
@@ -148,6 +152,7 @@ export interface FinancialProfile {
   age?: number;
   monthlyIncome?: number;
   monthlyExpense?: number;
+  monthlySavings?: number;
   termCover?: number;
   healthCover?: number;
   dependents?: number;

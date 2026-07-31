@@ -21,6 +21,18 @@
   --color-cream-200: #efe9da;
   --color-cream-300: #e4ddc9;
 
+  /* Sandal — warm tan/beige used for the glassmorphism PIN keypad */
+  --color-sandal-50: #faf5ec;
+  --color-sandal-100: #f2e6d1;
+  --color-sandal-200: #e6cea8;
+  --color-sandal-300: #dab982;
+  --color-sandal-400: #c9a06b;
+  --color-sandal-500: #b98a4f;
+  --color-sandal-600: #9c723e;
+  --color-sandal-700: #7d5b33;
+  --color-sandal-800: #644a2c;
+  --color-sandal-900: #503d26;
+
   --font-sans: Consolas, "SFMono-Regular", Menlo, Monaco, "Liberation Mono", "Courier New", monospace;
   --font-display: Consolas, "SFMono-Regular", Menlo, Monaco, "Liberation Mono", "Courier New", monospace;
   --font-numeric: Consolas, "SFMono-Regular", Menlo, Monaco, "Liberation Mono", "Courier New", monospace;
@@ -48,6 +60,7 @@
 
 html {
   font-size: 17px;
+  scroll-behavior: smooth;
 }
 
 /* Shrinks the page content area (topbar + routed page) a notch so more
@@ -138,6 +151,22 @@ body {
 button,
 a {
   touch-action: manipulation;
+}
+
+/* Tailwind's base reset leaves native <button> at the default arrow cursor
+   (only <a> gets a pointer automatically) — scoped narrowly to real
+   interactive elements so plain text/containers are never affected. */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+input[type="button"]:not(:disabled),
+input[type="submit"]:not(:disabled),
+label[for] {
+  cursor: pointer;
+}
+
+button:disabled,
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
 }
 
 /* GPU-composited (transform/opacity only) animations — avoids layout/paint jank */
@@ -374,4 +403,63 @@ a {
 
 .no-scrollbar::-webkit-scrollbar {
   display: none;
+}
+
+/* Wrong-PIN feedback — GPU-only (transform), so it stays smooth even on
+   low-end devices. Small/fast enough to read as a "no" without feeling
+   like a punishment. */
+@keyframes shake {
+  10%,
+  90% {
+    transform: translate3d(-1px, 0, 0);
+  }
+  20%,
+  80% {
+    transform: translate3d(2px, 0, 0);
+  }
+  30%,
+  50%,
+  70% {
+    transform: translate3d(-4px, 0, 0);
+  }
+  40%,
+  60% {
+    transform: translate3d(4px, 0, 0);
+  }
+}
+
+.animate-shake {
+  animation: shake 420ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+  will-change: transform;
+}
+
+/* Routed page content — a quick, cheap fade+rise (opacity/transform only,
+   no layout properties) so switching pages reads as a soft crossfade
+   instead of a hard cut while the new route mounts. */
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.animate-page-in {
+  animation: page-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Respect the OS-level "reduce motion" setting: keep state changes (the
+   shake still communicates "wrong PIN" via the dots turning red) but drop
+   the actual movement for anyone who's opted out of animation. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-shake,
+  .animate-page-in,
+  .animate-menu-in,
+  .animate-menu-in-3d,
+  .logo-flip {
+    animation: none !important;
+  }
 }

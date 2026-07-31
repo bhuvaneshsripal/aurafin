@@ -75,7 +75,7 @@ export default function Sidebar() {
     >
       <div className="px-1.5 mb-6 flex items-center justify-between gap-2">
         <span className="flex items-center gap-2.5 min-w-0">
-          <AppLogo className="w-9 h-9 rounded-lg shrink-0" />
+          <AppLogo className="w-9 h-9 rounded-full shrink-0" />
           <span className="font-luxury text-2xl font-semibold text-brand-800 dark:text-brand-200 tracking-tight">
             Aurafin<span className="text-brand-500">.</span>
           </span>
@@ -86,7 +86,7 @@ export default function Sidebar() {
             onClick={lockNow}
             title="Lock Aurafin now"
             aria-label="Lock Aurafin now"
-            className="icon-outline-green tap-scale h-8 w-8 flex items-center justify-center shrink-0"
+            className="tap-scale h-8 w-8 flex items-center justify-center rounded-full text-slate-400 dark:text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 shrink-0"
           >
             <Lock size={16} />
           </button>
