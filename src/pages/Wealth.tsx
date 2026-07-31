@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -15,6 +15,7 @@ import {
   ChevronUp,
   ChevronDown,
   ArrowUpDown,
+  GripVertical,
   X,
   Loader2,
   CheckCircle2,
@@ -528,6 +529,70 @@ function AssetsTab({
   const [tagDraft, setTagDraft] = useState('');
   const setHideFab = useUiStore((s) => s.setHideFab);
 
+  // After a manual up/down reorder, the moved row's new position can end up
+  // off-screen (e.g. moving something to the very top of a long list while
+  // scrolled halfway down). rowRefs keeps a live DOM-node lookup by asset id;
+  // once the Firestore write round-trips and `allAssets` updates with the
+  // new order, the effect below scrolls that row into view automatically.
+  const rowRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const [scrollToId, setScrollToId] = useState<string | null>(null);
+  const setRowRef = (id: string) => (el: HTMLElement | null) => {
+    if (el) rowRefs.current.set(id, el);
+    else rowRefs.current.delete(id);
+  };
+  useEffect(() => {
+    if (!scrollToId) return;
+    const el = rowRefs.current.get(scrollToId);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    setScrollToId(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allAssets]);
+
+  // Long-press-to-drag reordering is a desktop-only affordance — on a
+  // touchscreen, a long press already means something else (context menu /
+  // text selection) and a real drag gesture there is finicky at best, so
+  // this checks for a precise pointer (mouse/trackpad) rather than screen
+  // size, which also correctly excludes touch-first "desktop mode" tablets.
+  const [isDesktopPointer, setIsDesktopPointer] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(pointer: fine)');
+    setIsDesktopPointer(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setIsDesktopPointer(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  // armedId: draggable={true} kicks in only after a short hold, so a quick
+  // click still behaves like a normal click. draggingId/overId drive the
+  // visual feedback while an actual drag is in flight.
+  const [armedId, setArmedId] = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+  const longPressTimer = useRef<number | null>(null);
+
+  const clearLongPress = () => {
+    if (longPressTimer.current !== null) {
+      window.clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const armDrag = (id: string, e: ReactPointerEvent) => {
+    if (!isDesktopPointer) return;
+    // Starting the press on a button/checkbox/link should never arm a
+    // drag — those need their normal click behavior untouched.
+    if ((e.target as HTMLElement).closest('button, input, a, select')) return;
+    clearLongPress();
+    longPressTimer.current = window.setTimeout(() => setArmedId(id), 180);
+  };
+
+  const resetDragState = () => {
+    clearLongPress();
+    setArmedId(null);
+    setDraggingId(null);
+    setOverId(null);
+  };
+
   // The bulk-selection bar and the global "+" FAB sit in the same bottom-right
   // corner on mobile — hide the FAB while the bar is up so they don't overlap.
   useEffect(() => {
@@ -568,6 +633,7 @@ function AssetsTab({
   const handleMove = async (id: string, direction: 'up' | 'down') => {
     if (!user) return;
     setSortKey('manual');
+    setScrollToId(id);
     const ordered = [...assets].sort(
       (a, b) => (a.order ?? 0) - (b.order ?? 0) || a.updatedAt - b.updatedAt
     );
@@ -581,6 +647,33 @@ function AssetsTab({
     try {
       await upsertDoc(user.uid, 'assets', { ...current, order: neighborOrder });
       await upsertDoc(user.uid, 'assets', { ...neighbor, order: currentOrder });
+    } catch (err) {
+      console.error('Failed to reorder assets', err);
+    }
+  };
+
+  /** Drag-and-drop reorder — drops `draggedId` into `targetId`'s slot and
+   *  shifts everything else, then persists the new order for every asset
+   *  whose position actually changed. */
+  const handleReorderTo = async (draggedId: string, targetId: string) => {
+    if (!user || draggedId === targetId) return;
+    const ordered = [...assets].sort(
+      (a, b) => (a.order ?? 0) - (b.order ?? 0) || a.updatedAt - b.updatedAt
+    );
+    const fromIdx = ordered.findIndex((x) => x.id === draggedId);
+    const toIdx = ordered.findIndex((x) => x.id === targetId);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const reordered = [...ordered];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+    setSortKey('manual');
+    try {
+      await Promise.all(
+        reordered
+          .map((asset, idx) => ({ asset, idx }))
+          .filter(({ asset, idx }) => (asset.order ?? -1) !== idx)
+          .map(({ asset, idx }) => upsertDoc(user.uid, 'assets', { ...asset, order: idx }))
+      );
     } catch (err) {
       console.error('Failed to reorder assets', err);
     }
@@ -1066,7 +1159,36 @@ function AssetsTab({
             </thead>
             <tbody className="divide-y divide-slate-100">
               {sortedRows.map(({ asset: a, invested, currentPrice, value, pnl, pnlPercent, alloc }) => (
-                <tr key={a.id} className="group hover:bg-slate-50/60">
+                <tr
+                  key={a.id}
+                  ref={setRowRef(a.id)}
+                  draggable={armedId === a.id}
+                  onPointerDown={(e) => armDrag(a.id, e)}
+                  onPointerUp={clearLongPress}
+                  onPointerLeave={clearLongPress}
+                  onDragStart={(e) => {
+                    setDraggingId(a.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                  }}
+                  onDragOver={(e) => {
+                    if (!draggingId) return;
+                    e.preventDefault();
+                    setOverId(a.id);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (draggingId) handleReorderTo(draggingId, a.id);
+                    resetDragState();
+                  }}
+                  onDragEnd={resetDragState}
+                  className={`group hover:bg-slate-50/60 transition-colors ${
+                    isDesktopPointer ? 'cursor-grab active:cursor-grabbing' : ''
+                  } ${draggingId === a.id ? 'opacity-40' : ''} ${
+                    overId === a.id && draggingId && draggingId !== a.id
+                      ? 'bg-brand-50/70 outline outline-2 outline-brand-300 -outline-offset-2'
+                      : ''
+                  }`}
+                >
                   <td className="px-4 py-3.5">
                     <input
                       type="checkbox"
@@ -1076,23 +1198,33 @@ function AssetsTab({
                     />
                   </td>
                   <td className="px-4 py-3.5">
-                    <p className="font-semibold text-slate-800">{a.name}</p>
-                    <p className="text-xs text-slate-400">
-                      {ASSET_CLASS_LABELS[a.assetClass]}
-                      {a.institution ? ` · ${a.institution}` : ''}
-                      {a.interestRate ? ` · ${a.interestRate}% p.a.` : ''}
-                      {a.maturityDate && !computeMaturityInfo(a).isMatured
-                        ? ` · Matures ${a.maturityDate}`
-                        : ''}
-                    </p>
-                    {(() => {
-                      const { maturityAmount, isMatured } = computeMaturityInfo(a);
-                      return maturityAmount !== undefined && !isMatured ? (
-                        <p className="text-xs text-brand-600 font-medium">
-                          Maturity amount: {formatPreciseCurrency(maturityAmount, a.currency)}
+                    <div className="flex items-start gap-2">
+                      {isDesktopPointer && (
+                        <GripVertical
+                          size={14}
+                          className="mt-1 text-slate-300 group-hover:text-slate-400 shrink-0"
+                        />
+                      )}
+                      <div>
+                        <p className="font-semibold text-slate-800">{a.name}</p>
+                        <p className="text-xs text-slate-400">
+                          {ASSET_CLASS_LABELS[a.assetClass]}
+                          {a.institution ? ` · ${a.institution}` : ''}
+                          {a.interestRate ? ` · ${a.interestRate}% p.a.` : ''}
+                          {a.maturityDate && !computeMaturityInfo(a).isMatured
+                            ? ` · Matures ${a.maturityDate}`
+                            : ''}
                         </p>
-                      ) : null;
-                    })()}
+                        {(() => {
+                          const { maturityAmount, isMatured } = computeMaturityInfo(a);
+                          return maturityAmount !== undefined && !isMatured ? (
+                            <p className="text-xs text-brand-600 font-medium">
+                              Maturity amount: {formatPreciseCurrency(maturityAmount, a.currency)}
+                            </p>
+                          ) : null;
+                        })()}
+                      </div>
+                    </div>
                   </td>
                   <td className="px-4 py-3.5 text-right text-slate-600">
                     {a.quantity !== undefined
@@ -1133,12 +1265,12 @@ function AssetsTab({
                   </td>
                   <td className="px-4 py-3.5 text-right text-slate-600">{alloc.toFixed(1)}%</td>
                   <td className="px-4 py-3.5">
-                    <div className="flex items-center justify-end gap-1.5 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center justify-end gap-1">
                       <button
                         onClick={() => handleMove(a.id, 'up')}
                         disabled={filtered.findIndex((x) => x.id === a.id) === 0}
                         title="Move up"
-                        className="text-slate-400 hover:text-brand-600 disabled:opacity-30 disabled:hover:text-slate-400 p-1"
+                        className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-brand-400 hover:bg-brand-50 disabled:text-slate-300 disabled:border-slate-200 disabled:hover:text-slate-300 disabled:hover:border-slate-200 disabled:hover:bg-transparent rounded-md p-1 transition-colors"
                       >
                         <ChevronUp size={16} />
                       </button>
@@ -1146,28 +1278,28 @@ function AssetsTab({
                         onClick={() => handleMove(a.id, 'down')}
                         disabled={filtered.findIndex((x) => x.id === a.id) === filtered.length - 1}
                         title="Move down"
-                        className="text-slate-400 hover:text-brand-600 disabled:opacity-30 disabled:hover:text-slate-400 p-1"
+                        className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-brand-400 hover:bg-brand-50 disabled:text-slate-300 disabled:border-slate-200 disabled:hover:text-slate-300 disabled:hover:border-slate-200 disabled:hover:bg-transparent rounded-md p-1 transition-colors"
                       >
                         <ChevronDown size={16} />
                       </button>
                       <button
                         onClick={() => handleDuplicate(a)}
                         title="Duplicate"
-                        className="text-slate-400 hover:text-brand-600 p-1"
+                        className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-brand-400 hover:bg-brand-50 rounded-md p-1 transition-colors"
                       >
                         <Copy size={16} />
                       </button>
                       <button
                         onClick={() => openEdit(a)}
                         title="Edit"
-                        className="text-slate-400 hover:text-brand-600 p-1"
+                        className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-brand-400 hover:bg-brand-50 rounded-md p-1 transition-colors"
                       >
                         <Pencil size={16} />
                       </button>
                       <button
                         onClick={() => setConfirmDeleteAsset(a)}
                         title="Delete"
-                        className="text-slate-400 hover:text-green-600 p-1"
+                        className="text-slate-600 border border-slate-300 hover:text-red-600 hover:border-red-400 hover:bg-red-50 rounded-md p-1 transition-colors"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -1185,8 +1317,40 @@ function AssetsTab({
               const { value, pnl, pnlPercent } = resolveAssetValues(a, livePrices, sipValues);
               const { maturityAmount, isMatured } = computeMaturityInfo(a);
               return (
-                <div key={a.id} className="bg-white rounded-2xl border border-slate-200 p-4">
-                  <p className="font-semibold text-slate-800">{a.name}</p>
+                <div
+                  key={a.id}
+                  ref={setRowRef(a.id)}
+                  draggable={armedId === a.id}
+                  onPointerDown={(e) => armDrag(a.id, e)}
+                  onPointerUp={clearLongPress}
+                  onPointerLeave={clearLongPress}
+                  onDragStart={(e) => {
+                    setDraggingId(a.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                  }}
+                  onDragOver={(e) => {
+                    if (!draggingId) return;
+                    e.preventDefault();
+                    setOverId(a.id);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (draggingId) handleReorderTo(draggingId, a.id);
+                    resetDragState();
+                  }}
+                  onDragEnd={resetDragState}
+                  className={`relative bg-white rounded-2xl border border-slate-200 p-4 transition-all ${
+                    isDesktopPointer ? 'cursor-grab active:cursor-grabbing' : ''
+                  } ${draggingId === a.id ? 'opacity-40' : ''} ${
+                    overId === a.id && draggingId && draggingId !== a.id
+                      ? 'ring-2 ring-brand-300'
+                      : ''
+                  }`}
+                >
+                  {isDesktopPointer && (
+                    <GripVertical size={14} className="absolute top-4 right-4 text-slate-300" />
+                  )}
+                  <p className="font-semibold text-slate-800 pr-5">{a.name}</p>
                   <p className="text-xs text-slate-400 mb-2">
                     {ASSET_CLASS_LABELS[a.assetClass]}
                     {a.institution ? ` · ${a.institution}` : ''}
@@ -1212,7 +1376,7 @@ function AssetsTab({
                       onClick={() => handleMove(a.id, 'up')}
                       disabled={idx === 0}
                       title="Move up"
-                      className="text-slate-400 hover:text-brand-600 disabled:opacity-30 disabled:hover:text-slate-400"
+                      className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-brand-400 hover:bg-brand-50 disabled:text-slate-300 disabled:border-slate-200 disabled:hover:text-slate-300 disabled:hover:border-slate-200 disabled:hover:bg-transparent rounded-md p-1 transition-colors"
                     >
                       <ChevronUp size={16} />
                     </button>
@@ -1220,14 +1384,22 @@ function AssetsTab({
                       onClick={() => handleMove(a.id, 'down')}
                       disabled={idx === filtered.length - 1}
                       title="Move down"
-                      className="text-slate-400 hover:text-brand-600 disabled:opacity-30 disabled:hover:text-slate-400"
+                      className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-brand-400 hover:bg-brand-50 disabled:text-slate-300 disabled:border-slate-200 disabled:hover:text-slate-300 disabled:hover:border-slate-200 disabled:hover:bg-transparent rounded-md p-1 transition-colors"
                     >
                       <ChevronDown size={16} />
                     </button>
-                    <button onClick={() => openEdit(a)} className="text-slate-400 hover:text-brand-600">
+                    <button
+                      onClick={() => openEdit(a)}
+                      title="Edit"
+                      className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-brand-400 hover:bg-brand-50 rounded-md p-1 transition-colors"
+                    >
                       <Pencil size={16} />
                     </button>
-                    <button onClick={() => setConfirmDeleteAsset(a)} className="text-slate-400 hover:text-green-600">
+                    <button
+                      onClick={() => setConfirmDeleteAsset(a)}
+                      title="Delete"
+                      className="text-slate-600 border border-slate-300 hover:text-red-600 hover:border-red-400 hover:bg-red-50 rounded-md p-1 transition-colors"
+                    >
                       <Trash2 size={16} />
                     </button>
                   </div>
