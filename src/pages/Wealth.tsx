@@ -347,23 +347,23 @@ function FilterDropdown({
   };
 
   return (
-    <div className="relative w-full min-w-0 sm:flex-1 sm:min-w-[180px]" ref={ref}>
+    <div className="relative w-full min-w-0 sm:flex-1 sm:min-w-[150px]" ref={ref}>
       <span className="text-xs font-medium text-slate-500 mb-0.5 sm:mb-1 block">{label}</span>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full min-h-[38px] sm:min-h-[42px] flex items-center justify-between gap-1.5 border border-slate-200 rounded-lg px-2.5 sm:px-3 py-1 sm:py-1.5 bg-white text-left"
+        className="w-full min-h-[32px] sm:min-h-[34px] flex items-center justify-between gap-1.5 border border-slate-200 rounded-lg px-2 sm:px-2.5 py-0.5 sm:py-1 bg-white text-left"
       >
         <div className="flex items-center gap-1 flex-wrap flex-1 min-w-0">
           {selected.length === 0 ? (
-            <span className="text-slate-400 text-xs sm:text-sm truncate">{placeholder}</span>
+            <span className="text-slate-400 text-xs truncate">{placeholder}</span>
           ) : (
             selected.map((v) => {
               const opt = options.find((o) => o.value === v);
               return (
                 <span
                   key={v}
-                  className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 text-[11px] sm:text-xs font-medium pl-2 pr-1 py-0.5 sm:py-1 rounded-md max-w-full truncate"
+                  className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 text-[10px] sm:text-[11px] font-medium pl-1.5 pr-0.5 py-0.5 rounded-md max-w-full truncate"
                 >
                   {opt?.label ?? v}
                   <span
@@ -374,7 +374,7 @@ function FilterDropdown({
                     }}
                     className="hover:bg-slate-200 rounded-sm p-0.5 shrink-0"
                   >
-                    <X size={12} />
+                    <X size={11} />
                   </span>
                 </span>
               );
@@ -391,10 +391,10 @@ function FilterDropdown({
               }}
               className="hover:text-slate-600"
             >
-              <X size={14} />
+              <X size={13} />
             </span>
           )}
-          <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+          <ChevronDown size={13} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
         </div>
       </button>
       {open && (
@@ -443,7 +443,7 @@ function TotalStatCard({
   const positive = pnl >= 0;
   const isMasked = privacyMode && !isZeroAmount(pnl, 2);
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6">
+    <div className="keep-round-card bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6">
       <p className="text-xs font-semibold tracking-wide text-slate-400 mb-4 sm:mb-5">{title}</p>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-6">
         <div>
@@ -961,7 +961,7 @@ function AssetsTab({
           {sortKey !== 'manual' && viewMode === 'list' && (
             <button
               onClick={() => setSortKey('manual')}
-              className="h-[38px] sm:h-[42px] shrink-0 px-3 flex items-center justify-center border border-slate-200 rounded-lg text-sm text-slate-500 hover:bg-slate-50 whitespace-nowrap"
+              className="h-[32px] sm:h-[34px] shrink-0 px-3 flex items-center justify-center border border-slate-200 rounded-lg text-sm text-slate-500 hover:bg-slate-50 whitespace-nowrap"
             >
               Manual order
             </button>
@@ -969,7 +969,7 @@ function AssetsTab({
           <button
             onClick={() => toggleSort(sortKey)}
             title="Flip sort direction"
-            className="h-[38px] w-[38px] sm:h-[42px] sm:w-[42px] shrink-0 flex items-center justify-center border border-slate-200 rounded-lg text-slate-500 hover:bg-slate-50"
+            className="h-[32px] w-[32px] sm:h-[34px] sm:w-[34px] shrink-0 flex items-center justify-center border border-slate-200 rounded-lg text-slate-500 hover:bg-slate-50"
           >
             <ArrowUpDown size={16} />
           </button>
@@ -1182,8 +1182,8 @@ function AssetsTab({
                   }}
                   onDragEnd={resetDragState}
                   className={`group hover:bg-slate-50/60 transition-colors ${
-                    isDesktopPointer ? 'cursor-grab active:cursor-grabbing' : ''
-                  } ${draggingId === a.id ? 'opacity-40' : ''} ${
+                    draggingId === a.id ? 'opacity-40' : ''
+                  } ${
                     overId === a.id && draggingId && draggingId !== a.id
                       ? 'bg-brand-50/70 outline outline-2 outline-brand-300 -outline-offset-2'
                       : ''
@@ -1202,7 +1202,7 @@ function AssetsTab({
                       {isDesktopPointer && (
                         <GripVertical
                           size={14}
-                          className="mt-1 text-slate-300 group-hover:text-slate-400 shrink-0"
+                          className="mt-1 text-slate-300 group-hover:text-slate-400 shrink-0 cursor-grab active:cursor-grabbing"
                         />
                       )}
                       <div>
@@ -1270,7 +1270,7 @@ function AssetsTab({
                         onClick={() => handleMove(a.id, 'up')}
                         disabled={filtered.findIndex((x) => x.id === a.id) === 0}
                         title="Move up"
-                        className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-brand-400 hover:bg-brand-50 disabled:text-slate-300 disabled:border-slate-200 disabled:hover:text-slate-300 disabled:hover:border-slate-200 disabled:hover:bg-transparent rounded-md p-1 transition-colors"
+                        className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-black hover:border-2 hover:bg-brand-50 disabled:border-slate-200 disabled:text-slate-300 disabled:hover:border-slate-200 disabled:hover:bg-transparent disabled:hover:text-slate-300 rounded-md p-1 transition-colors"
                       >
                         <ChevronUp size={16} />
                       </button>
@@ -1278,28 +1278,28 @@ function AssetsTab({
                         onClick={() => handleMove(a.id, 'down')}
                         disabled={filtered.findIndex((x) => x.id === a.id) === filtered.length - 1}
                         title="Move down"
-                        className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-brand-400 hover:bg-brand-50 disabled:text-slate-300 disabled:border-slate-200 disabled:hover:text-slate-300 disabled:hover:border-slate-200 disabled:hover:bg-transparent rounded-md p-1 transition-colors"
+                        className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-black hover:border-2 hover:bg-brand-50 disabled:border-slate-200 disabled:text-slate-300 disabled:hover:border-slate-200 disabled:hover:bg-transparent disabled:hover:text-slate-300 rounded-md p-1 transition-colors"
                       >
                         <ChevronDown size={16} />
                       </button>
                       <button
                         onClick={() => handleDuplicate(a)}
                         title="Duplicate"
-                        className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-brand-400 hover:bg-brand-50 rounded-md p-1 transition-colors"
+                        className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-black hover:border-2 hover:bg-brand-50 rounded-md p-1 transition-colors"
                       >
                         <Copy size={16} />
                       </button>
                       <button
                         onClick={() => openEdit(a)}
                         title="Edit"
-                        className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-brand-400 hover:bg-brand-50 rounded-md p-1 transition-colors"
+                        className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-black hover:border-2 hover:bg-brand-50 rounded-md p-1 transition-colors"
                       >
                         <Pencil size={16} />
                       </button>
                       <button
                         onClick={() => setConfirmDeleteAsset(a)}
                         title="Delete"
-                        className="text-slate-600 border border-slate-300 hover:text-red-600 hover:border-red-400 hover:bg-red-50 rounded-md p-1 transition-colors"
+                        className="text-slate-600 border border-slate-300 hover:text-red-600 hover:border-black hover:border-2 hover:bg-red-50 rounded-md p-1 transition-colors"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -1340,15 +1340,18 @@ function AssetsTab({
                   }}
                   onDragEnd={resetDragState}
                   className={`relative bg-white rounded-2xl border border-slate-200 p-4 transition-all ${
-                    isDesktopPointer ? 'cursor-grab active:cursor-grabbing' : ''
-                  } ${draggingId === a.id ? 'opacity-40' : ''} ${
+                    draggingId === a.id ? 'opacity-40' : ''
+                  } ${
                     overId === a.id && draggingId && draggingId !== a.id
                       ? 'ring-2 ring-brand-300'
                       : ''
                   }`}
                 >
                   {isDesktopPointer && (
-                    <GripVertical size={14} className="absolute top-4 right-4 text-slate-300" />
+                    <GripVertical
+                      size={14}
+                      className="absolute top-4 right-4 text-slate-300 cursor-grab active:cursor-grabbing"
+                    />
                   )}
                   <p className="font-semibold text-slate-800 pr-5">{a.name}</p>
                   <p className="text-xs text-slate-400 mb-2">
@@ -1376,7 +1379,7 @@ function AssetsTab({
                       onClick={() => handleMove(a.id, 'up')}
                       disabled={idx === 0}
                       title="Move up"
-                      className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-brand-400 hover:bg-brand-50 disabled:text-slate-300 disabled:border-slate-200 disabled:hover:text-slate-300 disabled:hover:border-slate-200 disabled:hover:bg-transparent rounded-md p-1 transition-colors"
+                      className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-black hover:border-2 hover:bg-brand-50 disabled:border-slate-200 disabled:text-slate-300 disabled:hover:border-slate-200 disabled:hover:bg-transparent disabled:hover:text-slate-300 rounded-md p-1 transition-colors"
                     >
                       <ChevronUp size={16} />
                     </button>
@@ -1384,21 +1387,21 @@ function AssetsTab({
                       onClick={() => handleMove(a.id, 'down')}
                       disabled={idx === filtered.length - 1}
                       title="Move down"
-                      className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-brand-400 hover:bg-brand-50 disabled:text-slate-300 disabled:border-slate-200 disabled:hover:text-slate-300 disabled:hover:border-slate-200 disabled:hover:bg-transparent rounded-md p-1 transition-colors"
+                      className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-black hover:border-2 hover:bg-brand-50 disabled:border-slate-200 disabled:text-slate-300 disabled:hover:border-slate-200 disabled:hover:bg-transparent disabled:hover:text-slate-300 rounded-md p-1 transition-colors"
                     >
                       <ChevronDown size={16} />
                     </button>
                     <button
                       onClick={() => openEdit(a)}
                       title="Edit"
-                      className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-brand-400 hover:bg-brand-50 rounded-md p-1 transition-colors"
+                      className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-black hover:border-2 hover:bg-brand-50 rounded-md p-1 transition-colors"
                     >
                       <Pencil size={16} />
                     </button>
                     <button
                       onClick={() => setConfirmDeleteAsset(a)}
                       title="Delete"
-                      className="text-slate-600 border border-slate-300 hover:text-red-600 hover:border-red-400 hover:bg-red-50 rounded-md p-1 transition-colors"
+                      className="text-slate-600 border border-slate-300 hover:text-red-600 hover:border-black hover:border-2 hover:bg-red-50 rounded-md p-1 transition-colors"
                     >
                       <Trash2 size={16} />
                     </button>

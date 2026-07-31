@@ -102,8 +102,8 @@ export default function ProfileSwitcher({ compact = false }: { compact?: boolean
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
       >
-        <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: activeColour }} />
-        <span className="truncate flex-1 text-left">{activeLabel}</span>
+        <span className="h-3 w-3 rounded-full shrink-0 border border-black/10" style={{ backgroundColor: activeColour }} />
+        <span className="truncate flex-1 text-left font-bold">{activeLabel}</span>
         <ChevronDown size={15} className={`text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
@@ -117,7 +117,7 @@ export default function ProfileSwitcher({ compact = false }: { compact?: boolean
             className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
           >
             <Layers size={15} className="text-slate-400 shrink-0" />
-            <span className="flex-1 text-left">All Profiles</span>
+            <span className="flex-1 text-left font-bold">All Profiles</span>
             {activeProfileId === null && <Check size={15} className="text-brand-600 shrink-0" />}
           </button>
 
@@ -132,8 +132,8 @@ export default function ProfileSwitcher({ compact = false }: { compact?: boolean
               }}
               className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
             >
-              <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: p.colour }} />
-              <span className="flex-1 text-left truncate">{p.name}</span>
+              <span className="h-3 w-3 rounded-full shrink-0 border border-black/10" style={{ backgroundColor: p.colour }} />
+              <span className="flex-1 text-left truncate font-bold">{p.name}</span>
               {activeProfileId === p.id && <Check size={15} className="text-brand-600 shrink-0" />}
             </button>
           ))}

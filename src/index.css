@@ -320,6 +320,13 @@ button:disabled,
   border-radius: 0 !important;
 }
 
+/* Larger, gentler rounding for stat/summary cards (e.g. Total Assets) that
+   should stand out from the sharp-cornered design without going full pill
+   like the FAB/mini-fab. Same override pattern as .keep-round above. */
+.keep-round-card {
+  border-radius: 1rem !important;
+}
+
 /* PIN entry boxes on the lock screen — keep round. Higher specificity than
    the universal rule above, so it wins regardless of source order. */
 .keep-round {

@@ -22,10 +22,10 @@ export default function UpiQrCode({ link, size = 160 }: { link: string; size?: n
     return (
       <div
         style={{ width: size, height: size }}
-        className="rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse"
+        className="rounded-3xl bg-slate-100 dark:bg-slate-800 animate-pulse"
       />
     );
   }
 
-  return <img src={dataUrl} alt="UPI payment QR code" width={size} height={size} className="rounded-lg" />;
+  return <img src={dataUrl} alt="UPI payment QR code" width={size} height={size} className="rounded-3xl" />;
 }

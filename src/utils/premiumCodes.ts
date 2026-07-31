@@ -35,6 +35,12 @@ export const PLAN_CODES: Record<'monthly' | 'quarterly' | 'lifetime', { code: st
 
 const DISCOUNT_PREFIX = 'AURA15-';
 
+/** Flat 20%-off promo code — same for everyone (not tied to a UID like the
+ *  AURA15-XXXXXX codes). Unlike those, this one actually reduces the price
+ *  shown/paid, and is auto-applied as soon as it's typed correctly. */
+export const PROMO20_CODE = 'AURA20';
+export const PROMO20_PCT = 20;
+
 /** Deterministically derives a shareable 15%-discount code from a user's
  *  Firebase UID, so no server-side storage is needed to generate or check
  *  one. Same UID always produces the same code. */
@@ -51,6 +57,7 @@ export type CodeCheckResult =
   | { kind: 'developer' }
   | { kind: 'plan'; planId: 'monthly' | 'quarterly' | 'lifetime'; durationDays: number | null }
   | { kind: 'discount'; code: string }
+  | { kind: 'promo20' }
   | { kind: 'invalid' };
 
 /** Checks a code the person typed in. Doesn't check WHO owns a discount
@@ -60,6 +67,7 @@ export function checkRedeemCode(input: string): CodeCheckResult {
   const trimmed = input.trim().toUpperCase();
   if (!trimmed) return { kind: 'invalid' };
   if (trimmed === DEV_MASTER_CODE.toUpperCase()) return { kind: 'developer' };
+  if (trimmed === PROMO20_CODE.toUpperCase()) return { kind: 'promo20' };
   for (const [planId, { code, durationDays }] of Object.entries(PLAN_CODES) as [
     'monthly' | 'quarterly' | 'lifetime',
     { code: string; durationDays: number | null },
@@ -68,4 +76,11 @@ export function checkRedeemCode(input: string): CodeCheckResult {
   }
   if (/^AURA15-[A-Z0-9]{6}$/.test(trimmed)) return { kind: 'discount', code: trimmed };
   return { kind: 'invalid' };
+}
+
+/** True the moment the person's typed input exactly matches the AURA20
+ *  promo code (case-insensitive), so the UI can auto-apply it live as they
+ *  type rather than waiting for a button press. */
+export function isPromo20Code(input: string): boolean {
+  return input.trim().toUpperCase() === PROMO20_CODE.toUpperCase();
 }
