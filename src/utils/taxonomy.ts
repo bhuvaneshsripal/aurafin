@@ -18,6 +18,12 @@ export interface TypeOption<T extends string> {
   label: string;
 }
 
+export interface TypeGroup<T extends string> {
+  label: string;
+  /** The type this group opens the details form with by default. */
+  defaultValue: T;
+}
+
 export interface CategoryDef<T extends string> {
   key: string;
   label: string;
@@ -25,6 +31,11 @@ export interface CategoryDef<T extends string> {
   color: string;
   /** When there's exactly one type, Step 2 skips the subtype picker and goes straight to the form. */
   types: TypeOption<T>[];
+  /** Optional: show these grouped tiles on the type-picker screen instead of
+   *  one tile per raw type (e.g. Commodities groups Gold/Silver/Platinum
+   *  under one "Physical Gold / Silver" tile). The full `types` list is
+   *  still used everywhere else (the in-form Type dropdown, labels, etc). */
+  groups?: TypeGroup<T>[];
 }
 
 export const ASSET_TAXONOMY: CategoryDef<AssetClass>[] = [
@@ -91,6 +102,10 @@ export const ASSET_TAXONOMY: CategoryDef<AssetClass>[] = [
       { value: 'silver', label: 'Silver' },
       { value: 'platinum', label: 'Platinum' },
       { value: 'other_commodity', label: 'Other Commodity' },
+    ],
+    groups: [
+      { label: 'Physical Gold / Silver', defaultValue: 'gold' },
+      { label: 'Digital (ETF / SGB / MF)', defaultValue: 'other_commodity' },
     ],
   },
   {

@@ -1,5 +1,5 @@
 import { useState, useEffect, type ReactNode } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   updateProfile,
   updatePassword,
@@ -40,9 +40,12 @@ import { usePremiumStore, selectIsPremium } from '../store/premiumStore';
 import { checkRedeemCode, isPromo20Code, PROMO20_CODE, PROMO20_PCT, PLAN_CODES } from '../utils/premiumCodes';
 import { PRICING_PLANS, PLAN_LABELS, buildUpiLink, type PricingPlan } from '../config/payments';
 import UpiQrCode from '../components/UpiQrCode';
+import { useIsPro } from '../hooks/useIsPro';
+import ProBadge from '../components/pro/ProBadge';
 import type { HouseholdProfile, PremiumStatus } from '../types';
 import Modal from '../components/Modal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import { useUrlTab } from '../hooks/useUrlTab';
 
 type Tab = 'account' | 'preferences' | 'profiles' | 'billing' | 'data';
 
@@ -298,7 +301,13 @@ function PersonalInfoCard() {
 
 function SetPasswordCard() {
   const user = useAuthStore((s) => s.user);
-  const hasPasswordProvider = user?.providerData.some((p) => p.providerId === 'password') ?? false;
+  // `user` may briefly be the cached optimistic profile (uid/email only)
+  // right after a refresh, before Firebase confirms the full session and
+  // fills in fields like providerData. Fall back to `false` until then -
+  // it self-corrects the moment onAuthStateChanged resolves.
+  const hasPasswordProvider = (user && 'providerData' in user ? user.providerData : []).some(
+    (p) => p.providerId === 'password'
+  );
 
   const [hasSecurityQuestion, setHasSecurityQuestion] = useState<boolean | null>(null);
   const [mode, setMode] = useState<'form' | 'forgot' | 'forgot-sent'>('form');
@@ -846,10 +855,13 @@ function SharedAccessCard() {
       <div className="flex gap-3">
         <Users size={20} className="text-slate-700 dark:text-slate-300 shrink-0 mt-0.5" />
         <div>
-          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Shared Access</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Shared Access</h2>
+            <ProBadge size="xs" />
+          </div>
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-            Share your financial data with trusted people — spouse, financial advisor, CA, or anyone you
-            choose. Each person gets View Only or Full Access.
+            Share your financial data with up to 5 trusted people — spouse, financial advisor, CA, or
+            anyone you choose. Each person gets View Only or Full Access.
           </p>
         </div>
       </div>
@@ -1043,9 +1055,13 @@ function PreferencesTab() {
   return (
     <>
       <Card>
-        <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Base Currency</h2>
+        <div className="flex items-center gap-2 mb-1">
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Base Currency</h2>
+          <ProBadge size="xs" />
+        </div>
         <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
-          Your net worth and totals will be shown in this currency across the dashboard.
+          Your net worth and totals will be shown in this currency across the dashboard — with full
+          multi-currency support for assets held in any currency.
         </p>
         <select
           value={baseCurrency}
@@ -1069,7 +1085,10 @@ function ProfilesTab() {
   const profiles = useHouseholdProfilesStore((s) => s.profiles);
   const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
   const setActiveProfileId = useHouseholdProfilesStore((s) => s.setActiveProfileId);
-  const isPremium = usePremiumStore(selectIsPremium);
+  // Family Profiles is a Pro feature — gated by useIsPro() rather than raw
+  // premium status, so it stays fully usable while PRO_ACCESS_BYPASSED is
+  // true (see src/config/proFeatures.ts).
+  const isPremium = useIsPro();
 
   const [addOpen, setAddOpen] = useState(false);
   const [name, setName] = useState('');
@@ -1208,7 +1227,10 @@ function ProfilesTab() {
     <>
       <Card>
         <div className="flex items-center justify-between mb-1">
-          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Your Profiles</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Family Profiles</h2>
+            <ProBadge size="xs" />
+          </div>
           <Users size={16} className="text-slate-400" />
         </div>
         <p className="text-xs text-slate-600 dark:text-slate-300 mb-4">
@@ -1429,6 +1451,38 @@ const PREMIUM_FEATURES = [
   'Priority feature requests',
 ];
 
+// Purchasing Premium (redeem codes, discount code, plan picker + UPI
+// payment) isn't live yet — flip this back to true to restore it once
+// payments are ready. Kept as a single flag rather than deleting the flow
+// so nothing has to be rebuilt later.
+const PREMIUM_PURCHASE_ENABLED = false;
+
+function ProPromoCard() {
+  const navigate = useNavigate();
+  return (
+    <div className="relative overflow-hidden rounded-3xl border border-amber-200/70 dark:border-amber-500/25 bg-gradient-to-br from-slate-900 to-amber-950/40 p-6 sm:p-7 text-center shadow-sm">
+      <div className="pointer-events-none absolute -top-16 left-1/2 -translate-x-1/2 h-48 w-80 rounded-full bg-amber-400/20 blur-3xl" />
+      <div className="relative">
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-300 via-yellow-400 to-amber-500 flex items-center justify-center mx-auto mb-3 shadow-[0_6px_20px_rgba(217,161,20,0.4)]">
+          <Crown size={22} className="text-amber-950" strokeWidth={2.25} />
+        </div>
+        <h2 className="text-base font-bold text-white">Aurafin Pro</h2>
+        <p className="text-xs text-slate-300 mt-1.5 max-w-xs mx-auto leading-relaxed">
+          Unlimited profiles, deeper insights, multi-currency support and more — every Pro feature is
+          already unlocked for you while the plan finishes rolling out.
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate('/pro')}
+          className="inline-flex items-center gap-1.5 mt-4 bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-500 hover:to-amber-600 text-amber-950 text-xs font-bold px-4 py-2 rounded-full transition-colors"
+        >
+          <Crown size={12} /> See Aurafin Pro
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // Extra-rounded card used only on the Billing tab, per request — the shared
 // Card component above is left untouched so other tabs keep their look.
 function BillingCard({ children }: { children: ReactNode }) {
@@ -1560,6 +1614,8 @@ function BillingTab() {
         )}
       </BillingCard>
 
+      {PREMIUM_PURCHASE_ENABLED ? (
+        <>
       <BillingCard>
         <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Have a code?</h2>
         <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">
@@ -1792,6 +1848,10 @@ function BillingTab() {
             </div>
           )}
         </BillingCard>
+      )}
+        </>
+      ) : (
+        !isPremium && <ProPromoCard />
       )}
     </div>
   );
@@ -2041,7 +2101,10 @@ function DataTab() {
 export default function Settings() {
   const location = useLocation();
   const initialTab = (location.state as { tab?: Tab } | null)?.tab;
-  const [tab, setTab] = useState<Tab>(initialTab && TABS.some((t) => t.key === initialTab) ? initialTab : 'account');
+  const [tab, setTab] = useUrlTab<Tab>(
+    TABS.map((t) => t.key),
+    initialTab && TABS.some((t) => t.key === initialTab) ? initialTab : 'account'
+  );
 
   return (
     <div className="space-y-6">

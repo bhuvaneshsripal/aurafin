@@ -1,9 +1,10 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  /* Muted forest-green brand scale (was bright mint/emerald) */
+  /* ---- Brand scale — restored to the original muted forest-green ---- */
   --color-brand-50: #f0f6f2;
   --color-brand-100: #dbe9e0;
   --color-brand-200: #b8d4c3;
@@ -15,13 +16,48 @@
   --color-brand-800: #1f4d3d;
   --color-brand-900: #163a2c;
 
-  /* Warm cream neutrals for backgrounds/surfaces */
-  --color-cream-50: #fbfaf5;
-  --color-cream-100: #f6f3ea;
-  --color-cream-200: #efe9da;
-  --color-cream-300: #e4ddc9;
+  /* Blue accent — used sparingly for links, informational states, secondary charts */
+  --color-accent-50: #eff6ff;
+  --color-accent-100: #dbeafe;
+  --color-accent-200: #bfdbfe;
+  --color-accent-300: #93c5fd;
+  --color-accent-400: #60a5fa;
+  --color-accent-500: #3b82f6;
+  --color-accent-600: #2563eb;
+  --color-accent-700: #1d4ed8;
+  --color-accent-800: #1e40af;
+  --color-accent-900: #1e3a8a;
 
-  /* Sandal — warm tan/beige used for the glassmorphism PIN keypad */
+  /* Semantic status colors */
+  --color-success-500: #22c55e;
+  --color-warning-500: #f59e0b;
+  --color-danger-500: #dc2626;
+
+  /* Gold — reserved for the Aurafin Pro experience: Crown icons, PRO
+     badges, the pricing card, and the Pro page. Not used anywhere else,
+     so it stays a clear, consistent signal for "this is a Pro feature". */
+  --color-gold-50: #fffbeb;
+  --color-gold-100: #fef3c7;
+  --color-gold-200: #fde68a;
+  --color-gold-300: #fcd34d;
+  --color-gold-400: #fbbf24;
+  --color-gold-500: #d9a114;
+  --color-gold-600: #b3830a;
+  --color-gold-700: #8a6508;
+  --color-gold-800: #6b4e0a;
+  --color-gold-900: #4a360a;
+
+  /* Surfaces — cards stay pure white; the page background now carries a
+     slight warm sandal tint instead of a flat neutral gray, per request.
+     Reused as `bg-cream-*` across the app so this applies everywhere with
+     no per-file changes. */
+  --color-cream-50: #ffffff;
+  --color-cream-100: #faf7f1;
+  --color-cream-200: #f5efe2;
+  --color-cream-300: #ecdfc7;
+
+  /* Sandal — restored to the original warm tan/beige scale (used by the
+     lock-screen keypad, and now lightly echoed in the page background above). */
   --color-sandal-50: #faf5ec;
   --color-sandal-100: #f2e6d1;
   --color-sandal-200: #e6cea8;
@@ -33,29 +69,33 @@
   --color-sandal-800: #644a2c;
   --color-sandal-900: #503d26;
 
-  --font-sans: Consolas, "SFMono-Regular", Menlo, Monaco, "Liberation Mono", "Courier New", monospace;
-  --font-display: Consolas, "SFMono-Regular", Menlo, Monaco, "Liberation Mono", "Courier New", monospace;
-  --font-numeric: Consolas, "SFMono-Regular", Menlo, Monaco, "Liberation Mono", "Courier New", monospace;
-  --font-hero-numeric: Consolas, "SFMono-Regular", Menlo, Monaco, "Liberation Mono", "Courier New", monospace;
-  --font-luxury: "Playfair Display", "Cormorant Garamond", Georgia, serif;
+  /* Inter everywhere — including the numeric/display/brand-wordmark roles
+     that previously used a monospace stack or a serif. Tabular numerals
+     are preserved via font-feature-settings on the numeric utility classes
+     below, not via a different typeface. */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-numeric: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-hero-numeric: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-luxury: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 
-  /* Dark mode across the app is built on Tailwind's `slate` scale, which
-     has a cool blue undertone (e.g. default slate-900 is #0f172a — a navy,
-     not a black). Overriding the scale here with true, hue-free neutrals
-     (and pushing the darkest steps toward pure black) makes every existing
-     `dark:bg-slate-900`, `border-slate-800`, etc. render as black/charcoal
-     instead of dark blue, with no need to touch each component. */
+  /* Neutral grayscale (light: background #FAFAFA / cards #FFFFFF / primary
+     text #111827 / secondary text #6B7280 / borders #E5E7EB). Reusing
+     Tailwind's `slate-*` scale as the token surface — as before — means
+     every existing `text-slate-500`, `border-slate-200`,
+     `dark:bg-slate-900`, etc. across the app automatically renders the new
+     palette without touching each component. */
   --color-slate-50: #fafafa;
-  --color-slate-100: #f4f4f4;
-  --color-slate-200: #e4e4e4;
-  --color-slate-300: #d1d1d1;
-  --color-slate-400: #a3a3a3;
-  --color-slate-500: #737373;
-  --color-slate-600: #525252;
-  --color-slate-700: #3a3a3a;
-  --color-slate-800: #202020;
-  --color-slate-900: #121212;
-  --color-slate-950: #000000;
+  --color-slate-100: #f4f4f5;
+  --color-slate-200: #e5e7eb;
+  --color-slate-300: #d1d5db;
+  --color-slate-400: #9ca3af;
+  --color-slate-500: #6b7280;
+  --color-slate-600: #4b5563;
+  --color-slate-700: #374151;
+  --color-slate-800: #1f2937;
+  --color-slate-900: #111827;
+  --color-slate-950: #0a0b0d;
 }
 
 html {
@@ -115,24 +155,20 @@ body {
   letter-spacing: 0.01em;
 }
 
-/* Hero amounts (Net Worth, Invested, etc.) — premium bold with a bright
-   gold-shine finish instead of flat slate/black. */
+/* Hero amounts (Net Worth, Invested, etc.) — premium bold, flat ink color.
+   No gradients/glow per the fintech redesign spec; the weight and tabular
+   figures do the work of making these numbers feel important. */
 .number-premium {
   font-family: var(--font-numeric);
   font-weight: 700;
   font-feature-settings: "tnum" 1, "lnum" 1;
   font-variant-numeric: tabular-nums lining-nums;
-  letter-spacing: 0.01em;
-  background: linear-gradient(135deg, #f6c453 0%, #c9932a 45%, #8a6516 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  letter-spacing: -0.01em;
+  color: var(--color-slate-900);
 }
 
 .dark .number-premium {
-  background: linear-gradient(135deg, #ffe08a 0%, #f3c25e 45%, #d79f2e 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
+  color: #f4f4f5;
 }
 
 /* ---- Mobile performance & touch tuning (120fps target) ---- */
@@ -312,29 +348,58 @@ button:disabled,
   transform: scale(0.94);
 }
 
-/* Sharp, rectangular corners everywhere — cards, modals, inputs, buttons —
-   overrides any rounded-* utility. Specific round exceptions (FAB, mini-fab,
-   the PIN entry boxes/dots on the lock screen) opt back in below with a
-   class selector, which has higher specificity than this universal one. */
-* {
-  border-radius: 0 !important;
+/* ---- Premium fintech radius scale ---- */
+:root {
+  --radius-card: 16px;
+  --radius-control: 12px;
+  --radius-modal: 20px;
 }
 
-/* Larger, gentler rounding for stat/summary cards (e.g. Total Assets) that
-   should stand out from the sharp-cornered design without going full pill
-   like the FAB/mini-fab. Same override pattern as .keep-round above. */
+/* Cards — the app's primary "surface" container class. */
+.card,
 .keep-round-card {
-  border-radius: 1rem !important;
+  border-radius: var(--radius-card) !important;
 }
 
-/* PIN entry boxes on the lock screen — keep round. Higher specificity than
-   the universal rule above, so it wins regardless of source order. */
+/* Buttons, inputs, dropdowns all share the same 12px control radius. */
+button,
+input,
+select,
+textarea {
+  border-radius: var(--radius-control);
+}
+
+/* Fully round elements (avatars, FAB, PIN dots) opt back in explicitly —
+   kept for the handful of components that need a true circle regardless
+   of the control radius above. */
 .keep-round {
   border-radius: 9999px !important;
 }
 
-/* Floating Action Button — round, with a tactile 3D "push button" feel.
-   Higher specificity than the plain `button` rule above, so it stays round. */
+/* Soft shadow system — subtle elevation only, no heavy drop shadows. */
+.shadow-soft {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.shadow-soft-md {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+/* "Live" push-down feedback for primary action buttons (login/signup) —
+   same press feel as .mini-fab: a soft shadow that flattens and the button
+   nudges down when pressed, like a real button being clicked. */
+.btn-press {
+  box-shadow: 0 3px 0 0 rgba(0, 0, 0, 0.15);
+  transform: translateY(0);
+  transition: transform 100ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 100ms ease;
+}
+
+.btn-press:active {
+  transform: translateY(3px);
+  box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.15);
+}
+/* Floating action button — always a true circle, regardless of the
+   control radius above. */
 .fab-button {
   border-radius: 9999px !important;
   background: var(--color-brand-600);
@@ -443,6 +508,51 @@ button:disabled,
 /* Routed page content — a quick, cheap fade+rise (opacity/transform only,
    no layout properties) so switching pages reads as a soft crossfade
    instead of a hard cut while the new route mounts. */
+/* Gentle up/down float — used by the Aurafin Pro hero crown icon only. */
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+/* Lock screen: smooth unlock (fades + scales away to reveal the app
+   underneath) and a matching gentle entrance when it (re)locks. */
+@keyframes lock-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes lock-unlock {
+  from {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0px);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.05);
+    filter: blur(6px);
+  }
+}
+
+.animate-lock-in {
+  animation: lock-in 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-lock-unlock {
+  animation: lock-unlock 380ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
 @keyframes page-in {
   from {
     opacity: 0;
@@ -466,7 +576,10 @@ button:disabled,
   .animate-page-in,
   .animate-menu-in,
   .animate-menu-in-3d,
-  .logo-flip {
+  .logo-flip,
+  .animate-lock-in,
+  .animate-lock-unlock,
+  [class*='animate-[float'] {
     animation: none !important;
   }
 }

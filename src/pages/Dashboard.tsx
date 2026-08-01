@@ -322,8 +322,8 @@ function CashflowSummary({
             <XAxis dataKey="month" tick={{ fontSize: 12 }} />
             <YAxis tick={{ fontSize: 12 }} width={60} />
             <Tooltip formatter={(v) => formatCurrency(Number(v))} />
-            <Bar dataKey="income" fill="#16a35d" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="expense" fill="#f97316" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="income" fill="#16a34a" radius={[6, 6, 0, 0]} />
+            <Bar dataKey="expense" fill="#f59e0b" radius={[6, 6, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       )}

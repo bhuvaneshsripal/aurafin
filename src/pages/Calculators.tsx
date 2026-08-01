@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   LineChart,
   Line,
@@ -16,11 +17,15 @@ import {
   Landmark,
   Wallet,
   PiggyBank,
+  Layers,
+  Plus,
+  Trash2,
   type LucideIcon,
 } from 'lucide-react';
 import { formatCurrency } from '../utils/currency';
+import ProBadge from '../components/pro/ProBadge';
 
-type CalcKey = 'xirr' | 'sip' | 'lumpsum' | 'cagr' | 'emi' | 'swp' | 'retirement' | 'fd';
+type CalcKey = 'xirr' | 'sip' | 'lumpsum' | 'phased' | 'cagr' | 'emi' | 'swp' | 'retirement' | 'fd';
 
 interface CalcDef {
   key: CalcKey;
@@ -28,6 +33,7 @@ interface CalcDef {
   description: string;
   icon: LucideIcon;
   soon?: boolean;
+  pro?: boolean;
 }
 
 interface CalcGroup {
@@ -56,6 +62,13 @@ const GROUPS: CalcGroup[] = [
         label: 'Lumpsum Calculator',
         description: 'Growth of a one-time investment over time.',
         icon: Coins,
+      },
+      {
+        key: 'phased',
+        label: 'Phased Investment Calculator',
+        description: 'One fund where your monthly investment changes across year ranges (e.g. 1–3, 3–13, 13–20).',
+        icon: Layers,
+        pro: true,
       },
       {
         key: 'cagr',
@@ -104,7 +117,36 @@ const GROUPS: CalcGroup[] = [
 const ALL_CALCS = GROUPS.flatMap((g) => g.items);
 
 export default function Calculators() {
-  const [active, setActive] = useState<CalcKey | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlCalc = searchParams.get('calc') as CalcKey | null;
+  const [active, setActiveState] = useState<CalcKey | null>(
+    urlCalc && ALL_CALCS.some((c) => c.key === urlCalc) ? urlCalc : null
+  );
+  const didMountRef = useRef(false);
+
+  // Local state -> URL (?calc=). The initial sync replaces so it doesn't add
+  // an extra Back stop; opening/closing a calculator afterwards pushes, so
+  // Back steps out of a calculator one at a time instead of leaving the page.
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams);
+    if (active) next.set('calc', active);
+    else next.delete('calc');
+    if (next.toString() !== searchParams.toString()) {
+      setSearchParams(next, { replace: !didMountRef.current });
+    }
+    didMountRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
+
+  // URL -> local state (Back/Forward navigation, manual refresh).
+  useEffect(() => {
+    const fromUrl = searchParams.get('calc') as CalcKey | null;
+    const resolved = fromUrl && ALL_CALCS.some((c) => c.key === fromUrl) ? fromUrl : null;
+    if (resolved !== active) setActiveState(resolved);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const setActive = (key: CalcKey | null) => setActiveState(key);
   const activeCalc = ALL_CALCS.find((c) => c.key === active);
 
   if (activeCalc) {
@@ -117,12 +159,16 @@ export default function Calculators() {
           <ArrowLeft size={16} /> Back to Calculators
         </button>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{activeCalc.label}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{activeCalc.label}</h1>
+            {activeCalc.pro && <ProBadge />}
+          </div>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">{activeCalc.description}</p>
         </div>
         {active === 'xirr' && <XirrCalculator />}
         {active === 'sip' && <SipCalculator />}
         {active === 'lumpsum' && <LumpsumCalculator />}
+        {active === 'phased' && <PhasedCalculator />}
         {active === 'cagr' && <CagrCalculator />}
         {active === 'emi' && <EmiCalculator />}
         {active === 'swp' && <SwpCalculator />}
@@ -166,6 +212,7 @@ export default function Calculators() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="font-semibold text-slate-900 dark:text-white">{c.label}</p>
+                      {c.pro && <ProBadge size="xs" />}
                       {c.soon && (
                         <span className="text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded-full">
                           Soon
@@ -320,6 +367,195 @@ function LumpsumCalculator() {
           <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Projected Value</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400">Maturity Value</p>
           <p className="text-2xl font-bold text-brand-600 dark:text-brand-300">{formatCurrency(maturity)}</p>
+        </>
+      }
+      chartData={chartData}
+    />
+  );
+}
+
+interface Phase {
+  id: number;
+  amount: string;
+  from: string;
+  to: string;
+}
+
+function PhasedCalculator() {
+  const [phases, setPhases] = useState<Phase[]>([
+    { id: 1, amount: '1000', from: '1', to: '3' },
+    { id: 2, amount: '5000', from: '3', to: '13' },
+    { id: 3, amount: '10000', from: '13', to: '20' },
+  ]);
+  const [rate, setRate] = useState('12');
+  const nextId = useMemo(() => Math.max(0, ...phases.map((p) => p.id)) + 1, [phases]);
+
+  const addPhase = () => {
+    const lastTo = phases.length ? phases[phases.length - 1].to : '0';
+    setPhases((prev) => [...prev, { id: nextId, amount: '', from: lastTo, to: '' }]);
+  };
+  const removePhase = (id: number) => {
+    setPhases((prev) => prev.filter((p) => p.id !== id));
+  };
+  const updatePhase = (id: number, field: 'amount' | 'from' | 'to', value: string) => {
+    setPhases((prev) => prev.map((p) => (p.id === id ? { ...p, [field]: value } : p)));
+  };
+
+  const { chartData, invested, maturity, gain, totalYears, breakdown } = useMemo(() => {
+    const annualRate = (Number(rate) || 0) / 100;
+    const monthlyRate = annualRate / 12;
+
+    const ranges = phases
+      .map((p) => ({
+        amount: Number(p.amount) || 0,
+        from: Number(p.from) || 0,
+        to: Number(p.to) || 0,
+      }))
+      .filter((p) => p.amount > 0 && p.to > p.from)
+      .map((p) => ({ ...p, fromMonth: Math.round(p.from * 12), toMonth: Math.round(p.to * 12) }));
+
+    const n = ranges.length ? Math.max(...ranges.map((r) => r.to)) : 0;
+    const totalMonths = Math.round(n * 12);
+
+    let balance = 0;
+    let totalInvested = 0;
+    const data: { year: number; value: number }[] = [{ year: 0, value: 0 }];
+
+    // Same fund, compounding every month; the monthly contribution just changes
+    // depending on which phase (year range) that month falls into.
+    for (let month = 1; month <= totalMonths; month++) {
+      const activePhase = ranges.find((r) => month > r.fromMonth && month <= r.toMonth);
+      const monthlyAmount = activePhase ? activePhase.amount : 0;
+
+      balance = balance * (1 + monthlyRate) + monthlyAmount;
+      totalInvested += monthlyAmount;
+
+      if (month % 12 === 0) {
+        data.push({ year: month / 12, value: Math.round(balance) });
+      }
+    }
+    if (data[data.length - 1]?.year !== n) {
+      data.push({ year: n, value: Math.round(balance) });
+    }
+
+    const withInvested = ranges.map((r) => ({
+      amount: r.amount,
+      from: r.from,
+      to: r.to,
+      monthsInvested: r.toMonth - r.fromMonth,
+      totalInvested: r.amount * (r.toMonth - r.fromMonth),
+    }));
+
+    return {
+      chartData: data,
+      invested: Math.round(totalInvested),
+      maturity: Math.round(balance),
+      gain: Math.round(balance - totalInvested),
+      totalYears: n,
+      breakdown: withInvested,
+    };
+  }, [phases, rate]);
+
+  return (
+    <CalcShell
+      inputs={
+        <>
+          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Investment Phases</h2>
+          <p className="text-xs text-slate-400 dark:text-slate-500 -mt-2">
+            One fund, monthly investment that changes over time. Example: ₹1,000/month from year 1 to 3, then
+            ₹5,000/month from year 3 to 13, then ₹10,000/month from year 13 to 20 — everything compounds together.
+          </p>
+
+          <div className="space-y-2">
+            {phases.map((p, i) => (
+              <div key={p.id} className="flex items-end gap-2">
+                <Field label={i === 0 ? 'Monthly Amount' : ''}>
+                  <input
+                    type="number"
+                    placeholder="Amount"
+                    value={p.amount}
+                    onChange={(e) => updatePhase(p.id, 'amount', e.target.value)}
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label={i === 0 ? 'From Year' : ''}>
+                  <input
+                    type="number"
+                    placeholder="From"
+                    value={p.from}
+                    onChange={(e) => updatePhase(p.id, 'from', e.target.value)}
+                    className={`${inputClass} w-20`}
+                  />
+                </Field>
+                <Field label={i === 0 ? 'To Year' : ''}>
+                  <input
+                    type="number"
+                    placeholder="To"
+                    value={p.to}
+                    onChange={(e) => updatePhase(p.id, 'to', e.target.value)}
+                    className={`${inputClass} w-20`}
+                  />
+                </Field>
+                <button
+                  type="button"
+                  onClick={() => removePhase(p.id)}
+                  disabled={phases.length <= 1}
+                  className="mb-0.5 h-[42px] w-10 shrink-0 rounded-lg border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-400 hover:text-red-500 hover:border-red-300 dark:hover:border-red-700 disabled:opacity-30 disabled:pointer-events-none"
+                  aria-label="Remove phase"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={addPhase}
+            className="flex items-center gap-1.5 text-sm font-medium text-brand-600 dark:text-brand-300 hover:text-brand-700"
+          >
+            <Plus size={16} /> Add another phase
+          </button>
+
+          <Field label="Expected Annual Return (%)">
+            <input type="number" value={rate} onChange={(e) => setRate(e.target.value)} className={inputClass} />
+          </Field>
+        </>
+      }
+      result={
+        <>
+          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Projected Value</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Total Invested</p>
+              <p className="text-xl font-bold text-slate-900 dark:text-white">{formatCurrency(invested)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Maturity Value (Year {totalYears})</p>
+              <p className="text-xl font-bold text-brand-600 dark:text-brand-300">{formatCurrency(maturity)}</p>
+            </div>
+          </div>
+          <div>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Estimated Gain</p>
+            <p className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(gain)}</p>
+          </div>
+          {breakdown.length > 0 && (
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
+              <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide">
+                Breakdown by phase
+              </p>
+              {breakdown.map((b, i) => (
+                <div key={i} className="flex items-center justify-between text-sm">
+                  <span className="text-slate-500 dark:text-slate-400">
+                    Year {b.from}–{b.to}: {formatCurrency(b.amount)}/mo
+                  </span>
+                  <span className="font-medium text-slate-700 dark:text-slate-200">
+                    {formatCurrency(b.totalInvested)} invested
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </>
       }
       chartData={chartData}

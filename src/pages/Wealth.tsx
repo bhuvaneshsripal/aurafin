@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Plus,
   Trash2,
@@ -41,6 +41,7 @@ import Modal from '../components/Modal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import type { Asset, AssetClass, Liability, LiabilityClass } from '../types';
 import { CURRENCIES, formatPreciseCurrency, maskPreciseAmount, isZeroAmount } from '../utils/currency';
+import ProBadge from '../components/pro/ProBadge';
 import {
   ASSET_TAXONOMY,
   LIABILITY_TAXONOMY,
@@ -68,6 +69,8 @@ import {
   computeSipLiveValue,
   type MfSearchResult,
 } from '../utils/mutualFunds';
+import { fetchLivePrices } from '../utils/marketPrices';
+import { useUrlTab } from '../hooks/useUrlTab';
 
 type Tab = 'assets' | 'liabilities' | 'networth' | 'allocation';
 type SortKey = 'manual' | 'name' | 'qty' | 'avgCost' | 'perUnit' | 'invested' | 'value' | 'pnl' | 'alloc';
@@ -87,9 +90,16 @@ function formatGrams(qty: number): string {
 export default function Wealth() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<Tab>('assets');
-  const [addFlow, setAddFlow] = useState<EntryType | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTab] = useUrlTab<Tab>(['assets', 'liabilities', 'networth', 'allocation'], 'assets');
   const [startCategoryKey, setStartCategoryKey] = useState<string | undefined>();
+
+  const addFlow: EntryType | null =
+    searchParams.get('add') === '1'
+      ? searchParams.get('entry') === 'liability'
+        ? 'liability'
+        : 'asset'
+      : null;
 
   // Onboarding's "Add your assets" step hands off a chosen asset category
   // via navigation state so this page can jump straight into Step 2 of the
@@ -98,21 +108,46 @@ export default function Wealth() {
     const startAddAsset = (location.state as { startAddAsset?: string } | null)?.startAddAsset;
     if (startAddAsset) {
       setStartCategoryKey(startAddAsset);
-      setAddFlow('asset');
-      navigate(location.pathname, { replace: true, state: null });
+      const next = new URLSearchParams(searchParams);
+      next.set('add', '1');
+      next.set('entry', 'asset');
+      next.set('step', 'details');
+      next.set('cat', startAddAsset);
+      navigate({ pathname: location.pathname, search: next.toString() }, { replace: true, state: null });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Opening the Add Asset/Liability flow pushes a fresh history entry, so the
+  // browser Back button (or the flow's own Back link) steps out of it one
+  // screen at a time instead of leaving the whole Wealth page.
+  const openAdd = (entryType: EntryType) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('add', '1');
+    next.set('entry', entryType);
+    next.set('step', 'category');
+    next.delete('cat');
+    next.delete('type');
+    setSearchParams(next);
+  };
+
+  const closeAdd = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('add');
+    next.delete('entry');
+    next.delete('step');
+    next.delete('cat');
+    next.delete('type');
+    setSearchParams(next, { replace: true });
+    setStartCategoryKey(undefined);
+  };
 
   if (addFlow) {
     return (
       <AddWealthPage
         initialEntryType={addFlow}
         initialCategoryKey={startCategoryKey}
-        onClose={() => {
-          setAddFlow(null);
-          setStartCategoryKey(undefined);
-        }}
+        onClose={closeAdd}
       />
     );
   }
@@ -120,10 +155,10 @@ export default function Wealth() {
   return (
     <div className="space-y-4">
       {tab === 'assets' && (
-        <AssetsTab tab={tab} setTab={setTab} onAdd={() => setAddFlow('asset')} />
+        <AssetsTab tab={tab} setTab={setTab} onAdd={() => openAdd('asset')} />
       )}
       {tab === 'liabilities' && (
-        <LiabilitiesTab tab={tab} setTab={setTab} onAdd={() => setAddFlow('liability')} />
+        <LiabilitiesTab tab={tab} setTab={setTab} onAdd={() => openAdd('liability')} />
       )}
       {tab === 'networth' && <NetWorthTab tab={tab} setTab={setTab} />}
       {tab === 'allocation' && <AllocationTab tab={tab} setTab={setTab} />}
@@ -143,36 +178,65 @@ function AddWealthPage({
 }) {
   const user = useAuthStore((s) => s.user);
   const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
-  const [entryType, setEntryType] = useState<EntryType>(initialEntryType);
-  const [step, setStep] = useState<'category' | 'details'>(initialCategoryKey ? 'details' : 'category');
-  const [categoryKey, setCategoryKey] = useState<string | undefined>(initialCategoryKey);
-  const [pickedType, setPickedType] = useState<string | undefined>(() => {
-    if (!initialCategoryKey) return undefined;
-    const taxonomy = initialEntryType === 'asset' ? ASSET_TAXONOMY : LIABILITY_TAXONOMY;
-    return taxonomy.find((c) => c.key === initialCategoryKey)?.types[0]?.value;
-  });
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const entryType: EntryType = searchParams.get('entry') === 'liability' ? 'liability' : initialEntryType;
+  const step = (searchParams.get('step') as 'category' | 'type' | 'details' | null) ??
+    (initialCategoryKey ? 'details' : 'category');
+  const categoryKey = searchParams.get('cat') ?? initialCategoryKey ?? undefined;
+  const urlPickedType = searchParams.get('type') ?? undefined;
 
   const taxonomy = entryType === 'asset' ? ASSET_TAXONOMY : LIABILITY_TAXONOMY;
   const category = taxonomy.find((c) => c.key === categoryKey);
+  const pickedType =
+    urlPickedType ?? (categoryKey ? taxonomy.find((c) => c.key === categoryKey)?.types[0]?.value : undefined);
 
-  const resetToCategory = () => {
-    setStep('category');
-    setCategoryKey(undefined);
-    setPickedType(undefined);
+  // Every transition pushes a fresh history entry, so the browser Back
+  // button (and this flow's own "Back" links) step out one screen at a time
+  // — category list -> type tiles -> details form — instead of leaving the
+  // whole Add Asset/Liability flow in one go. Refreshing mid-flow re-reads
+  // the same state straight from the URL above.
+  const pushParams = (patch: Record<string, string | undefined>) => {
+    const next = new URLSearchParams(searchParams);
+    Object.entries(patch).forEach(([k, v]) => {
+      if (v === undefined) next.delete(k);
+      else next.set(k, v);
+    });
+    setSearchParams(next);
   };
+
+  const resetToCategory = () => pushParams({ step: 'category', cat: undefined, type: undefined });
 
   const switchEntryType = (next: EntryType) => {
     if (next === entryType) return;
-    setEntryType(next);
-    setStep('category');
-    setCategoryKey(undefined);
-    setPickedType(undefined);
+    pushParams({ entry: next, step: 'category', cat: undefined, type: undefined });
   };
 
+  // Step 1 picks a broad category (Equity, Commodities, ...). If it only has
+  // one possible type (Cash, Other), there's nothing to choose so we skip
+  // straight to the details form; otherwise show the type tiles for that
+  // category (grouped tiles when the category defines `groups`, otherwise
+  // one tile per raw type) before moving on to Step 2.
   const selectCategory = (cat: CategoryDef<string>) => {
-    setCategoryKey(cat.key);
-    setPickedType(cat.types[0]?.value);
-    setStep('details');
+    if (cat.types.length <= 1) {
+      pushParams({ cat: cat.key, type: cat.types[0]?.value, step: 'details' });
+    } else {
+      pushParams({ cat: cat.key, type: undefined, step: 'type' });
+    }
+  };
+
+  const selectType = (value: string) => {
+    pushParams({ type: value, step: 'details' });
+  };
+
+  // From the details form's "Back", return to the type tiles when the
+  // category actually has a choice to make, otherwise back to Step 1.
+  const backFromDetails = () => {
+    if (category && category.types.length > 1) {
+      pushParams({ step: 'type', type: undefined });
+    } else {
+      resetToCategory();
+    }
   };
 
   const handleSaveAsset = async (asset: Asset) => {
@@ -210,8 +274,12 @@ function AddWealthPage({
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Add {noun}</h2>
           <p className="text-slate-500 text-sm mt-0.5">
-            Step {step === 'category' ? 1 : 2} of 2:{' '}
-            {step === 'category' ? `Select ${entryType} type` : 'Enter details'}
+            Step {step === 'details' ? 2 : 1} of 2:{' '}
+            {step === 'category'
+              ? `Select ${entryType} type`
+              : step === 'type'
+                ? category?.label ?? `Select ${entryType} type`
+                : (category?.types.find((t) => t.value === pickedType)?.label ?? 'Enter details')}
           </p>
         </div>
         <button
@@ -264,12 +332,36 @@ function AddWealthPage({
               })}
             </div>
           </div>
+        ) : step === 'type' && category ? (
+          <div className="space-y-4">
+            <button
+              onClick={resetToCategory}
+              className="flex items-center gap-1 text-sm text-slate-500 hover:text-brand-600"
+            >
+              <ArrowLeft size={14} /> All categories
+            </button>
+            <h3 className="font-semibold text-slate-900">{category.label}</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {(category.groups
+                ? category.groups.map((g) => ({ value: g.defaultValue, label: g.label }))
+                : category.types
+              ).map((t) => (
+                <button
+                  key={t.value}
+                  onClick={() => selectType(t.value)}
+                  className="border border-slate-200 rounded-xl px-4 py-3.5 text-sm font-medium text-slate-800 text-center hover:border-brand-400 hover:bg-brand-50 transition-colors"
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
         ) : entryType === 'asset' ? (
           <AssetDetailsForm
             category={category as CategoryDef<AssetClass> | undefined}
             initial={null}
             initialType={pickedType as AssetClass}
-            onBack={resetToCategory}
+            onBack={backFromDetails}
             onSave={handleSaveAsset}
           />
         ) : (
@@ -277,7 +369,7 @@ function AddWealthPage({
             category={category as CategoryDef<LiabilityClass> | undefined}
             initial={null}
             initialType={pickedType as LiabilityClass}
-            onBack={resetToCategory}
+            onBack={backFromDetails}
             onSave={handleSaveLiability}
           />
         )}
@@ -878,8 +970,11 @@ function AssetsTab({
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Assets</h2>
-          <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">{assets.length} assets</p>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Assets</h2>
+            <ProBadge size="xs" />
+          </div>
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">{assets.length} assets · unlimited</p>
           <p className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1.5 mt-1">
             <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
             Live prices update every 60 seconds
@@ -1894,6 +1989,58 @@ function AssetDetailsForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSip, fundIsLinked, symbol, sipAmount, sipFrequency, sipDay, startDate, investedValue]);
 
+  // --- Auto-calculated Current Value (Stocks / ETFs / Equity & Index Funds /
+  // Crypto — any SYMBOL_ENABLED_CLASSES entry other than SIP, which has its
+  // own NAV-based calc above). Fetches a live quote for the symbol and sets
+  // Current Value to quantity × live price, same as resolveAssetValues()
+  // does for the saved asset list — so what's typed while adding/editing
+  // matches what the dashboard will show. Respects valueTouchedRef, so once
+  // the person hand-edits Current Value themselves, auto-fill backs off.
+  const [equityLiveLoading, setEquityLiveLoading] = useState(false);
+  const [equityLiveError, setEquityLiveError] = useState(false);
+  const [equityLivePrice, setEquityLivePrice] = useState<number | null>(null);
+  const isEquityLive = SYMBOL_ENABLED_CLASSES.has(assetClass) && !isSip && !isWeightTracked;
+
+  useEffect(() => {
+    if (!isEquityLive) {
+      setEquityLivePrice(null);
+      setEquityLiveError(false);
+      setEquityLiveLoading(false);
+      return;
+    }
+    const sym = symbol.trim();
+    const qty = Number(quantity);
+    if (!sym || !qty || qty <= 0) {
+      setEquityLivePrice(null);
+      setEquityLiveError(false);
+      setEquityLiveLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setEquityLiveLoading(true);
+    setEquityLiveError(false);
+    const timer = setTimeout(() => {
+      fetchLivePrices([{ key: sym, name }]).then((priceMap) => {
+        if (cancelled) return;
+        setEquityLiveLoading(false);
+        const price = priceMap.get(sym.toUpperCase());
+        if (price === undefined) {
+          setEquityLivePrice(null);
+          setEquityLiveError(true);
+          return;
+        }
+        setEquityLivePrice(price);
+        if (!valueTouchedRef.current) setValue((qty * price).toFixed(2));
+      });
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEquityLive, symbol, quantity]);
+
   const estimatedMaturityValue = DEPOSIT_LIKE_CLASSES.has(assetClass)
     ? computeMaturityInfo({
         id: initial?.id ?? '',
@@ -2374,6 +2521,22 @@ function AssetDetailsForm({
           )}
           {isSip && liveValueError && (
             <p className={errorTextClass}>Couldn't fetch this fund's live NAV — using amount invested so far instead.</p>
+          )}
+          {isEquityLive && equityLiveLoading && (
+            <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
+              <Loader2 size={12} className="animate-spin" /> Fetching live price for "{symbol.trim()}"…
+            </p>
+          )}
+          {isEquityLive && !equityLiveLoading && equityLivePrice !== null && (
+            <p className="text-xs text-slate-400 mt-1">
+              Live price {formatPreciseCurrency(equityLivePrice, currency)} × {quantity || 0} — updates
+              automatically; edit this field to override.
+            </p>
+          )}
+          {isEquityLive && !equityLiveLoading && equityLiveError && (
+            <p className={errorTextClass}>
+              Couldn't fetch a live price for "{symbol.trim()}" — enter the current value manually.
+            </p>
           )}
           {!isSip && attemptedSubmit && valueMissing && <p className={errorTextClass}>Current Value is required.</p>}
         </Field>

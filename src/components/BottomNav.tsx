@@ -11,6 +11,7 @@ import {
   Settings,
   Smartphone,
   MessageSquarePlus,
+  Crown,
   X,
 } from 'lucide-react';
 import QuickAddMenu from './QuickAddMenu';
@@ -22,10 +23,18 @@ const primaryLinks = [
   { to: '/transactions', label: 'Money', icon: Receipt },
 ];
 
-const moreLinks = [
+interface MoreLink {
+  to: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  gold?: boolean;
+}
+
+const moreLinks: MoreLink[] = [
   { to: '/essentials', label: 'Essentials', icon: Target },
   { to: '/import', label: 'Import', icon: FileUp },
   { to: '/calculators', label: 'Calculators', icon: Calculator },
+  { to: '/pro', label: 'Aurafin Pro', icon: Crown, gold: true },
   { to: '/settings', label: 'Settings', icon: Settings },
   { to: '/install', label: 'Install App', icon: Smartphone },
   { to: '/feedback', label: 'Feedback', icon: MessageSquarePlus },
@@ -102,20 +111,24 @@ export default function BottomNav() {
               </button>
             </div>
             <div className="grid grid-cols-3 gap-2 px-5 pb-2 pt-2">
-              {moreLinks.map(({ to, label, icon: Icon }) => (
+              {moreLinks.map(({ to, label, icon: Icon, gold }) => (
                 <NavLink
                   key={to}
                   to={to}
                   onClick={() => setMoreOpen(false)}
                   className={({ isActive }) =>
                     `tap-scale flex flex-col items-center justify-center gap-2 rounded-xl px-2 py-4 text-xs font-medium text-center transition-colors ${
-                      isActive
-                        ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300'
-                        : 'bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                      gold
+                        ? isActive
+                          ? 'bg-gradient-to-b from-amber-400/25 to-yellow-500/10 text-amber-700 dark:text-amber-300 ring-1 ring-amber-300/60 dark:ring-amber-500/30'
+                          : 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300'
+                        : isActive
+                          ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300'
+                          : 'bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
                     }`
                   }
                 >
-                  <Icon size={20} />
+                  <Icon size={20} className={gold ? 'text-amber-500' : undefined} />
                   {label}
                 </NavLink>
               ))}

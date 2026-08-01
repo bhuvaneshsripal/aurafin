@@ -13,7 +13,7 @@
  */
 
 // TODO: replace with your real UPI ID (e.g. "yourname@okhdfcbank")
-export const UPI_ID = '';
+export const UPI_ID = 'your-upi-id@bank';
 
 // TODO: replace with your name/business name as it should show in the UPI app
 export const PAYEE_NAME = 'Aurafin';

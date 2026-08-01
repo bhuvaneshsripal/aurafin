@@ -19,9 +19,57 @@ function onboardingKey(uid: string) {
   return `aurafin-needs-onboarding-${uid}`;
 }
 
+// A trimmed-down, non-sensitive snapshot of the signed-in user - just
+// enough for every screen that reads user.uid/user.email/etc (nothing in
+// this app calls Firebase-specific methods like getIdToken() on the
+// store's `user`; Firestore's own SDK manages the real token internally
+// via `auth.currentUser`). Safe to keep in localStorage and safe to trust
+// optimistically for a frame or two, since it grants no access by itself -
+// Firestore's security rules are enforced against the real Firebase ID
+// token, not against anything read from here.
+type CachedUser = Pick<User, 'uid' | 'email' | 'displayName' | 'photoURL'>;
+
+const CACHED_USER_KEY = 'aurafin-cached-user';
+
+function readCachedUser(): CachedUser | null {
+  try {
+    const raw = localStorage.getItem(CACHED_USER_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.uid === 'string') return parsed as CachedUser;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedUser(user: User | null) {
+  try {
+    if (!user) {
+      localStorage.removeItem(CACHED_USER_KEY);
+      return;
+    }
+    const cached: CachedUser = {
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName,
+      photoURL: user.photoURL,
+    };
+    localStorage.setItem(CACHED_USER_KEY, JSON.stringify(cached));
+  } catch {
+    // localStorage can throw in some private/locked-down browser modes -
+    // worst case we just lose the optimistic-render fast path next time.
+  }
+}
+
 interface AuthState {
-  user: User | null;
+  user: User | CachedUser | null;
   loading: boolean;
+  // True while we're showing a cached user optimistically and Firebase
+  // hasn't confirmed (or refuted) that session yet. Unlike `loading`, this
+  // never blocks rendering - it's only there for UI that wants to show a
+  // subtle "syncing" indicator instead of a blocking spinner.
+  verifying: boolean;
   needsOnboarding: boolean;
   init: () => void;
   loginWithGoogle: () => Promise<void>;
@@ -31,63 +79,62 @@ interface AuthState {
   completeOnboarding: () => void;
 }
 
-// Firebase's own local-persistence layer writes a "firebase:authUser:..."
-// key to localStorage the moment someone signs in, and only clears it on
-// sign-out. Its presence means "a session should exist" — so on refresh we
-// can tell apart "definitely never logged in" (safe to show Login almost
-// immediately) from "was logged in, just waiting on Firebase to confirm it"
-// (worth waiting longer, so a slow network doesn't flash the login screen
-// for an already-signed-in person).
-function hasPersistedSession(): boolean {
-  try {
-    return Object.keys(localStorage).some(
-      (key) => key.startsWith('firebase:authUser:') && localStorage.getItem(key)
-    );
-  } catch {
-    // localStorage can throw in some private/locked-down browser modes —
-    // treat that as "unknown", not "definitely no session".
-    return false;
-  }
-}
+const cachedUser = readCachedUser();
+
+// Guards against re-subscribing onAuthStateChanged multiple times - e.g.
+// React StrictMode's mount/unmount/remount of effects in development, or
+// any component that ends up calling init() more than once. Without this,
+// every extra call opened a second listener, which meant every downstream
+// Firestore sync effect that depends on `user` (see DataSync in App.tsx)
+// re-ran and re-rendered redundantly.
+let authInitialized = false;
 
 export const useAuthStore = create<AuthState>((set, get) => ({
-  user: null,
-  loading: true,
-  needsOnboarding: false,
+  // Hydrate synchronously from the last known session so the very first
+  // render already has a user (when one exists) instead of starting blank
+  // and waiting on Firebase's async callback.
+  user: cachedUser,
+  loading: !cachedUser,
+  verifying: !!cachedUser,
+  needsOnboarding: cachedUser ? localStorage.getItem(onboardingKey(cachedUser.uid)) === 'true' : false,
   init: () => {
+    if (authInitialized) return;
+    authInitialized = true;
+
     let resolved = false;
     onAuthStateChanged(
       auth,
       (user) => {
         resolved = true;
+        writeCachedUser(user);
         set({
           user,
           loading: false,
+          verifying: false,
           needsOnboarding: user ? localStorage.getItem(onboardingKey(user.uid)) === 'true' : false,
         });
       },
       (error) => {
         // The listener itself failed (rare, but possible on restricted
-        // storage/network) — don't leave the app stuck on "Loading…".
+        // storage/network) - don't leave the app stuck on "Loading...", and
+        // don't keep trusting a cached user we can no longer verify.
         console.error('Auth state error', error);
         resolved = true;
-        set({ user: null, loading: false });
+        writeCachedUser(null);
+        set({ user: null, loading: false, verifying: false });
       }
     );
     // Safety net: on some mobile browsers/PWAs (storage restrictions, slow
     // networks, privacy-shield extensions), Firebase's auth-state check can
-    // stall and never call back at all. Rather than hang on "Loading…"
-    // forever, fall through eventually — if the person is actually still
-    // signed in, onAuthStateChanged will still fire whenever it does
-    // resolve and log them back in automatically.
-    //
-    // The timeout is longer when a persisted session exists, so a slow
-    // network doesn't cause an already-logged-in person to see the Login
-    // screen flash up before the real auth state arrives — they just see
-    // the loading spinner a little longer instead.
-    const fallbackDelay = hasPersistedSession() ? 12000 : 2500;
+    // stall and never call back at all. Rather than hang forever, fall
+    // through eventually:
+    //  - if we have a cached user, we're already rendering the app, so this
+    //    only clears the "verifying" flag - nothing the person sees changes;
+    //  - if we don't, this is what lets a genuinely-logged-out visitor reach
+    //    the Login screen instead of staring at a spinner indefinitely.
+    const fallbackDelay = cachedUser ? 12000 : 2500;
     setTimeout(() => {
-      if (!resolved) set({ loading: false });
+      if (!resolved) set({ loading: false, verifying: false });
     }, fallbackDelay);
   },
   loginWithGoogle: async () => {
@@ -107,6 +154,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
   logout: async () => {
     await signOut(auth);
+    writeCachedUser(null);
   },
   completeOnboarding: () => {
     const uid = get().user?.uid;

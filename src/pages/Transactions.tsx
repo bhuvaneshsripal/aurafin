@@ -5,6 +5,7 @@ import TransactionsTab from './money/TransactionsTab';
 import BudgetTab from './money/BudgetTab';
 import AccountsTab from './money/AccountsTab';
 import InsightsTab from './money/InsightsTab';
+import ProBadge from '../components/pro/ProBadge';
 
 const TABS = [
   {
@@ -12,24 +13,28 @@ const TABS = [
     label: 'Transactions',
     title: 'Transactions',
     subtitle: 'All your income and expenses in one place',
+    pro: false,
   },
   {
     key: 'budget',
     label: 'Budget',
     title: 'Budget',
     subtitle: 'Plan your month, then watch how it goes',
+    pro: false,
   },
   {
     key: 'accounts',
     label: 'Accounts',
     title: 'Accounts',
     subtitle: 'Bank, card, cash & wallet',
+    pro: false,
   },
   {
     key: 'insights',
     label: 'Insights',
     title: 'Insights',
     subtitle: 'See where your money goes',
+    pro: true,
   },
 ] as const;
 
@@ -46,7 +51,10 @@ export default function Money() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">{active.title}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">{active.title}</h1>
+            {active.pro && <ProBadge />}
+          </div>
           <p className="text-slate-500 dark:text-slate-400 text-sm sm:text-base mt-1">{active.subtitle}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -74,13 +82,14 @@ export default function Money() {
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`shrink-0 pb-3 text-sm sm:text-base font-medium border-b-2 transition-colors ${
+              className={`shrink-0 pb-3 text-sm sm:text-base font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
                 tab === t.key
                   ? 'border-brand-600 text-brand-700 dark:text-brand-300'
                   : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
               }`}
             >
               {t.label}
+              {t.pro && <ProBadge size="xs" />}
             </button>
           ))}
         </div>

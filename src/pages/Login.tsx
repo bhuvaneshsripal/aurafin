@@ -21,7 +21,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+    <div className="animate-page-in min-h-screen flex items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <img
@@ -45,7 +45,7 @@ export default function Login() {
 
           <button
             onClick={() => loginWithGoogle()}
-            className="w-full flex items-center justify-center gap-2.5 border border-slate-200 rounded-lg py-2.5 text-base font-medium text-slate-700 hover:bg-slate-50 mb-4"
+            className="btn-press w-full flex items-center justify-center gap-2.5 border border-slate-200 rounded-lg py-2.5 text-base font-medium text-slate-700 hover:bg-slate-50 mb-4"
           >
             <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
               <path
@@ -103,9 +103,9 @@ export default function Login() {
             {error && <p className="text-sm text-red-500">{error}</p>}
             <button
               onClick={submit}
-              className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-base font-medium"
+              className="btn-press w-full bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white py-2.5 rounded-lg text-base font-medium"
             >
-              {mode === 'login' ? 'Sign In' : 'Sign Up'}
+              {mode === 'login' ? 'Log In' : 'Sign Up'}
             </button>
           </div>
 

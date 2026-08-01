@@ -27,11 +27,13 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import Amount from '../components/Amount';
 import type { Goal } from '../types';
 import { CURRENCIES, formatCurrency } from '../utils/currency';
+import { useUrlTab } from '../hooks/useUrlTab';
+import ProBadge from '../components/pro/ProBadge';
 
 type Tab = 'health' | 'goals';
 
 export default function Essentials() {
-  const [tab, setTab] = useState<Tab>('health');
+  const [tab, setTab] = useUrlTab<Tab>(['health', 'goals'], 'health');
 
   return (
     <div className="space-y-6">
@@ -50,13 +52,14 @@ export default function Essentials() {
           <button
             key={key}
             onClick={() => setTab(key)}
-            className={`px-4 py-2.5 text-base font-medium border-b-2 -mb-px transition-colors ${
+            className={`px-4 py-2.5 text-base font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 ${
               tab === key
                 ? 'border-brand-600 dark:border-brand-500 text-brand-700 dark:text-brand-300'
                 : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
             }`}
           >
             {label}
+            {key === 'goals' && <ProBadge size="xs" />}
           </button>
         ))}
       </div>
@@ -574,7 +577,9 @@ function GoalsTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-base text-slate-500 dark:text-slate-400">{goals.length} active goals</p>
+        <p className="text-base text-slate-500 dark:text-slate-400 flex items-center gap-2">
+          {goals.length} active goals <ProBadge size="xs" />
+        </p>
         <button
           onClick={() => {
             setEditing(null);

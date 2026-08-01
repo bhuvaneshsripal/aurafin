@@ -22,6 +22,18 @@ export default function Topbar() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  // Fades a full-screen overlay in first, then flips the real auth state —
+  // so leaving the app reads as a smooth log out instead of an abrupt cut
+  // to the Login screen.
+  const handleLogout = () => {
+    setConfirmOpen(false);
+    setSigningOut(true);
+    window.setTimeout(() => {
+      logout();
+    }, 320);
+  };
 
   const profileRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
@@ -145,7 +157,7 @@ export default function Topbar() {
                   }}
                   className="w-full text-left px-4 py-2.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40"
                 >
-                  Sign Out
+                  Log Out
                 </button>
               </div>
             )}
@@ -225,7 +237,7 @@ export default function Topbar() {
                   }}
                   className="w-full text-left px-4 py-2.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40"
                 >
-                  Sign Out
+                  Log Out
                 </button>
               </div>
             )}
@@ -236,7 +248,7 @@ export default function Topbar() {
       <Modal
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
-        title={<>Sign out of <span className="font-luxury">Aurafin</span>?</>}
+        title={<>Log out of <span className="font-luxury">Aurafin</span>?</>}
       >
         <p className="text-sm text-slate-500 mb-6">
           You'll need to sign in again to see your dashboard. Your data stays saved in the cloud.
@@ -249,13 +261,20 @@ export default function Topbar() {
             Cancel
           </button>
           <button
-            onClick={() => logout()}
+            onClick={handleLogout}
             className="flex-1 bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-sm font-medium"
           >
-            Sign Out
+            Log Out
           </button>
         </div>
       </Modal>
+
+      {signingOut && (
+        <div className="animate-backdrop-in fixed inset-0 z-[200] flex flex-col items-center justify-center gap-3 bg-cream-100 dark:bg-slate-950">
+          <img src="/logo-icon.png" alt="Aurafin" className="h-12 w-12 rounded-full object-cover" />
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Logging out…</p>
+        </div>
+      )}
     </>
   );
 }

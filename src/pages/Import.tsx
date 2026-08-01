@@ -14,6 +14,7 @@ import { formatCurrency, formatPreciseCurrency } from '../utils/currency';
 import { ASSET_TAXONOMY } from '../utils/taxonomy';
 import { exportToCsv, exportToXlsx, IMPORT_TEMPLATE_ROWS } from '../utils/exportCsv';
 import type { AssetClass } from '../types';
+import ProBadge from '../components/pro/ProBadge';
 
 interface Broker {
   key: string;
@@ -233,13 +234,13 @@ export default function Import() {
         <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 gap-1 max-w-sm">
           <button
             onClick={() => setImportTab('broker')}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5 ${
               importTab === 'broker'
                 ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
             }`}
           >
-            Import from Broker
+            Import from Broker <ProBadge size="xs" />
           </button>
           <button
             onClick={() => setImportTab('standard')}
@@ -257,7 +258,10 @@ export default function Import() {
       {status === 'idle' && importTab === 'broker' && (
         <>
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
-            <h3 className="font-semibold text-slate-900 dark:text-white">Select Broker</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-slate-900 dark:text-white">Select Broker</h3>
+              <ProBadge size="xs" />
+            </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
               {BROKERS.map((b) => (
                 <button

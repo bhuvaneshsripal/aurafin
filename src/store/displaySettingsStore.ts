@@ -2,10 +2,10 @@ import { create } from 'zustand';
 
 // Base values these scales are relative to — matches the static values that
 // used to live directly in index.css (html font-size, and the .app-scale
-// zoom on the content column).
+// zoom on the content column). Font defaults to 100%, screen defaults to 95%.
 const BASE_FONT_PX = 17;
 const DEFAULT_FONT_SCALE = 1;
-const DEFAULT_SCREEN_SCALE = 0.9;
+const DEFAULT_SCREEN_SCALE = 0.95;
 
 const FONT_STEP = 0.05;
 const FONT_MIN = 0.85;

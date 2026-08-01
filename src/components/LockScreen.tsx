@@ -17,6 +17,28 @@ export default function LockScreen() {
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
 
+  // Keeps the lock screen mounted for one more animation frame after a
+  // correct PIN unlocks it, so it fades/scales smoothly away instead of
+  // vanishing the instant `locked` flips to false.
+  const [shouldRender, setShouldRender] = useState(locked);
+  const [unlocking, setUnlocking] = useState(false);
+
+  useEffect(() => {
+    if (locked) {
+      setShouldRender(true);
+      setUnlocking(false);
+      return;
+    }
+    if (!shouldRender) return;
+    setUnlocking(true);
+    const timer = window.setTimeout(() => {
+      setShouldRender(false);
+      setUnlocking(false);
+    }, 380);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locked]);
+
   const submitPin = useCallback(
     (value?: string) => {
       if (shake) return;
@@ -93,7 +115,7 @@ export default function LockScreen() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [locked, mode, pressDigit, submitPin]);
 
-  if (!locked) return null;
+  if (!shouldRender) return null;
 
   const requestOtp = async () => {
     if (!user?.email) return;
@@ -134,7 +156,11 @@ export default function LockScreen() {
   };
 
   return (
-    <div className="font-luxury fixed inset-0 z-[100] flex flex-col bg-cream-100 dark:bg-slate-950 px-6 pt-12 pb-8 overflow-y-auto overflow-x-hidden">
+    <div
+      className={`font-luxury fixed inset-0 z-[100] flex flex-col bg-cream-100 dark:bg-slate-950 px-6 pt-12 pb-8 overflow-y-auto overflow-x-hidden ${
+        unlocking ? 'animate-lock-unlock pointer-events-none' : 'animate-lock-in'
+      }`}
+    >
       {/* Soft blurred sandal-toned orbs — purely decorative, they give the
           glassmorphism keypad below something translucent to sit on top of. */}
       <div className="pointer-events-none absolute -top-16 -left-16 h-64 w-64 rounded-full bg-sandal-300/40 dark:bg-sandal-600/20 blur-3xl" />
@@ -184,7 +210,7 @@ export default function LockScreen() {
                   key={d}
                   type="button"
                   onClick={() => pressDigit(d)}
-                  className="keep-round aspect-square rounded-full backdrop-blur-xl bg-sandal-200/40 dark:bg-sandal-500/15 border border-sandal-100/60 dark:border-sandal-300/20 shadow-[0_4px_16px_-4px_rgba(154,114,62,0.35)] text-2xl font-semibold text-sandal-800 dark:text-sandal-100 active:scale-95 active:bg-sandal-300/50 dark:active:bg-sandal-400/25 transition-all"
+                  className="keep-round aspect-square rounded-full bg-white dark:bg-slate-800 shadow-[0_8px_22px_-4px_rgba(0,0,0,0.45)] text-2xl font-semibold text-slate-800 dark:text-slate-100 active:scale-95 active:shadow-[0_3px_10px_-3px_rgba(0,0,0,0.35)] transition-all duration-150"
                 >
                   {d}
                 </button>
@@ -193,14 +219,14 @@ export default function LockScreen() {
               <button
                 type="button"
                 onClick={() => pressDigit('0')}
-                className="keep-round aspect-square rounded-full backdrop-blur-xl bg-sandal-200/40 dark:bg-sandal-500/15 border border-sandal-100/60 dark:border-sandal-300/20 shadow-[0_4px_16px_-4px_rgba(154,114,62,0.35)] text-2xl font-semibold text-sandal-800 dark:text-sandal-100 active:scale-95 active:bg-sandal-300/50 dark:active:bg-sandal-400/25 transition-all"
+                className="keep-round aspect-square rounded-full bg-white dark:bg-slate-800 shadow-[0_8px_22px_-4px_rgba(0,0,0,0.45)] text-2xl font-semibold text-slate-800 dark:text-slate-100 active:scale-95 active:shadow-[0_3px_10px_-3px_rgba(0,0,0,0.35)] transition-all duration-150"
               >
                 0
               </button>
               <button
                 type="button"
                 onClick={pressBackspace}
-                className="keep-round aspect-square rounded-full backdrop-blur-xl bg-sandal-200/40 dark:bg-sandal-500/15 border border-sandal-100/60 dark:border-sandal-300/20 shadow-[0_4px_16px_-4px_rgba(154,114,62,0.35)] flex items-center justify-center text-sandal-700 dark:text-sandal-200 active:scale-95 active:bg-sandal-300/50 dark:active:bg-sandal-400/25 transition-all"
+                className="keep-round aspect-square rounded-full bg-white dark:bg-slate-800 shadow-[0_8px_22px_-4px_rgba(0,0,0,0.45)] flex items-center justify-center text-slate-700 dark:text-slate-200 active:scale-95 active:shadow-[0_3px_10px_-3px_rgba(0,0,0,0.35)] transition-all duration-150"
               >
                 <Delete size={24} />
               </button>
