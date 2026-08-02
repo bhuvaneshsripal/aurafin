@@ -8,7 +8,7 @@ import {
   sendPasswordResetEmail,
   EmailAuthProvider,
 } from 'firebase/auth';
-import { Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, Crown, Copy, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, X, Download, Upload, Sparkles, QrCode, Zap } from 'lucide-react';
+import { Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, Crown, Copy, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, X, Download, Upload, Sparkles, Zap } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
 import { useAppLockStore } from '../store/appLockStore';
@@ -37,10 +37,9 @@ import { buildBackup, downloadBackupJson, readBackupFile, countBackupItems, type
 import { useHouseholdProfilesStore, PROFILE_COLOURS } from '../store/householdProfilesStore';
 import { useInstallPromptStore, triggerInstallPrompt } from '../store/installPromptStore';
 import { usePremiumStore, selectIsPremium } from '../store/premiumStore';
-import { checkRedeemCode, isPromo20Code, PROMO20_CODE, PROMO20_PCT, PLAN_CODES } from '../utils/premiumCodes';
+import { checkRedeemCode, isPromo20Code, isPromo1RsCode, PROMO20_CODE, PROMO20_PCT, PROMO1RS_PRICE, PLAN_CODES } from '../utils/premiumCodes';
 import { PRICING_PLANS, PLAN_LABELS, buildUpiLink, type PricingPlan } from '../config/payments';
 import { PRO_FEATURES } from '../config/proFeatures';
-import UpiQrCode from '../components/UpiQrCode';
 import { useIsPro } from '../hooks/useIsPro';
 import ProBadge from '../components/pro/ProBadge';
 import type { HouseholdProfile, PremiumStatus } from '../types';
@@ -1456,7 +1455,7 @@ const PREMIUM_FEATURES = [
 // payment) isn't live yet — flip this back to true to restore it once
 // payments are ready. Kept as a single flag rather than deleting the flow
 // so nothing has to be rebuilt later.
-const PREMIUM_PURCHASE_ENABLED = false;
+const PREMIUM_PURCHASE_ENABLED = true;
 
 // The full Aurafin Pro showcase, moved here from the old standalone /pro
 // page — that page has been retired (see the /pro -> /settings?tab=billing
@@ -1588,17 +1587,22 @@ function BillingTab() {
   const [code, setCode] = useState('');
   const [result, setResult] = useState<'idle' | 'success' | 'invalid' | 'discount-only'>('idle');
   const [copied, setCopied] = useState(false);
-  const [qrGenerated, setQrGenerated] = useState(false);
 
-  // AURA20 auto-applies live as soon as it's typed correctly — no button press needed.
+  // AURA20 and AURA1RS both auto-apply live as soon as they're typed
+  // correctly — no button press needed.
   const promoApplied = isPromo20Code(code);
+  const promo1rsApplied = isPromo1RsCode(code);
 
   const monthlyPlan = PRICING_PLANS.find((p) => p.id === 'monthly') ?? PRICING_PLANS[0];
   const quarterlyPlan = PRICING_PLANS.find((p) => p.id === 'quarterly') ?? PRICING_PLANS[0];
   const lifetimePlan = PRICING_PLANS.find((p) => p.id === 'lifetime') ?? PRICING_PLANS[0];
 
-  const discountedPrice = (price: number) =>
-    promoApplied ? Math.round(price * (1 - PROMO20_PCT / 100)) : price;
+  // AURA1RS only ever discounts the Monthly plan (down to a flat ₹1) — it
+  // leaves Quarterly/Lifetime pricing untouched.
+  const discountedPrice = (price: number, planId?: PricingPlan['id']) => {
+    if (promo1rsApplied && planId === 'monthly') return PROMO1RS_PRICE;
+    return promoApplied ? Math.round(price * (1 - PROMO20_PCT / 100)) : price;
+  };
 
   const quarterlySavingsPct =
     monthlyPlan.price > 0
@@ -1606,18 +1610,17 @@ function BillingTab() {
       : 0;
   const [selectedPlan, setSelectedPlan] = useState<PricingPlan | null>(quarterlyPlan);
 
-  // With AURA20 applied, the plan actually paid (and the QR/payment link)
-  // reflects the discounted price.
-  const payablePlan: PricingPlan | null =
-    selectedPlan && promoApplied
-      ? { ...selectedPlan, price: Math.round(selectedPlan.price * (1 - PROMO20_PCT / 100)) }
-      : selectedPlan;
-
-  // Any change to the plan or the discount means the QR would point at a
-  // stale amount, so it needs to be regenerated on request again.
+  // AURA1RS is Monthly-only, so typing it correctly jumps the selection to
+  // the Monthly plan (there's nothing to discount on Quarterly/Lifetime).
   useEffect(() => {
-    setQrGenerated(false);
-  }, [selectedPlan?.id, promoApplied]);
+    if (promo1rsApplied) setSelectedPlan(monthlyPlan);
+  }, [promo1rsApplied, monthlyPlan]);
+
+  // With AURA20/AURA1RS applied, the plan actually paid (and the UPI
+  // payment link) reflects the discounted price.
+  const payablePlan: PricingPlan | null = selectedPlan
+    ? { ...selectedPlan, price: discountedPrice(selectedPlan.price, selectedPlan.id) }
+    : selectedPlan;
 
   const handleRedeem = async () => {
     if (!user) return;
@@ -1632,10 +1635,10 @@ function BillingTab() {
       setResult('discount-only');
       return;
     }
-    if (check.kind === 'promo20') {
-      // It's already auto-applied live as they type it, but pressing Redeem
-      // should still give a clear, unmistakable "yes, this worked" moment —
-      // otherwise nothing visibly changes when the button is pressed.
+    if (check.kind === 'promo20' || check.kind === 'promo1rs') {
+      // Both are already auto-applied live as they type it, but pressing
+      // Redeem should still give a clear, unmistakable "yes, this worked"
+      // moment — otherwise nothing visibly changes when the button is pressed.
       setResult('success');
       return;
     }
@@ -1704,15 +1707,17 @@ function BillingTab() {
 
       {PREMIUM_PURCHASE_ENABLED ? (
         <>
-      {!isPremium && (
-        <BillingCard>
+      <BillingCard>
           <div className="flex items-center gap-1.5 mb-1">
             <Sparkles size={14} className="text-brand-500" />
-            <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Keep Pro After Trial</h2>
+            <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+              {isPremium ? 'Your Aurafin Pro' : 'Keep Pro After Trial'}
+            </h2>
           </div>
           <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
-            Loving Pro? Pick a plan below, pay via UPI, and message the developer with your payment
-            screenshot to get your redeem code.
+            {isPremium
+              ? "You're already Pro — thanks for supporting Aurafin! Here's everything that's unlocked for you."
+              : 'Loving Pro? Pick a plan below, pay via UPI, and message the developer with your payment screenshot to get your redeem code.'}
           </p>
 
           {/* Recommended plan — big highlighted box */}
@@ -1794,11 +1799,11 @@ function BillingTab() {
                   {plan.label}
                 </p>
                 <div className="flex items-baseline gap-1.5 mt-1">
-                  {promoApplied && (
+                  {(promoApplied || (promo1rsApplied && plan.id === 'monthly')) && (
                     <span className="text-xs text-slate-400 dark:text-slate-500 line-through">₹{plan.price}</span>
                   )}
                   <p className="font-hero-numeric text-xl text-slate-900 dark:text-white">
-                    ₹{discountedPrice(plan.price)}
+                    ₹{discountedPrice(plan.price, plan.id)}
                   </p>
                 </div>
                 <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{plan.blurb}</p>
@@ -1813,23 +1818,45 @@ function BillingTab() {
 
           {selectedPlan && payablePlan && (
             <>
-              {promoApplied && (
+              {!isPremium && promo1rsApplied && selectedPlan.id === 'monthly' ? (
                 <p className="flex items-center gap-1 text-xs text-brand-600 dark:text-brand-300 mt-4">
                   <Sparkles size={12} />
                   <span className="line-through text-slate-400 dark:text-slate-500">₹{selectedPlan.price}</span>
-                  20% off with AURA20 — ₹{payablePlan.price}
+                  ₹1 special with AURA1RS — ₹{payablePlan.price}
                 </p>
+              ) : (
+                !isPremium &&
+                promoApplied && (
+                  <p className="flex items-center gap-1 text-xs text-brand-600 dark:text-brand-300 mt-4">
+                    <Sparkles size={12} />
+                    <span className="line-through text-slate-400 dark:text-slate-500">₹{selectedPlan.price}</span>
+                    20% off with AURA20 — ₹{payablePlan.price}
+                  </p>
+                )
               )}
-              <a
-                href={buildUpiLink(payablePlan)}
-                className="mt-4 flex items-center justify-center gap-2 w-full bg-brand-600 hover:bg-brand-700 text-white px-5 py-3.5 rounded-2xl text-sm font-semibold shadow-sm transition-colors"
-              >
-                <Sparkles size={16} />
-                Get Pro for ₹{payablePlan.price}/{PLAN_LABELS[selectedPlan.id]}
-              </a>
+              {isPremium ? (
+                <button
+                  type="button"
+                  disabled
+                  className="mt-4 flex items-center justify-center gap-2 w-full bg-brand-600 text-white px-5 py-3.5 rounded-2xl text-sm font-semibold shadow-sm cursor-default"
+                >
+                  <Sparkles size={16} />
+                  You're already Pro
+                </button>
+              ) : (
+                <a
+                  href={buildUpiLink(payablePlan)}
+                  className="mt-4 flex items-center justify-center gap-2 w-full bg-brand-600 hover:bg-brand-700 text-white px-5 py-3.5 rounded-2xl text-sm font-semibold shadow-sm transition-colors"
+                >
+                  <Sparkles size={16} />
+                  Get Pro for ₹{payablePlan.price}/{PLAN_LABELS[selectedPlan.id]}
+                </a>
+              )}
             </>
           )}
 
+          {!isPremium && (
+            <>
           {/* Coupon row — compact, inline, matches the reference screenshot */}
           <div className="flex items-center gap-2 mt-5 pt-5 border-t border-slate-100 dark:border-slate-800">
             <span className="text-xs font-medium text-slate-500 dark:text-slate-400 shrink-0">Have a coupon?</span>
@@ -1844,14 +1871,25 @@ function BillingTab() {
                 className={`w-full border bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-full px-3 py-1.5 text-sm focus:outline-none focus:ring-2 transition-colors ${
                   promoApplied
                     ? 'border-brand-400 focus:ring-brand-500 pr-8'
-                    : 'border-slate-200 dark:border-slate-700 focus:ring-brand-500'
+                    : 'border-slate-200 dark:border-slate-700 focus:ring-brand-500 pr-[4.75rem]'
                 }`}
               />
-              {promoApplied && (
+              {promoApplied ? (
                 <Sparkles
                   size={14}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-500 animate-pulse"
                 />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCode(PROMO20_CODE);
+                    setResult('idle');
+                  }}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-brand-600 dark:text-brand-300 bg-brand-50 dark:bg-brand-900/30 px-2.5 py-1 rounded-full hover:bg-brand-100 dark:hover:bg-brand-900/50 transition-colors"
+                >
+                  Autofill
+                </button>
               )}
             </div>
             <button
@@ -1864,7 +1902,11 @@ function BillingTab() {
           </div>
           {result === 'success' && (
             <p className="text-xs text-brand-600 dark:text-brand-300 mt-2">
-              {promoApplied ? '🎉 AURA20 applied — the discounted price is shown above.' : 'Code applied — thanks!'}
+              {promo1rsApplied
+                ? '🎉 AURA1RS applied — Monthly is now just ₹1, shown above.'
+                : promoApplied
+                  ? '🎉 AURA20 applied — the discounted price is shown above.'
+                  : 'Code applied — thanks!'}
             </p>
           )}
           {result === 'discount-only' && !promoApplied && (
@@ -1874,51 +1916,35 @@ function BillingTab() {
           )}
           {result === 'invalid' && <p className="text-xs text-red-500 mt-2">That code doesn't look right.</p>}
           <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
-            Try <span className="font-mono">AURA20</span> for 20% off — it auto-applies as you type it.
+            Try <span className="font-mono">AURA20</span> for 20% off any plan — it auto-applies
+            as you type it.
           </p>
 
           {selectedPlan && payablePlan && (
-            <div className="flex flex-col sm:flex-row items-center gap-5 mt-5 pt-5 border-t border-slate-100 dark:border-slate-800">
-              {qrGenerated ? (
-                <UpiQrCode link={buildUpiLink(payablePlan)} />
-              ) : (
-                <button
-                  onClick={() => setQrGenerated(true)}
-                  className="flex flex-col items-center justify-center gap-1.5 w-[160px] h-[160px] rounded-3xl border-2 border-dashed border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-brand-400 hover:text-brand-600 dark:hover:text-brand-300 transition-colors shrink-0"
-                >
-                  <QrCode size={22} />
-                  <span className="text-xs font-medium">Generate QR</span>
-                </button>
-              )}
-              <div className="flex-1 space-y-1">
-                <p className="text-sm text-slate-600 dark:text-slate-300">
-                  {qrGenerated
-                    ? 'Scan the QR with any UPI app, or tap the button above on mobile.'
-                    : 'Tap "Generate QR" to create a scannable code for this amount, or just tap the button above on mobile.'}
-                </p>
-                <p className="text-xs text-slate-400 dark:text-slate-500">
-                  After paying, contact the developer (see "Contact us" in the sidebar) with your
-                  screenshot to receive your redeem code.
-                </p>
-              </div>
-            </div>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-5 pt-5 border-t border-slate-100 dark:border-slate-800">
+              After paying, contact the developer (see "Contact us" in the sidebar) with your
+              payment screenshot to receive your redeem code.
+            </p>
+          )}
+            </>
           )}
         </BillingCard>
-      )}
 
       {!isPremium && (
         <BillingCard>
           <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Your discount code</h2>
           <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">
-            Share this with anyone — it gets them 20% off Premium.
+            Share this with anyone — it gets them 20% off Premium, and auto-applies as soon as
+            it's typed into the coupon field above.
           </p>
           <div className="flex items-center gap-2">
-            <code className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl px-3 py-2 text-sm font-mono text-slate-700 dark:text-slate-200">
-              {PROMO20_CODE}
-            </code>
+            <div className="flex-1 flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl px-3 py-2">
+              <code className="text-sm font-mono text-slate-700 dark:text-slate-200">{PROMO20_CODE}</code>
+              <span className="text-[11px] text-slate-400 dark:text-slate-500 shrink-0">20% off any plan</span>
+            </div>
             <button
               onClick={copyCode}
-              className="flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 px-3 py-2 rounded-3xl text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
+              className="flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 px-3 py-2 rounded-3xl text-sm hover:bg-slate-50 dark:hover:bg-slate-800 shrink-0"
             >
               <Copy size={14} /> {copied ? 'Copied' : 'Copy'}
             </button>

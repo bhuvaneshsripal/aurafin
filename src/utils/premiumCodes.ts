@@ -41,6 +41,12 @@ const DISCOUNT_PREFIX = 'AURA15-';
 export const PROMO20_CODE = 'AURA20';
 export const PROMO20_PCT = 20;
 
+/** ₹1-only special — same idea as PROMO20 but only ever discounts the
+ *  Monthly plan down to a flat ₹1. Auto-applied live as soon as it's typed
+ *  correctly, same as AURA20. */
+export const PROMO1RS_CODE = 'AURA1RS';
+export const PROMO1RS_PRICE = 1;
+
 /** Deterministically derives a shareable 15%-discount code from a user's
  *  Firebase UID, so no server-side storage is needed to generate or check
  *  one. Same UID always produces the same code. */
@@ -58,6 +64,7 @@ export type CodeCheckResult =
   | { kind: 'plan'; planId: 'monthly' | 'quarterly' | 'lifetime'; durationDays: number | null }
   | { kind: 'discount'; code: string }
   | { kind: 'promo20' }
+  | { kind: 'promo1rs' }
   | { kind: 'invalid' };
 
 /** Checks a code the person typed in. Doesn't check WHO owns a discount
@@ -68,6 +75,7 @@ export function checkRedeemCode(input: string): CodeCheckResult {
   if (!trimmed) return { kind: 'invalid' };
   if (trimmed === DEV_MASTER_CODE.toUpperCase()) return { kind: 'developer' };
   if (trimmed === PROMO20_CODE.toUpperCase()) return { kind: 'promo20' };
+  if (trimmed === PROMO1RS_CODE.toUpperCase()) return { kind: 'promo1rs' };
   for (const [planId, { code, durationDays }] of Object.entries(PLAN_CODES) as [
     'monthly' | 'quarterly' | 'lifetime',
     { code: string; durationDays: number | null },
@@ -83,4 +91,10 @@ export function checkRedeemCode(input: string): CodeCheckResult {
  *  type rather than waiting for a button press. */
 export function isPromo20Code(input: string): boolean {
   return input.trim().toUpperCase() === PROMO20_CODE.toUpperCase();
+}
+
+/** True the moment the person's typed input exactly matches the AURA1RS
+ *  ₹1-only promo code (case-insensitive). */
+export function isPromo1RsCode(input: string): boolean {
+  return input.trim().toUpperCase() === PROMO1RS_CODE.toUpperCase();
 }
