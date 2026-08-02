@@ -37,7 +37,6 @@ const Essentials = lazyWithRetry(() => import('./pages/Essentials'));
 const Transactions = lazyWithRetry(() => import('./pages/Transactions'));
 const Import = lazyWithRetry(() => import('./pages/Import'));
 const Calculators = lazyWithRetry(() => import('./pages/Calculators'));
-const Pro = lazyWithRetry(() => import('./pages/Pro'));
 const Settings = lazyWithRetry(() => import('./pages/Settings'));
 const WhatsNew = lazyWithRetry(() => import('./pages/WhatsNew'));
 const InstallApp = lazyWithRetry(() => import('./pages/InstallApp'));
@@ -86,7 +85,7 @@ function AppShell() {
                   <Route path="/transactions" element={<Transactions />} />
                   <Route path="/import" element={<Import />} />
                   <Route path="/calculators" element={<Calculators />} />
-                  <Route path="/pro" element={<Pro />} />
+                  <Route path="/pro" element={<Navigate to="/settings?tab=billing" replace />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/whats-new" element={<WhatsNew />} />
                   <Route path="/install" element={<InstallApp />} />

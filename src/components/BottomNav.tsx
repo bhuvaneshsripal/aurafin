@@ -10,8 +10,6 @@ import {
   Calculator,
   Settings,
   Smartphone,
-  MessageSquarePlus,
-  Crown,
   X,
 } from 'lucide-react';
 import QuickAddMenu from './QuickAddMenu';
@@ -34,10 +32,8 @@ const moreLinks: MoreLink[] = [
   { to: '/essentials', label: 'Essentials', icon: Target },
   { to: '/import', label: 'Import', icon: FileUp },
   { to: '/calculators', label: 'Calculators', icon: Calculator },
-  { to: '/pro', label: 'Aurafin Pro', icon: Crown, gold: true },
   { to: '/settings', label: 'Settings', icon: Settings },
   { to: '/install', label: 'Install App', icon: Smartphone },
-  { to: '/feedback', label: 'Feedback', icon: MessageSquarePlus },
 ];
 
 export default function BottomNav() {

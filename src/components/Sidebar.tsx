@@ -8,9 +8,7 @@ import {
   FileUp,
   Calculator,
   Smartphone,
-  MessageSquarePlus,
   Lock,
-  Crown,
 } from 'lucide-react';
 import { useAppLockStore } from '../store/appLockStore';
 import { usePremiumStore, selectIsPremium } from '../store/premiumStore';
@@ -32,7 +30,6 @@ const toolLinks = [
 
 const utilityLinks = [
   { to: '/install', label: 'Install App', icon: Smartphone },
-  { to: '/feedback', label: 'Feedback', icon: MessageSquarePlus },
 ];
 
 function NavItem({
@@ -49,7 +46,7 @@ function NavItem({
       to={to}
       end={to === '/'}
       className={({ isActive }) =>
-        `flex items-center gap-3 px-3 py-2.5 rounded-xl text-[14px] font-medium transition-all duration-150 ${
+        `flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-150 ${
           isActive
             ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300'
             : 'text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
@@ -62,26 +59,6 @@ function NavItem({
           {label}
         </>
       )}
-    </NavLink>
-  );
-}
-
-function ProNavItem() {
-  return (
-    <NavLink
-      to="/pro"
-      className={({ isActive }) =>
-        `group flex items-center gap-3 px-3 py-2.5 rounded-xl text-[14px] font-semibold transition-all duration-150 ${
-          isActive
-            ? 'bg-gradient-to-r from-amber-400/20 to-yellow-500/10 text-amber-700 dark:text-amber-300 ring-1 ring-amber-300/60 dark:ring-amber-500/30'
-            : 'text-amber-600 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-500/10'
-        }`
-      }
-    >
-      <span className="flex items-center justify-center h-[18px] w-[18px] shrink-0">
-        <Crown size={17} strokeWidth={2.1} className="text-amber-500 group-hover:scale-110 transition-transform" />
-      </span>
-      Aurafin Pro
     </NavLink>
   );
 }
@@ -130,11 +107,7 @@ export default function Sidebar() {
 
       <div className="flex-1" />
 
-      <div className="pb-1">
-        <ProNavItem />
-      </div>
-
-      <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+      <div className="mt-3 pt-4 border-t border-slate-100 dark:border-slate-800">
         <p className="px-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1.5">
           Tools
         </p>

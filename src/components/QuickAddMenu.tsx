@@ -13,7 +13,9 @@ import { useAuthStore } from '../store/authStore';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { upsertDoc } from '../hooks/useFirestoreSync';
+import { useAssetLimitReached } from '../hooks/useIsPro';
 import Modal from './Modal';
+import AssetLimitModal from './pro/AssetLimitModal';
 import type { Asset, AssetClass, Liability, Snapshot, Transaction, TransactionType } from '../types';
 import { CURRENCIES } from '../utils/currency';
 import { ASSET_TAXONOMY } from '../utils/taxonomy';
@@ -23,6 +25,8 @@ type QuickAction = 'expense' | 'income' | 'transfer' | 'asset' | 'liability' | '
 export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'desktop' | 'fab' }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [active, setActive] = useState<QuickAction>(null);
+  const [limitModalOpen, setLimitModalOpen] = useState(false);
+  const assetLimitReached = useAssetLimitReached();
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -34,6 +38,13 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
   }, []);
 
   const open = (action: QuickAction) => {
+    // Free plan is capped on assets — show the upgrade prompt instead of
+    // the Add Asset form once the limit is hit.
+    if (action === 'asset' && assetLimitReached) {
+      setMenuOpen(false);
+      setLimitModalOpen(true);
+      return;
+    }
     setActive(action);
     setMenuOpen(false);
   };
@@ -104,6 +115,7 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
       <Modal open={active === 'snapshot'} onClose={() => setActive(null)} title="Save Net Worth Snapshot">
         <SnapshotForm onDone={() => setActive(null)} />
       </Modal>
+      <AssetLimitModal open={limitModalOpen} onClose={() => setLimitModalOpen(false)} />
     </>
   );
 }
@@ -258,6 +270,7 @@ function TransferForm({ onDone }: { onDone: () => void }) {
 
 function AssetForm({ onDone }: { onDone: () => void }) {
   const user = useAuthStore((s) => s.user);
+  const assetLimitReached = useAssetLimitReached();
   const [name, setName] = useState('');
   const [assetClass, setAssetClass] = useState<AssetClass>('stock');
   const [value, setValue] = useState('');
@@ -265,6 +278,9 @@ function AssetForm({ onDone }: { onDone: () => void }) {
 
   const submit = async () => {
     if (!user || !name || !value) return;
+    // Backstop in case this form is ever reached with stale limit state —
+    // the "Asset" menu item itself already blocks opening it past the cap.
+    if (assetLimitReached) return;
     const asset: Asset = {
       id: crypto.randomUUID(),
       name,

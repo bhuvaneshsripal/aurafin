@@ -21,6 +21,16 @@
  *  `false` = Pro features fall back to the real `usePremiumStore` status. */
 export const PRO_ACCESS_BYPASSED = true;
 
+/**
+ * The one Pro restriction that's actually enforced today, independent of
+ * `PRO_ACCESS_BYPASSED` above (which only covers the *other* six Pro
+ * features listed below). Free accounts can track up to this many assets;
+ * past that, adding another asset shows an upgrade prompt instead. Change
+ * this number to adjust the free tier, or see `useAssetLimitReached` in
+ * `src/hooks/useIsPro.ts` for where it's checked.
+ */
+export const FREE_ASSET_LIMIT = 30;
+
 export interface ProFeatureDef {
   id: string;
   /** Short label as shown next to a Crown/PRO badge. */
