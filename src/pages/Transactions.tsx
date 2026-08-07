@@ -6,7 +6,6 @@ import BudgetTab from './money/BudgetTab';
 import AccountsTab from './money/AccountsTab';
 import InsightsTab from './money/InsightsTab';
 import ProBadge from '../components/pro/ProBadge';
-import { getInsightsRange, type InsightsRangeKey } from '../utils/dateRanges';
 
 const TABS = [
   {
@@ -33,7 +32,7 @@ const TABS = [
   {
     key: 'insights',
     label: 'Insights',
-    title: 'Money Insights',
+    title: 'Insights',
     subtitle: 'See where your money goes',
     pro: true,
   },
@@ -44,13 +43,9 @@ type TabKey = (typeof TABS)[number]['key'];
 export default function Money() {
   const [tab, setTab] = useState<TabKey>('transactions');
   const [accountsModalOpen, setAccountsModalOpen] = useState(false);
-  const [insightsRange, setInsightsRange] = useState<InsightsRangeKey>('lastMonth');
-  const [insightsCustomFrom, setInsightsCustomFrom] = useState('');
-  const [insightsCustomTo, setInsightsCustomTo] = useState('');
   const navigate = useNavigate();
 
   const active = TABS.find((t) => t.key === tab)!;
-  const insightsBounds = getInsightsRange(insightsRange, insightsCustomFrom, insightsCustomTo);
 
   return (
     <div className="space-y-6">
@@ -60,9 +55,7 @@ export default function Money() {
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">{active.title}</h1>
             {active.pro && <ProBadge />}
           </div>
-          <p className="text-slate-500 dark:text-slate-400 text-sm sm:text-base mt-1">
-            {tab === 'insights' ? insightsBounds.label : active.subtitle}
-          </p>
+          <p className="text-slate-500 dark:text-slate-400 text-sm sm:text-base mt-1">{active.subtitle}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {tab === 'accounts' && (
@@ -105,16 +98,7 @@ export default function Money() {
       {tab === 'transactions' && <TransactionsTab />}
       {tab === 'budget' && <BudgetTab />}
       {tab === 'accounts' && <AccountsTab open={accountsModalOpen} onOpenChange={setAccountsModalOpen} />}
-      {tab === 'insights' && (
-        <InsightsTab
-          range={insightsRange}
-          onRangeChange={setInsightsRange}
-          customFrom={insightsCustomFrom}
-          customTo={insightsCustomTo}
-          onCustomFromChange={setInsightsCustomFrom}
-          onCustomToChange={setInsightsCustomTo}
-        />
-      )}
+      {tab === 'insights' && <InsightsTab />}
     </div>
   );
 }

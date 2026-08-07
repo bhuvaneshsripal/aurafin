@@ -1788,7 +1788,18 @@ function AssetDetailsForm({
   onBack?: () => void;
   onSave: (a: Asset) => void;
 }) {
-  const startClass: AssetClass = initial?.assetClass ?? initialType ?? 'stock';
+  // Some older saved assets carry an assetClass value from before the
+  // taxonomy was reorganized, which no longer matches any known type. Left
+  // as-is, the Asset Type <select> falls back to showing its first option
+  // ("Direct Stock") purely as a browser display quirk, while the actual
+  // state still holds the stale value — silently breaking checks like
+  // SYMBOL_ENABLED_CLASSES.has(assetClass) and hiding the Symbol/Quantity/
+  // Avg. Cost fields even though the dropdown looks like it says "Direct
+  // Stock". Normalize here so state always matches what's shown.
+  const isValidAssetClass = (v?: string | null): v is AssetClass => !!v && v in ASSET_CLASS_LABELS;
+  const startClass: AssetClass = isValidAssetClass(initial?.assetClass)
+    ? initial!.assetClass
+    : initialType ?? 'stock';
   const effectiveCategory = category ?? ASSET_CLASS_TO_CATEGORY[startClass];
 
   const [name, setName] = useState(initial?.name ?? '');
@@ -2038,7 +2049,14 @@ function AssetDetailsForm({
       return;
     }
     const sym = symbol.trim();
-    const qty = Number(quantity);
+    // Default Quantity to 1 the moment a symbol is typed in, if the person
+    // hasn't set a quantity yet — keeps it editable, just gives a sensible
+    // starting point so Current Value can auto-calculate right away.
+    let qty = Number(quantity);
+    if (sym && (!quantity || qty <= 0)) {
+      qty = 1;
+      setQuantity('1');
+    }
     if (!sym || !qty || qty <= 0) {
       setEquityLivePrice(null);
       setEquityLiveError(false);
@@ -2169,8 +2187,8 @@ function AssetDetailsForm({
       <Field label="Name">
         <input
           value={name}
-          onChange={(e) => setName(e.target.value)}
-          className={`${inputClass} ${attemptedSubmit && nameMissing ? errorInputClass : ''}`}
+          onChange={(e) => setName(e.target.value.toUpperCase())}
+          className={`${inputClass} ${attemptedSubmit && nameMissing ? errorInputClass : ''} uppercase`}
           placeholder="e.g. HDFC Flexicap SIP"
         />
         {attemptedSubmit && nameMissing && <p className={errorTextClass}>Name is required.</p>}
@@ -2794,7 +2812,12 @@ function LiabilityDetailsForm({
         </button>
       )}
       <Field label="Name">
-        <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} placeholder="e.g. Home Loan" />
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value.toUpperCase())}
+          className={`${inputClass} uppercase`}
+          placeholder="e.g. Home Loan"
+        />
       </Field>
       {effectiveCategory && effectiveCategory.types.length > 1 ? (
         <Field label={`${effectiveCategory.label} Type`}>
