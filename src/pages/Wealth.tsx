@@ -31,6 +31,7 @@ import {
 } from 'recharts';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLivePricesStore } from '../store/livePricesStore';
+import { useSyncStatusStore } from '../store/syncStatusStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useAuthStore } from '../store/authStore';
 import { useUiStore } from '../store/uiStore';
@@ -552,6 +553,7 @@ function TotalStatCard({
   pnlPercent,
   currency = 'INR',
   privacyMode,
+  loading = false,
 }: {
   title: string;
   invested: number;
@@ -560,42 +562,56 @@ function TotalStatCard({
   pnlPercent: number;
   currency?: string;
   privacyMode: boolean;
+  loading?: boolean;
 }) {
   const positive = pnl >= 0;
   const isMasked = privacyMode && !isZeroAmount(pnl, 2);
   return (
     <div className="keep-round-card bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6">
       <p className="text-xs font-semibold tracking-wide text-slate-400 mb-4 sm:mb-5">{title}</p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-6">
-        <div>
-          <p className="text-xs font-medium text-slate-400 mb-1">INVESTED</p>
-          <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white break-words">
-            {maskPreciseAmount(invested, currency, privacyMode)}
-          </p>
+      {loading ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-6">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className={i === 2 ? 'col-span-2 sm:col-span-1' : undefined}>
+              <p className="text-xs font-medium text-slate-400 mb-1">
+                {i === 0 ? 'INVESTED' : i === 1 ? 'CURRENT VALUE' : 'P&L'}
+              </p>
+              <div className="h-7 sm:h-8 w-24 rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />
+            </div>
+          ))}
         </div>
-        <div>
-          <p className="text-xs font-medium text-slate-400 mb-1">CURRENT VALUE</p>
-          <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white break-words">
-            {maskPreciseAmount(currentValue, currency, privacyMode)}
-          </p>
-        </div>
-        <div className="col-span-2 sm:col-span-1">
-          <p className="text-xs font-medium text-slate-400 mb-1">P&L</p>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={`text-xl sm:text-2xl font-bold break-words ${positive ? 'text-brand-600 dark:text-brand-300' : 'text-red-500'}`}>
-              {isMasked ? '••••••' : `${positive ? '+' : ''}${formatPreciseCurrency(pnl, currency)}`}
-            </span>
-            <span
-              className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                positive ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-300' : 'bg-red-50 dark:bg-red-900/30 text-red-500'
-              }`}
-            >
-              {positive ? '+' : ''}
-              {pnlPercent.toFixed(1)}%
-            </span>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-6">
+          <div>
+            <p className="text-xs font-medium text-slate-400 mb-1">INVESTED</p>
+            <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white break-words">
+              {maskPreciseAmount(invested, currency, privacyMode)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-400 mb-1">CURRENT VALUE</p>
+            <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white break-words">
+              {maskPreciseAmount(currentValue, currency, privacyMode)}
+            </p>
+          </div>
+          <div className="col-span-2 sm:col-span-1">
+            <p className="text-xs font-medium text-slate-400 mb-1">P&L</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`text-xl sm:text-2xl font-bold break-words ${positive ? 'text-brand-600 dark:text-brand-300' : 'text-red-500'}`}>
+                {isMasked ? '••••••' : `${positive ? '+' : ''}${formatPreciseCurrency(pnl, currency)}`}
+              </span>
+              <span
+                className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                  positive ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-300' : 'bg-red-50 dark:bg-red-900/30 text-red-500'
+                }`}
+              >
+                {positive ? '+' : ''}
+                {pnlPercent.toFixed(1)}%
+              </span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -631,8 +647,31 @@ function AssetsTab({
   const allAssets = useAssetsStore((s) => s.assets);
   const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
   const assets = activeProfileId ? allAssets.filter((a) => a.profileId === activeProfileId) : allAssets;
+  const navigate = useNavigate();
   const livePrices = useLivePricesStore((s) => s.prices);
   const sipValues = useLivePricesStore((s) => s.sipValues);
+  const pricesAttempted = useLivePricesStore((s) => s.pricesAttempted);
+  const sipValuesAttempted = useLivePricesStore((s) => s.sipValuesAttempted);
+  const assetsServerConfirmed = useSyncStatusStore((s) => s.assetsServerConfirmed);
+  // Same reasoning as the Dashboard's Net Worth card: show totals as soon as
+  // either (a) a real price fetch has completed this session, or (b) we
+  // already have a real cached price for every live-priced holding from
+  // last time — no need to make the person wait out a fresh network
+  // round-trip just to render a number that'll very likely be unchanged; it
+  // shows instantly and the background refresh corrects it silently if not.
+  const liveEquityAssets = allAssets.filter((a) => a.symbol && a.quantity && a.quantity > 0);
+  const hasLivePriced = liveEquityAssets.length > 0;
+  const pricesCached =
+    hasLivePriced && liveEquityAssets.every((a) => livePrices[a.symbol!.toUpperCase()] !== undefined);
+  const sipLinkedAssets = allAssets.filter(
+    (a) => a.assetClass === 'sip' && a.symbol && /^\d+$/.test(a.symbol)
+  );
+  const hasSipLinked = sipLinkedAssets.length > 0;
+  const sipCached = hasSipLinked && sipLinkedAssets.every((a) => sipValues[a.symbol!.trim()] !== undefined);
+  const totalsReady =
+    assetsServerConfirmed &&
+    (!hasLivePriced || pricesAttempted || pricesCached) &&
+    (!hasSipLinked || sipValuesAttempted || sipCached);
   const user = useAuthStore((s) => s.user);
   const privacyMode = useUiStore((s) => s.privacyMode);
   const [modalOpen, setModalOpen] = useState(false);
@@ -1001,7 +1040,7 @@ function AssetsTab({
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Assets</h2>
-            <ProBadge size="xs" />
+            <ProBadge size="xs" onClick={() => navigate('/settings?tab=billing')} />
           </div>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">{assets.length} assets · unlimited</p>
           <p className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1.5 mt-1">
@@ -1107,6 +1146,7 @@ function AssetsTab({
         pnl={totalPnl}
         pnlPercent={totalPnlPercent}
         privacyMode={privacyMode}
+        loading={!totalsReady}
       />
 
       {filtered.length === 0 && (
@@ -1156,7 +1196,7 @@ function AssetsTab({
                   onClick={() => (selectedIds.size > 0 ? toggleRowSelect(a.id) : setViewingAsset(a))}
                   className="flex-1 flex items-center justify-between gap-3 text-left min-w-0"
                 >
-                  <p className="font-semibold text-slate-800 truncate">{a.name}</p>
+                  <p className="font-semibold text-slate-800 truncate uppercase">{a.name}</p>
                   <div className="text-right shrink-0">
                     <p className="font-semibold text-slate-800">
                       {maskPreciseAmount(value, a.currency, privacyMode)}
@@ -1234,9 +1274,9 @@ function AssetsTab({
               <Field label="Tag name">
                 <input
                   value={tagDraft}
-                  onChange={(e) => setTagDraft(e.target.value)}
+                  onChange={(e) => setTagDraft(e.target.value.toUpperCase())}
                   placeholder="e.g. Long-term"
-                  className={inputClass}
+                  className={`${inputClass} uppercase`}
                 />
               </Field>
               <p className="text-xs text-slate-400">
@@ -1330,7 +1370,7 @@ function AssetsTab({
                         />
                       )}
                       <div>
-                        <p className="font-semibold text-slate-800">{a.name}</p>
+                        <p className="font-semibold text-slate-800 uppercase">{a.name}</p>
                         <p className="text-xs text-slate-400">
                           {ASSET_CLASS_LABELS[a.assetClass]}
                           {a.institution ? ` · ${a.institution}` : ''}
@@ -1477,7 +1517,7 @@ function AssetsTab({
                       className="absolute top-4 right-4 text-slate-300 cursor-grab active:cursor-grabbing"
                     />
                   )}
-                  <p className="font-semibold text-slate-800 pr-5">{a.name}</p>
+                  <p className="font-semibold text-slate-800 pr-5 uppercase">{a.name}</p>
                   <p className="text-xs text-slate-400 mb-2">
                     {ASSET_CLASS_LABELS[a.assetClass]}
                     {a.institution ? ` · ${a.institution}` : ''}
@@ -1546,7 +1586,7 @@ function AssetsTab({
         title="Delete this asset?"
       >
         <p className="text-sm text-slate-500 mb-6">
-          This will permanently delete <strong>{confirmDeleteAsset?.name}</strong>. This can't be undone.
+          This will permanently delete <strong className="uppercase">{confirmDeleteAsset?.name}</strong>. This can't be undone.
         </p>
         <div className="flex gap-3">
           <button
@@ -1678,7 +1718,7 @@ function AssetDetailPage({
 
       <Modal open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)} title="Delete this asset?">
         <p className="text-sm text-slate-500 mb-6">
-          This will permanently delete <strong>{asset.name}</strong>. This can't be undone.
+          This will permanently delete <strong className="uppercase">{asset.name}</strong>. This can't be undone.
         </p>
         <div className="flex gap-3">
           <button
@@ -1851,6 +1891,65 @@ function AssetDetailsForm({
     return WEIGHT_TRACKED_CLASSES.has(startClass) ? [{ id: crypto.randomUUID(), grams: '', amount: '' }] : [];
   });
   const isWeightTracked = WEIGHT_TRACKED_CLASSES.has(assetClass);
+
+  // --- Unit-tracked purchases (Stocks / ETFs / Mutual Funds / Crypto, etc.) -
+  // Same idea as the weight-tracked lots above, but for share/unit-based
+  // holdings: each buy is its own lot (quantity + price paid per unit).
+  // Bought more later at a different price? Add another row — total
+  // quantity and the weighted-average cost are computed automatically.
+  const isUnitTrackedClass = (c: AssetClass) => SYMBOL_ENABLED_CLASSES.has(c) && !SIP_CLASSES.has(c);
+  const [shareLots, setShareLots] = useState<
+    { id: string; date?: string; quantity: string; price: string }[]
+  >(() => {
+    if (initial?.shareLots?.length) {
+      return initial.shareLots.map((l) => ({
+        id: l.id,
+        date: l.date,
+        quantity: l.quantity?.toString() ?? '',
+        price: l.price?.toString() ?? '',
+      }));
+    }
+    if (isUnitTrackedClass(startClass) && (initial?.quantity || initial?.avgCost)) {
+      return [
+        {
+          id: crypto.randomUUID(),
+          date: initial?.startDate,
+          quantity: initial?.quantity?.toString() ?? '',
+          price: initial?.avgCost?.toString() ?? '',
+        },
+      ];
+    }
+    return isUnitTrackedClass(startClass) ? [{ id: crypto.randomUUID(), quantity: '', price: '' }] : [];
+  });
+  const isUnitTracked = isUnitTrackedClass(assetClass);
+  const totalShareQty = Math.round(
+    shareLots.reduce((sum, l) => sum + (Number(l.quantity) || 0), 0) * 10000
+  ) / 10000;
+  const totalShareInvested = shareLots.reduce(
+    (sum, l) => sum + (Number(l.quantity) || 0) * (Number(l.price) || 0),
+    0
+  );
+  // Weighted-average cost = total paid ÷ total units — this is the "average"
+  // the person ends up holding at once they've bought at more than one price.
+  const weightedAvgCost = totalShareQty > 0 ? totalShareInvested / totalShareQty : 0;
+
+  const addShareLot = () =>
+    setShareLots((rows) => [...rows, { id: crypto.randomUUID(), quantity: '', price: '' }]);
+  const removeShareLot = (id: string) =>
+    setShareLots((rows) => (rows.length > 1 ? rows.filter((r) => r.id !== id) : rows));
+  const updateShareLot = (id: string, patch: Partial<{ date: string; quantity: string; price: string }>) =>
+    setShareLots((rows) => rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+
+  // Quantity and Avg. Cost always mirror the lot totals for unit-tracked
+  // assets — they're derived, never hand-typed directly, same as grams/
+  // invested are for weight-tracked assets above.
+  useEffect(() => {
+    if (!isUnitTracked) return;
+    setQuantity(totalShareQty > 0 ? String(totalShareQty) : '');
+    setAvgCost(weightedAvgCost > 0 ? String(Number(weightedAvgCost.toFixed(4))) : '');
+    setInvestedValue(totalShareInvested > 0 ? String(totalShareInvested) : '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isUnitTracked, totalShareQty, totalShareInvested]);
   // Round to 4 decimal places (0.1 mg precision — plenty for jewellery/coins)
   // to avoid floating-point addition artifacts like 0.454099999999999995.
   const totalGrams = Math.round(
@@ -2051,9 +2150,11 @@ function AssetDetailsForm({
     const sym = symbol.trim();
     // Default Quantity to 1 the moment a symbol is typed in, if the person
     // hasn't set a quantity yet — keeps it editable, just gives a sensible
-    // starting point so Current Value can auto-calculate right away.
+    // starting point so Current Value can auto-calculate right away. Skipped
+    // for unit-tracked assets, where Quantity is derived from the purchase
+    // lots below instead of being hand-typed.
     let qty = Number(quantity);
-    if (sym && (!quantity || qty <= 0)) {
+    if (sym && (!quantity || qty <= 0) && !isUnitTracked) {
       qty = 1;
       setQuantity('1');
     }
@@ -2169,6 +2270,16 @@ function AssetDetailsForm({
               date: l.date || undefined,
               grams: Number(l.grams) || 0,
               amount: Number(l.amount) || 0,
+            }))
+        : undefined,
+      shareLots: isUnitTracked
+        ? shareLots
+            .filter((l) => Number(l.quantity) > 0 || Number(l.price) > 0)
+            .map((l) => ({
+              id: l.id,
+              date: l.date || undefined,
+              quantity: Number(l.quantity) || 0,
+              price: Number(l.price) || 0,
             }))
         : undefined,
     });
@@ -2307,18 +2418,78 @@ function AssetDetailsForm({
           </p>
         </div>
       )}
-      {SYMBOL_ENABLED_CLASSES.has(assetClass) && !SIP_CLASSES.has(assetClass) && !isWeightTracked && (
-        <div className="grid grid-cols-3 gap-3">
+      {isUnitTracked && (
+        <>
           <Field label="Symbol (for live price)">
-            <input value={symbol} onChange={(e) => setSymbol(e.target.value)} className={inputClass} placeholder="RELIANCE" />
+            <input value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} className={`${inputClass} uppercase`} placeholder="RELIANCE" />
           </Field>
-          <Field label="Quantity">
-            <input type="number" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)} className={inputClass} placeholder="0" />
-          </Field>
-          <Field label="Avg. Cost">
-            <input type="number" step="any" value={avgCost} onChange={(e) => setAvgCost(e.target.value)} className={inputClass} placeholder="0.00" />
-          </Field>
-        </div>
+          <div className="space-y-3 border border-slate-100 bg-slate-50/60 rounded-xl p-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <p className="text-sm font-medium text-slate-700">Purchases</p>
+              <p className="text-xs text-slate-500">
+                Total: <span className="font-semibold text-brand-700">{totalShareQty || 0}</span>
+                {' · Avg. Cost '}
+                <span className="font-semibold text-brand-700">
+                  {formatPreciseCurrency(weightedAvgCost, currency)}
+                </span>
+              </p>
+            </div>
+            <div className="space-y-2">
+              {shareLots.map((lot, i) => (
+                <div key={lot.id} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
+                  <Field label={i === 0 ? 'Date' : ''}>
+                    <input
+                      type="date"
+                      value={lot.date ?? ''}
+                      onChange={(e) => updateShareLot(lot.id, { date: e.target.value })}
+                      className={inputClass}
+                    />
+                  </Field>
+                  <Field label={i === 0 ? 'Quantity' : ''}>
+                    <input
+                      type="number"
+                      step="any"
+                      value={lot.quantity}
+                      onChange={(e) => updateShareLot(lot.id, { quantity: e.target.value })}
+                      className={inputClass}
+                      placeholder="e.g. 10"
+                    />
+                  </Field>
+                  <Field label={i === 0 ? 'Price / Unit' : ''}>
+                    <input
+                      type="number"
+                      step="any"
+                      value={lot.price}
+                      onChange={(e) => updateShareLot(lot.id, { price: e.target.value })}
+                      className={inputClass}
+                      placeholder="e.g. 200"
+                    />
+                  </Field>
+                  <button
+                    type="button"
+                    onClick={() => removeShareLot(lot.id)}
+                    disabled={shareLots.length === 1}
+                    className="h-[42px] w-[42px] shrink-0 flex items-center justify-center border border-slate-200 rounded-lg text-slate-400 hover:text-green-600 hover:border-green-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Remove this purchase"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={addShareLot}
+              className="flex items-center gap-1.5 text-sm text-brand-600 hover:text-brand-700 font-medium"
+            >
+              <Plus size={16} /> Add another purchase
+            </button>
+            <p className="text-xs text-slate-400">
+              Bought more later at a different price? Come back to Edit and add another purchase row —
+              quantity and average cost update automatically, and returns recalculate off the new average.
+            </p>
+          </div>
+        </>
       )}
       {SIP_CLASSES.has(assetClass) && (
         <div className="space-y-4 border border-slate-100 bg-slate-50/60 rounded-xl p-4">
@@ -2460,8 +2631,8 @@ function AssetDetailsForm({
             <Field label="Bank / Institution">
               <input
                 value={institution}
-                onChange={(e) => setInstitution(e.target.value)}
-                className={inputClass}
+                onChange={(e) => setInstitution(e.target.value.toUpperCase())}
+                className={`${inputClass} uppercase`}
                 placeholder="e.g. HDFC Bank"
               />
             </Field>
@@ -2560,6 +2731,11 @@ function AssetDetailsForm({
               Defaults to total amount paid ({formatPreciseCurrency(totalPurchaseAmount, currency)}) — edit if today's market value is different.
             </p>
           )}
+          {isUnitTracked && !symbol.trim() && (
+            <p className="text-xs text-slate-400 mt-1">
+              Add a Symbol above for a live price, or enter today's value here manually.
+            </p>
+          )}
           {isSip && fundIsLinked && !liveValueLoading && !liveValueError && (
             <p className="text-xs text-slate-400 mt-1">Calculated from the fund's live NAV × units bought each installment.</p>
           )}
@@ -2591,7 +2767,7 @@ function AssetDetailsForm({
           label={
             SIP_CLASSES.has(assetClass)
               ? 'Initial Investment Amount'
-              : isWeightTracked
+              : isWeightTracked || isUnitTracked
                 ? 'Invested (auto, from purchases)'
                 : 'Invested (optional)'
           }
@@ -2600,9 +2776,9 @@ function AssetDetailsForm({
             type="number"
             step="any"
             value={investedValue}
-            readOnly={isWeightTracked}
-            onChange={(e) => !isWeightTracked && setInvestedValue(e.target.value)}
-            className={`${inputClass} ${isWeightTracked ? 'bg-slate-50 text-slate-600 cursor-not-allowed' : ''}`}
+            readOnly={isWeightTracked || isUnitTracked}
+            onChange={(e) => !isWeightTracked && !isUnitTracked && setInvestedValue(e.target.value)}
+            className={`${inputClass} ${isWeightTracked || isUnitTracked ? 'bg-slate-50 text-slate-600 cursor-not-allowed' : ''}`}
             placeholder={SIP_CLASSES.has(assetClass) ? '0' : 'Auto: Qty × Avg'}
           />
         </Field>
@@ -2703,7 +2879,7 @@ function LiabilitiesTab({
           <tbody className="divide-y divide-slate-100">
             {liabilities.map((l) => (
               <tr key={l.id}>
-                <td className="px-4 py-3 font-medium text-slate-800">{l.name}</td>
+                <td className="px-4 py-3 font-medium text-slate-800 uppercase">{l.name}</td>
                 <td className="px-4 py-3 text-slate-500">
                   {l.liabilityClass ? LIABILITY_CLASS_LABELS[l.liabilityClass] : '—'}
                 </td>
@@ -2755,7 +2931,7 @@ function LiabilitiesTab({
         onClose={() => setPendingDelete(null)}
         onConfirm={confirmDelete}
         title="Delete this liability?"
-        description={<>This will permanently delete <strong>{pendingDelete?.name}</strong>. This can't be undone.</>}
+        description={<>This will permanently delete <strong className="uppercase">{pendingDelete?.name}</strong>. This can't be undone.</>}
       />
     </div>
   );

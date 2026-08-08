@@ -131,7 +131,7 @@ export default function TransactionsTab() {
               {t.type === 'income' ? <ArrowUpCircle size={20} /> : <ArrowDownCircle size={20} />}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="font-medium text-slate-800 dark:text-slate-100 truncate">{t.category}</p>
+              <p className="font-medium text-slate-800 dark:text-slate-100 truncate uppercase">{t.category}</p>
               <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{t.date}</p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -183,7 +183,7 @@ export default function TransactionsTab() {
             {sorted.map((t) => (
               <tr key={t.id}>
                 <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{t.date}</td>
-                <td className="px-4 py-3 font-medium text-slate-800 dark:text-slate-100">{t.category}</td>
+                <td className="px-4 py-3 font-medium text-slate-800 dark:text-slate-100 uppercase">{t.category}</td>
                 <td className="px-4 py-3">
                   <span
                     className={`text-sm px-2 py-1 rounded-full font-medium ${
@@ -291,8 +291,8 @@ function TransactionForm({
       <Field label="Category">
         <input
           value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className={inputClass}
+          onChange={(e) => setCategory(e.target.value.toUpperCase())}
+          className={`${inputClass} uppercase`}
           placeholder="e.g. Rent, Salary, Groceries"
         />
       </Field>

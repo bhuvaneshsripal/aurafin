@@ -184,7 +184,7 @@ export default function BudgetTab() {
           <div className="divide-y divide-slate-100 dark:divide-slate-800">
             {draft.map((item) => (
               <div key={item.id} className="flex items-center gap-3 py-2.5">
-                <span className="flex-1 text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
+                <span className="flex-1 text-sm font-medium text-slate-700 dark:text-slate-200 truncate uppercase">
                   {item.category}
                 </span>
                 <div className="flex items-center gap-1 shrink-0">
@@ -231,7 +231,7 @@ export default function BudgetTab() {
               <div className="flex items-center gap-1.5">
                 <input
                   value={newCategory}
-                  onChange={(e) => setNewCategory(e.target.value)}
+                  onChange={(e) => setNewCategory(e.target.value.toUpperCase())}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && newCategory.trim()) {
                       addCategory(newCategory.trim());
@@ -239,7 +239,7 @@ export default function BudgetTab() {
                     }
                   }}
                   placeholder="Custom category"
-                  className="border border-dashed border-slate-300 dark:border-slate-600 rounded-full px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 dark:bg-slate-800 dark:text-white w-40"
+                  className="border border-dashed border-slate-300 dark:border-slate-600 rounded-full px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 dark:bg-slate-800 dark:text-white w-40 uppercase"
                 />
                 <button
                   onClick={() => {

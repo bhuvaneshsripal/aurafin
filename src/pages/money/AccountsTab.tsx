@@ -243,7 +243,7 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <p className="font-semibold text-slate-800 dark:text-slate-100 truncate">{row.name}</p>
+                      <p className="font-semibold text-slate-800 dark:text-slate-100 truncate uppercase">{row.name}</p>
                       {isDefault ? (
                         <span className="flex items-center gap-1 text-[11px] font-medium text-amber-500 dark:text-amber-400 shrink-0">
                           <Star size={11} className="fill-amber-400 text-amber-400" />
@@ -364,7 +364,7 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
         onClose={() => setPendingDelete(null)}
         onConfirm={confirmDelete}
         title="Delete this account?"
-        description={<>This will permanently delete <strong>{pendingDelete?.name}</strong>. This can't be undone.</>}
+        description={<>This will permanently delete <strong className="uppercase">{pendingDelete?.name}</strong>. This can't be undone.</>}
       />
     </div>
   );
@@ -469,8 +469,8 @@ function AccountForm({
         </span>
         <input
           value={name}
-          onChange={(e) => setName(e.target.value)}
-          className={inputClass}
+          onChange={(e) => setName(e.target.value.toUpperCase())}
+          className={`${inputClass} uppercase`}
           placeholder="e.g. HDFC Savings"
         />
       </label>
@@ -482,8 +482,8 @@ function AccountForm({
             <input
               list="bank-options"
               value={institution}
-              onChange={(e) => setInstitution(e.target.value)}
-              className={inputClass}
+              onChange={(e) => setInstitution(e.target.value.toUpperCase())}
+              className={`${inputClass} uppercase`}
               placeholder="Pick or type a bank"
             />
             <datalist id="bank-options">

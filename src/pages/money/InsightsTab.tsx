@@ -104,7 +104,7 @@ export default function InsightsTab() {
               {byCategory.map((c, i) => (
                 <div key={c.name} className="flex items-center gap-2.5">
                   <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                  <span className="flex-1 text-sm text-slate-600 dark:text-slate-300 truncate">{c.name}</span>
+                  <span className="flex-1 text-sm text-slate-600 dark:text-slate-300 truncate uppercase">{c.name}</span>
                   <span className="text-sm font-medium text-slate-800 dark:text-slate-100 whitespace-nowrap">
                     <Amount value={c.value} />
                   </span>

@@ -72,7 +72,7 @@ export default function Liabilities() {
           <tbody className="divide-y divide-slate-100">
             {liabilities.map((l) => (
               <tr key={l.id}>
-                <td className="px-4 py-3 font-medium text-slate-800">{l.name}</td>
+                <td className="px-4 py-3 font-medium text-slate-800 uppercase">{l.name}</td>
                 <td className="px-4 py-3 text-slate-800">{formatCurrency(l.outstanding, l.currency)}</td>
                 <td className="px-4 py-3 text-slate-500">
                   {l.emi ? formatCurrency(l.emi, l.currency) : '—'}
@@ -116,7 +116,7 @@ export default function Liabilities() {
         onConfirm={confirmDelete}
         busy={deleting}
         title="Delete this liability?"
-        description={<>This will permanently delete <strong>{pendingDelete?.name}</strong>. This can't be undone.</>}
+        description={<>This will permanently delete <strong className="uppercase">{pendingDelete?.name}</strong>. This can't be undone.</>}
       />
     </div>
   );
@@ -149,7 +149,7 @@ function LiabilityForm({
   return (
     <div className="space-y-4">
       <Field label="Name">
-        <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} placeholder="e.g. Home Loan" />
+        <input value={name} onChange={(e) => setName(e.target.value.toUpperCase())} className={`${inputClass} uppercase`} placeholder="e.g. Home Loan" />
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Outstanding">

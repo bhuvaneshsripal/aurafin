@@ -20,6 +20,7 @@ const REFRESH_MS = 60_000;
 export function useLiveSipValues() {
   const assets = useAssetsStore((s) => s.assets);
   const setSipValues = useLivePricesStore((s) => s.setSipValues);
+  const setSipValuesAttempted = useLivePricesStore((s) => s.setSipValuesAttempted);
   const fetching = useRef(false);
 
   const sipAssets = assets.filter(
@@ -62,6 +63,7 @@ export function useLiveSipValues() {
         // A failed refresh just leaves the last-known values in place.
       } finally {
         fetching.current = false;
+        setSipValuesAttempted(true);
       }
     };
 
@@ -69,5 +71,5 @@ export function useLiveSipValues() {
     const id = setInterval(refresh, REFRESH_MS);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lookupKey, setSipValues]);
+  }, [lookupKey, setSipValues, setSipValuesAttempted]);
 }

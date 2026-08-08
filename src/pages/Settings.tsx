@@ -8,7 +8,7 @@ import {
   sendPasswordResetEmail,
   EmailAuthProvider,
 } from 'firebase/auth';
-import { Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, Crown, Copy, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, X, Download, Upload, Sparkles, QrCode, Layers, PieChart, Globe2, Share2, FileUp, TrendingUp, Zap } from 'lucide-react';
+import { Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, Crown, Copy, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, X, Download, Upload, Sparkles, QrCode, Zap } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
 import { useAppLockStore } from '../store/appLockStore';
@@ -37,7 +37,7 @@ import { buildBackup, downloadBackupJson, readBackupFile, countBackupItems, type
 import { useHouseholdProfilesStore, PROFILE_COLOURS } from '../store/householdProfilesStore';
 import { useInstallPromptStore, triggerInstallPrompt } from '../store/installPromptStore';
 import { usePremiumStore, selectIsPremium } from '../store/premiumStore';
-import { checkRedeemCode, isPromo20Code, PROMO20_CODE, PROMO20_PCT, PLAN_CODES } from '../utils/premiumCodes';
+import { checkRedeemCode, isPromo20Code, isPromo1RsCode, PROMO20_CODE, PROMO20_PCT, PROMO1RS_PRICE, PLAN_CODES } from '../utils/premiumCodes';
 import { PRICING_PLANS, PLAN_LABELS, buildUpiLink, type PricingPlan } from '../config/payments';
 import { PRO_FEATURES } from '../config/proFeatures';
 import UpiQrCode from '../components/UpiQrCode';
@@ -1458,25 +1458,40 @@ const PREMIUM_FEATURES = [
 // so nothing has to be rebuilt later.
 const PREMIUM_PURCHASE_ENABLED = false;
 
-const PRO_FEATURE_ICONS: Record<string, typeof Layers> = {
-  'unlimited-assets-goals': Layers,
-  'income-expense-insights': PieChart,
-  'family-profiles': Users,
-  'multi-currency': Globe2,
-  'share-with-others': Share2,
-  'broker-import': FileUp,
-  'phased-investment-calculator': TrendingUp,
-};
+type ProPlanId = 'monthly' | 'quarterly' | 'lifetime';
 
-const PRO_SHOWCASE_PRICE = 199;
+const PRO_PLANS: {
+  id: ProPlanId;
+  label: string;
+  price: number;
+  cadence: string;
+  months?: number;
+  sublabel?: string;
+  perDayDays: number;
+  perDayNote?: string;
+}[] = [
+  { id: 'monthly', label: '1 Month', price: 99, cadence: '/month', months: 1, perDayDays: 30 },
+  {
+    id: 'quarterly',
+    label: '3 Months',
+    price: 199,
+    cadence: 'for 3 months',
+    months: 3,
+    perDayDays: 90,
+  },
+  {
+    id: 'lifetime',
+    label: 'Lifetime',
+    price: 399,
+    cadence: 'one-time, forever',
+    perDayDays: 730,
+    perDayNote: 'over 2 years',
+  },
+];
 
-function ProGoldIconTile({ Icon }: { Icon: typeof Layers }) {
-  return (
-    <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-brand-100 to-brand-50 dark:from-brand-600/20 dark:to-brand-600/5 flex items-center justify-center text-brand-600 dark:text-brand-400 shrink-0 ring-1 ring-brand-200/70 dark:ring-brand-600/20">
-      <Icon size={20} strokeWidth={2} />
-    </div>
-  );
-}
+// The plan visually led with as "Recommended" — it's the one with real
+// savings vs. paying monthly, so it's the one worth steering people to.
+const RECOMMENDED_PLAN_ID: ProPlanId = 'monthly';
 
 // The full Aurafin Pro showcase, moved here from the old standalone /pro
 // page — that page has been retired (see the /pro -> /settings?tab=billing
@@ -1484,113 +1499,222 @@ function ProGoldIconTile({ Icon }: { Icon: typeof Layers }) {
 // upgrade info sits alongside the rest of the account/plan details.
 function ProShowcase() {
   const [clicked, setClicked] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<ProPlanId>(RECOMMENDED_PLAN_ID);
+  const [promoInput, setPromoInput] = useState('');
+  const [applyResult, setApplyResult] = useState<'idle' | 'applied' | 'invalid'>('idle');
+
+  // AURA20 is the public, advertised code — 20% off every plan.
+  const promo20Applied = isPromo20Code(promoInput);
+  // AURA1RS is an intentionally hidden code — one month for ₹1. It's never
+  // named or hinted at in the UI; it only works if someone already knows
+  // the exact string and types it in.
+  const promo1RsApplied = isPromo1RsCode(promoInput);
+  const promoApplied = promo20Applied || promo1RsApplied;
+
+  const displayPrice = (plan: (typeof PRO_PLANS)[number]) => {
+    if (promo1RsApplied && plan.id === 'monthly') return PROMO1RS_PRICE;
+    if (promo20Applied) return Math.round(plan.price * 0.8);
+    return plan.price;
+  };
+  const isDiscounted = (plan: (typeof PRO_PLANS)[number]) => displayPrice(plan) !== plan.price;
+
+  const monthlyPlan = PRO_PLANS.find((p) => p.id === 'monthly')!;
+  const recommendedPlan = PRO_PLANS.find((p) => p.id === RECOMMENDED_PLAN_ID)!;
+  const otherPlans = PRO_PLANS.filter((p) => p.id !== RECOMMENDED_PLAN_ID);
+  const selected = PRO_PLANS.find((p) => p.id === selectedPlan)!;
+
+  const savePct =
+    recommendedPlan.months && monthlyPlan.price > 0
+      ? Math.round((1 - recommendedPlan.price / (monthlyPlan.price * recommendedPlan.months)) * 100)
+      : 0;
+
+  const applyPromo = () => {
+    setApplyResult(promoApplied ? 'applied' : promoInput.trim() ? 'invalid' : 'idle');
+  };
+  const quickApplyPromo = () => {
+    setPromoInput(PROMO20_CODE);
+    setApplyResult('applied');
+  };
 
   return (
     <div className="space-y-6">
-      {/* ---- Hero ---- */}
-      <div className="relative overflow-hidden rounded-3xl border border-brand-200/60 dark:border-brand-600/20 bg-gradient-to-br from-slate-900 via-slate-900 to-brand-900/40 px-6 py-10 sm:px-10 sm:py-12 text-center shadow-soft-md">
-        <div className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 h-72 w-[36rem] rounded-full bg-brand-500/20 blur-3xl" />
-        <div className="pointer-events-none absolute inset-0 opacity-[0.07] [background-image:radial-gradient(circle_at_1px_1px,white_1px,transparent_0)] [background-size:22px_22px]" />
-
-        <div className="relative">
-          <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-gradient-to-br from-brand-400 via-brand-500 to-brand-600 shadow-[0_8px_30px_rgba(44,110,73,0.45)] mb-5 animate-[float_4s_ease-in-out_infinite]">
-            <Crown size={26} className="text-brand-900" strokeWidth={2.25} />
+      <div className="space-y-5">
+        {/* ---- Header ---- */}
+        <div className="flex items-start gap-2.5">
+          <Crown size={20} className="text-brand-600 mt-0.5 shrink-0" />
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Upgrade to Aurafin Pro</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              Every Pro feature below is already unlocked for you — pick a plan for when payments go live.
+            </p>
           </div>
-          <p className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-brand-400 mb-3">
-            <Sparkles size={12} /> Introducing
-          </p>
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
-            Aurafin <span className="bg-gradient-to-r from-brand-400 via-brand-400 to-brand-500 bg-clip-text text-transparent">Pro</span>
-          </h2>
-          <p className="text-slate-300 text-sm sm:text-base mt-3 max-w-xl mx-auto leading-relaxed">
-            The complete picture of your wealth — unlimited tracking, deeper insights, and a
-            household you can share it all with.
-          </p>
         </div>
-      </div>
 
-      {/* ---- Pricing card + feature checklist ---- */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
-        <div className="lg:col-span-2">
-          <div className="group relative rounded-3xl border-2 border-brand-400/60 dark:border-brand-600/30 bg-white dark:bg-slate-900 p-7 shadow-soft-md">
-            <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-              <span className="inline-flex items-center gap-1 bg-gradient-to-r from-brand-500 to-brand-600 text-brand-900 text-[10px] font-bold uppercase tracking-wide px-3 py-1 rounded-full shadow-sm">
-                <Sparkles size={10} /> Most loved
+        {/* ---- Recommended plan — big highlighted card ---- */}
+        <button
+          type="button"
+          onClick={() => setSelectedPlan(recommendedPlan.id)}
+          className={`relative w-full text-left rounded-3xl border-2 p-6 transition-colors ${
+            selectedPlan === recommendedPlan.id
+              ? 'border-brand-500 bg-brand-50/70 dark:bg-brand-900/20'
+              : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60'
+          }`}
+        >
+          <span
+            className={`absolute top-4 right-4 flex items-center justify-center w-7 h-7 rounded-full border-2 shrink-0 transition-colors ${
+              selectedPlan === recommendedPlan.id
+                ? 'bg-brand-600 border-brand-600'
+                : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900'
+            }`}
+          >
+            {selectedPlan === recommendedPlan.id && <Check size={15} strokeWidth={3} className="text-white" />}
+          </span>
+
+          <span className="inline-flex items-center bg-brand-600 text-white text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full">
+            Recommended
+          </span>
+
+          <div className="flex items-baseline flex-wrap gap-x-2 gap-y-1 mt-3">
+            {isDiscounted(recommendedPlan) && (
+              <span className="text-lg text-slate-400 dark:text-slate-500 line-through">
+                ₹{recommendedPlan.price}
               </span>
-            </div>
+            )}
+            <span className="text-3xl font-bold text-slate-900 dark:text-white">
+              ₹{displayPrice(recommendedPlan)}
+            </span>
+            <span className="text-sm text-slate-500 dark:text-slate-400">{recommendedPlan.cadence}</span>
+            {savePct > 0 && !isDiscounted(recommendedPlan) && (
+              <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 rounded-full">
+                Save {savePct}%
+              </span>
+            )}
+            {isDiscounted(recommendedPlan) && (
+              <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 rounded-full">
+                <Sparkles size={10} /> Promo applied
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+            {recommendedPlan.months && recommendedPlan.months > 1
+              ? `Just ₹${Math.round(displayPrice(recommendedPlan) / recommendedPlan.months)}/mo. `
+              : ''}
+            That's about ₹{(displayPrice(recommendedPlan) / recommendedPlan.perDayDays).toFixed(2)}/day.
+          </p>
 
-            <div className="flex items-center gap-2 mt-2">
-              <Crown size={18} className="text-brand-600" />
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Aurafin Pro</h3>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 mt-4 pt-4 border-t border-brand-200/60 dark:border-brand-800/40">
+            {PRO_FEATURES.map((f) => (
+              <div key={f.id} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                <Check size={14} className="text-brand-600 dark:text-brand-400 shrink-0" />
+                {f.label}
+              </div>
+            ))}
+          </div>
+        </button>
 
-            <div className="flex items-baseline gap-1 mt-4">
-              <span className="text-4xl font-bold text-slate-900 dark:text-white">₹{PRO_SHOWCASE_PRICE}</span>
-              <span className="text-slate-400 dark:text-slate-500 text-sm">/month</span>
-            </div>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Cancel anytime. No hidden fees.</p>
-
-            <ul className="mt-6 space-y-3">
-              {PRO_FEATURES.map((f) => (
-                <li key={f.id} className="flex items-start gap-2.5 text-sm text-slate-700 dark:text-slate-200">
-                  <span className="mt-0.5 flex items-center justify-center h-4 w-4 rounded-full bg-brand-100 dark:bg-brand-600/20 shrink-0">
-                    <Check size={11} strokeWidth={3} className="text-brand-600 dark:text-brand-400" />
-                  </span>
-                  {f.label}
-                </li>
-              ))}
-            </ul>
-
+        {/* ---- Other plans — compact side-by-side boxes ---- */}
+        <div className="grid grid-cols-2 gap-3">
+          {otherPlans.map((plan) => (
             <button
+              key={plan.id}
               type="button"
-              onClick={() => setClicked(true)}
-              className="mt-7 w-full flex items-center justify-center gap-2 bg-gradient-to-r from-brand-500 via-brand-600 to-brand-600 hover:from-brand-600 hover:to-brand-600 text-brand-900 font-semibold px-5 py-3 rounded-2xl text-sm shadow-[0_6px_20px_rgba(44,110,73,0.4)] transition-all duration-200 hover:shadow-[0_8px_26px_rgba(44,110,73,0.5)] active:scale-[0.98]"
+              onClick={() => setSelectedPlan(plan.id)}
+              className={`relative text-left rounded-3xl border p-4 transition-colors ${
+                selectedPlan === plan.id
+                  ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20'
+                  : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800'
+              }`}
             >
-              <Crown size={16} />
-              {clicked ? "You're already Pro" : 'Upgrade to Pro'}
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                {plan.label}
+              </p>
+              <div className="flex items-baseline gap-1.5 mt-1">
+                {isDiscounted(plan) && (
+                  <span className="text-xs text-slate-400 dark:text-slate-500 line-through">₹{plan.price}</span>
+                )}
+                <p className="font-bold text-xl text-slate-900 dark:text-white">₹{displayPrice(plan)}</p>
+              </div>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                {plan.sublabel ??
+                  (plan.months ? `₹${Math.round(displayPrice(plan) / plan.months)}/mo` : plan.cadence)}
+              </p>
+              {selectedPlan === plan.id && (
+                <span className="absolute top-3 right-3 flex items-center justify-center w-5 h-5 rounded-full bg-brand-600">
+                  <Check size={12} className="text-white" />
+                </span>
+              )}
             </button>
-            <p className="text-center text-[11px] font-medium text-brand-600 dark:text-brand-500 mt-2.5">
-              {clicked
-                ? 'Every Pro feature is unlocked for you already — enjoy!'
-                : 'Available soon — every Pro feature already works for you'}
-            </p>
-          </div>
+          ))}
         </div>
 
-        <div className="lg:col-span-3 space-y-3">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 px-1">
-            Everything included
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {PRO_FEATURES.map((f) => {
-              const Icon = PRO_FEATURE_ICONS[f.id] ?? Sparkles;
-              return (
-                <div
-                  key={f.id}
-                  className="group flex items-start gap-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 transition-all duration-200 hover:border-brand-400 dark:hover:border-brand-600/40 hover:-translate-y-0.5 hover:shadow-soft"
-                >
-                  <ProGoldIconTile Icon={Icon} />
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
-                      {f.label}
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                      {f.description}
-                    </p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+        {/* ---- CTA ---- */}
+        <button
+          type="button"
+          onClick={() => setClicked(true)}
+          className="w-full flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-5 py-3.5 rounded-2xl text-sm font-semibold shadow-sm transition-colors"
+        >
+          <Sparkles size={16} />
+          {clicked ? "You're already Pro" : `Get Pro for ₹${displayPrice(selected)}${selected.months === 1 ? '/month' : selected.months ? `/${selected.months}mo` : ' (one-time)'}`}
+        </button>
+        <p className="text-center text-[11px] font-medium text-brand-600 dark:text-brand-500 -mt-2.5">
+          {clicked
+            ? 'Every Pro feature is unlocked for you already — enjoy!'
+            : 'Available soon — every Pro feature already works for you'}
+        </p>
 
-          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 p-4 mt-4">
-            <ShieldCheck size={18} className="text-brand-600 dark:text-brand-300 shrink-0" />
-            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-              All Pro features are fully unlocked for every account right now, while Aurafin Pro
-              finishes rolling out. Nothing you use today will be taken away.
-            </p>
+        {/* ---- Coupon row ---- */}
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <span className="text-xs font-medium text-slate-500 dark:text-slate-400 shrink-0">Have a coupon?</span>
+          <div className="relative flex-1 min-w-[120px]">
+            <input
+              value={promoInput}
+              onChange={(e) => {
+                setPromoInput(e.target.value);
+                setApplyResult('idle');
+              }}
+              placeholder="Enter code"
+              className={`w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-full px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-colors ${
+                promoInput ? 'pr-8' : ''
+              }`}
+            />
+            {promoInput && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPromoInput('');
+                  setApplyResult('idle');
+                }}
+                aria-label="Clear code"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
+          <button
+            type="button"
+            onClick={applyPromo}
+            disabled={!promoInput.trim()}
+            className="bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-100 disabled:opacity-50 text-white dark:text-slate-900 px-4 py-1.5 rounded-full text-sm font-medium shrink-0"
+          >
+            Apply
+          </button>
+          <button
+            type="button"
+            onClick={quickApplyPromo}
+            className="flex items-center gap-1 text-xs font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 shrink-0"
+          >
+            <Sparkles size={12} /> Save {PROMO20_PCT}% with {PROMO20_CODE}
+          </button>
         </div>
+        {applyResult === 'applied' && (
+          <p className="text-xs text-brand-600 dark:text-brand-300 -mt-2">
+            🎉 Promo applied — the discounted price is shown above.
+          </p>
+        )}
+        {applyResult === 'invalid' && (
+          <p className="text-xs text-red-500 -mt-2">That code doesn't look right.</p>
+        )}
       </div>
 
       {/* ---- Bottom strip ---- */}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Plus,
   ArrowUpCircle,
@@ -16,9 +17,8 @@ import { upsertDoc } from '../hooks/useFirestoreSync';
 import { useAssetLimitReached } from '../hooks/useIsPro';
 import Modal from './Modal';
 import AssetLimitModal from './pro/AssetLimitModal';
-import type { Asset, AssetClass, Liability, Snapshot, Transaction, TransactionType } from '../types';
+import type { Asset, Snapshot, Transaction, TransactionType } from '../types';
 import { CURRENCIES } from '../utils/currency';
-import { ASSET_TAXONOMY } from '../utils/taxonomy';
 
 type QuickAction = 'expense' | 'income' | 'transfer' | 'asset' | 'liability' | 'snapshot' | null;
 
@@ -28,6 +28,7 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
   const [limitModalOpen, setLimitModalOpen] = useState(false);
   const assetLimitReached = useAssetLimitReached();
   const ref = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
@@ -39,10 +40,20 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
 
   const open = (action: QuickAction) => {
     // Free plan is capped on assets — show the upgrade prompt instead of
-    // the Add Asset form once the limit is hit.
+    // the Add Asset flow once the limit is hit.
     if (action === 'asset' && assetLimitReached) {
       setMenuOpen(false);
       setLimitModalOpen(true);
+      return;
+    }
+    // Asset and Liability get the full Wealth page add flow (category ->
+    // type -> details, with all the class-specific fields like symbol,
+    // quantity, avg cost, institution, etc.) instead of the stripped-down
+    // quick-add form, so people get the same complete experience from
+    // anywhere in the app.
+    if (action === 'asset' || action === 'liability') {
+      setMenuOpen(false);
+      navigate(`/wealth?add=1&entry=${action}&step=category`);
       return;
     }
     setActive(action);
@@ -105,12 +116,6 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
       </Modal>
       <Modal open={active === 'transfer'} onClose={() => setActive(null)} title="Record Transfer">
         <TransferForm onDone={() => setActive(null)} />
-      </Modal>
-      <Modal open={active === 'asset'} onClose={() => setActive(null)} title="Add Asset">
-        <AssetForm onDone={() => setActive(null)} />
-      </Modal>
-      <Modal open={active === 'liability'} onClose={() => setActive(null)} title="Add Liability">
-        <LiabilityForm onDone={() => setActive(null)} />
       </Modal>
       <Modal open={active === 'snapshot'} onClose={() => setActive(null)} title="Save Net Worth Snapshot">
         <SnapshotForm onDone={() => setActive(null)} />
@@ -244,7 +249,7 @@ function TransferForm({ onDone }: { onDone: () => void }) {
         <select value={fromId} onChange={(e) => setFromId(e.target.value)} className={inputClass}>
           {assets.map((a) => (
             <option key={a.id} value={a.id}>
-              {a.name}
+              {a.name.toUpperCase()}
             </option>
           ))}
         </select>
@@ -253,7 +258,7 @@ function TransferForm({ onDone }: { onDone: () => void }) {
         <select value={toId} onChange={(e) => setToId(e.target.value)} className={inputClass}>
           {assets.map((a) => (
             <option key={a.id} value={a.id}>
-              {a.name}
+              {a.name.toUpperCase()}
             </option>
           ))}
         </select>
@@ -263,115 +268,6 @@ function TransferForm({ onDone }: { onDone: () => void }) {
       </Field>
       <button onClick={submit} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-base font-medium">
         Record Transfer
-      </button>
-    </div>
-  );
-}
-
-function AssetForm({ onDone }: { onDone: () => void }) {
-  const user = useAuthStore((s) => s.user);
-  const assetLimitReached = useAssetLimitReached();
-  const [name, setName] = useState('');
-  const [assetClass, setAssetClass] = useState<AssetClass>('stock');
-  const [value, setValue] = useState('');
-  const [currency, setCurrency] = useState('INR');
-
-  const submit = async () => {
-    if (!user || !name || !value) return;
-    // Backstop in case this form is ever reached with stale limit state —
-    // the "Asset" menu item itself already blocks opening it past the cap.
-    if (assetLimitReached) return;
-    const asset: Asset = {
-      id: crypto.randomUUID(),
-      name,
-      assetClass,
-      value: Number(value),
-      currency,
-      updatedAt: Date.now(),
-    };
-    await upsertDoc(user.uid, 'assets', asset);
-    onDone();
-  };
-
-  return (
-    <div className="space-y-4">
-      <Field label="Name">
-        <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} placeholder="e.g. HDFC Flexicap SIP" />
-      </Field>
-      <Field label="Asset Class">
-        <select value={assetClass} onChange={(e) => setAssetClass(e.target.value as AssetClass)} className={inputClass}>
-          {ASSET_TAXONOMY.map((cat) => (
-            <optgroup key={cat.key} label={cat.label}>
-              {cat.types.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-      </Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Value">
-          <input type="number" value={value} onChange={(e) => setValue(e.target.value)} className={inputClass} placeholder="0" />
-        </Field>
-        <Field label="Currency">
-          <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={inputClass}>
-            {CURRENCIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </Field>
-      </div>
-      <button onClick={submit} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-base font-medium">
-        Save Asset
-      </button>
-    </div>
-  );
-}
-
-function LiabilityForm({ onDone }: { onDone: () => void }) {
-  const user = useAuthStore((s) => s.user);
-  const [name, setName] = useState('');
-  const [outstanding, setOutstanding] = useState('');
-  const [currency, setCurrency] = useState('INR');
-
-  const submit = async () => {
-    if (!user || !name || !outstanding) return;
-    const liability: Liability = {
-      id: crypto.randomUUID(),
-      name,
-      outstanding: Number(outstanding),
-      currency,
-      updatedAt: Date.now(),
-    };
-    await upsertDoc(user.uid, 'liabilities', liability);
-    onDone();
-  };
-
-  return (
-    <div className="space-y-4">
-      <Field label="Name">
-        <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} placeholder="e.g. Home Loan" />
-      </Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Outstanding">
-          <input type="number" value={outstanding} onChange={(e) => setOutstanding(e.target.value)} className={inputClass} placeholder="0" />
-        </Field>
-        <Field label="Currency">
-          <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={inputClass}>
-            {CURRENCIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </Field>
-      </div>
-      <button onClick={submit} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-base font-medium">
-        Save Liability
       </button>
     </div>
   );

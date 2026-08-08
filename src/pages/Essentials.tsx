@@ -598,7 +598,7 @@ function GoalsTab() {
           return (
             <div key={g.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-lg">{g.name}</h3>
+                <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-lg uppercase">{g.name}</h3>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => {
@@ -651,7 +651,7 @@ function GoalsTab() {
         onClose={() => setPendingDelete(null)}
         onConfirm={confirmDelete}
         title="Delete this goal?"
-        description={<>This will permanently delete <strong>{pendingDelete?.name}</strong>. This can't be undone.</>}
+        description={<>This will permanently delete <strong className="uppercase">{pendingDelete?.name}</strong>. This can't be undone.</>}
       />
     </div>
   );

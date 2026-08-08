@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 /** Live-computed value for a SIP holding — the auto-calculated Current Value
  *  (units bought at each installment's NAV, priced at the latest NAV) plus
@@ -15,9 +16,19 @@ interface LivePricesState {
   sipValues: Record<string, SipLiveEntry>;
   lastUpdated: number | null;
   loading: boolean;
+  /** True once the first equity-price fetch cycle has finished (success or
+   *  failure) since the app loaded. Lets the UI hold off showing Net Worth /
+   *  Total Assets until the real live price is in, instead of flashing the
+   *  last-saved (possibly stale) value first and correcting a few seconds
+   *  later. */
+  pricesAttempted: boolean;
+  /** Same idea as `pricesAttempted`, for linked-SIP NAV values. */
+  sipValuesAttempted: boolean;
   setPrices: (prices: Record<string, number>) => void;
   setSipValues: (sipValues: Record<string, SipLiveEntry>) => void;
   setLoading: (loading: boolean) => void;
+  setPricesAttempted: (attempted: boolean) => void;
+  setSipValuesAttempted: (attempted: boolean) => void;
   /** Live 24K gold rate (₹/gram) polled by useLiveGoldPrice whenever the
    *  person holds a Gold asset — see src/utils/goldPrice.ts. */
   goldPricePerGram: number | null;
@@ -29,24 +40,48 @@ interface LivePricesState {
   setGoldPriceError: (error: boolean) => void;
 }
 
-export const useLivePricesStore = create<LivePricesState>((set) => ({
-  prices: {},
-  sipValues: {},
-  lastUpdated: null,
-  loading: false,
-  setPrices: (prices) => set({ prices, lastUpdated: Date.now(), loading: false }),
-  setSipValues: (sipValues) =>
-    set((s) => ({ sipValues: { ...s.sipValues, ...sipValues }, lastUpdated: Date.now() })),
-  setLoading: (loading) => set({ loading }),
-  goldPricePerGram: null,
-  goldPriceAsOf: null,
-  goldPriceLoading: false,
-  goldPriceError: false,
-  setGoldPrice: (goldPricePerGram, goldPriceAsOf) =>
-    set({ goldPricePerGram, goldPriceAsOf, goldPriceLoading: false, goldPriceError: false }),
-  setGoldPriceLoading: (goldPriceLoading) => set({ goldPriceLoading }),
-  setGoldPriceError: (goldPriceError) => set({ goldPriceError }),
-}));
+export const useLivePricesStore = create<LivePricesState>()(
+  persist(
+    (set) => ({
+      prices: {},
+      sipValues: {},
+      lastUpdated: null,
+      loading: false,
+      pricesAttempted: false,
+      sipValuesAttempted: false,
+      setPrices: (prices) => set({ prices, lastUpdated: Date.now(), loading: false }),
+      setSipValues: (sipValues) =>
+        set((s) => ({ sipValues: { ...s.sipValues, ...sipValues }, lastUpdated: Date.now() })),
+      setLoading: (loading) => set({ loading }),
+      setPricesAttempted: (pricesAttempted) => set({ pricesAttempted }),
+      setSipValuesAttempted: (sipValuesAttempted) => set({ sipValuesAttempted }),
+      goldPricePerGram: null,
+      goldPriceAsOf: null,
+      goldPriceLoading: false,
+      goldPriceError: false,
+      setGoldPrice: (goldPricePerGram, goldPriceAsOf) =>
+        set({ goldPricePerGram, goldPriceAsOf, goldPriceLoading: false, goldPriceError: false }),
+      setGoldPriceLoading: (goldPriceLoading) => set({ goldPriceLoading }),
+      setGoldPriceError: (goldPriceError) => set({ goldPriceError }),
+    }),
+    {
+      // Cache the last real fetched prices across page loads/refreshes, so
+      // the next visit can show them instantly instead of an empty state
+      // that has to wait out a fresh network round-trip first. A fresh
+      // fetch still kicks off in the background and silently corrects
+      // anything that's changed since — this only avoids the *wait*, it
+      // doesn't skip the refresh.
+      name: 'aurafin-live-prices-cache',
+      partialize: (s) => ({
+        prices: s.prices,
+        sipValues: s.sipValues,
+        lastUpdated: s.lastUpdated,
+        goldPricePerGram: s.goldPricePerGram,
+        goldPriceAsOf: s.goldPriceAsOf,
+      }),
+    }
+  )
+);
 
 /** Resolve live LTP for a symbol, falling back to stored avg or computed price. */
 export function resolveLivePrice(

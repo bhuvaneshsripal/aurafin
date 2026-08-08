@@ -80,7 +80,7 @@ export default function Assets() {
           <tbody className="divide-y divide-slate-100">
             {assets.map((a) => (
               <tr key={a.id}>
-                <td className="px-4 py-3 font-medium text-slate-800">{a.name}</td>
+                <td className="px-4 py-3 font-medium text-slate-800 uppercase">{a.name}</td>
                 <td className="px-4 py-3 text-slate-500">{ASSET_CLASS_LABELS[a.assetClass]}</td>
                 <td className="px-4 py-3 text-slate-800">{formatCurrency(a.value, a.currency)}</td>
                 <td className="px-4 py-3">
@@ -116,7 +116,7 @@ export default function Assets() {
         onConfirm={confirmDelete}
         busy={deleting}
         title="Delete this asset?"
-        description={<>This will permanently delete <strong>{pendingDelete?.name}</strong>. This can't be undone.</>}
+        description={<>This will permanently delete <strong className="uppercase">{pendingDelete?.name}</strong>. This can't be undone.</>}
       />
     </div>
   );
@@ -143,7 +143,7 @@ function AssetForm({ initial, onSave }: { initial: Asset | null; onSave: (a: Ass
   return (
     <div className="space-y-4">
       <Field label="Name">
-        <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} placeholder="e.g. HDFC Flexicap SIP" />
+        <input value={name} onChange={(e) => setName(e.target.value.toUpperCase())} className={`${inputClass} uppercase`} placeholder="e.g. HDFC Flexicap SIP" />
       </Field>
       <Field label="Asset Class">
         <select value={assetClass} onChange={(e) => setAssetClass(e.target.value as AssetClass)} className={inputClass}>

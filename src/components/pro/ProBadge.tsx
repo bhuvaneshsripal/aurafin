@@ -12,9 +12,11 @@ import { Crown } from 'lucide-react';
 export default function ProBadge({
   size = 'sm',
   className = '',
+  onClick,
 }: {
   size?: 'xs' | 'sm' | 'md';
   className?: string;
+  onClick?: () => void;
 }) {
   const sizes = {
     xs: { pad: 'px-1.5 py-[1px]', text: 'text-[9px]', icon: 10, gap: 'gap-0.5' },
@@ -22,10 +24,23 @@ export default function ProBadge({
     md: { pad: 'px-2.5 py-1', text: 'text-[11px]', icon: 13, gap: 'gap-1' },
   }[size];
 
+  const badgeClass = `inline-flex items-center ${sizes.gap} ${sizes.pad} rounded-full font-bold uppercase tracking-wide text-white shrink-0 bg-gradient-to-r from-amber-400 via-yellow-500 to-amber-500 shadow-[0_1px_4px_rgba(217,161,20,0.45)] ${sizes.text} ${className}`;
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`${badgeClass} cursor-pointer hover:brightness-105 active:brightness-95 transition-[filter]`}
+      >
+        <Crown size={sizes.icon} strokeWidth={2.5} className="drop-shadow-sm" />
+        Pro
+      </button>
+    );
+  }
+
   return (
-    <span
-      className={`inline-flex items-center ${sizes.gap} ${sizes.pad} rounded-full font-bold uppercase tracking-wide text-white shrink-0 bg-gradient-to-r from-amber-400 via-yellow-500 to-amber-500 shadow-[0_1px_4px_rgba(217,161,20,0.45)] ${sizes.text} ${className}`}
-    >
+    <span className={badgeClass}>
       <Crown size={sizes.icon} strokeWidth={2.5} className="drop-shadow-sm" />
       Pro
     </span>

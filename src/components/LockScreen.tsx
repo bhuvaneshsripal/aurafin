@@ -210,7 +210,7 @@ export default function LockScreen() {
                   key={d}
                   type="button"
                   onClick={() => pressDigit(d)}
-                  className="keep-round aspect-square rounded-full bg-white dark:bg-slate-800 shadow-[0_8px_22px_-4px_rgba(0,0,0,0.45)] text-2xl font-semibold text-slate-800 dark:text-slate-100 active:scale-95 active:shadow-[0_3px_10px_-3px_rgba(0,0,0,0.35)] transition-all duration-150"
+                  className="aspect-square rounded-2xl bg-white dark:bg-slate-800 shadow-[0_8px_22px_-4px_rgba(0,0,0,0.45)] text-2xl font-semibold text-slate-800 dark:text-slate-100 active:scale-95 active:shadow-[0_3px_10px_-3px_rgba(0,0,0,0.35)] transition-all duration-150"
                 >
                   {d}
                 </button>
@@ -219,14 +219,14 @@ export default function LockScreen() {
               <button
                 type="button"
                 onClick={() => pressDigit('0')}
-                className="keep-round aspect-square rounded-full bg-white dark:bg-slate-800 shadow-[0_8px_22px_-4px_rgba(0,0,0,0.45)] text-2xl font-semibold text-slate-800 dark:text-slate-100 active:scale-95 active:shadow-[0_3px_10px_-3px_rgba(0,0,0,0.35)] transition-all duration-150"
+                className="aspect-square rounded-2xl bg-white dark:bg-slate-800 shadow-[0_8px_22px_-4px_rgba(0,0,0,0.45)] text-2xl font-semibold text-slate-800 dark:text-slate-100 active:scale-95 active:shadow-[0_3px_10px_-3px_rgba(0,0,0,0.35)] transition-all duration-150"
               >
                 0
               </button>
               <button
                 type="button"
                 onClick={pressBackspace}
-                className="keep-round aspect-square rounded-full bg-white dark:bg-slate-800 shadow-[0_8px_22px_-4px_rgba(0,0,0,0.45)] flex items-center justify-center text-slate-700 dark:text-slate-200 active:scale-95 active:shadow-[0_3px_10px_-3px_rgba(0,0,0,0.35)] transition-all duration-150"
+                className="aspect-square rounded-2xl bg-white dark:bg-slate-800 shadow-[0_8px_22px_-4px_rgba(0,0,0,0.45)] flex items-center justify-center text-slate-700 dark:text-slate-200 active:scale-95 active:shadow-[0_3px_10px_-3px_rgba(0,0,0,0.35)] transition-all duration-150"
               >
                 <Delete size={24} />
               </button>

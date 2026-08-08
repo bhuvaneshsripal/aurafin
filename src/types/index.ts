@@ -107,6 +107,13 @@ export interface Asset {
    * `quantity` (grams) and `investedValue` are then derived by summing all lots.
    */
   purchaseLots?: { id: string; date?: string; grams: number; amount: number }[];
+  /**
+   * Individual buy lots for unit-tracked equities/funds (Stocks, ETFs, Mutual
+   * Funds, Crypto, etc.). Each time more is bought at a different price, a new
+   * lot is appended instead of overwriting the total — `quantity` and
+   * `avgCost` are then derived by summing lots and weighting by quantity.
+   */
+  shareLots?: { id: string; date?: string; quantity: number; price: number }[];
   /** Sub-type shown on the Accounts tab (bank/cash/wallet/broker/other) — display only. */
   accountType?: 'bank' | 'cash' | 'wallet' | 'broker' | 'other';
   /** Last 4 digits of the account/card number, for display. */

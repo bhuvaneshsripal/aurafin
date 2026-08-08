@@ -84,3 +84,14 @@ export function checkRedeemCode(input: string): CodeCheckResult {
 export function isPromo20Code(input: string): boolean {
   return input.trim().toUpperCase() === PROMO20_CODE.toUpperCase();
 }
+
+/** Hidden ₹1-for-one-month promo. Intentionally NOT surfaced anywhere in
+ *  the UI (no hint text, no placeholder, no "try this code" copy) — it
+ *  only works if someone already knows it and types it in exactly. Keep
+ *  it that way; don't reference PROMO1RS_CODE in any visible label. */
+export const PROMO1RS_CODE = 'AURA1RS';
+export const PROMO1RS_PRICE = 1;
+
+export function isPromo1RsCode(input: string): boolean {
+  return input.trim().toUpperCase() === PROMO1RS_CODE.toUpperCase();
+}

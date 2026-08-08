@@ -83,7 +83,7 @@ export default function Goals() {
             <div key={g.id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  <h3 className="font-semibold text-slate-800 truncate">{g.name}</h3>
+                  <h3 className="font-semibold text-slate-800 truncate uppercase">{g.name}</h3>
                   {g.linkedToNetWorth && (
                     <span className="flex items-center gap-1 shrink-0 text-[10px] font-medium uppercase tracking-wide bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded-full">
                       <Scale size={10} /> Net Worth
@@ -134,7 +134,7 @@ export default function Goals() {
         onConfirm={confirmDelete}
         busy={deleting}
         title="Delete this goal?"
-        description={<>This will permanently delete <strong>{pendingDelete?.name}</strong>. This can't be undone.</>}
+        description={<>This will permanently delete <strong className="uppercase">{pendingDelete?.name}</strong>. This can't be undone.</>}
       />
     </div>
   );
@@ -162,7 +162,7 @@ function GoalForm({ initial, onSave }: { initial: Goal | null; onSave: (g: Goal)
   return (
     <div className="space-y-4">
       <Field label="Goal Name">
-        <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} placeholder="e.g. Retirement Corpus" />
+        <input value={name} onChange={(e) => setName(e.target.value.toUpperCase())} className={`${inputClass} uppercase`} placeholder="e.g. Retirement Corpus" />
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Target Amount">

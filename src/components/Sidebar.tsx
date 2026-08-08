@@ -80,8 +80,15 @@ export default function Sidebar() {
       <div className="px-1 mb-7 flex items-center justify-between gap-2">
         <span className="flex items-center gap-2.5 min-w-0">
           <AppLogo className="w-9 h-9 rounded-full shrink-0" />
-          <span className="text-[20px] font-bold text-slate-900 dark:text-white tracking-tight">
-            Aurafin<span className="text-brand-600">.</span>
+          <span className="text-[20px] font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-1.5 min-w-0">
+            <span className="truncate">
+              Aurafin<span className="text-brand-600">.</span>
+            </span>
+            {isPremium && (
+              <span className="text-[10px] font-bold uppercase tracking-wide text-green-800 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-1.5 py-0.5 rounded-full shrink-0">
+                Pro
+              </span>
+            )}
           </span>
         </span>
         {lockEnabled && (
@@ -125,11 +132,6 @@ export default function Sidebar() {
       </nav>
 
       <div className="px-2.5 pt-3 mt-2 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-400 dark:text-slate-500">
-        {isPremium && (
-          <span className="inline-flex items-center gap-1 mb-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-brand-600 text-white">
-            Pro
-          </span>
-        )}
         <p>
           Developed by Bhuvanesh S ·{' '}
           <a

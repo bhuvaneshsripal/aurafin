@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ChevronDown, ChevronUp, Scale, ArrowLeftRight, TrendingUp, Target } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ChevronDown, ChevronUp, ChevronRight, Scale, ArrowLeftRight, TrendingUp, Target } from 'lucide-react';
 import {
   ResponsiveContainer,
   BarChart,
@@ -43,10 +43,34 @@ export default function Dashboard() {
   const allGoals = useGoalsStore((s) => s.goals);
   const livePrices = useLivePricesStore((s) => s.prices);
   const sipValues = useLivePricesStore((s) => s.sipValues);
+  const pricesAttempted = useLivePricesStore((s) => s.pricesAttempted);
+  const sipValuesAttempted = useLivePricesStore((s) => s.sipValuesAttempted);
   const privacyMode = useUiStore((s) => s.privacyMode);
   const assetsServerConfirmed = useSyncStatusStore((s) => s.assetsServerConfirmed);
   const liabilitiesServerConfirmed = useSyncStatusStore((s) => s.liabilitiesServerConfirmed);
-  const netWorthReady = assetsServerConfirmed && liabilitiesServerConfirmed;
+  // Assets/liabilities loading from the server isn't the whole picture — if
+  // any asset is priced live (a stock/fund symbol, or a linked SIP), Net
+  // Worth also has to wait for a real price before showing a number.
+  // Two ways to satisfy that: this session already fetched one (pricesAttempted),
+  // or we already have a real price cached locally from last time (persisted
+  // in livePricesStore) — in which case there's no need to make the person
+  // wait out a fresh network round-trip just to show a number that will very
+  // likely be the same; it shows instantly and the background refresh
+  // corrects it silently if anything actually changed.
+  const liveEquityAssets = allAssets.filter((a) => a.symbol && a.quantity && a.quantity > 0);
+  const hasLivePriced = liveEquityAssets.length > 0;
+  const pricesCached =
+    hasLivePriced && liveEquityAssets.every((a) => livePrices[a.symbol!.toUpperCase()] !== undefined);
+  const sipLinkedAssets = allAssets.filter(
+    (a) => a.assetClass === 'sip' && a.symbol && /^\d+$/.test(a.symbol)
+  );
+  const hasSipLinked = sipLinkedAssets.length > 0;
+  const sipCached = hasSipLinked && sipLinkedAssets.every((a) => sipValues[a.symbol!.trim()] !== undefined);
+  const netWorthReady =
+    assetsServerConfirmed &&
+    liabilitiesServerConfirmed &&
+    (!hasLivePriced || pricesAttempted || pricesCached) &&
+    (!hasSipLinked || sipValuesAttempted || sipCached);
 
   const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
 
@@ -102,7 +126,10 @@ export default function Dashboard() {
           </p>
           {hasWealth ? (
             !netWorthReady ? (
-              <div className="mt-3 h-11 sm:h-12 w-48 rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />
+              <div className="mt-3 h-11 sm:h-12 flex items-center gap-2 rounded-lg bg-slate-100 dark:bg-slate-800 px-3">
+                <LoadingDots />
+                <span className="text-xs text-slate-400 dark:text-slate-500">Fetching live prices…</span>
+              </div>
             ) : (
               <>
                 <div className="flex items-center gap-2.5 flex-wrap mt-2">
@@ -122,7 +149,7 @@ export default function Dashboard() {
                     </span>
                   )}
                 </div>
-                <MiniTrend />
+                <MiniTrend isPositive={netWorthPnl >= 0} />
               </>
             )
           ) : (
@@ -130,9 +157,9 @@ export default function Dashboard() {
               <span className="font-hero-numeric text-4xl sm:text-5xl text-slate-900 dark:text-white block mt-2 break-words">
                 {maskPreciseAmount(0, 'INR', privacyMode)}
               </span>
-              <a href="#wealth" className="text-sm font-medium text-brand-700 dark:text-brand-300 hover:underline mt-2 inline-block">
+              <Link to="/wealth" className="text-sm font-medium text-brand-700 dark:text-brand-300 hover:underline mt-2 inline-block">
                 Take your first snapshot →
-              </a>
+              </Link>
             </>
           )}
         </div>
@@ -141,19 +168,15 @@ export default function Dashboard() {
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
             Invested · <span className="text-slate-400">₹ INR</span>
           </p>
-          {hasWealth ? (
-            !netWorthReady ? (
-              <div className="mt-3 h-11 sm:h-12 w-40 rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />
-            ) : (
-              <span className="font-hero-numeric text-4xl sm:text-5xl text-slate-900 dark:text-white block mt-2 break-words">
-                {maskPreciseAmount(investedAssetsTotal, 'INR', privacyMode)}
-              </span>
-            )
-          ) : (
-            <span className="font-hero-numeric text-4xl sm:text-5xl text-slate-900 dark:text-white block mt-2 break-words">
-              {maskPreciseAmount(0, 'INR', privacyMode)}
-            </span>
-          )}
+          {/* Invested is pure cost-basis (qty × avg cost, or the SIP schedule) —
+              it never depends on a live price fetch, and the local store already
+              has it the instant the page loads (from cache if offline, from the
+              server moments later). No reason to gate this behind a loading
+              state at all; just render whatever's current, same as everywhere
+              else in the app. */}
+          <span className="font-hero-numeric text-4xl sm:text-5xl text-slate-900 dark:text-white block mt-2 break-words">
+            {maskPreciseAmount(hasWealth ? investedAssetsTotal : 0, 'INR', privacyMode)}
+          </span>
         </div>
       </div>
 
@@ -177,13 +200,25 @@ export default function Dashboard() {
           <div className="mt-6 text-center">
             <p className="text-slate-400 text-sm mb-3">No income or spending logged in this window.</p>
             <span className="text-sm font-medium text-brand-700 dark:text-brand-300">
-              Add income → <span className="text-slate-300 mx-1">·</span> Add expense →
+              <Link to="/transactions" className="hover:underline">
+                Add income →
+              </Link>
+              <span className="text-slate-300 mx-1">·</span>
+              <Link to="/transactions" className="hover:underline">
+                Add expense →
+              </Link>
             </span>
           </div>
         )}
       </div>
 
-      <Section title="Wealth" icon={Scale} iconColor="text-indigo-500" summary={<Amount value={netWorth} />}>
+      <Section
+        title="Wealth"
+        icon={Scale}
+        iconColor="text-indigo-500"
+        summary={netWorthReady ? <Amount value={netWorth} /> : <SummarySkeleton />}
+        to="/wealth"
+      >
         <WealthSummary assets={assets} liabilities={liabilities} totalAssets={totalAssets} totalLiabilities={totalLiabilities} />
       </Section>
 
@@ -192,18 +227,33 @@ export default function Dashboard() {
         icon={ArrowLeftRight}
         iconColor="text-violet-500"
         summary={<Amount value={monthIncome - monthExpense} />}
+        to="/transactions"
       >
         <CashflowSummary income={monthIncome} expense={monthExpense} transactions={transactions} />
       </Section>
 
-      <Section title="Investments" icon={TrendingUp} iconColor="text-brand-600" summary={<Amount value={totalInvestments} />}>
+      <Section
+        title="Investments"
+        icon={TrendingUp}
+        iconColor="text-brand-600"
+        summary={<Amount value={totalInvestments} />}
+        to="/wealth?tab=assets"
+      >
         <InvestmentsSummary investments={investments} />
       </Section>
 
-      <Section title="Goals" icon={Target} iconColor="text-orange-500" summary={`${goals.length}`}>
-        <GoalsSummary goals={goals} netWorth={netWorth} />
+      <Section title="Goals" icon={Target} iconColor="text-orange-500" summary={`${goals.length}`} to="/essentials?tab=goals">
+        <GoalsSummary goals={goals} netWorth={netWorthReady ? netWorth : 0} />
       </Section>
     </div>
+  );
+}
+
+function SummarySkeleton() {
+  return (
+    <span className="inline-flex items-center h-4 align-middle">
+      <LoadingDots />
+    </span>
   );
 }
 
@@ -212,15 +262,18 @@ function Section({
   icon: Icon,
   iconColor = 'text-brand-600',
   summary,
+  to,
   children,
 }: {
   title: string;
   icon: typeof Scale;
   iconColor?: string;
   summary: React.ReactNode;
+  to?: string;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
       <button
@@ -234,10 +287,23 @@ function Section({
         </div>
         <span className="font-semibold text-slate-900 dark:text-white">{summary}</span>
       </button>
-      {open && <div className="px-6 pb-6">{children}</div>}
+      {open && (
+        <div className="px-6 pb-6">
+          {children}
+          {to && (
+            <button
+              onClick={() => navigate(to)}
+              className="mt-4 flex items-center gap-1 text-sm font-medium text-brand-700 dark:text-brand-300 hover:underline"
+            >
+              Go to {title} to add or edit <ChevronRight size={14} />
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
+
 
 function WealthSummary({
   assets,
@@ -254,7 +320,7 @@ function WealthSummary({
   const assetPct = total > 0 ? Math.round((totalAssets / total) * 100) : 100;
 
   if (assets.length === 0 && liabilities.length === 0) {
-    return <EmptyState text="Add assets or liabilities to see your wealth breakdown." />;
+    return <EmptyState text="Add assets or liabilities to see your wealth breakdown." to="/wealth" cta="Add asset or liability →" />;
   }
 
   return (
@@ -301,7 +367,7 @@ function CashflowSummary({
   }, [transactions]);
 
   if (transactions.length === 0) {
-    return <EmptyState text="Log income or expenses in Money to see your cashflow here." />;
+    return <EmptyState text="Log income or expenses in Money to see your cashflow here." to="/transactions" cta="Add income or expense →" />;
   }
 
   return (
@@ -342,7 +408,11 @@ function InvestmentsSummary({
 
   if (investments.length === 0) {
     return (
-      <EmptyState text="Add equity, mutual fund, or crypto assets in Wealth to see them here." />
+      <EmptyState
+        text="Add equity, mutual fund, or crypto assets in Wealth to see them here."
+        to="/wealth?tab=assets"
+        cta="Add investment →"
+      />
     );
   }
   const sorted = [...investments].sort((a, b) => b.value - a.value);
@@ -355,7 +425,7 @@ function InvestmentsSummary({
           const { invested } = resolveAssetValues(a, livePrices, sipValues);
           return (
             <div key={a.id} className="border border-slate-100 dark:border-slate-800 rounded-xl p-4">
-              <p className="font-medium text-slate-800 dark:text-slate-100">{a.name}</p>
+              <p className="font-medium text-slate-800 dark:text-slate-100 uppercase">{a.name}</p>
               <span className="text-lg font-semibold text-slate-900 dark:text-white block">
                 {maskPreciseAmount(
                   invested !== undefined ? invested : a.value,
@@ -388,7 +458,7 @@ function GoalsSummary({
   netWorth: number;
 }) {
   if (goals.length === 0) {
-    return <EmptyState text="Set a goal in Essentials to track your progress here." />;
+    return <EmptyState text="Set a goal in Essentials to track your progress here." to="/essentials?tab=goals" cta="Add goal →" />;
   }
   const current = Math.max(0, netWorth);
   return (
@@ -398,7 +468,7 @@ function GoalsSummary({
         return (
           <div key={g.id}>
             <div className="flex items-center justify-between text-sm mb-1">
-              <span className="font-medium text-slate-700 dark:text-slate-200">{g.name}</span>
+              <span className="font-medium text-slate-700 dark:text-slate-200 uppercase">{g.name}</span>
               <span className="text-slate-400">{pct}%</span>
             </div>
             <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
@@ -411,15 +481,37 @@ function GoalsSummary({
   );
 }
 
-function MiniTrend() {
+/** Three dots fading/bouncing in sequence — a lightweight "still working"
+ * indicator for values waiting on a live network round-trip. */
+function LoadingDots() {
+  return (
+    <span className="loading-dots inline-flex items-center gap-1" role="status" aria-label="Loading">
+      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-slate-500 inline-block" />
+      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-slate-500 inline-block" />
+      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-slate-500 inline-block" />
+    </span>
+  );
+}
+
+/** Small sparkline under the Net Worth figure. Direction and color follow
+ * the actual overall P&L instead of always trending up, so a portfolio
+ * that's down shows a gently declining red line rather than a misleadingly
+ * cheerful green climb. */
+function MiniTrend({ isPositive }: { isPositive: boolean }) {
+  const points = isPositive
+    ? '0,44 40,40 80,36 120,30 160,22 200,16 240,6'
+    : '0,10 40,15 80,20 120,26 160,32 200,37 240,42';
+  const stroke = isPositive ? 'var(--color-brand-600)' : '#ef4444';
   return (
     <div className="mt-3 h-14">
       <svg viewBox="0 0 240 56" className="w-full h-full" preserveAspectRatio="none">
         <polyline
-          points="0,44 40,40 80,36 120,30 160,22 200,16 240,6"
+          points={points}
           fill="none"
-          stroke="var(--color-brand-600)"
+          stroke={stroke}
           strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
         />
       </svg>
     </div>
@@ -447,10 +539,15 @@ function RangePills() {
   );
 }
 
-function EmptyState({ text }: { text: string }) {
+function EmptyState({ text, to, cta }: { text: string; to?: string; cta?: string }) {
   return (
-    <div className="py-8 flex items-center justify-center text-sm text-slate-400 text-center px-6">
-      {text}
+    <div className="py-8 flex flex-col items-center justify-center gap-2 text-sm text-slate-400 text-center px-6">
+      <span>{text}</span>
+      {to && (
+        <Link to={to} className="text-brand-700 dark:text-brand-300 font-medium hover:underline">
+          {cta ?? 'Add now →'}
+        </Link>
+      )}
     </div>
   );
 }
