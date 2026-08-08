@@ -24,6 +24,13 @@ export interface PriceLookup {
   isin?: string;
   /** Full name, used as a last-resort search query if there's no ISIN. */
   name?: string;
+  /**
+   * Which market this ticker trades on. Defaults to 'IN' (NSE, falling
+   * back to BSE/Yahoo). 'US' skips the NSE attempt entirely and queries
+   * the US market directly — an NSE lookup for "AAPL" would just fail
+   * (or worse, silently match an unrelated NSE symbol).
+   */
+  market?: 'IN' | 'US';
 }
 
 /**
@@ -78,9 +85,11 @@ async function searchYahooSymbol(query: string): Promise<string | null> {
   return resolved;
 }
 
-async function fetchQuote(symbol: string): Promise<{ price: number } | null> {
+async function fetchQuote(symbol: string, market: 'IN' | 'US' = 'IN'): Promise<{ price: number } | null> {
   try {
-    const res = await fetch(`${QUOTE_BASE}/${encodeURIComponent(symbol)}`);
+    const res = await fetch(
+      `${QUOTE_BASE}/${encodeURIComponent(symbol)}?market=${market}`
+    );
     if (!res.ok) return null;
 
     const json = await res.json();
@@ -119,6 +128,7 @@ export async function fetchLivePrices(lookups: PriceLookup[]): Promise<Map<strin
     await Promise.all(
       batch.map(async (lookup) => {
         let yahooSymbol: string | null = null;
+        const market = lookup.market ?? 'IN';
 
         if (looksLikeTicker(lookup.key)) {
           yahooSymbol = toYahooSymbol(lookup.key);
@@ -130,7 +140,7 @@ export async function fetchLivePrices(lookups: PriceLookup[]): Promise<Map<strin
         }
 
         if (!yahooSymbol) return;
-        const quote = await fetchQuote(yahooSymbol);
+        const quote = await fetchQuote(yahooSymbol, market);
         if (quote) results.set(lookup.key, quote.price);
       })
     );

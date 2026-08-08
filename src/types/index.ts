@@ -73,6 +73,24 @@ export interface Asset {
    * source only gave a full company name instead of a ticker.
    */
   isin?: string;
+  /**
+   * Which exchange/market this equity trades on. 'IN' (default) routes live
+   * price lookup through NSE/BSE; 'US' routes straight to the US market
+   * (NASDAQ/NYSE via Yahoo) and skips the NSE attempt, since a US ticker
+   * like AAPL isn't an NSE symbol. Only meaningful for Direct Stock, ETF,
+   * and International Equity — see MARKET_SELECTABLE_CLASSES.
+   */
+  market?: 'IN' | 'US';
+  /**
+   * Marks this asset as a recurring/systematic investment plan (SIP) —
+   * available on Direct Stock, ETF, and International Equity in addition
+   * to the dedicated Mutual Fund SIP type. Reuses sipAmount/sipFrequency/
+   * sipDay below purely as reminder metadata; unlike the Mutual Fund SIP
+   * type this does NOT auto-calculate Current Value, since there's no
+   * free per-day historical price feed for arbitrary stocks — quantity/
+   * invested value still come from the manually logged purchase lots.
+   */
+  recurringInvestment?: boolean;
   /** Number of shares/units held. */
   quantity?: number;
   /** Average buy price per unit. */

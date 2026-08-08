@@ -24,17 +24,23 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
     if (url.pathname.startsWith('/api/market/chart/')) {
       const raw = decodeURIComponent(url.pathname.split('/').pop() ?? '').toUpperCase()
       const bareSymbol = raw.replace(/\.(NS|BO)$/i, '')
+      // 'IN' (default) = NSE, falling back to BSE/Yahoo. 'US' = skip NSE
+      // entirely — a US ticker like AAPL isn't an NSE symbol.
+      const market = (url.searchParams.get('market') ?? 'IN').toUpperCase() === 'US' ? 'US' : 'IN'
 
-      try {
-        const quote = await fetchNseQuote(bareSymbol)
-        send(200, { symbol: bareSymbol, price: quote.price, currency: quote.currency, source: 'nse' })
-        return
-      } catch {
-        // fall through to Yahoo
+      if (market === 'IN') {
+        try {
+          const quote = await fetchNseQuote(bareSymbol)
+          send(200, { symbol: bareSymbol, price: quote.price, currency: quote.currency, source: 'nse' })
+          return
+        } catch {
+          // fall through to Yahoo
+        }
       }
 
       try {
-        const yahooSymbol = /\.(NS|BO)$/i.test(raw) ? raw : `${raw}.NS`
+        const yahooSymbol =
+          market === 'US' ? raw : /\.(NS|BO)$/i.test(raw) ? raw : `${raw}.NS`
         const upstream = await fetch(
           `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=1d`,
           { headers: { 'User-Agent': 'Mozilla/5.0' } }
@@ -44,12 +50,12 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
         const meta = data?.chart?.result?.[0]?.meta
         const price = meta?.regularMarketPrice ?? meta?.previousClose
         if (typeof price !== 'number') {
-          send(502, { error: 'Could not get a live price from NSE or Yahoo' })
+          send(502, { error: `Could not get a live price from ${market === 'US' ? 'the US market' : 'NSE or Yahoo'}` })
           return
         }
-        send(200, { symbol: bareSymbol, price, currency: meta?.currency ?? 'INR', source: 'yahoo' })
+        send(200, { symbol: bareSymbol, price, currency: meta?.currency ?? (market === 'US' ? 'USD' : 'INR'), source: 'yahoo' })
       } catch {
-        send(502, { error: 'Could not reach NSE or Yahoo Finance' })
+        send(502, { error: 'Could not reach the live price source' })
       }
       return
     }

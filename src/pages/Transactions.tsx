@@ -6,6 +6,7 @@ import BudgetTab from './money/BudgetTab';
 import AccountsTab from './money/AccountsTab';
 import InsightsTab from './money/InsightsTab';
 import ProBadge from '../components/pro/ProBadge';
+import { useUrlTab } from '../hooks/useUrlTab';
 
 const TABS = [
   {
@@ -41,7 +42,10 @@ const TABS = [
 type TabKey = (typeof TABS)[number]['key'];
 
 export default function Money() {
-  const [tab, setTab] = useState<TabKey>('transactions');
+  const [tab, setTab] = useUrlTab<TabKey>(
+    ['transactions', 'budget', 'accounts', 'insights'],
+    'transactions'
+  );
   const [accountsModalOpen, setAccountsModalOpen] = useState(false);
   const navigate = useNavigate();
 

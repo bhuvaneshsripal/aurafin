@@ -247,3 +247,18 @@ export const WEIGHT_TRACKED_CLASSES = new Set<AssetClass>(['gold', 'silver', 'pl
 
 /** SIP gets its own dedicated form (fund/symbol, initial + recurring amount, start date, SIP date) instead of the generic symbol/quantity/avg-cost fields. */
 export const SIP_CLASSES = new Set<AssetClass>(['sip']);
+
+/**
+ * Equity classes that trade on more than one market, so the form shows a
+ * Market (India / US) selector. This routes live-price lookup correctly
+ * (a US ticker like AAPL isn't an NSE symbol) and defaults Currency to
+ * match the chosen market.
+ */
+export const MARKET_SELECTABLE_CLASSES = new Set<AssetClass>(['stock', 'etf', 'international_equity']);
+
+/**
+ * Equity classes — outside the dedicated Mutual Fund SIP type — that can
+ * optionally be flagged as a recurring/systematic investment plan. Shows
+ * a "Set up as SIP" toggle with amount/frequency/day reminder fields.
+ */
+export const RECURRING_ELIGIBLE_CLASSES = new Set<AssetClass>(['stock', 'etf', 'international_equity']);

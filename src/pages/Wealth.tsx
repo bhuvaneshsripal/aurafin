@@ -59,6 +59,8 @@ import {
   RECURRING_DEPOSIT_CLASSES,
   SIP_CLASSES,
   WEIGHT_TRACKED_CLASSES,
+  MARKET_SELECTABLE_CLASSES,
+  RECURRING_ELIGIBLE_CLASSES,
   type CategoryDef,
 } from '../utils/taxonomy';
 import {
@@ -75,6 +77,7 @@ import {
 } from '../utils/mutualFunds';
 import { fetchLivePrices } from '../utils/marketPrices';
 import { useUrlTab } from '../hooks/useUrlTab';
+import { useModalBackClose } from '../hooks/useModalBackClose';
 
 type Tab = 'assets' | 'liabilities' | 'networth' | 'allocation';
 type SortKey = 'manual' | 'name' | 'qty' | 'avgCost' | 'perUnit' | 'invested' | 'value' | 'pnl' | 'alloc';
@@ -676,6 +679,7 @@ function AssetsTab({
   const privacyMode = useUiStore((s) => s.privacyMode);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Asset | null>(null);
+  useModalBackClose(modalOpen, () => setModalOpen(false));
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [sortKey, setSortKey] = useState<SortKey>('manual');
@@ -1370,7 +1374,19 @@ function AssetsTab({
                         />
                       )}
                       <div>
-                        <p className="font-semibold text-slate-800 uppercase">{a.name}</p>
+                        <p className="font-semibold text-slate-800 uppercase">
+                          {a.name}
+                          {a.market === 'US' && (
+                            <span className="ml-1.5 align-middle inline-block bg-blue-50 text-blue-600 text-[10px] font-semibold px-1.5 py-0.5 rounded normal-case">
+                              US
+                            </span>
+                          )}
+                          {a.recurringInvestment && (
+                            <span className="ml-1.5 align-middle inline-block bg-amber-50 text-amber-600 text-[10px] font-semibold px-1.5 py-0.5 rounded normal-case">
+                              SIP
+                            </span>
+                          )}
+                        </p>
                         <p className="text-xs text-slate-400">
                           {ASSET_CLASS_LABELS[a.assetClass]}
                           {a.institution ? ` · ${a.institution}` : ''}
@@ -1517,7 +1533,19 @@ function AssetsTab({
                       className="absolute top-4 right-4 text-slate-300 cursor-grab active:cursor-grabbing"
                     />
                   )}
-                  <p className="font-semibold text-slate-800 pr-5 uppercase">{a.name}</p>
+                  <p className="font-semibold text-slate-800 pr-5 uppercase">
+                    {a.name}
+                    {a.market === 'US' && (
+                      <span className="ml-1.5 align-middle inline-block bg-blue-50 text-blue-600 text-[10px] font-semibold px-1.5 py-0.5 rounded normal-case">
+                        US
+                      </span>
+                    )}
+                    {a.recurringInvestment && (
+                      <span className="ml-1.5 align-middle inline-block bg-amber-50 text-amber-600 text-[10px] font-semibold px-1.5 py-0.5 rounded normal-case">
+                        SIP
+                      </span>
+                    )}
+                  </p>
                   <p className="text-xs text-slate-400 mb-2">
                     {ASSET_CLASS_LABELS[a.assetClass]}
                     {a.institution ? ` · ${a.institution}` : ''}
@@ -1676,6 +1704,7 @@ function AssetDetailPage({
   const { invested, value, pnl, pnlPercent } = resolveAssetValues(asset, livePrices, sipValues);
   const category = ASSET_CLASS_TO_CATEGORY[asset.assetClass];
   const positive = (pnl ?? 0) >= 0;
+  const recurringSip = asset.recurringInvestment ? computeSipProgress(asset) : undefined;
 
   const notesLine = [
     extra.isin ? `ISIN: ${extra.isin}` : null,
@@ -1769,6 +1798,9 @@ function AssetDetailPage({
         <div className="grid grid-cols-2 gap-y-4 gap-x-4">
           <DetailField label="PRODUCT TYPE" value={ASSET_CLASS_LABELS[asset.assetClass]} />
           <DetailField label="CURRENCY" value={asset.currency} />
+          {asset.market && (
+            <DetailField label="MARKET" value={asset.market === 'US' ? 'United States' : 'India'} />
+          )}
           {asset.quantity !== undefined && (
             <DetailField
               label="QUANTITY"
@@ -1790,6 +1822,29 @@ function AssetDetailPage({
           {asset.maturityDate && <DetailField label="MATURITY DATE" value={asset.maturityDate} />}
         </div>
       </div>
+
+      {asset.recurringInvestment && recurringSip && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-5">
+          <p className="text-xs font-semibold tracking-wide text-slate-400 mb-4">RECURRING INVESTMENT (SIP)</p>
+          <div className="grid grid-cols-2 gap-y-4 gap-x-4">
+            {asset.sipAmount !== undefined && (
+              <DetailField
+                label="INSTALLMENT"
+                value={`${formatPreciseCurrency(asset.sipAmount, asset.currency)} / ${asset.sipFrequency === 'quarterly' ? 'quarter' : 'month'}`}
+              />
+            )}
+            {asset.startDate && <DetailField label="STARTED" value={asset.startDate} />}
+            <DetailField label="INSTALLMENTS SO FAR" value={`${recurringSip.installmentsElapsed}`} />
+            {recurringSip.nextInstallmentDate && (
+              <DetailField label="NEXT DUE" value={recurringSip.nextInstallmentDate} />
+            )}
+          </div>
+          <p className="text-xs text-slate-400 mt-4">
+            This is a reminder only — log each purchase as a new lot when editing this asset so
+            quantity and average cost stay accurate.
+          </p>
+        </div>
+      )}
 
       {notesLine && (
         <div className="bg-white rounded-2xl border border-slate-200 p-5">
@@ -1862,6 +1917,21 @@ function AssetDetailsForm({
     initial?.sipFrequency ?? 'monthly'
   );
   const [sipDay, setSipDay] = useState(initial?.sipDay?.toString() ?? '');
+  // --- Market (India / US) + recurring investment (SIP) for Stocks/ETFs/
+  // International Equity ---------------------------------------------------
+  const [market, setMarket] = useState<'IN' | 'US'>(initial?.market ?? 'IN');
+  const isMarketSelectable = MARKET_SELECTABLE_CLASSES.has(assetClass);
+  const isRecurringEligible = RECURRING_ELIGIBLE_CLASSES.has(assetClass);
+  const [recurringInvestment, setRecurringInvestment] = useState(
+    initial?.recurringInvestment ?? false
+  );
+  // Only auto-flip Currency to match a newly picked Market on a *new* asset —
+  // never clobber a currency the person already saved or hand-picked.
+  const currencyTouchedRef = useRef(!!initial);
+  useEffect(() => {
+    if (!isMarketSelectable || currencyTouchedRef.current) return;
+    setCurrency(market === 'US' ? 'USD' : 'INR');
+  }, [market, isMarketSelectable]);
 
   // --- Weight-tracked purchases (Gold / Silver / Platinum) ---------------
   // Each buy is its own lot (grams + amount); totals are summed below.
@@ -2169,7 +2239,7 @@ function AssetDetailsForm({
     setEquityLiveLoading(true);
     setEquityLiveError(false);
     const timer = setTimeout(() => {
-      fetchLivePrices([{ key: sym, name }]).then((priceMap) => {
+      fetchLivePrices([{ key: sym, name, market: isMarketSelectable ? market : undefined }]).then((priceMap) => {
         if (cancelled) return;
         setEquityLiveLoading(false);
         const price = priceMap.get(sym.toUpperCase());
@@ -2187,7 +2257,7 @@ function AssetDetailsForm({
       clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEquityLive, symbol, quantity]);
+  }, [isEquityLive, symbol, quantity, market, isMarketSelectable]);
 
   const estimatedMaturityValue = DEPOSIT_LIKE_CLASSES.has(assetClass)
     ? computeMaturityInfo({
@@ -2220,6 +2290,26 @@ function AssetDetailsForm({
       })
     : undefined;
 
+  // Reminder-only progress for a recurring Stock/ETF/Intl. Equity SIP —
+  // unlike the Mutual Fund SIP above, this never drives Current Value
+  // (no free per-day historical price feed for arbitrary stocks); it just
+  // tells the person how many installments are due and when the next is.
+  const stockSipProgress =
+    isRecurringEligible && recurringInvestment
+      ? computeSipProgress({
+          id: initial?.id ?? '',
+          name,
+          assetClass,
+          value: Number(value) || 0,
+          currency,
+          startDate: startDate || undefined,
+          sipAmount: sipAmount ? Number(sipAmount) : undefined,
+          sipFrequency,
+          sipDay: sipDay ? Number(sipDay) : undefined,
+          updatedAt: 0,
+        })
+      : undefined;
+
   const nameMissing = !name.trim();
   // SIP's Current Value is auto-calculated, so it's never a required
   // hand-typed field — everything else still needs a value to save.
@@ -2244,6 +2334,7 @@ function AssetDetailsForm({
       value: Number(value),
       currency,
       symbol: symbol.trim().toUpperCase() || undefined,
+      market: isMarketSelectable ? market : undefined,
       quantity: qty,
       avgCost: avg,
       investedValue: invested,
@@ -2257,9 +2348,19 @@ function AssetDetailsForm({
       startDate: startDate || undefined,
       maturityDate: maturityDate || undefined,
       monthlyInstallment: monthlyInstallment ? Number(monthlyInstallment) : undefined,
-      sipAmount: sipAmount ? Number(sipAmount) : undefined,
-      sipFrequency: SIP_CLASSES.has(assetClass) ? sipFrequency : undefined,
-      sipDay: sipDay ? Number(sipDay) : undefined,
+      recurringInvestment: isRecurringEligible ? recurringInvestment : undefined,
+      sipAmount:
+        (SIP_CLASSES.has(assetClass) || (isRecurringEligible && recurringInvestment)) && sipAmount
+          ? Number(sipAmount)
+          : undefined,
+      sipFrequency:
+        SIP_CLASSES.has(assetClass) || (isRecurringEligible && recurringInvestment)
+          ? sipFrequency
+          : undefined,
+      sipDay:
+        (SIP_CLASSES.has(assetClass) || (isRecurringEligible && recurringInvestment)) && sipDay
+          ? Number(sipDay)
+          : undefined,
       order: initial?.order,
       updatedAt: Date.now(),
       purchaseLots: isWeightTracked
@@ -2420,9 +2521,108 @@ function AssetDetailsForm({
       )}
       {isUnitTracked && (
         <>
+          {isMarketSelectable && (
+            <Field label="Market">
+              <select
+                value={market}
+                onChange={(e) => setMarket(e.target.value as 'IN' | 'US')}
+                className={`${inputClass} bg-white text-slate-700`}
+              >
+                <option value="IN">🇮🇳 India (NSE / BSE)</option>
+                <option value="US">🇺🇸 United States (NASDAQ / NYSE)</option>
+              </select>
+              <p className="text-xs text-slate-400 mt-1">
+                {market === 'US'
+                  ? 'Live price is fetched from the US market — Currency defaults to USD below.'
+                  : 'Live price is fetched from NSE, falling back to BSE/Yahoo.'}
+              </p>
+            </Field>
+          )}
           <Field label="Symbol (for live price)">
-            <input value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} className={`${inputClass} uppercase`} placeholder="RELIANCE" />
+            <input
+              value={symbol}
+              onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+              className={`${inputClass} uppercase`}
+              placeholder={isMarketSelectable && market === 'US' ? 'e.g. AAPL, TSLA, GOOGL' : 'RELIANCE'}
+            />
+            {isMarketSelectable && market === 'US' && (
+              <p className="text-xs text-slate-400 mt-1">Use the plain US ticker — no exchange suffix needed.</p>
+            )}
           </Field>
+          {isRecurringEligible && (
+            <div className="space-y-4 border border-slate-100 bg-slate-50/60 rounded-xl p-4">
+              <label className="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={recurringInvestment}
+                  onChange={(e) => setRecurringInvestment(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                />
+                Set up as a recurring investment (SIP)
+              </label>
+              {recurringInvestment && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="SIP Amount (per installment)">
+                      <input
+                        type="number"
+                        step="any"
+                        value={sipAmount}
+                        onChange={(e) => setSipAmount(e.target.value)}
+                        className={inputClass}
+                        placeholder="e.g. 10000"
+                      />
+                    </Field>
+                    <Field label="Frequency">
+                      <select
+                        value={sipFrequency}
+                        onChange={(e) => setSipFrequency(e.target.value as 'monthly' | 'quarterly')}
+                        className={inputClass}
+                      >
+                        <option value="monthly">Monthly</option>
+                        <option value="quarterly">Quarterly</option>
+                      </select>
+                    </Field>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Start Date">
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className={inputClass}
+                      />
+                    </Field>
+                    <Field label="SIP Date (day of month)">
+                      <input
+                        type="number"
+                        min={1}
+                        max={31}
+                        step={1}
+                        value={sipDay}
+                        onChange={(e) => setSipDay(e.target.value)}
+                        className={inputClass}
+                        placeholder="e.g. 5"
+                      />
+                    </Field>
+                  </div>
+                  {stockSipProgress && (
+                    <p className="text-xs text-slate-500">
+                      {stockSipProgress.installmentsElapsed > 0
+                        ? `${stockSipProgress.installmentsElapsed} installment${stockSipProgress.installmentsElapsed === 1 ? '' : 's'} due since start`
+                        : 'No installments due yet'}
+                      {stockSipProgress.nextInstallmentDate && ` · Next due ${stockSipProgress.nextInstallmentDate}`}
+                    </p>
+                  )}
+                  <p className="text-xs text-slate-400">
+                    This just tracks your plan and reminds you when the next installment is due — log
+                    each actual purchase under "Purchases" below once you invest, so quantity and
+                    average cost stay accurate.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
           <div className="space-y-3 border border-slate-100 bg-slate-50/60 rounded-xl p-4">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <p className="text-sm font-medium text-slate-700">Purchases</p>
@@ -2784,7 +2984,14 @@ function AssetDetailsForm({
         </Field>
       </div>
       <Field label="Currency">
-        <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={inputClass}>
+        <select
+          value={currency}
+          onChange={(e) => {
+            currencyTouchedRef.current = true;
+            setCurrency(e.target.value);
+          }}
+          className={inputClass}
+        >
           {CURRENCIES.map((c) => (
             <option key={c} value={c}>
               {c}
@@ -2821,6 +3028,7 @@ function LiabilitiesTab({
   const user = useAuthStore((s) => s.user);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Liability | null>(null);
+  useModalBackClose(modalOpen, () => setModalOpen(false));
   const [pendingDelete, setPendingDelete] = useState<Liability | null>(null);
 
   const handleDelete = async (id: string) => {

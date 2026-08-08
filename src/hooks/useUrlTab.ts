@@ -35,11 +35,14 @@ export function useUrlTab<T extends string>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
-  // URL -> local state (covers Back/Forward navigation and manual refresh).
+  // URL -> local state (covers Back/Forward navigation, manual refresh, and
+  // re-clicking a nav link back to this page — which lands on the bare path
+  // with no ?tab= param and should snap back to the default tab).
   useEffect(() => {
     const urlValue = searchParams.get(paramKey) as T | null;
-    if (urlValue && validValues.includes(urlValue) && urlValue !== value) {
-      setValue(urlValue);
+    const resolved = urlValue && validValues.includes(urlValue) ? urlValue : defaultValue;
+    if (resolved !== value) {
+      setValue(resolved);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
