@@ -54,7 +54,7 @@ export default function Assets() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Assets</h1>
+          <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Assets</h1>
           <p className="text-slate-500 text-sm mt-1">
             {assets.length} tracked · {formatCurrency(assets.reduce((s, a) => s + a.value, 0))} total
           </p>

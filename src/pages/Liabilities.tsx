@@ -42,7 +42,7 @@ export default function Liabilities() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Liabilities</h1>
+          <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Liabilities</h1>
           <p className="text-slate-500 text-sm mt-1">
             {liabilities.length} active ·{' '}
             {formatCurrency(liabilities.reduce((s, l) => s + l.outstanding, 0))} outstanding

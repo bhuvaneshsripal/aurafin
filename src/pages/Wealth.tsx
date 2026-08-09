@@ -75,7 +75,7 @@ import {
   computeSipLiveValue,
   type MfSearchResult,
 } from '../utils/mutualFunds';
-import { fetchLivePrices } from '../utils/marketPrices';
+import { fetchLivePrices, fetchFxRate, searchStockSymbols, type StockSearchResult } from '../utils/marketPrices';
 import { useUrlTab } from '../hooks/useUrlTab';
 import { useModalBackClose } from '../hooks/useModalBackClose';
 
@@ -600,12 +600,12 @@ function TotalStatCard({
           <div className="col-span-2 sm:col-span-1">
             <p className="text-xs font-medium text-slate-400 mb-1">P&L</p>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className={`text-xl sm:text-2xl font-bold break-words ${positive ? 'text-brand-600 dark:text-brand-300' : 'text-red-500'}`}>
+              <span className={`text-xl sm:text-2xl font-bold break-words ${positive ? 'text-brand-600 dark:text-brand-300' : 'text-red-500 dark:text-red-400'}`}>
                 {isMasked ? '••••••' : `${positive ? '+' : ''}${formatPreciseCurrency(pnl, currency)}`}
               </span>
               <span
                 className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                  positive ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-300' : 'bg-red-50 dark:bg-red-900/30 text-red-500'
+                  positive ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-300' : 'bg-red-50 dark:bg-red-900/30 text-red-500 dark:text-red-400'
                 }`}
               >
                 {positive ? '+' : ''}
@@ -688,8 +688,14 @@ function AssetsTab({
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedCurrencies, setSelectedCurrencies] = useState<string[]>([]);
   const [viewingAsset, setViewingAsset] = useState<Asset | null>(null);
+  // Viewing an asset swaps the whole tab into a full detail page (like a
+  // pushed screen), so the phone/PWA Back button should close it and land
+  // back on the list — not skip past it to whatever page was open before
+  // Wealth. Same guard-history-entry trick already used for the modals below.
+  useModalBackClose(!!viewingAsset, () => setViewingAsset(null));
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [tagModalOpen, setTagModalOpen] = useState(false);
+  useModalBackClose(tagModalOpen, () => setTagModalOpen(false));
   const [tagDraft, setTagDraft] = useState('');
   const setHideFab = useUiStore((s) => s.setHideFab);
 
@@ -1183,7 +1189,7 @@ function AssetsTab({
           {/* Mobile: simplified rows — name, current value, P&L only. Tap a row to view details;
               tap the checkbox (or tap a row while others are selected) to multi-select. */}
           <div className="md:hidden bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
-            {sortedRows.map(({ asset: a, value, pnl, pnlPercent }) => (
+            {sortedRows.map(({ asset: a, value, pnl }) => (
               <div
                 key={a.id}
                 className={`w-full flex items-center gap-3 px-4 py-3.5 active:bg-slate-50 ${
@@ -1206,11 +1212,10 @@ function AssetsTab({
                       {maskPreciseAmount(value, a.currency, privacyMode)}
                     </p>
                     {pnl !== undefined && (
-                      <p className={`text-xs ${pnl >= 0 ? 'text-brand-600' : 'text-red-500'}`}>
+                      <p className={`text-xs ${pnl >= 0 ? 'text-brand-600 dark:text-brand-300' : 'text-red-500 dark:text-red-400'}`}>
                         {privacyMode && !isZeroAmount(pnl, 2)
                           ? '••••••'
                           : `${pnl >= 0 ? '+' : ''}${formatPreciseCurrency(pnl, a.currency)}`}
-                        {pnlPercent !== undefined && ` (${pnl >= 0 ? '+' : ''}${pnlPercent.toFixed(1)}%)`}
                       </p>
                     )}
                   </div>
@@ -1302,16 +1307,16 @@ function AssetsTab({
           </Modal>
 
           {/* Desktop/laptop: full table, every column. */}
-          <div className="hidden md:block bg-white rounded-2xl border border-slate-200 overflow-x-auto">
+          <div className="hidden md:block bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-x-auto">
           <table className="w-full text-sm min-w-[900px]">
-            <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
+            <thead className="bg-slate-50 dark:bg-slate-900/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
               <tr>
                 <th className="px-4 py-3 w-10">
                   <input
                     type="checkbox"
                     checked={allFilteredSelected}
                     onChange={toggleSelectAll}
-                    className="h-4 w-4 rounded border-slate-300"
+                    className="h-4 w-4 rounded border-slate-300 dark:border-slate-600"
                   />
                 </th>
                 <SortHeader label="NAME" sortKeyName="name" />
@@ -1325,8 +1330,8 @@ function AssetsTab({
                 <th className="px-4 py-3 w-44"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
-              {sortedRows.map(({ asset: a, invested, currentPrice, value, pnl, pnlPercent, alloc }) => (
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+              {sortedRows.map(({ asset: a, invested, currentPrice, value, pnl, alloc }) => (
                 <tr
                   key={a.id}
                   ref={setRowRef(a.id)}
@@ -1428,16 +1433,10 @@ function AssetsTab({
                   <td className="px-4 py-3.5 text-right">
                     {pnl !== undefined ? (
                       <>
-                        <p className={`font-semibold ${pnl >= 0 ? 'text-brand-600' : 'text-red-500'}`}>
+                        <p className={`font-semibold ${pnl >= 0 ? 'text-brand-600 dark:text-brand-300' : 'text-red-500 dark:text-red-400'}`}>
                           {pnl >= 0 ? '+' : ''}
                           {formatPreciseCurrency(pnl, a.currency)}
                         </p>
-                        {pnlPercent !== undefined && (
-                          <p className={`text-xs ${pnl >= 0 ? 'text-brand-600' : 'text-red-500'}`}>
-                            {pnl >= 0 ? '+' : ''}
-                            {pnlPercent.toFixed(1)}%
-                          </p>
-                        )}
                       </>
                     ) : (
                       '—'
@@ -1494,7 +1493,7 @@ function AssetsTab({
       ) : filtered.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {filtered.map((a, idx) => {
-              const { value, pnl, pnlPercent } = resolveAssetValues(a, livePrices, sipValues);
+              const { value, pnl } = resolveAssetValues(a, livePrices, sipValues);
               const { maturityAmount, isMatured } = computeMaturityInfo(a);
               return (
                 <div
@@ -1560,10 +1559,10 @@ function AssetsTab({
                       Maturity amount: {maskPreciseAmount(maturityAmount, a.currency, privacyMode)}
                     </p>
                   )}
-                  {pnlPercent !== undefined && (
-                    <p className={`text-xs font-medium ${pnl! >= 0 ? 'text-brand-600' : 'text-red-500'}`}>
-                      {pnl! >= 0 ? '+' : ''}
-                      {pnlPercent.toFixed(1)}%
+                  {pnl !== undefined && (
+                    <p className={`text-xs font-medium ${pnl >= 0 ? 'text-brand-600 dark:text-brand-300' : 'text-red-500 dark:text-red-400'}`}>
+                      {pnl >= 0 ? '+' : ''}
+                      {formatPreciseCurrency(pnl, a.currency)}
                     </p>
                   )}
                   <div className="flex items-center gap-3 mt-3">
@@ -1701,7 +1700,7 @@ function AssetDetailPage({
     notes?: string;
   };
 
-  const { invested, value, pnl, pnlPercent } = resolveAssetValues(asset, livePrices, sipValues);
+  const { invested, value, pnl } = resolveAssetValues(asset, livePrices, sipValues);
   const category = ASSET_CLASS_TO_CATEGORY[asset.assetClass];
   const positive = (pnl ?? 0) >= 0;
   const recurringSip = asset.recurringInvestment ? computeSipProgress(asset) : undefined;
@@ -1710,9 +1709,7 @@ function AssetDetailPage({
     extra.isin ? `ISIN: ${extra.isin}` : null,
     extra.sector ? `Sector: ${extra.sector.toUpperCase()}` : null,
     pnl !== undefined
-      ? `P&L: ${pnl >= 0 ? '+' : ''}${formatPreciseCurrency(pnl, asset.currency)}${
-          pnlPercent !== undefined ? ` (${pnl >= 0 ? '+' : ''}${pnlPercent.toFixed(4)}%)` : ''
-        }`
+      ? `P&L: ${pnl >= 0 ? '+' : ''}${formatPreciseCurrency(pnl, asset.currency)}`
       : null,
     extra.notes ?? null,
   ]
@@ -1784,11 +1781,10 @@ function AssetDetailPage({
           {maskPreciseAmount(value, asset.currency, privacyMode)}
         </p>
         {pnl !== undefined && (
-          <p className={`flex items-center gap-1 text-sm font-medium mt-1 ${positive ? 'text-brand-600' : 'text-red-500'}`}>
+          <p className={`flex items-center gap-1 text-sm font-medium mt-1 ${positive ? 'text-brand-600 dark:text-brand-300' : 'text-red-500 dark:text-red-400'}`}>
             {positive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
             {positive ? '+' : ''}
             {formatPreciseCurrency(pnl, asset.currency)}
-            {pnlPercent !== undefined && ` (${positive ? '+' : ''}${pnlPercent.toFixed(1)}%)`}
           </p>
         )}
       </div>
@@ -2010,6 +2006,108 @@ function AssetDetailsForm({
   const updateShareLot = (id: string, patch: Partial<{ date: string; quantity: string; price: string }>) =>
     setShareLots((rows) => rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
 
+  // --- "Invest ₹100 in a $354 stock" — per-purchase amount-in-another-
+  // currency entry ---------------------------------------------------------
+  // Each lot can be filled in either by Quantity (the usual way) or by an
+  // Amount typed in whichever currency the person actually paid in. When a
+  // lot is in "amount" mode, its Quantity is derived — never hand-typed —
+  // by converting that amount into the asset's own currency at the live FX
+  // rate and dividing by Price/Unit, same idea as a real fractional-share
+  // brokerage order. Only offered where the "other" currency is well-defined:
+  // market-selectable classes (Stock/ETF/International Equity), where it's
+  // always USD vs INR.
+  const otherCurrency = currency === 'USD' ? 'INR' : 'USD';
+  const [lotInputMode, setLotInputMode] = useState<Record<string, 'qty' | 'amount'>>({});
+  const [lotAmount, setLotAmount] = useState<Record<string, string>>({});
+  const [lotAmountCurrency, setLotAmountCurrency] = useState<Record<string, string>>({});
+  // Price/Unit can likewise be typed in either currency — e.g. an Indian
+  // investor who paid in ₹ for a US stock and only knows the INR price per
+  // share. `lotPriceRaw` is what's actually typed (in `lotPriceCurrency`);
+  // `lot.price` itself always stays in the asset's own currency (converted
+  // at the live FX rate), since that's what every other calculation
+  // (avg. cost, invested value, live-price comparisons) assumes it's in.
+  const [lotPriceRaw, setLotPriceRaw] = useState<Record<string, string>>({});
+  const [lotPriceCurrency, setLotPriceCurrency] = useState<Record<string, string>>({});
+  const [fxRate, setFxRate] = useState<number | null>(null);
+  const [fxLoading, setFxLoading] = useState(false);
+  const [fxFailed, setFxFailed] = useState(false);
+
+  const anyLotNeedsFx = shareLots.some(
+    (lot) =>
+      (lotInputMode[lot.id] === 'amount' && (lotAmountCurrency[lot.id] ?? otherCurrency) !== currency) ||
+      (lotPriceCurrency[lot.id] ?? currency) !== currency
+  );
+
+  // Fetch (and refetch on currency flip) the rate to convert the "other"
+  // currency into whatever currency the asset itself is tracked in.
+  useEffect(() => {
+    if (!isMarketSelectable || !anyLotNeedsFx) return;
+    let cancelled = false;
+    setFxLoading(true);
+    setFxFailed(false);
+    fetchFxRate(otherCurrency, currency).then((rate) => {
+      if (cancelled) return;
+      setFxLoading(false);
+      if (rate === null) {
+        setFxFailed(true);
+      } else {
+        setFxFailed(false);
+        setFxRate(rate);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMarketSelectable, anyLotNeedsFx, otherCurrency, currency]);
+
+  const setLotMode = (id: string, mode: 'qty' | 'amount') => {
+    setLotInputMode((m) => ({ ...m, [id]: mode }));
+    if (mode === 'amount' && !lotAmountCurrency[id]) {
+      setLotAmountCurrency((m) => ({ ...m, [id]: otherCurrency }));
+    }
+  };
+
+  // Re-derive Quantity for every lot currently in "amount" mode whenever its
+  // amount, its chosen currency, the price/unit, or the FX rate changes.
+  useEffect(() => {
+    if (!isMarketSelectable) return;
+    shareLots.forEach((lot) => {
+      if (lotInputMode[lot.id] !== 'amount') return;
+      const amt = Number(lotAmount[lot.id]);
+      const price = Number(lot.price);
+      if (!amt || amt <= 0 || !price || price <= 0) return;
+      const amtCurrency = lotAmountCurrency[lot.id] ?? otherCurrency;
+      const convertedAmt = amtCurrency === currency ? amt : fxRate !== null ? amt * fxRate : null;
+      if (convertedAmt === null) return; // rate hasn't loaded yet
+      const qty = convertedAmt / price;
+      const qtyStr = qty > 0 ? qty.toFixed(6) : '';
+      if (qtyStr !== lot.quantity) updateShareLot(lot.id, { quantity: qtyStr });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMarketSelectable, shareLots, lotInputMode, lotAmount, lotAmountCurrency, fxRate, otherCurrency, currency]);
+
+  // Re-derive Price/Unit (in the asset's own currency) whenever the raw
+  // typed price, its chosen currency, or the FX rate changes.
+  useEffect(() => {
+    if (!isMarketSelectable) return;
+    shareLots.forEach((lot) => {
+      const rawStr = lotPriceRaw[lot.id];
+      if (rawStr === undefined) return; // untouched — price box is still bound directly
+      const priceCurrency = lotPriceCurrency[lot.id] ?? currency;
+      const raw = Number(rawStr);
+      if (!raw || raw <= 0) {
+        if (lot.price !== '') updateShareLot(lot.id, { price: '' });
+        return;
+      }
+      const converted = priceCurrency === currency ? raw : fxRate !== null ? raw * fxRate : null;
+      if (converted === null) return; // rate hasn't loaded yet
+      const priceStr = converted > 0 ? converted.toFixed(6) : '';
+      if (priceStr !== lot.price) updateShareLot(lot.id, { price: priceStr });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMarketSelectable, shareLots, lotPriceRaw, lotPriceCurrency, fxRate, currency]);
+
   // Quantity and Avg. Cost always mirror the lot totals for unit-tracked
   // assets — they're derived, never hand-typed directly, same as grams/
   // invested are for weight-tracked assets above.
@@ -2210,6 +2308,53 @@ function AssetDetailsForm({
   const [equityLivePrice, setEquityLivePrice] = useState<number | null>(null);
   const isEquityLive = SYMBOL_ENABLED_CLASSES.has(assetClass) && !isSip && !isWeightTracked;
 
+  // --- Symbol autocomplete (Stocks / ETFs / International Equity) --------
+  // Lets people type a company name (or a misspelled/half-remembered
+  // ticker, e.g. "GOOGLE") and pick the real trading symbol from a list,
+  // instead of having to already know it's "GOOGL". Only offered for
+  // unit-tracked, market-selectable classes — SIP has its own fund search.
+  const [symbolSuggestions, setSymbolSuggestions] = useState<StockSearchResult[]>([]);
+  const [symbolSearchOpen, setSymbolSearchOpen] = useState(false);
+  const [symbolSearchLoading, setSymbolSearchLoading] = useState(false);
+  const [symbolSearchFailed, setSymbolSearchFailed] = useState(false);
+  const [symbolSearchedQuery, setSymbolSearchedQuery] = useState('');
+  const symbolTouched = useRef(false);
+  const symbolIsSearchable = isUnitTracked;
+
+  useEffect(() => {
+    if (!symbolIsSearchable || !symbolTouched.current) return;
+    const q = symbol.trim();
+    if (q.length < 3) {
+      setSymbolSuggestions([]);
+      return;
+    }
+    setSymbolSearchLoading(true);
+    const timer = setTimeout(() => {
+      searchStockSymbols(q, isMarketSelectable ? market : 'IN').then((results) => {
+        setSymbolSearchLoading(false);
+        setSymbolSearchedQuery(q);
+        if (results === null) {
+          setSymbolSearchFailed(true);
+          setSymbolSuggestions([]);
+        } else {
+          setSymbolSearchFailed(false);
+          setSymbolSuggestions(results);
+        }
+        setSymbolSearchOpen(true);
+      });
+    }, 350);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [symbol, symbolIsSearchable, market, isMarketSelectable]);
+
+  const selectSymbol = (result: StockSearchResult) => {
+    symbolTouched.current = false; // selecting shouldn't immediately re-trigger a search
+    setSymbol(result.symbol);
+    setSymbolSuggestions([]);
+    setSymbolSearchOpen(false);
+    if (!name.trim() && result.name) setName(result.name);
+  };
+
   useEffect(() => {
     if (!isEquityLive) {
       setEquityLivePrice(null);
@@ -2401,7 +2546,7 @@ function AssetDetailsForm({
           value={name}
           onChange={(e) => setName(e.target.value.toUpperCase())}
           className={`${inputClass} ${attemptedSubmit && nameMissing ? errorInputClass : ''} uppercase`}
-          placeholder="e.g. HDFC Flexicap SIP"
+          placeholder=""
         />
         {attemptedSubmit && nameMissing && <p className={errorTextClass}>Name is required.</p>}
       </Field>
@@ -2538,15 +2683,73 @@ function AssetDetailsForm({
               </p>
             </Field>
           )}
-          <Field label="Symbol (for live price)">
-            <input
-              value={symbol}
-              onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-              className={`${inputClass} uppercase`}
-              placeholder={isMarketSelectable && market === 'US' ? 'e.g. AAPL, TSLA, GOOGL' : 'RELIANCE'}
-            />
+          <Field label={<>Symbol (for live price) <span className="text-red-500">*</span></>}>
+            <div className="relative">
+              <input
+                value={symbol}
+                onChange={(e) => {
+                  symbolTouched.current = true;
+                  setSymbol(e.target.value.toUpperCase());
+                }}
+                onFocus={() => symbolSuggestions.length > 0 && setSymbolSearchOpen(true)}
+                onBlur={() => setTimeout(() => setSymbolSearchOpen(false), 150)}
+                className={`${inputClass} uppercase ${symbolSearchLoading ? 'pr-9' : ''}`}
+                placeholder={
+                  isMarketSelectable && market === 'US'
+                    ? "Example: GOOGL"
+                    : 'Example: ITC'
+                }
+                autoComplete="off"
+              />
+              {symbolSearchLoading && (
+                <Loader2
+                  size={16}
+                  className="animate-spin text-slate-400 absolute right-3 top-1/2 -translate-y-1/2"
+                />
+              )}
+              {symbolSearchOpen && symbolSuggestions.length > 0 && (
+                <div className="absolute z-10 mt-1 w-full max-h-64 overflow-auto bg-white border border-slate-200 rounded-lg shadow-lg">
+                  {symbolSuggestions.map((s) => (
+                    <button
+                      key={s.symbol}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => selectSymbol(s)}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-brand-50 border-b border-slate-100 last:border-0 flex items-center justify-between gap-3"
+                    >
+                      <span className="truncate">
+                        <span className="font-semibold">{s.symbol}</span>
+                        {s.name && s.name !== s.symbol && (
+                          <span className="text-slate-500"> — {s.name}</span>
+                        )}
+                      </span>
+                      {s.exchDisp && (
+                        <span className="text-xs text-slate-400 shrink-0">{s.exchDisp}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {symbolSearchOpen &&
+                !symbolSearchLoading &&
+                symbolSuggestions.length === 0 &&
+                symbol.trim() === symbolSearchedQuery &&
+                symbol.trim().length >= 3 && (
+                  <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg px-3 py-2 text-sm">
+                    {symbolSearchFailed ? (
+                      <span className="text-red-500">
+                        Couldn't reach symbol search — check your connection, or enter the ticker directly.
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">
+                        No matches for "{symbolSearchedQuery}". Try just the company name, e.g. "Google".
+                      </span>
+                    )}
+                  </div>
+                )}
+            </div>
             {isMarketSelectable && market === 'US' && (
-              <p className="text-xs text-slate-400 mt-1">Use the plain US ticker — no exchange suffix needed.</p>
+              <p className="text-xs text-slate-400 mt-1">Not sure of the ticker? Just type the company name.</p>
             )}
           </Field>
           {isRecurringEligible && (
@@ -2635,47 +2838,192 @@ function AssetDetailsForm({
               </p>
             </div>
             <div className="space-y-2">
-              {shareLots.map((lot, i) => (
-                <div key={lot.id} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
-                  <Field label={i === 0 ? 'Date' : ''}>
-                    <input
-                      type="date"
-                      value={lot.date ?? ''}
-                      onChange={(e) => updateShareLot(lot.id, { date: e.target.value })}
-                      className={inputClass}
-                    />
-                  </Field>
-                  <Field label={i === 0 ? 'Quantity' : ''}>
-                    <input
-                      type="number"
-                      step="any"
-                      value={lot.quantity}
-                      onChange={(e) => updateShareLot(lot.id, { quantity: e.target.value })}
-                      className={inputClass}
-                      placeholder="e.g. 10"
-                    />
-                  </Field>
-                  <Field label={i === 0 ? 'Price / Unit' : ''}>
-                    <input
-                      type="number"
-                      step="any"
-                      value={lot.price}
-                      onChange={(e) => updateShareLot(lot.id, { price: e.target.value })}
-                      className={inputClass}
-                      placeholder="e.g. 200"
-                    />
-                  </Field>
-                  <button
-                    type="button"
-                    onClick={() => removeShareLot(lot.id)}
-                    disabled={shareLots.length === 1}
-                    className="h-[42px] w-[42px] shrink-0 flex items-center justify-center border border-slate-200 rounded-lg text-slate-400 hover:text-green-600 hover:border-green-200 disabled:opacity-30 disabled:cursor-not-allowed"
-                    title="Remove this purchase"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))}
+              {shareLots.map((lot, i) => {
+                const mode = lotInputMode[lot.id] ?? 'qty';
+                const amtCurrency = lotAmountCurrency[lot.id] ?? otherCurrency;
+                const priceCurrency = lotPriceCurrency[lot.id] ?? currency;
+                return (
+                  <div key={lot.id} className="space-y-1.5 pb-2 border-b border-slate-100 last:border-0 last:pb-0">
+                    <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
+                      <Field label={i === 0 ? 'Date' : ''}>
+                        <input
+                          type="date"
+                          value={lot.date ?? ''}
+                          onChange={(e) => updateShareLot(lot.id, { date: e.target.value })}
+                          className={inputClass}
+                        />
+                      </Field>
+                      {mode === 'qty' ? (
+                        <Field label={i === 0 ? 'Quantity' : ''}>
+                          <input
+                            type="number"
+                            step="any"
+                            value={lot.quantity}
+                            onChange={(e) => updateShareLot(lot.id, { quantity: e.target.value })}
+                            className={inputClass}
+                            placeholder="e.g. 10"
+                          />
+                        </Field>
+                      ) : (
+                        <Field label={i === 0 ? 'Amount Invested' : ''}>
+                          <div className="flex gap-1">
+                            <input
+                              type="number"
+                              step="any"
+                              value={lotAmount[lot.id] ?? ''}
+                              onChange={(e) => setLotAmount((m) => ({ ...m, [lot.id]: e.target.value }))}
+                              className={`${fieldBaseClass} flex-1 min-w-0 px-3`}
+                              placeholder="e.g. 100"
+                            />
+                            <select
+                              value={amtCurrency}
+                              onChange={(e) =>
+                                setLotAmountCurrency((m) => ({ ...m, [lot.id]: e.target.value }))
+                              }
+                              className={`${fieldBaseClass} w-14 shrink-0 px-1`}
+                            >
+                              <option value={currency}>{currency}</option>
+                              <option value={otherCurrency}>{otherCurrency}</option>
+                            </select>
+                          </div>
+                        </Field>
+                      )}
+                      <Field label={i === 0 ? 'Price / Unit' : ''}>
+                        {isMarketSelectable ? (
+                          <div className="flex gap-1">
+                            <input
+                              type="number"
+                              step="any"
+                              value={lotPriceRaw[lot.id] ?? lot.price}
+                              onChange={(e) => setLotPriceRaw((m) => ({ ...m, [lot.id]: e.target.value }))}
+                              className={`${fieldBaseClass} flex-1 min-w-0 px-3`}
+                              placeholder="e.g. 200"
+                            />
+                            <select
+                              value={lotPriceCurrency[lot.id] ?? currency}
+                              onChange={(e) => {
+                                const nextCurrency = e.target.value;
+                                const prevCurrency = lotPriceCurrency[lot.id] ?? currency;
+                                setLotPriceCurrency((m) => ({ ...m, [lot.id]: nextCurrency }));
+                                if (nextCurrency === prevCurrency) return;
+                                // Re-seed the raw box by CONVERTING the currently
+                                // displayed number into the newly chosen currency —
+                                // never copy the digits over unconverted. Copying
+                                // verbatim (e.g. a $1.05 price becoming "₹1.05")
+                                // silently corrupts the saved cost basis, which is
+                                // exactly how a stray $1.05 avg. cost sneaks in.
+                                // If we can't convert safely yet (rate not loaded),
+                                // clear the box instead of showing a wrong number —
+                                // the person re-types rather than trusting bad data.
+                                const curRaw =
+                                  lotPriceRaw[lot.id] !== undefined
+                                    ? Number(lotPriceRaw[lot.id])
+                                    : Number(lot.price);
+                                if (curRaw && fxRate !== null) {
+                                  const converted =
+                                    prevCurrency === currency ? curRaw / fxRate : curRaw * fxRate;
+                                  setLotPriceRaw((m) => ({
+                                    ...m,
+                                    [lot.id]: converted > 0 ? converted.toFixed(6) : '',
+                                  }));
+                                } else {
+                                  setLotPriceRaw((m) => ({ ...m, [lot.id]: '' }));
+                                }
+                              }}
+                              className={`${fieldBaseClass} w-14 shrink-0 px-1`}
+                            >
+                              <option value={currency}>{currency}</option>
+                              <option value={otherCurrency}>{otherCurrency}</option>
+                            </select>
+                          </div>
+                        ) : (
+                          <input
+                            type="number"
+                            step="any"
+                            value={lot.price}
+                            onChange={(e) => updateShareLot(lot.id, { price: e.target.value })}
+                            className={inputClass}
+                            placeholder="e.g. 200"
+                          />
+                        )}
+                      </Field>
+                      <button
+                        type="button"
+                        onClick={() => removeShareLot(lot.id)}
+                        disabled={shareLots.length === 1}
+                        className="h-[42px] w-[42px] shrink-0 flex items-center justify-center border border-slate-200 rounded-lg text-slate-400 hover:text-green-600 hover:border-green-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Remove this purchase"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                    {isMarketSelectable && (
+                      <div className="text-xs text-slate-400 flex items-center gap-2 flex-wrap">
+                        {mode === 'qty' ? (
+                          <button
+                            type="button"
+                            onClick={() => setLotMode(lot.id, 'amount')}
+                            className="text-brand-600 hover:text-brand-700 underline"
+                          >
+                            Paid in {otherCurrency}? Enter the amount instead
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setLotMode(lot.id, 'qty')}
+                              className="text-brand-600 hover:text-brand-700 underline"
+                            >
+                              Enter quantity instead
+                            </button>
+                            {amtCurrency !== currency && (
+                              <span>
+                                {fxLoading && !fxRate ? (
+                                  <span className="flex items-center gap-1">
+                                    <Loader2 size={11} className="animate-spin" /> Fetching {otherCurrency}/
+                                    {currency} rate…
+                                  </span>
+                                ) : fxFailed && !fxRate ? (
+                                  <span className="text-red-500">
+                                    Couldn't fetch a live exchange rate — enter Quantity directly instead.
+                                  </span>
+                                ) : lot.quantity ? (
+                                  <>
+                                    ≈ <span className="font-medium text-slate-500">{lot.quantity}</span> shares
+                                    at 1 {otherCurrency} ≈ {fxRate?.toFixed(4)} {currency}
+                                  </>
+                                ) : null}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                    {isMarketSelectable && priceCurrency !== currency && (
+                      <div className="text-xs text-slate-400 flex items-center gap-2 flex-wrap">
+                        {fxLoading && !fxRate ? (
+                          <span className="flex items-center gap-1">
+                            <Loader2 size={11} className="animate-spin" /> Fetching {otherCurrency}/{currency}{' '}
+                            rate…
+                          </span>
+                        ) : fxFailed && !fxRate ? (
+                          <span className="text-red-500">
+                            Couldn't fetch a live exchange rate — enter the price in {currency} directly instead.
+                          </span>
+                        ) : lot.price ? (
+                          <>
+                            Price/Unit ≈{' '}
+                            <span className="font-medium text-slate-500">
+                              {formatPreciseCurrency(Number(lot.price), currency)}
+                            </span>{' '}
+                            at 1 {otherCurrency} ≈ {fxRate?.toFixed(4)} {currency}
+                          </>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
             <button
               type="button"
@@ -3073,9 +3421,9 @@ function LiabilitiesTab({
 
       <TabNav tab={tab} setTab={setTab} />
 
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-x-auto">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-x-auto">
         <table className="w-full text-base min-w-[820px]">
-          <thead className="bg-slate-50 text-slate-500 text-left">
+          <thead className="bg-slate-50 dark:bg-slate-900/40 text-slate-500 dark:text-slate-400 text-left">
             <tr>
               <th className="px-4 py-3 font-medium">Name</th>
               <th className="px-4 py-3 font-medium">Type</th>
@@ -3084,15 +3432,15 @@ function LiabilitiesTab({
               <th className="px-4 py-3 font-medium"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
             {liabilities.map((l) => (
               <tr key={l.id}>
-                <td className="px-4 py-3 font-medium text-slate-800 uppercase">{l.name}</td>
-                <td className="px-4 py-3 text-slate-500">
+                <td className="px-4 py-3 font-medium text-slate-800 dark:text-slate-100 uppercase">{l.name}</td>
+                <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
                   {l.liabilityClass ? LIABILITY_CLASS_LABELS[l.liabilityClass] : '—'}
                 </td>
-                <td className="px-4 py-3 text-slate-800">{formatPreciseCurrency(l.outstanding, l.currency)}</td>
-                <td className="px-4 py-3 text-slate-500">{l.emi ? formatPreciseCurrency(l.emi, l.currency) : '—'}</td>
+                <td className="px-4 py-3 text-slate-800 dark:text-slate-100">{formatPreciseCurrency(l.outstanding, l.currency)}</td>
+                <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{l.emi ? formatPreciseCurrency(l.emi, l.currency) : '—'}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3 justify-end">
                     <button
@@ -3361,7 +3709,7 @@ function AllocationChart({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
   return (
     <label className="block">
       <span className="text-sm font-medium text-slate-500 mb-1 block">{label}</span>
@@ -3372,6 +3720,15 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 const inputClass =
   'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-brand-500';
+
+// Same visual styling as inputClass but WITHOUT the `w-full`, so it's safe to
+// pair with flex-basis utilities (flex-1, w-14, etc.) inside a flex row.
+// Reusing inputClass there caused a Tailwind cascade bug: `w-full` and `w-14`
+// have equal specificity, and Tailwind's generated stylesheet order (not the
+// order classes are listed in JSX) decided which one won — so the currency
+// <select> kept rendering at full width and crushed the number input next to it.
+const fieldBaseClass =
+  'border border-slate-200 rounded-lg py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-brand-500';
 
 const errorInputClass = 'border-red-400 focus:ring-red-400';
 const errorTextClass = 'text-xs text-red-500 mt-1';

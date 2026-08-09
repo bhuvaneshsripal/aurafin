@@ -60,6 +60,31 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
       return
     }
 
+    if (url.pathname === '/api/market/fx') {
+      const from = (url.searchParams.get('from') ?? 'USD').toUpperCase()
+      const to = (url.searchParams.get('to') ?? 'INR').toUpperCase()
+      if (from === to) {
+        send(200, { rate: 1, from, to, asOf: Date.now() })
+        return
+      }
+      try {
+        const upstream = await fetch(
+          `https://api.frankfurter.dev/v1/latest?base=${encodeURIComponent(from)}&symbols=${encodeURIComponent(to)}`
+        )
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const json = (await upstream.json()) as any
+        const rate = json?.rates?.[to]
+        if (typeof rate !== 'number') {
+          send(502, { error: 'Exchange rate not available for this currency pair' })
+          return
+        }
+        send(200, { rate, from, to, asOf: Date.now() })
+      } catch {
+        send(502, { error: 'Could not reach the exchange rate source' })
+      }
+      return
+    }
+
     if (url.pathname === '/api/market/v1/finance/search') {
       const q = url.searchParams.get('q') ?? ''
       if (!q.trim()) {

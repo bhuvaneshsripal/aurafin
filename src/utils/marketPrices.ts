@@ -53,6 +53,42 @@ export function looksLikeTicker(symbol: string): boolean {
   return trimmed.length > 0 && !/\s/.test(trimmed);
 }
 
+/** A single symbol-search suggestion, shown in the "type 3 letters" autocomplete. */
+export interface StockSearchResult {
+  symbol: string;
+  /** Company name, when the upstream provides one (Yahoo does; NSE's autocomplete doesn't, so it falls back to the symbol). */
+  name: string;
+  /** Display exchange, e.g. "NSE", "NasdaqGS". */
+  exchDisp?: string;
+}
+
+/**
+ * Search for real trading symbols matching a (possibly misspelled or
+ * partial) company name — powers the Symbol field's autocomplete so
+ * people don't have to already know the correct ticker ("GOOGLE" ->
+ * suggests GOOGL/GOOG). Returns `[]` for a genuine no-match, or `null`
+ * if the request itself failed, so callers can tell those apart.
+ */
+export async function searchStockSymbols(
+  query: string,
+  market: 'IN' | 'US' = 'IN'
+): Promise<StockSearchResult[] | null> {
+  const q = query.trim();
+  if (q.length < 3) return [];
+  try {
+    const res = await fetch(`${SEARCH_BASE}?q=${encodeURIComponent(q)}&market=${market}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    const quotes: { symbol?: string; name?: string; exchDisp?: string }[] = json?.quotes ?? [];
+    return quotes
+      .filter((r): r is { symbol: string; name: string; exchDisp?: string } => !!r.symbol)
+      .slice(0, 8)
+      .map((r) => ({ symbol: r.symbol, name: r.name || r.symbol, exchDisp: r.exchDisp }));
+  } catch {
+    return null;
+  }
+}
+
 // In-memory cache from ISIN/name -> resolved Yahoo symbol, so we only hit
 // the search endpoint once per session instead of on every 60s poll.
 const resolvedSymbolCache = new Map<string, string | null>();
@@ -147,4 +183,38 @@ export async function fetchLivePrices(lookups: PriceLookup[]): Promise<Map<strin
   }
 
   return results;
+}
+
+/** Backed by api/market/fx.js (frankfurter.dev — free, keyless, updated daily). */
+const FX_BASE = '/api/market/fx';
+
+// Cached at module scope (not per-component) and shared across the whole
+// session — an exchange rate barely moves minute to minute, so there's no
+// need to re-fetch it every time a purchase row's amount changes.
+const FX_CACHE_MS = 5 * 60 * 1000;
+const fxCache = new Map<string, { rate: number; fetchedAt: number }>();
+
+/**
+ * Live exchange rate: how much 1 unit of `from` is worth in `to`
+ * (e.g. fetchFxRate('INR', 'USD') ≈ 0.012). Returns `null` if the rate
+ * couldn't be fetched, so callers can fall back to leaving the amount
+ * unconverted rather than silently using a wrong rate.
+ */
+export async function fetchFxRate(from: string, to: string): Promise<number | null> {
+  if (from === to) return 1;
+  const pair = `${from}_${to}`;
+  const cached = fxCache.get(pair);
+  if (cached && Date.now() - cached.fetchedAt < FX_CACHE_MS) return cached.rate;
+
+  try {
+    const res = await fetch(`${FX_BASE}?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    const rate = json?.rate;
+    if (typeof rate !== 'number' || !Number.isFinite(rate)) return null;
+    fxCache.set(pair, { rate, fetchedAt: Date.now() });
+    return rate;
+  } catch {
+    return null;
+  }
 }

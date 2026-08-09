@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import type { ReactNode } from 'react';
 import Modal from './Modal';
 
@@ -24,6 +25,18 @@ export default function ConfirmDeleteModal({
   confirmLabel = 'Delete',
   busy = false,
 }: ConfirmDeleteModalProps) {
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && !busy) {
+        e.preventDefault();
+        onConfirm();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [open, busy, onConfirm]);
+
   return (
     <Modal open={open} onClose={onClose} title={title}>
       <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">{description}</p>
