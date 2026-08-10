@@ -3,7 +3,7 @@ import { useAssetsStore } from '../store/assetsStore';
 import { useLivePricesStore } from '../store/livePricesStore';
 import { fetchLivePrices, type PriceLookup } from '../utils/marketPrices';
 
-const REFRESH_MS = 60_000;
+const REFRESH_MS = 10_000;
 
 /**
  * Polls Yahoo Finance for equity holdings with a symbol + quantity.

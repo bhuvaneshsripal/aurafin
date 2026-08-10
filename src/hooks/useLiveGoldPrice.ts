@@ -3,7 +3,7 @@ import { useAssetsStore } from '../store/assetsStore';
 import { useLivePricesStore } from '../store/livePricesStore';
 import { fetchLiveGoldPrice } from '../utils/goldPrice';
 
-const REFRESH_MS = 60_000;
+const REFRESH_MS = 10_000;
 
 /**
  * Polls the live 24K gold rate (see api/market/gold.js) whenever the

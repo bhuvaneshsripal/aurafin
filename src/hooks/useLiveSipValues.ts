@@ -9,7 +9,7 @@ import { listSipInstallments } from '../utils/assetValues';
 // published once a day after market close, so this won't surface a new
 // number more often than that — but it does mean a freshly-published NAV,
 // or a newly-added/edited SIP, shows up within a minute instead of up to 15.
-const REFRESH_MS = 60_000;
+const REFRESH_MS = 10_000;
 
 /**
  * Keeps the auto-calculated Current Value for linked SIPs (mutual fund
