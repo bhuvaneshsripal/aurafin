@@ -64,27 +64,27 @@ export default function BottomNav() {
               end={to === '/'}
               onClick={() => setMoreOpen(false)}
               className={({ isActive }) =>
-                `tap-scale flex flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium transition-colors ${
+                `tap-scale flex flex-col items-center justify-center gap-1 py-2.5 text-[12px] font-semibold transition-colors ${
                   isActive
                     ? 'text-brand-600 dark:text-brand-300'
                     : 'text-slate-500 dark:text-slate-400'
                 }`
               }
             >
-              <Icon size={18} />
+              <Icon size={22} />
               {label}
             </NavLink>
           ))}
 
           <button
             onClick={() => setMoreOpen(true)}
-            className={`tap-scale flex flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium transition-colors ${
+            className={`tap-scale flex flex-col items-center justify-center gap-1 py-2.5 text-[12px] font-semibold transition-colors ${
               isMoreActive
                 ? 'text-brand-600 dark:text-brand-300'
                 : 'text-slate-500 dark:text-slate-400'
             }`}
           >
-            <MoreHorizontal size={18} />
+            <MoreHorizontal size={22} />
             More
           </button>
         </div>

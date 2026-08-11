@@ -109,7 +109,7 @@ html {
    touching the root font-size that the nav bars' rem-based sizing reads
    from, so this stays scoped to the content column only. */
 .app-scale {
-  zoom: var(--app-zoom, 0.9);
+  zoom: var(--app-zoom, 0.87);
 }
 
 body {

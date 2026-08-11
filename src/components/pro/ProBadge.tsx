@@ -24,7 +24,7 @@ export default function ProBadge({
     md: { pad: 'px-2.5 py-1', text: 'text-[11px]', icon: 13, gap: 'gap-1' },
   }[size];
 
-  const badgeClass = `inline-flex items-center ${sizes.gap} ${sizes.pad} rounded-full font-bold uppercase tracking-wide text-white shrink-0 bg-gradient-to-r from-amber-400 via-yellow-500 to-amber-500 shadow-[0_1px_4px_rgba(217,161,20,0.45)] ${sizes.text} ${className}`;
+  const badgeClass = `inline-flex items-center ${sizes.gap} ${sizes.pad} rounded-full font-bold uppercase tracking-wide text-white shrink-0 bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-400 shadow-[0_2px_8px_rgba(217,161,20,0.6)] hover:shadow-[0_4px_12px_rgba(217,161,20,0.75)] transition-shadow ${sizes.text} ${className}`;
 
   if (onClick) {
     return (
@@ -59,8 +59,8 @@ export function ProCrown({
   return (
     <Crown
       size={size}
-      strokeWidth={2.25}
-      className={`text-amber-500 fill-amber-400/90 shrink-0 ${className}`}
+      strokeWidth={2.5}
+      className={`text-amber-600 fill-amber-300 drop-shadow-md shrink-0 ${className}`}
     />
   );
 }
