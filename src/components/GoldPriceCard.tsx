@@ -1,4 +1,5 @@
-import { Coins, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
+import { Coins, RefreshCw, ChevronDown } from 'lucide-react';
 import { useLivePricesStore } from '../store/livePricesStore';
 import { goldPricePerGram22k } from '../utils/goldPrice';
 import { formatCurrency } from '../utils/currency';
@@ -59,46 +60,66 @@ export default function GoldPriceCard() {
   const loading = useLivePricesStore((s) => s.goldPriceLoading);
   const error = useLivePricesStore((s) => s.goldPriceError);
 
+  // Starts collapsed every time — it only opens when the person taps the
+  // chevron to expand it themselves, never automatically.
+  const [expanded, setExpanded] = useState(false);
+
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-amber-500 bg-amber-50 dark:bg-amber-900/20 rounded-xl p-2 flex items-center justify-center">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className="w-full flex items-center justify-between gap-2 text-left"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-amber-500 bg-amber-50 dark:bg-amber-900/20 rounded-xl p-2 flex items-center justify-center shrink-0">
             <Coins className="w-4 h-4" />
           </span>
-          <div>
+          <div className="min-w-0">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Live Gold Price</p>
             <p className="text-[11px] text-slate-400 dark:text-slate-500">India · per gram, calibrated live estimate</p>
           </div>
         </div>
-        {price24k !== null && !loading && (
-          <span className="flex items-center gap-1 text-[11px] font-medium text-brand-600 dark:text-brand-300">
-            <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
-            Live
-          </span>
-        )}
-      </div>
-
-      {price24k === null && loading && (
-        <div className="mt-4 flex items-center gap-2 rounded-lg bg-slate-100 dark:bg-slate-800 px-3 py-3">
-          <RefreshCw className="w-3.5 h-3.5 text-slate-400 animate-spin" />
-          <span className="text-xs text-slate-400 dark:text-slate-500">Fetching live gold rate…</span>
+        <div className="flex items-center gap-2 shrink-0">
+          {price24k !== null && !loading && (
+            <span className="flex items-center gap-1 text-[11px] font-medium text-brand-600 dark:text-brand-300">
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
+              Live
+            </span>
+          )}
+          <ChevronDown
+            className={`w-4 h-4 text-slate-400 dark:text-slate-500 transition-transform duration-200 ${
+              expanded ? 'rotate-180' : ''
+            }`}
+          />
         </div>
-      )}
+      </button>
 
-      {price24k === null && !loading && error && (
-        <p className="mt-4 text-sm text-slate-400">Couldn't fetch a live gold rate right now. Try again shortly.</p>
-      )}
-
-      {price24k !== null && (
+      {expanded && (
         <>
-          <div className="flex flex-col sm:flex-row gap-3 mt-4">
-            <RateBlock label="24K (999)" perGram={price24k} accent="bg-amber-500" />
-            <RateBlock label="22K (916)" perGram={goldPricePerGram22k(price24k)} accent="bg-amber-300" />
-          </div>
-          <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-3">
-            {error ? 'Showing last known rate · ' : ''}Updated {timeAgo(asOf)}
-          </p>
+          {price24k === null && loading && (
+            <div className="mt-4 flex items-center gap-2 rounded-lg bg-slate-100 dark:bg-slate-800 px-3 py-3">
+              <RefreshCw className="w-3.5 h-3.5 text-slate-400 animate-spin" />
+              <span className="text-xs text-slate-400 dark:text-slate-500">Fetching live gold rate…</span>
+            </div>
+          )}
+
+          {price24k === null && !loading && error && (
+            <p className="mt-4 text-sm text-slate-400">Couldn't fetch a live gold rate right now. Try again shortly.</p>
+          )}
+
+          {price24k !== null && (
+            <>
+              <div className="flex flex-col sm:flex-row gap-3 mt-4">
+                <RateBlock label="24K (999)" perGram={price24k} accent="bg-amber-500" />
+                <RateBlock label="22K (916)" perGram={goldPricePerGram22k(price24k)} accent="bg-amber-300" />
+              </div>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-3">
+                {error ? 'Showing last known rate · ' : ''}Updated {timeAgo(asOf)}
+              </p>
+            </>
+          )}
         </>
       )}
     </div>

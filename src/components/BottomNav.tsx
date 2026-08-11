@@ -10,6 +10,7 @@ import {
   Calculator,
   Settings,
   Smartphone,
+  CreditCard,
   X,
 } from 'lucide-react';
 import QuickAddMenu from './QuickAddMenu';
@@ -34,6 +35,7 @@ const moreLinks: MoreLink[] = [
   { to: '/calculators', label: 'Calculators', icon: Calculator },
   { to: '/settings', label: 'Settings', icon: Settings },
   { to: '/install', label: 'Install App', icon: Smartphone },
+  { to: '/settings?tab=billing', label: 'Billing', icon: CreditCard, gold: true },
 ];
 
 export default function BottomNav() {

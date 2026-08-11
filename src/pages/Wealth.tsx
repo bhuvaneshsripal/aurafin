@@ -2137,7 +2137,8 @@ function AssetDetailsForm({
   // pure sums, never hand-typed for weight-tracked assets. Current Value
   // defaults to the total paid but is left alone once the person edits it,
   // so today's market rate can differ from cost without being overwritten.
-  const valueTouchedRef = useRef(false);
+  // For existing assets, preserve the saved current value (don't overwrite with invested amount).
+  const valueTouchedRef = useRef(!!initial?.value);
   useEffect(() => {
     if (!isWeightTracked) return;
     setQuantity(totalGrams > 0 ? String(totalGrams) : '');

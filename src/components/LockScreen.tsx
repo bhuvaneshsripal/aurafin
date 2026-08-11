@@ -157,7 +157,7 @@ export default function LockScreen() {
 
   return (
     <div
-      className={`font-luxury fixed inset-0 z-[100] flex flex-col bg-cream-100 dark:bg-slate-950 px-6 pt-12 pb-8 overflow-y-auto overflow-x-hidden ${
+      className={`font-luxury fixed inset-0 z-[100] flex flex-col bg-sandal-100 dark:bg-sandal-900 px-6 pt-12 pb-8 overflow-y-auto overflow-x-hidden ${
         unlocking ? 'animate-lock-unlock pointer-events-none' : 'animate-lock-in'
       }`}
     >
@@ -176,25 +176,27 @@ export default function LockScreen() {
             <h1 className="font-luxury text-xl font-bold text-slate-900 dark:text-white mb-1">
               Aurafin is Locked
             </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">Enter your 4-digit PIN</p>
+            <p className="font-luxury text-sm text-slate-500 dark:text-slate-400 mb-6">Enter your 4-digit PIN</p>
 
-            {/* PIN dots */}
+            {/* PIN dots — pop up in size the instant a digit is entered, and
+                shrink back down on backspace/clear, so the count is felt as
+                much as seen. */}
             <div className={`flex items-center justify-center gap-3 ${shake ? 'animate-shake' : ''}`}>
               {[0, 1, 2, 3].map((i) => (
                 <span
                   key={i}
-                  className={`keep-round h-3 w-3 border-2 transition-colors duration-150 ${
+                  className={`keep-round border-2 transition-all duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${
                     i < pin.length
                       ? shake
-                        ? 'bg-red-500 border-red-500'
-                        : 'bg-brand-600 border-brand-600'
-                      : 'bg-transparent border-slate-300 dark:border-slate-600'
+                        ? 'h-4 w-4 bg-red-500 border-red-500'
+                        : 'h-4 w-4 bg-brand-600 border-brand-600'
+                      : 'h-2.5 w-2.5 bg-transparent border-slate-300 dark:border-slate-600'
                   }`}
                 />
               ))}
             </div>
 
-            {pinAttemptError && <p className="text-sm text-red-500 mt-3">{pinAttemptError}</p>}
+            {pinAttemptError && <p className="font-luxury text-sm text-red-500 mt-3">{pinAttemptError}</p>}
           </div>
 
           {/* Spacer — pushes the keypad toward the bottom of the screen so
@@ -210,7 +212,7 @@ export default function LockScreen() {
                   key={d}
                   type="button"
                   onClick={() => pressDigit(d)}
-                  className="aspect-square rounded-2xl bg-white dark:bg-slate-800 shadow-[0_8px_22px_-4px_rgba(0,0,0,0.45)] text-2xl font-semibold text-slate-800 dark:text-slate-100 active:scale-95 active:shadow-[0_3px_10px_-3px_rgba(0,0,0,0.35)] transition-all duration-150"
+                  className="font-luxury aspect-square rounded-2xl bg-white shadow-[0_8px_22px_-4px_rgba(0,0,0,0.45)] text-2xl font-semibold text-slate-800 active:scale-[0.85] active:shadow-[0_2px_6px_-2px_rgba(0,0,0,0.3)] transition-transform duration-75 ease-out will-change-transform"
                 >
                   {d}
                 </button>
@@ -219,14 +221,14 @@ export default function LockScreen() {
               <button
                 type="button"
                 onClick={() => pressDigit('0')}
-                className="aspect-square rounded-2xl bg-white dark:bg-slate-800 shadow-[0_8px_22px_-4px_rgba(0,0,0,0.45)] text-2xl font-semibold text-slate-800 dark:text-slate-100 active:scale-95 active:shadow-[0_3px_10px_-3px_rgba(0,0,0,0.35)] transition-all duration-150"
+                className="font-luxury aspect-square rounded-2xl bg-white shadow-[0_8px_22px_-4px_rgba(0,0,0,0.45)] text-2xl font-semibold text-slate-800 active:scale-[0.85] active:shadow-[0_2px_6px_-2px_rgba(0,0,0,0.3)] transition-transform duration-75 ease-out will-change-transform"
               >
                 0
               </button>
               <button
                 type="button"
                 onClick={pressBackspace}
-                className="aspect-square rounded-2xl bg-white dark:bg-slate-800 shadow-[0_8px_22px_-4px_rgba(0,0,0,0.45)] flex items-center justify-center text-slate-700 dark:text-slate-200 active:scale-95 active:shadow-[0_3px_10px_-3px_rgba(0,0,0,0.35)] transition-all duration-150"
+                className="aspect-square rounded-2xl bg-white shadow-[0_8px_22px_-4px_rgba(0,0,0,0.45)] flex items-center justify-center text-slate-700 active:scale-[0.85] active:shadow-[0_2px_6px_-2px_rgba(0,0,0,0.3)] transition-transform duration-75 ease-out will-change-transform"
               >
                 <Delete size={24} />
               </button>
@@ -235,13 +237,13 @@ export default function LockScreen() {
             <button
               onClick={requestOtp}
               disabled={otpStatus === 'sending'}
-              className="text-xs text-slate-400 dark:text-slate-500 font-medium mt-6"
+              className="font-luxury text-xs text-slate-500 font-medium mt-6 active:scale-95 transition-transform duration-75"
             >
               {otpStatus === 'sending' ? 'Sending code...' : 'Forgot PIN? Tap to reset via email'}
             </button>
-            {otpStatus === 'error' && <p className="text-xs text-red-500 mt-2">{otpError}</p>}
+            {otpStatus === 'error' && <p className="font-luxury text-xs text-red-500 mt-2">{otpError}</p>}
             {!isOtpEmailConfigured() && (
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
+              <p className="font-luxury text-xs text-slate-500 mt-2">
                 Email reset isn't configured yet on this deployment.
               </p>
             )}

@@ -80,7 +80,7 @@ export default function Sidebar() {
       <div className="px-1 mb-7 flex items-center justify-between gap-2">
         <span className="flex items-center gap-2.5 min-w-0">
           <AppLogo className="w-9 h-9 rounded-full shrink-0" />
-          <span className="text-[20px] font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-1.5 min-w-0">
+          <span className="font-luxury text-[20px] font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-1.5 min-w-0">
             <span className="truncate">
               Aurafin<span className="text-brand-600">.</span>
             </span>
