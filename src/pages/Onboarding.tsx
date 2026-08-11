@@ -47,7 +47,7 @@ export default function Onboarding() {
   const saveProfile = async () => {
     if (!user) return;
     if (!age && !income && !expense && !savings) return;
-    await upsertDoc(user.uid, 'financialProfile', {
+    await upsertDoc(user, 'financialProfile', {
       id: 'profile',
       age: Number(age) || undefined,
       monthlyIncome: Number(income) || undefined,
@@ -63,6 +63,11 @@ export default function Onboarding() {
     } else {
       navigate('/');
     }
+  };
+
+  const skipAll = () => {
+    completeOnboarding();
+    navigate('/');
   };
 
   const goImport = () => {
@@ -95,7 +100,7 @@ export default function Onboarding() {
         </div>
 
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-8">
-          {step === 'welcome' && <WelcomeStep onNext={() => goTo(1)} />}
+          {step === 'welcome' && <WelcomeStep onNext={() => goTo(1)} onSkipAll={skipAll} onBack={() => navigate(-1)} />}
 
           {step === 'profile' && (
             <ProfileStep
@@ -109,6 +114,7 @@ export default function Onboarding() {
               setSavings={setSavings}
               onBack={() => goTo(0)}
               onSkip={() => goTo(2)}
+              onSkipAll={skipAll}
               onContinue={async () => {
                 await saveProfile();
                 goTo(2);
@@ -122,48 +128,92 @@ export default function Onboarding() {
               setSelected={setSelectedTypes}
               onBack={() => goTo(1)}
               onSkip={() => goTo(3)}
+              onSkipAll={skipAll}
               onSave={() => goTo(3)}
               onImportBroker={goImport}
             />
           )}
 
-          {step === 'secure' && <SecureStep onBack={() => goTo(2)} onSkip={finish} onDone={finish} />}
+          {step === 'secure' && <SecureStep onBack={() => goTo(2)} onSkip={finish} onSkipAll={skipAll} onDone={finish} />}
         </div>
       </div>
     </div>
   );
 }
 
-function WelcomeStep({ onNext }: { onNext: () => void }) {
+function WelcomeStep({ onNext, onSkipAll, onBack }: { onNext: () => void; onSkipAll: () => void; onBack?: () => void }) {
+  const user = useAuthStore((s) => s.user);
+  const isGuest = (user as any)?.isAnonymous === true;
+
   return (
     <div className="flex flex-col items-center text-center gap-5">
-      <div className="w-16 h-16 rounded-full bg-brand-50 dark:bg-brand-900/40 flex items-center justify-center">
-        <Sparkles size={26} className="text-brand-600" />
+      <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
+        isGuest 
+          ? 'bg-orange-50 dark:bg-orange-900/40' 
+          : 'bg-brand-50 dark:bg-brand-900/40'
+      }`}>
+        <Sparkles size={26} className={isGuest ? 'text-orange-600' : 'text-brand-600'} />
       </div>
       <div>
         <h2 className="font-luxury text-2xl font-semibold text-slate-900 dark:text-white mb-2">
-          Welcome to Aurafin
+          {isGuest ? 'Guest Mode' : 'Welcome to Aurafin'}
         </h2>
         <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-          Your privacy-first net worth tracker. Your data lives in your own account — no ads, no
-          selling your data. Just you and your numbers.
+          {isGuest 
+            ? 'Explore Aurafin with temporary guest access. Your data will be cleared when you log out. Create an account anytime to save your data permanently.'
+            : 'Your privacy-first net worth tracker. Your data lives in your own account — no ads, no selling your data. Just you and your numbers.'
+          }
         </p>
       </div>
 
       <div className="grid grid-cols-3 gap-3 w-full">
         <FeatureBox icon={Coins} label="Track assets & liabilities" />
         <FeatureBox icon={Globe2} label="Multi-currency support" />
-        <FeatureBox icon={BadgeCheck} label="Private & secure" />
+        <FeatureBox icon={BadgeCheck} label={isGuest ? 'Try it free' : 'Private & secure'} />
       </div>
 
-      <button
-        type="button"
-        onClick={onNext}
-        className="mt-1 flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium"
-      >
-        Get Started
-        <ArrowRight size={16} />
-      </button>
+      {isGuest && (
+        <div className="w-full p-3 bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 rounded-lg">
+          <p className="text-xs text-orange-800 dark:text-orange-200">
+            💡 <strong>Guest Tip:</strong> Your data won't be saved after you log out. Sign up with email to keep your data.
+          </p>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between mt-6 w-full">
+        {onBack ? (
+          <button
+            type="button"
+            onClick={onBack}
+            className="text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+          >
+            ← Back
+          </button>
+        ) : (
+          <div />
+        )}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onSkipAll}
+            className="border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+          >
+            Skip All
+          </button>
+          <button
+            type="button"
+            onClick={onNext}
+            className={`flex items-center justify-center gap-2 px-6 py-2 rounded-lg text-sm font-medium text-white ${
+              isGuest
+                ? 'bg-orange-600 hover:bg-orange-700'
+                : 'bg-brand-600 hover:bg-brand-700'
+            }`}
+          >
+            Get Started
+            <ArrowRight size={16} />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -188,6 +238,7 @@ interface ProfileStepProps {
   setSavings: (v: string) => void;
   onBack: () => void;
   onSkip: () => void;
+  onSkipAll: () => void;
   onContinue: () => void;
 }
 
@@ -202,6 +253,7 @@ function ProfileStep({
   setSavings,
   onBack,
   onSkip,
+  onSkipAll,
   onContinue,
 }: ProfileStepProps) {
   return (
@@ -237,7 +289,7 @@ function ProfileStep({
         />
       </div>
 
-      <StepNav onBack={onBack} onSkip={onSkip} onNext={onContinue} nextLabel="Continue" />
+      <StepNav onBack={onBack} onSkip={onSkip} onSkipAll={onSkipAll} onNext={onContinue} nextLabel="Continue" />
     </div>
   );
 }
@@ -273,6 +325,7 @@ function AssetsStep({
   setSelected,
   onBack,
   onSkip,
+  onSkipAll,
   onSave,
   onImportBroker,
 }: {
@@ -280,6 +333,7 @@ function AssetsStep({
   setSelected: (v: string[]) => void;
   onBack: () => void;
   onSkip: () => void;
+  onSkipAll: () => void;
   onSave: () => void;
   onImportBroker: () => void;
 }) {
@@ -349,7 +403,7 @@ function AssetsStep({
         })}
       </div>
 
-      <StepNav onBack={onBack} onSkip={onSkip} onNext={onSave} nextLabel="Save" nextDisabled={selected.length === 0} />
+      <StepNav onBack={onBack} onSkip={onSkip} onSkipAll={onSkipAll} onNext={onSave} nextLabel="Save" nextDisabled={selected.length === 0} />
     </div>
   );
 }
@@ -357,10 +411,12 @@ function AssetsStep({
 function SecureStep({
   onBack,
   onSkip,
+  onSkipAll,
   onDone,
 }: {
   onBack: () => void;
   onSkip: () => void;
+  onSkipAll: () => void;
   onDone: () => void;
 }) {
   const { setPin } = useAppLockStore();
@@ -407,7 +463,7 @@ function SecureStep({
         Set Up PIN
       </button>
 
-      <StepNav onBack={onBack} onSkip={onSkip} />
+      <StepNav onBack={onBack} onSkip={onSkip} onSkipAll={onSkipAll} />
 
       <Modal open={pinModalOpen} onClose={() => setPinModalOpen(false)} title="Set Up App Lock">
         <div className="space-y-4">
@@ -440,44 +496,55 @@ function SecureStep({
 function StepNav({
   onBack,
   onSkip,
+  onSkipAll,
   onNext,
   nextLabel,
   nextDisabled,
 }: {
   onBack: () => void;
   onSkip: () => void;
+  onSkipAll: () => void;
   onNext?: () => void;
   nextLabel?: string;
   nextDisabled?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between mt-6 w-full">
-      <button
-        type="button"
-        onClick={onBack}
-        className="text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-      >
-        Back
-      </button>
-      <div className="flex items-center gap-3">
+    <div>
+      <div className="flex items-center justify-between mt-6 w-full">
         <button
           type="button"
-          onClick={onSkip}
-          className="border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+          onClick={onBack}
+          className="text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
         >
-          Skip
+          ← Back
         </button>
-        {onNext && (
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={onNext}
-            disabled={nextDisabled}
-            className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-400 dark:disabled:bg-slate-700 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium"
+            onClick={onSkip}
+            className="border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
           >
-            {nextLabel}
-            <ArrowRight size={15} />
+            Skip
           </button>
-        )}
+          <button
+            type="button"
+            onClick={onSkipAll}
+            className="border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+          >
+            Skip All
+          </button>
+          {onNext && (
+            <button
+              type="button"
+              onClick={onNext}
+              disabled={nextDisabled}
+              className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-400 dark:disabled:bg-slate-700 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium"
+            >
+              {nextLabel}
+              <ArrowRight size={15} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

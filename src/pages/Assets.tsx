@@ -30,7 +30,7 @@ export default function Assets() {
 
   const handleDelete = async (id: string) => {
     if (!user) return;
-    await removeDoc(user.uid, 'assets', id);
+    await removeDoc(user, 'assets', id);
   };
 
   const confirmDelete = async () => {
@@ -46,7 +46,7 @@ export default function Assets() {
 
   const handleSave = async (asset: Asset) => {
     if (!user) return;
-    await upsertDoc(user.uid, 'assets', asset);
+    await upsertDoc(user, 'assets', asset);
     setModalOpen(false);
   };
 

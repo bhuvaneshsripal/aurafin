@@ -6,6 +6,7 @@ import {
   createUserWithEmailAndPassword,
   getAdditionalUserInfo,
   signOut,
+  signInAnonymously,
   type User,
 } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase/config';
@@ -75,6 +76,7 @@ interface AuthState {
   loginWithGoogle: () => Promise<void>;
   loginWithEmail: (email: string, password: string) => Promise<void>;
   registerWithEmail: (email: string, password: string) => Promise<void>;
+  loginAsGuest: () => Promise<void>;
   logout: () => Promise<void>;
   completeOnboarding: () => void;
 }
@@ -152,7 +154,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     localStorage.setItem(onboardingKey(result.user.uid), 'true');
     set({ needsOnboarding: true });
   },
+  loginAsGuest: async () => {
+    const result = await signInAnonymously(auth);
+    // Guests need to see onboarding/intro questions just like new sign-ups
+    localStorage.setItem(onboardingKey(result.user.uid), 'true');
+    set({ needsOnboarding: true });
+  },
   logout: async () => {
+    const currentUser = get().user;
+    // Clear all guest localStorage data when logging out
+    if (currentUser && (currentUser as any).isAnonymous === true) {
+      const guestCollections = ['assets', 'liabilities', 'goals', 'transactions', 'snapshots', 'budgets', 'financialProfile', 'profiles'];
+      guestCollections.forEach((collection) => {
+        localStorage.removeItem(`aurafin-guest-${currentUser.uid}-${collection}`);
+      });
+    }
     await signOut(auth);
     writeCachedUser(null);
   },

@@ -176,7 +176,7 @@ function TransactionForm({ type, onDone }: { type: TransactionType; onDone: () =
       currency,
       date,
     };
-    await upsertDoc(user.uid, 'transactions', t);
+    await upsertDoc(user, 'transactions', t);
     onDone();
   };
 
@@ -238,8 +238,8 @@ function TransferForm({ onDone }: { onDone: () => void }) {
 
     const updatedFrom: Asset = { ...from, value: Math.max(0, from.value - value), updatedAt: Date.now() };
     const updatedTo: Asset = { ...to, value: to.value + value, updatedAt: Date.now() };
-    await upsertDoc(user.uid, 'assets', updatedFrom);
-    await upsertDoc(user.uid, 'assets', updatedTo);
+    await upsertDoc(user, 'assets', updatedFrom);
+    await upsertDoc(user, 'assets', updatedTo);
     onDone();
   };
 
@@ -290,7 +290,7 @@ function SnapshotForm({ onDone }: { onDone: () => void }) {
       totalAssets,
       totalLiabilities,
     };
-    await upsertDoc(user.uid, 'snapshots', snapshot);
+    await upsertDoc(user, 'snapshots', snapshot);
     onDone();
   };
 

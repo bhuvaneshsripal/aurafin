@@ -91,7 +91,7 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
 
   const handleDelete = async (row: AccountRow) => {
     if (!user) return;
-    await removeDoc(user.uid, row.kind === 'asset' ? 'assets' : 'liabilities', row.id);
+    await removeDoc(user, row.kind === 'asset' ? 'assets' : 'liabilities', row.id);
   };
 
   const confirmDelete = async () => {
@@ -105,11 +105,11 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
     await Promise.all([
       ...assets
         .filter((a) => a.assetClass === 'cash')
-        .map((a) => upsertDoc(user.uid, 'assets', { ...a, isDefaultAccount: row.kind === 'asset' && a.id === row.id })),
+        .map((a) => upsertDoc(user, 'assets', { ...a, isDefaultAccount: row.kind === 'asset' && a.id === row.id })),
       ...liabilities
         .filter((l) => l.liabilityClass === 'credit_card')
         .map((l) =>
-          upsertDoc(user.uid, 'liabilities', { ...l, isDefaultAccount: row.kind === 'liability' && l.id === row.id })
+          upsertDoc(user, 'liabilities', { ...l, isDefaultAccount: row.kind === 'liability' && l.id === row.id })
         ),
     ]);
   };
@@ -142,7 +142,7 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
         isDefaultAccount: accounts.length === 0,
         updatedAt: Date.now(),
       };
-      await upsertDoc(user.uid, 'liabilities', liability);
+      await upsertDoc(user, 'liabilities', liability);
     } else {
       const asset: Asset = {
         id: crypto.randomUUID(),
@@ -159,7 +159,7 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
         isDefaultAccount: accounts.length === 0,
         updatedAt: Date.now(),
       };
-      await upsertDoc(user.uid, 'assets', asset);
+      await upsertDoc(user, 'assets', asset);
     }
     onOpenChange(false);
   };
@@ -190,7 +190,7 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
         balanceAsOf: form.balanceAsOf,
         updatedAt: Date.now(),
       };
-      await upsertDoc(user.uid, 'liabilities', updated);
+      await upsertDoc(user, 'liabilities', updated);
     } else {
       const original = assets.find((a) => a.id === editingRow.id);
       if (!original) return;
@@ -206,7 +206,7 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
         balanceAsOf: form.balanceAsOf,
         updatedAt: Date.now(),
       };
-      await upsertDoc(user.uid, 'assets', updated);
+      await upsertDoc(user, 'assets', updated);
     }
     setEditingRow(null);
   };

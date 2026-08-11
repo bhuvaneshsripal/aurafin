@@ -1177,7 +1177,7 @@ function ProfilesTab() {
       createdAt: Date.now(),
       isDefault: isFirstProfile,
     };
-    await upsertDoc(user.uid, 'profiles', profile);
+    await upsertDoc(user, 'profiles', profile);
     // Only the very first profile ever created should auto-become active/
     // default. Later ones must be set default explicitly — adding a 2nd,
     // 3rd, etc. profile should never silently bump the current default.
@@ -1196,7 +1196,7 @@ function ProfilesTab() {
   const handleSaveEdit = async () => {
     if (!user || !editingProfile || !editName.trim()) return;
     const updated: HouseholdProfile = { ...editingProfile, name: editName.trim(), colour: editColour };
-    await upsertDoc(user.uid, 'profiles', updated);
+    await upsertDoc(user, 'profiles', updated);
     setEditingProfile(null);
   };
 
@@ -1210,7 +1210,7 @@ function ProfilesTab() {
 
   const handleDelete = async (id: string) => {
     if (!user) return;
-    await removeDoc(user.uid, 'profiles', id);
+    await removeDoc(user, 'profiles', id);
     if (activeProfileId === id) {
       const remaining = profiles.filter((p) => p.id !== id);
       setActiveProfileId(remaining[0]?.id ?? null);
@@ -1804,7 +1804,7 @@ function BillingTab() {
       redeemedAt: now,
       expiresAt: check.kind === 'plan' && check.durationDays ? now + check.durationDays * 24 * 60 * 60 * 1000 : undefined,
     };
-    await upsertDoc(user.uid, 'premium', status);
+    await upsertDoc(user, 'premium', status);
     setResult('success');
     setCode('');
   };
@@ -2160,14 +2160,14 @@ function DataTab() {
     setRestoreStatus('restoring');
     try {
       const { data } = pendingRestore;
-      if (data.assets?.length) await bulkUpsertDocs(user.uid, 'assets', data.assets);
-      if (data.liabilities?.length) await bulkUpsertDocs(user.uid, 'liabilities', data.liabilities);
-      if (data.goals?.length) await bulkUpsertDocs(user.uid, 'goals', data.goals);
-      if (data.transactions?.length) await bulkUpsertDocs(user.uid, 'transactions', data.transactions);
-      if (data.snapshots?.length) await bulkUpsertDocs(user.uid, 'snapshots', data.snapshots);
-      if (data.budgets?.length) await bulkUpsertDocs(user.uid, 'budgets', data.budgets);
-      if (data.profiles?.length) await bulkUpsertDocs(user.uid, 'profiles', data.profiles);
-      if (data.financialProfile?.[0]) await upsertDoc(user.uid, 'financialProfile', data.financialProfile[0]);
+      if (data.assets?.length) await bulkUpsertDocs(user, 'assets', data.assets);
+      if (data.liabilities?.length) await bulkUpsertDocs(user, 'liabilities', data.liabilities);
+      if (data.goals?.length) await bulkUpsertDocs(user, 'goals', data.goals);
+      if (data.transactions?.length) await bulkUpsertDocs(user, 'transactions', data.transactions);
+      if (data.snapshots?.length) await bulkUpsertDocs(user, 'snapshots', data.snapshots);
+      if (data.budgets?.length) await bulkUpsertDocs(user, 'budgets', data.budgets);
+      if (data.profiles?.length) await bulkUpsertDocs(user, 'profiles', data.profiles);
+      if (data.financialProfile?.[0]) await upsertDoc(user, 'financialProfile', data.financialProfile[0]);
       setRestoreStatus('done');
     } catch {
       setRestoreError('Something went wrong while restoring. Please try again.');

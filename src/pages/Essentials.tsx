@@ -95,7 +95,7 @@ function HealthCheck() {
 
   const saveField = async (patch: Partial<{ age: number; monthlyIncome: number; monthlyExpense: number; termCover: number; healthCover: number; dependents: number }>) => {
     if (!user) return;
-    await upsertDoc(user.uid, 'financialProfile', { id: 'profile', ...(profile ?? {}), ...patch });
+    await upsertDoc(user, 'financialProfile', { id: 'profile', ...(profile ?? {}), ...patch });
   };
 
   const handleSaveSnapshot = () => {
@@ -559,7 +559,7 @@ function GoalsTab() {
 
   const handleDelete = async (id: string) => {
     if (!user) return;
-    await removeDoc(user.uid, 'goals', id);
+    await removeDoc(user, 'goals', id);
   };
 
   const confirmDelete = async () => {
@@ -570,7 +570,7 @@ function GoalsTab() {
 
   const handleSave = async (goal: Goal) => {
     if (!user) return;
-    await upsertDoc(user.uid, 'goals', goal.profileId ? goal : { ...goal, profileId: activeProfileId ?? undefined });
+    await upsertDoc(user, 'goals', goal.profileId ? goal : { ...goal, profileId: activeProfileId ?? undefined });
     setModalOpen(false);
   };
 

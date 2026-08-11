@@ -18,7 +18,7 @@ export default function Liabilities() {
 
   const handleDelete = async (id: string) => {
     if (!user) return;
-    await removeDoc(user.uid, 'liabilities', id);
+    await removeDoc(user, 'liabilities', id);
   };
 
   const confirmDelete = async () => {
@@ -34,7 +34,7 @@ export default function Liabilities() {
 
   const handleSave = async (liability: Liability) => {
     if (!user) return;
-    await upsertDoc(user.uid, 'liabilities', liability);
+    await upsertDoc(user, 'liabilities', liability);
     setModalOpen(false);
   };
 

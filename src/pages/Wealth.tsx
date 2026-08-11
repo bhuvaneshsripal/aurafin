@@ -275,7 +275,7 @@ function AddWealthPage({
       return;
     }
     try {
-      await upsertDoc(user.uid, 'assets', asset.profileId ? asset : { ...asset, profileId: activeProfileId ?? undefined });
+      await upsertDoc(user, 'assets', asset.profileId ? asset : { ...asset, profileId: activeProfileId ?? undefined });
       onClose();
     } catch (err) {
       console.error('Failed to save asset', err);
@@ -784,12 +784,12 @@ function AssetsTab({
 
   const handleDelete = async (id: string) => {
     if (!user) return;
-    await removeDoc(user.uid, 'assets', id);
+    await removeDoc(user, 'assets', id);
   };
 
   const handleDuplicate = async (a: Asset) => {
     if (!user) return;
-    await upsertDoc(user.uid, 'assets', {
+    await upsertDoc(user, 'assets', {
       ...a,
       id: crypto.randomUUID(),
       name: `${a.name} (Copy)`,
@@ -815,8 +815,8 @@ function AssetsTab({
     const currentOrder = current.order ?? idx;
     const neighborOrder = neighbor.order ?? swapIdx;
     try {
-      await upsertDoc(user.uid, 'assets', { ...current, order: neighborOrder });
-      await upsertDoc(user.uid, 'assets', { ...neighbor, order: currentOrder });
+      await upsertDoc(user, 'assets', { ...current, order: neighborOrder });
+      await upsertDoc(user, 'assets', { ...neighbor, order: currentOrder });
     } catch (err) {
       console.error('Failed to reorder assets', err);
     }
@@ -842,7 +842,7 @@ function AssetsTab({
         reordered
           .map((asset, idx) => ({ asset, idx }))
           .filter(({ asset, idx }) => (asset.order ?? -1) !== idx)
-          .map(({ asset, idx }) => upsertDoc(user.uid, 'assets', { ...asset, order: idx }))
+          .map(({ asset, idx }) => upsertDoc(user, 'assets', { ...asset, order: idx }))
       );
     } catch (err) {
       console.error('Failed to reorder assets', err);
@@ -861,7 +861,7 @@ function AssetsTab({
   const handleSave = async (asset: Asset) => {
     if (!user) return;
     try {
-      await upsertDoc(user.uid, 'assets', asset);
+      await upsertDoc(user, 'assets', asset);
       setModalOpen(false);
     } catch (err) {
       console.error('Failed to save asset', err);
@@ -3381,7 +3381,7 @@ function LiabilitiesTab({
 
   const handleDelete = async (id: string) => {
     if (!user) return;
-    await removeDoc(user.uid, 'liabilities', id);
+    await removeDoc(user, 'liabilities', id);
   };
 
   const confirmDelete = async () => {
@@ -3393,7 +3393,7 @@ function LiabilitiesTab({
   const handleSave = async (liability: Liability) => {
     if (!user) return;
     try {
-      await upsertDoc(user.uid, 'liabilities', liability);
+      await upsertDoc(user, 'liabilities', liability);
       setModalOpen(false);
     } catch (err) {
       console.error('Failed to save liability', err);

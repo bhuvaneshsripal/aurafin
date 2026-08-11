@@ -36,7 +36,7 @@ export default function Goals() {
 
   const handleDelete = async (id: string) => {
     if (!user) return;
-    await removeDoc(user.uid, 'goals', id);
+    await removeDoc(user, 'goals', id);
   };
 
   const confirmDelete = async () => {
@@ -52,7 +52,7 @@ export default function Goals() {
 
   const handleSave = async (goal: Goal) => {
     if (!user) return;
-    await upsertDoc(user.uid, 'goals', goal);
+    await upsertDoc(user, 'goals', goal);
     setModalOpen(false);
   };
 

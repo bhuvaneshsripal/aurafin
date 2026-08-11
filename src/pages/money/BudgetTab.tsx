@@ -130,8 +130,8 @@ export default function BudgetTab() {
     try {
       const removedIds = [...savedIds].filter((id) => !draft.some((i) => i.id === id));
       await Promise.all([
-        ...draft.map((i) => upsertDoc(user.uid, 'budgets', i)),
-        ...removedIds.map((id) => removeDoc(user.uid, 'budgets', id)),
+        ...draft.map((i) => upsertDoc(user, 'budgets', i)),
+        ...removedIds.map((id) => removeDoc(user, 'budgets', id)),
       ]);
       setSavedIds(new Set(draft.map((i) => i.id)));
     } finally {

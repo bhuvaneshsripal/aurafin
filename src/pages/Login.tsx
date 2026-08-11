@@ -3,12 +3,13 @@ import { Eye, EyeOff } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
 export default function Login() {
-  const { loginWithGoogle, loginWithEmail, registerWithEmail } = useAuthStore();
+  const { loginWithGoogle, loginWithEmail, registerWithEmail, loginAsGuest } = useAuthStore();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [guestLoading, setGuestLoading] = useState(false);
 
   const submit = async () => {
     setError('');
@@ -45,7 +46,7 @@ export default function Login() {
 
           <button
             onClick={() => loginWithGoogle()}
-            className="btn-press w-full flex items-center justify-center gap-2.5 border border-slate-200 rounded-lg py-2.5 text-base font-medium text-slate-700 hover:bg-slate-50 mb-4"
+            className="btn-press w-full flex items-center justify-center gap-2.5 border border-slate-200 rounded-lg py-2.5 text-base font-medium text-slate-700 hover:bg-slate-50 mb-3"
           >
             <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
               <path
@@ -66,6 +67,27 @@ export default function Login() {
               />
             </svg>
             Continue with Google
+          </button>
+
+          <button
+            onClick={async () => {
+              setError('');
+              setGuestLoading(true);
+              try {
+                await loginAsGuest();
+              } catch (e) {
+                setError(e instanceof Error ? e.message : 'Failed to continue as guest');
+                setGuestLoading(false);
+              }
+            }}
+            disabled={guestLoading}
+            className="btn-press w-full flex items-center justify-center gap-2.5 border border-slate-200 rounded-lg py-2.5 text-base font-medium text-slate-700 hover:bg-slate-50 mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+            {guestLoading ? 'Loading...' : 'Try Demo'}
           </button>
 
           <div className="flex items-center gap-3 my-4">

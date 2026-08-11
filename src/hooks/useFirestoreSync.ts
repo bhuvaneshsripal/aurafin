@@ -17,8 +17,50 @@ const ALL_USER_COLLECTIONS = [
 ] as const;
 
 /**
+ * Check if a user is anonymous (guest)
+ */
+export function isAnonymousUser(user: any): boolean {
+  return user?.isAnonymous === true;
+}
+
+/**
+ * Get localStorage key for guest collection
+ */
+function getGuestStorageKey(uid: string, collectionName: string): string {
+  return `aurafin-guest-${uid}-${collectionName}`;
+}
+
+/**
+ * Load guest data from localStorage if available
+ */
+function loadGuestData<T extends { id: string }>(uid: string, collectionName: string): T[] {
+  try {
+    const key = getGuestStorageKey(uid, collectionName);
+    const data = localStorage.getItem(key);
+    return data ? JSON.parse(data) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Save guest data to localStorage
+ */
+export function saveGuestData<T>(uid: string, collectionName: string, items: T[]): void {
+  try {
+    const key = getGuestStorageKey(uid, collectionName);
+    localStorage.setItem(key, JSON.stringify(items));
+  } catch {
+    // Silently fail if localStorage is unavailable
+  }
+}
+
+/**
  * Generic two-way sync between a Firestore subcollection at
  * users/{uid}/{collectionName} and a local Zustand store slice.
+ *
+ * For guests (anonymous users), data is persisted to localStorage instead of Firestore.
+ * For regular users, data syncs with Firestore in real-time.
  *
  * setLocal replaces the in-memory list whenever the remote data changes.
  *
@@ -41,6 +83,16 @@ export function useFirestoreCollectionSync<T extends { id: string }>(
 
   useEffect(() => {
     if (!user) return;
+
+    // For guest users, load from localStorage instead of Firestore
+    if (isAnonymousUser(user)) {
+      const items = loadGuestData<T>(user.uid, collectionName);
+      setLocal(items);
+      onSyncChange?.(false);
+      return;
+    }
+
+    // For regular users, sync with Firestore
     const colRef = collection(db, 'users', user.uid, collectionName);
     const unsub = onSnapshot(colRef, { includeMetadataChanges: true }, (snap) => {
       const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as T);
@@ -52,10 +104,25 @@ export function useFirestoreCollectionSync<T extends { id: string }>(
 }
 
 export async function upsertDoc<T extends { id: string }>(
-  uid: string,
+  uidOrUser: string | { uid: string; isAnonymous?: boolean },
   collectionName: string,
   item: T
 ) {
+  const uid = typeof uidOrUser === 'string' ? uidOrUser : uidOrUser.uid;
+  const isGuest = typeof uidOrUser === 'object' && isAnonymousUser(uidOrUser);
+
+  // For guests, save to localStorage
+  if (isGuest) {
+    const items = loadGuestData<T>(uid, collectionName);
+    const exists = items.some((i) => i.id === item.id);
+    const updated = exists
+      ? items.map((i) => (i.id === item.id ? item : i))
+      : [...items, item];
+    saveGuestData(uid, collectionName, updated);
+    return;
+  }
+
+  // For regular users, save to Firestore
   const ref = doc(db, 'users', uid, collectionName, item.id);
   await setDoc(ref, item, { merge: true });
 }
@@ -63,12 +130,25 @@ export async function upsertDoc<T extends { id: string }>(
 /**
  * Write many items in one Firestore batch (max 500 per Firestore's
  * own limit, chunked automatically here). Used for CSV/Excel imports.
+ * For guests, items are saved to localStorage.
  */
 export async function bulkUpsertDocs<T extends { id: string }>(
-  uid: string,
+  uidOrUser: string | { uid: string; isAnonymous?: boolean },
   collectionName: string,
   items: T[]
 ) {
+  const uid = typeof uidOrUser === 'string' ? uidOrUser : uidOrUser.uid;
+  const isGuest = typeof uidOrUser === 'object' && isAnonymousUser(uidOrUser);
+
+  // For guests, save all items to localStorage
+  if (isGuest) {
+    const existing = loadGuestData<T>(uid, collectionName);
+    const merged = existing.filter((e) => !items.some((i) => i.id === e.id));
+    saveGuestData(uid, collectionName, [...merged, ...items]);
+    return;
+  }
+
+  // For regular users, save to Firestore in batches
   const chunkSize = 450;
   for (let i = 0; i < items.length; i += chunkSize) {
     const chunk = items.slice(i, i + chunkSize);
@@ -81,7 +161,19 @@ export async function bulkUpsertDocs<T extends { id: string }>(
   }
 }
 
-export async function removeDoc(uid: string, collectionName: string, id: string) {
+export async function removeDoc(uidOrUser: string | { uid: string; isAnonymous?: boolean }, collectionName: string, id: string) {
+  const uid = typeof uidOrUser === 'string' ? uidOrUser : uidOrUser.uid;
+  const isGuest = typeof uidOrUser === 'object' && isAnonymousUser(uidOrUser);
+
+  // For guests, remove from localStorage
+  if (isGuest) {
+    const items = loadGuestData<any>(uid, collectionName);
+    const filtered = items.filter((i) => i.id !== id);
+    saveGuestData(uid, collectionName, filtered);
+    return;
+  }
+
+  // For regular users, remove from Firestore
   const ref = doc(db, 'users', uid, collectionName, id);
   await deleteDoc(ref);
 }

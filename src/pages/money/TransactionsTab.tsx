@@ -37,7 +37,7 @@ export default function TransactionsTab() {
 
   const handleDelete = async (id: string) => {
     if (!user) return;
-    await removeDoc(user.uid, 'transactions', id);
+    await removeDoc(user, 'transactions', id);
   };
 
   const confirmDelete = async () => {
@@ -48,7 +48,7 @@ export default function TransactionsTab() {
 
   const handleSave = async (t: Transaction) => {
     if (!user) return;
-    await upsertDoc(user.uid, 'transactions', t.profileId ? t : { ...t, profileId: activeProfileId ?? undefined });
+    await upsertDoc(user, 'transactions', t.profileId ? t : { ...t, profileId: activeProfileId ?? undefined });
     setModalOpen(false);
   };
 

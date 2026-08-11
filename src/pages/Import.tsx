@@ -205,7 +205,7 @@ export default function Import() {
     setStatus('saving');
     try {
       const { assets, updatedCount, addedCount } = rowsToAssets(rows, existingAssets, matchExisting);
-      await bulkUpsertDocs(user.uid, 'assets', assets);
+      await bulkUpsertDocs(user, 'assets', assets);
       setImportResult({ updated: updatedCount, added: addedCount });
       setStatus('done');
     } catch (e) {
