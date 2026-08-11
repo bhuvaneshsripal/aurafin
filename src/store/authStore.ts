@@ -1,8 +1,7 @@
 import { create } from 'zustand';
 import {
   onAuthStateChanged,
-  signInWithRedirect,
-  getRedirectResult,
+  signInWithPopup,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   getAdditionalUserInfo,
@@ -127,22 +126,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ user: null, loading: false, verifying: false });
       }
     );
-
-    // Check if we're returning from a Google sign-in redirect
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result) {
-          const additionalInfo = getAdditionalUserInfo(result);
-          if (additionalInfo?.isNewUser) {
-            localStorage.setItem(onboardingKey(result.user.uid), 'true');
-            set({ needsOnboarding: true });
-          }
-        }
-      })
-      .catch((error) => {
-        console.error('Google redirect sign-in error:', error);
-      });
-
     // Safety net: on some mobile browsers/PWAs (storage restrictions, slow
     // networks, privacy-shield extensions), Firebase's auth-state check can
     // stall and never call back at all. Rather than hang forever, fall
@@ -157,8 +140,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }, fallbackDelay);
   },
   loginWithGoogle: async () => {
-    // Use redirect instead of popup to avoid popup blocker issues and OAuth loops
-    await signInWithRedirect(auth, googleProvider);
+    const result = await signInWithPopup(auth, googleProvider);
+    if (getAdditionalUserInfo(result)?.isNewUser) {
+      localStorage.setItem(onboardingKey(result.user.uid), 'true');
+      set({ needsOnboarding: true });
+    }
   },
   loginWithEmail: async (email, password) => {
     await signInWithEmailAndPassword(auth, email, password);

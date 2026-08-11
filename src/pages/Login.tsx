@@ -10,6 +10,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [guestLoading, setGuestLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const submit = async () => {
     setError('');
@@ -18,6 +19,31 @@ export default function Login() {
       else await registerWithEmail(email, password);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setError('');
+    setGoogleLoading(true);
+    try {
+      await loginWithGoogle();
+    } catch (e) {
+      // signInWithPopup rejects (e.g. popup blocked, closed by the user,
+      // an unauthorized domain, or a misconfigured Firebase project) and
+      // previously nothing caught that rejection - the button just looked
+      // like it did nothing. Surface it instead.
+      const code = (e as { code?: string })?.code;
+      if (code === 'auth/popup-blocked') {
+        setError('Your browser blocked the Google sign-in popup. Please allow popups for this site and try again.');
+      } else if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        // User closed the popup themselves - not really an error worth showing.
+      } else if (code === 'auth/unauthorized-domain') {
+        setError('This domain is not authorized for Google sign-in yet. Add it under Firebase Console > Authentication > Settings > Authorized domains.');
+      } else {
+        setError(e instanceof Error ? e.message : 'Google sign-in failed. Please try again.');
+      }
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -45,8 +71,9 @@ export default function Login() {
           </p>
 
           <button
-            onClick={() => loginWithGoogle()}
-            className="btn-press w-full flex items-center justify-center gap-2.5 border border-slate-200 rounded-lg py-2.5 text-base font-medium text-slate-700 hover:bg-slate-50 mb-3"
+            onClick={handleGoogleLogin}
+            disabled={googleLoading}
+            className="btn-press w-full flex items-center justify-center gap-2.5 border border-slate-200 rounded-lg py-2.5 text-base font-medium text-slate-700 hover:bg-slate-50 mb-3 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
               <path
@@ -66,7 +93,7 @@ export default function Login() {
                 d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.167 6.656 3.58 9 3.58z"
               />
             </svg>
-            Continue with Google
+            {googleLoading ? 'Connecting…' : 'Continue with Google'}
           </button>
 
           <button
@@ -89,6 +116,8 @@ export default function Login() {
             </svg>
             {guestLoading ? 'Loading...' : 'Try Demo'}
           </button>
+
+          {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
 
           <div className="flex items-center gap-3 my-4">
             <div className="h-px bg-slate-200 flex-1" />
@@ -122,7 +151,6 @@ export default function Login() {
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
-            {error && <p className="text-sm text-red-500">{error}</p>}
             <button
               onClick={submit}
               className="btn-press w-full bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white py-2.5 rounded-lg text-base font-medium"
