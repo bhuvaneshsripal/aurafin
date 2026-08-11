@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, memo, useEffect } from 'react';
+import { useState, useCallback, useMemo, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Sparkles,
@@ -11,7 +11,6 @@ import {
   Lock,
   Plus,
   Trash2,
-  X,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useAppLockStore } from '../store/appLockStore';
@@ -23,8 +22,6 @@ import PinBoxInput from '../components/PinBoxInput';
 import {
   saveOnboardingCache,
   getOnboardingCache,
-  getCachedAssets,
-  hasValidOnboardingCache,
   clearOnboardingCache,
   updateCachedAssets,
   removeAssetFromCache,
@@ -49,7 +46,6 @@ export default function OnboardingEnhanced() {
 
   // Load from cache if available
   const cachedData = useMemo(() => getOnboardingCache(), []);
-  const hasCache = useMemo(() => hasValidOnboardingCache(), []);
 
   const [stepIndex, setStepIndex] = useState(0);
   const step: StepKey = STEPS[stepIndex];
