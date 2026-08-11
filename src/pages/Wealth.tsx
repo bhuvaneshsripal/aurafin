@@ -31,6 +31,7 @@ import {
 } from 'recharts';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLivePricesStore } from '../store/livePricesStore';
+import { goldPricePerGram22k } from '../utils/goldPrice';
 import { useSyncStatusStore } from '../store/syncStatusStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useAuthStore } from '../store/authStore';
@@ -2145,6 +2146,38 @@ function AssetDetailsForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isWeightTracked, totalGrams, totalPurchaseAmount]);
 
+  // --- Gold purity live pricing (24K / 22K) -------------------------------
+  // Gold-only: lets the person pick 24K or 22K and have Current Value
+  // auto-fill from the app-wide live gold rate (see useLiveGoldPrice /
+  // livePricesStore, already polling in the background) × total grams
+  // purchased — the same "digital gold app" style quote as the Dashboard
+  // ticker. 22K is derived from the live 24K rate at the standard 22/24
+  // purity ratio. This is estimate-only and isn't saved on the asset
+  // itself; picking a purity just drives the one-off/auto Current Value
+  // calculation below, same as the equity live-price auto-calc elsewhere
+  // in this form. Selecting a purity re-enables auto-fill even if the
+  // person had previously hand-edited Current Value, since that's a fresh,
+  // explicit choice to go live.
+  const isGold = assetClass === 'gold';
+  const [goldPurity, setGoldPurity] = useState<'24k' | '22k' | null>(null);
+  const liveGold24k = useLivePricesStore((s) => s.goldPricePerGram);
+  const liveGoldLoading = useLivePricesStore((s) => s.goldPriceLoading);
+  const liveGoldError = useLivePricesStore((s) => s.goldPriceError);
+  const goldPurityPricePerGram =
+    liveGold24k === null ? null : goldPurity === '22k' ? goldPricePerGram22k(liveGold24k) : liveGold24k;
+
+  const selectGoldPurity = (purity: '24k' | '22k') => {
+    setGoldPurity(purity);
+    valueTouchedRef.current = false;
+  };
+
+  useEffect(() => {
+    if (!isGold || !goldPurity || goldPurityPricePerGram === null) return;
+    if (valueTouchedRef.current) return;
+    if (totalGrams > 0) setValue((goldPurityPricePerGram * totalGrams).toFixed(2));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGold, goldPurity, goldPurityPricePerGram, totalGrams]);
+
   // Whether the person tried to save at least once — required-field errors
   // only show up after this, so the form doesn't look "broken" on first view.
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
@@ -2596,6 +2629,55 @@ function AssetDetailsForm({
           <p className="text-sm font-medium text-slate-700 border border-slate-200 rounded-lg px-3 py-2.5 bg-slate-50">
             {ASSET_CLASS_LABELS[assetClass] ?? assetClass ?? 'Unknown'}
           </p>
+        </Field>
+      )}
+      {isGold && (
+        <Field label="Gold Purity">
+          <div className="grid grid-cols-2 gap-3">
+            {(['24k', '22k'] as const).map((purity) => {
+              const price =
+                liveGold24k === null
+                  ? null
+                  : purity === '22k'
+                    ? goldPricePerGram22k(liveGold24k)
+                    : liveGold24k;
+              const selected = goldPurity === purity;
+              return (
+                <button
+                  key={purity}
+                  type="button"
+                  onClick={() => selectGoldPurity(purity)}
+                  className={`text-left rounded-xl border p-3.5 transition-colors ${
+                    selected
+                      ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <span
+                    className={`text-sm font-semibold ${selected ? 'text-brand-700' : 'text-slate-700'}`}
+                  >
+                    {purity === '24k' ? '24K (999)' : '22K (916)'}
+                  </span>
+                  <p className="font-numeric text-sm mt-1 text-slate-600">
+                    {liveGoldLoading && price === null
+                      ? 'Loading…'
+                      : price !== null
+                        ? `${formatPreciseCurrency(price, 'INR')}/g`
+                        : 'Unavailable'}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+          {liveGoldError && liveGold24k === null && (
+            <p className={errorTextClass}>Couldn't fetch a live gold rate — enter Current Value manually.</p>
+          )}
+          {goldPurity && (
+            <p className="text-xs text-slate-400 mt-1.5">
+              Current Value below is set to live {goldPurity === '24k' ? '24K' : '22K'} rate × total grams —
+              this is a global spot estimate, not an exact local jeweller rate. Edit it to override.
+            </p>
+          )}
         </Field>
       )}
       {isWeightTracked && (

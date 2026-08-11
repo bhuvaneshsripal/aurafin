@@ -18,6 +18,7 @@ import { useUiStore } from '../store/uiStore';
 import { useSyncStatusStore } from '../store/syncStatusStore';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import Amount from '../components/Amount';
+import GoldPriceCard from '../components/GoldPriceCard';
 import { ASSET_CLASS_LABELS, formatCurrency, maskPreciseAmount } from '../utils/currency';
 import { resolveAssetValues } from '../utils/assetValues';
 
@@ -179,6 +180,8 @@ export default function Dashboard() {
           </span>
         </div>
       </div>
+
+      <GoldPriceCard />
 
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
         <div className="flex items-center justify-between">

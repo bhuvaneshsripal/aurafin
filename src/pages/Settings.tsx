@@ -13,6 +13,7 @@ import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
 import { useAppLockStore } from '../store/appLockStore';
 import { useDisplaySettingsStore, FONT_MIN_SCALE, FONT_MAX_SCALE, SCREEN_MIN_SCALE, SCREEN_MAX_SCALE } from '../store/displaySettingsStore';
+import { useGoldSettingsStore } from '../store/goldSettingsStore';
 import PinBoxInput from '../components/PinBoxInput';
 import { auth } from '../firebase/config';
 import { CURRENCIES } from '../utils/currency';
@@ -1051,6 +1052,54 @@ function DisplaySizeCard() {
   );
 }
 
+function GoldRateCard() {
+  const premiumPercent = useGoldSettingsStore((s) => s.premiumPercent);
+  const setPremiumPercent = useGoldSettingsStore((s) => s.setPremiumPercent);
+  // Local draft so typing "1" then "2" for "12" doesn't briefly commit "1".
+  const [draft, setDraft] = useState(String(premiumPercent));
+
+  useEffect(() => {
+    setDraft(String(premiumPercent));
+  }, [premiumPercent]);
+
+  const commit = () => {
+    const parsed = Number(draft);
+    if (Number.isFinite(parsed)) {
+      const clamped = Math.min(30, Math.max(-10, parsed));
+      setPremiumPercent(clamped);
+      setDraft(String(clamped));
+    } else {
+      setDraft(String(premiumPercent));
+    }
+  };
+
+  return (
+    <Card>
+      <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Gold Rate Calibration</h2>
+      <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
+        The live gold rate is derived from a global spot price, which typically reads lower than
+        Indian retail/bullion rates (import duty, GST, dealer margin). Compare the "Live Gold
+        Price" card on your Dashboard against a source you trust — like Goodreturns or your local
+        jeweller — and adjust this until they match.
+      </p>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          step="0.1"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+          }}
+          className="w-24 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+        />
+        <span className="text-sm text-slate-500 dark:text-slate-400">% added on top of the raw spot-derived rate</span>
+      </div>
+    </Card>
+  );
+}
+
 function PreferencesTab() {
   const [baseCurrency, setBaseCurrency] = useState('INR');
   return (
@@ -1076,6 +1125,7 @@ function PreferencesTab() {
           ))}
         </select>
       </Card>
+      <GoldRateCard />
       <DisplaySizeCard />
     </>
   );

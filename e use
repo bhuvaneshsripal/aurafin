@@ -1,0 +1,51 @@
+[35msrc/components/PinBoxInput.tsx[m[36m:[m[32m9[m[36m:[m  /** Mask entered digits as dots, like a [1;31mpassword[m field. Defaults to true. */
+[35msrc/components/PinBoxInput.tsx[m[36m:[m[32m70[m[36m:[m          type={mask ? '[1;31mpassword[m' : 'text'}
+[35msrc/pages/Login.tsx[m[36m:[m[32m9[m[36m:[m  const [[1;31mpassword[m, setPassword] = useState('');
+[35msrc/pages/Login.tsx[m[36m:[m[32m17[m[36m:[m      if (mode === 'login') await loginWithEmail(email, [1;31mpassword[m);
+[35msrc/pages/Login.tsx[m[36m:[m[32m18[m[36m:[m      else await registerWithEmail(email, [1;31mpassword[m);
+[35msrc/pages/Login.tsx[m[36m:[m[32m109[m[36m:[m                type={showPassword ? 'text' : '[1;31mpassword[m'}
+[35msrc/pages/Login.tsx[m[36m:[m[32m110[m[36m:[m                placeholder="Your [1;31mpassword[m"
+[35msrc/pages/Login.tsx[m[36m:[m[32m111[m[36m:[m                value={[1;31mpassword[m}
+[35msrc/pages/Login.tsx[m[36m:[m[32m119[m[36m:[m                aria-label={showPassword ? 'Hide [1;31mpassword[m' : 'Show [1;31mpassword[m'}
+[35msrc/pages/Settings.tsx[m[36m:[m[32m311[m[36m:[m    (p) => p.providerId === '[1;31mpassword[m'
+[35msrc/pages/Settings.tsx[m[36m:[m[32m332[m[36m:[m  // Once a [1;31mpassword[m is already set, check whether a recovery question was
+[35msrc/pages/Settings.tsx[m[36m:[m[32m333[m[36m:[m  // saved for it (older accounts may not have one yet) so "Forgot [1;31mpassword[m?"
+[35msrc/pages/Settings.tsx[m[36m:[m[32m350[m[36m:[m  const [1;31mpassword[msMatch = newPassword.length > 0 && newPassword === confirmPassword;
+[35msrc/pages/Settings.tsx[m[36m:[m[32m353[m[36m:[m  const valid = lengthValid && [1;31mpassword[msMatch && oldPasswordOk && securityAnswerOk;
+[35msrc/pages/Settings.tsx[m[36m:[m[32m362[m[36m:[m          ? 'Enter your current [1;31mpassword[m.'
+[35msrc/pages/Settings.tsx[m[36m:[m[32m364[m[36m:[m            ? 'New [1;31mpassword[m must be at least 6 characters.'
+[35msrc/pages/Settings.tsx[m[36m:[m[32m365[m[36m:[m            : ![1;31mpassword[msMatch
+[35msrc/pages/Settings.tsx[m[36m:[m[32m366[m[36m:[m              ? 'New [1;31mpassword[m and confirmation do not match.'
+[35msrc/pages/Settings.tsx[m[36m:[m[32m377[m[36m:[m        // Re-authenticate with the old [1;31mpassword[m first — this both proves
+[35msrc/pages/Settings.tsx[m[36m:[m[32m379[m[36m:[m        // for changing a [1;31mpassword[m, instead of forcing a full sign-out.
+[35msrc/pages/Settings.tsx[m[36m:[m[32m384[m[36m:[m        // Google-only account so far — link an email/[1;31mpassword[m credential so
+[35msrc/pages/Settings.tsx[m[36m:[m[32m385[m[36m:[m        // they can also sign in with email + [1;31mpassword[m from now on.
+[35msrc/pages/Settings.tsx[m[36m:[m[32m401[m[36m:[m        code === 'auth/invalid-credential' || code === 'auth/wrong-[1;31mpassword[m'
+[35msrc/pages/Settings.tsx[m[36m:[m[32m402[m[36m:[m          ? 'Old [1;31mpassword[m is incorrect.'
+[35msrc/pages/Settings.tsx[m[36m:[m[32m404[m[36m:[m            ? 'Please sign out and sign in again before changing your [1;31mpassword[m.'
+[35msrc/pages/Settings.tsx[m[36m:[m[32m407[m[36m:[m              : code === 'auth/weak-[1;31mpassword[m'
+[35msrc/pages/Settings.tsx[m[36m:[m[32m408[m[36m:[m                ? 'That [1;31mpassword[m is too weak. Use at least 6 characters.'
+[35msrc/pages/Settings.tsx[m[36m:[m[32m409[m[36m:[m                : 'Could not set [1;31mpassword[m. Please try again.'
+[35msrc/pages/Settings.tsx[m[36m:[m[32m449[m[36m:[m          ? 'Update the [1;31mpassword[m you use to sign in with email and [1;31mpassword[m.'
+[35msrc/pages/Settings.tsx[m[36m:[m[32m450[m[36m:[m          : 'Set a [1;31mpassword[m so you can also sign in with email and [1;31mpassword[m, in addition to Google.'}
+[35msrc/pages/Settings.tsx[m[36m:[m[32m461[m[36m:[m                    type={showOldPassword ? 'text' : '[1;31mpassword[m'}
+[35msrc/pages/Settings.tsx[m[36m:[m[32m464[m[36m:[m                    placeholder="Enter your current [1;31mpassword[m"
+[35msrc/pages/Settings.tsx[m[36m:[m[32m470[m[36m:[m                    aria-label={showOldPassword ? 'Hide [1;31mpassword[m' : 'Show [1;31mpassword[m'}
+[35msrc/pages/Settings.tsx[m[36m:[m[32m481[m[36m:[m                type="[1;31mpassword[m"
+[35msrc/pages/Settings.tsx[m[36m:[m[32m491[m[36m:[m                type="[1;31mpassword[m"
+[35msrc/pages/Settings.tsx[m[36m:[m[32m494[m[36m:[m                placeholder="Re-enter new [1;31mpassword[m"
+[35msrc/pages/Settings.tsx[m[36m:[m[32m526[m[36m:[m                    Used to recover your [1;31mpassword[m later if you forget it.
+[35msrc/pages/Settings.tsx[m[36m:[m[32m546[m[36m:[m                Forgot your [1;31mpassword[m?
+[35msrc/pages/Settings.tsx[m[36m:[m[32m594[m[36m:[m            Check <strong>{user?.email}</strong> for a link to set a new [1;31mpassword[m.
+[35msrc/store/authStore.ts[m[36m:[m[32m14[m[36m:[m// Set the moment a brand-new account is created (email/[1;31mpassword[m sign-up, or
+[35msrc/store/authStore.ts[m[36m:[m[32m77[m[36m:[m  loginWithEmail: (email: string, [1;31mpassword[m: string) => Promise<void>;
+[35msrc/store/authStore.ts[m[36m:[m[32m78[m[36m:[m  registerWithEmail: (email: string, [1;31mpassword[m: string) => Promise<void>;
+[35msrc/store/authStore.ts[m[36m:[m[32m149[m[36m:[m  loginWithEmail: async (email, [1;31mpassword[m) => {
+[35msrc/store/authStore.ts[m[36m:[m[32m150[m[36m:[m    await signInWithEmailAndPassword(auth, email, [1;31mpassword[m);
+[35msrc/store/authStore.ts[m[36m:[m[32m152[m[36m:[m  registerWithEmail: async (email, [1;31mpassword[m) => {
+[35msrc/store/authStore.ts[m[36m:[m[32m153[m[36m:[m    const result = await createUserWithEmailAndPassword(auth, email, [1;31mpassword[m);
+[35msrc/utils/securityQuestion.ts[m[36m:[m[32m4[m[36m:[m// Recovery for the email/[1;31mpassword[m sign-in [1;31mpassword[m (Settings → Set
+[35msrc/utils/securityQuestion.ts[m[36m:[m[32m37[m[36m:[m  return doc(db, 'users', uid, 'security', '[1;31mpassword[mRecovery');
+[35msrc/utils/securityQuestion.ts[m[36m:[m[32m41[m[36m:[m *  sign-in [1;31mpassword[m. The answer itself is never stored — only its hash. */
+[35msrc/utils/securityQuestion.ts[m[36m:[m[32m44[m[36m:[m  const data: SecurityAnswerDoc = { id: '[1;31mpassword[mRecovery', question, answerHash, updatedAt: Date.now() };
+[35msrc/utils/securityQuestion.ts[m[36m:[m[32m49[m[36m:[m *  displayed on the "Forgot [1;31mpassword[m?" screen, or null if none is set up. */

@@ -4,6 +4,8 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
 import { fetchNseQuote, searchNseSymbol } from './api/_lib/nse.js'
+// @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
+import { fetchLiveGoldPricePerGram24k } from './api/_lib/gold.js'
 
 // Local-dev/preview stand-in for the api/market/* serverless functions.
 // A plain URL-rewrite proxy (like /api/mf below) can't work for NSE,
@@ -110,6 +112,27 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
         send(200, await upstream.json())
       } catch {
         send(502, { error: 'Could not reach NSE or Yahoo Finance' })
+      }
+      return
+    }
+
+    if (url.pathname === '/api/market/gold') {
+      try {
+        const result = await fetchLiveGoldPricePerGram24k()
+        if (!result) {
+          console.error('[dev/gold] every gold-price source failed (gold-api.com, Yahoo, frankfurter.dev) — check your network/firewall/proxy can reach external hosts')
+          send(502, { error: 'Could not fetch a live gold price right now' })
+          return
+        }
+        send(200, {
+          pricePerGram24k: result.pricePerGram24k,
+          currency: 'INR',
+          basis: 'global-spot-estimate',
+          asOf: result.asOf,
+        })
+      } catch (err) {
+        console.error('[dev/gold] fetch failed:', err)
+        send(502, { error: 'Could not fetch a live gold price right now' })
       }
       return
     }
