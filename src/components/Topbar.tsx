@@ -5,7 +5,6 @@ import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
 import { useUiStore } from '../store/uiStore';
 import { useAppLockStore } from '../store/appLockStore';
-import { usePremiumStore, selectIsPremium } from '../store/premiumStore';
 import Modal from './Modal';
 import QuickAddMenu from './QuickAddMenu';
 import ProfileSwitcher from './ProfileSwitcher';
@@ -17,7 +16,6 @@ export default function Topbar() {
   const { theme, toggleTheme, privacyMode, togglePrivacy } = useUiStore();
   const lockEnabled = useAppLockStore((s) => s.enabled);
   const lockNow = useAppLockStore((s) => s.lockNow);
-  const isPremium = usePremiumStore(selectIsPremium);
   const navigate = useNavigate();
 
   const [profileOpen, setProfileOpen] = useState(false);
@@ -63,11 +61,6 @@ export default function Topbar() {
           <span className="font-luxury text-lg font-semibold text-brand-800 dark:text-brand-200 tracking-tight truncate">
             Aurafin<span className="text-brand-500">.</span>
           </span>
-          {isPremium && (
-            <span className="text-[9px] font-bold uppercase tracking-wide text-green-800 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-1.5 py-0.5 rounded-full shrink-0">
-              Pro
-            </span>
-          )}
           <ProfileSwitcher compact />
           {lockEnabled && (
             <button

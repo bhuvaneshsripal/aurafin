@@ -5,7 +5,6 @@ import TransactionsTab from './money/TransactionsTab';
 import BudgetTab from './money/BudgetTab';
 import AccountsTab from './money/AccountsTab';
 import InsightsTab from './money/InsightsTab';
-import ProBadge from '../components/pro/ProBadge';
 import { useUrlTab } from '../hooks/useUrlTab';
 
 const TABS = [
@@ -14,28 +13,24 @@ const TABS = [
     label: 'Transactions',
     title: 'Transactions',
     subtitle: 'All your income and expenses in one place',
-    pro: false,
   },
   {
     key: 'budget',
     label: 'Budget',
     title: 'Budget',
     subtitle: 'Plan your month, then watch how it goes',
-    pro: false,
   },
   {
     key: 'accounts',
     label: 'Accounts',
     title: 'Accounts',
     subtitle: 'Bank, card, cash & wallet',
-    pro: false,
   },
   {
     key: 'insights',
     label: 'Insights',
     title: 'Insights',
     subtitle: 'See where your money goes',
-    pro: true,
   },
 ] as const;
 
@@ -57,7 +52,6 @@ export default function Money() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">{active.title}</h1>
-            {active.pro && <ProBadge />}
           </div>
           <p className="text-slate-500 dark:text-slate-400 text-sm sm:text-base mt-1">{active.subtitle}</p>
         </div>
@@ -93,7 +87,6 @@ export default function Money() {
               }`}
             >
               {t.label}
-              {t.pro && <ProBadge size="xs" />}
             </button>
           ))}
         </div>

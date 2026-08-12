@@ -14,9 +14,7 @@ import { useAuthStore } from '../store/authStore';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { upsertDoc } from '../hooks/useFirestoreSync';
-import { useAssetLimitReached } from '../hooks/useIsPro';
 import Modal from './Modal';
-import AssetLimitModal from './pro/AssetLimitModal';
 import type { Asset, Snapshot, Transaction, TransactionType } from '../types';
 import { CURRENCIES } from '../utils/currency';
 
@@ -25,8 +23,6 @@ type QuickAction = 'expense' | 'income' | 'transfer' | 'asset' | 'liability' | '
 export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'desktop' | 'fab' }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [active, setActive] = useState<QuickAction>(null);
-  const [limitModalOpen, setLimitModalOpen] = useState(false);
-  const assetLimitReached = useAssetLimitReached();
   const ref = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
@@ -39,13 +35,6 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
   }, []);
 
   const open = (action: QuickAction) => {
-    // Free plan is capped on assets — show the upgrade prompt instead of
-    // the Add Asset flow once the limit is hit.
-    if (action === 'asset' && assetLimitReached) {
-      setMenuOpen(false);
-      setLimitModalOpen(true);
-      return;
-    }
     // Asset and Liability get the full Wealth page add flow (category ->
     // type -> details, with all the class-specific fields like symbol,
     // quantity, avg cost, institution, etc.) instead of the stripped-down
@@ -120,7 +109,6 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
       <Modal open={active === 'snapshot'} onClose={() => setActive(null)} title="Save Net Worth Snapshot">
         <SnapshotForm onDone={() => setActive(null)} />
       </Modal>
-      <AssetLimitModal open={limitModalOpen} onClose={() => setLimitModalOpen(false)} />
     </>
   );
 }

@@ -23,7 +23,6 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { formatCurrency } from '../utils/currency';
-import ProBadge from '../components/pro/ProBadge';
 
 type CalcKey = 'xirr' | 'sip' | 'lumpsum' | 'phased' | 'cagr' | 'emi' | 'swp' | 'retirement' | 'fd';
 
@@ -33,7 +32,6 @@ interface CalcDef {
   description: string;
   icon: LucideIcon;
   soon?: boolean;
-  pro?: boolean;
 }
 
 interface CalcGroup {
@@ -68,7 +66,6 @@ const GROUPS: CalcGroup[] = [
         label: 'Phased Investment Calculator',
         description: 'One fund where your monthly investment changes across year ranges (e.g. 1–3, 3–13, 13–20).',
         icon: Layers,
-        pro: true,
       },
       {
         key: 'cagr',
@@ -161,7 +158,6 @@ export default function Calculators() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{activeCalc.label}</h1>
-            {activeCalc.pro && <ProBadge />}
           </div>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">{activeCalc.description}</p>
         </div>
@@ -212,7 +208,6 @@ export default function Calculators() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="font-semibold text-slate-900 dark:text-white">{c.label}</p>
-                      {c.pro && <ProBadge size="xs" />}
                       {c.soon && (
                         <span className="text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded-full">
                           Soon

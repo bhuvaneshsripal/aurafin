@@ -11,7 +11,6 @@ import {
   Lock,
 } from 'lucide-react';
 import { useAppLockStore } from '../store/appLockStore';
-import { usePremiumStore, selectIsPremium } from '../store/premiumStore';
 import ProfileSwitcher from './ProfileSwitcher';
 import AppLogo from './AppLogo';
 
@@ -66,7 +65,6 @@ function NavItem({
 export default function Sidebar() {
   const lockEnabled = useAppLockStore((s) => s.enabled);
   const lockNow = useAppLockStore((s) => s.lockNow);
-  const isPremium = usePremiumStore(selectIsPremium);
 
   return (
     <aside
@@ -84,11 +82,6 @@ export default function Sidebar() {
             <span className="truncate">
               Aurafin<span className="text-brand-600">.</span>
             </span>
-            {isPremium && (
-              <span className="text-[10px] font-bold uppercase tracking-wide text-green-800 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-1.5 py-0.5 rounded-full shrink-0">
-                Pro
-              </span>
-            )}
           </span>
         </span>
         {lockEnabled && (

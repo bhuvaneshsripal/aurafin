@@ -10,7 +10,6 @@ import { useBudgetStore } from './store/budgetStore';
 import { useFinancialProfileStore } from './store/financialProfileStore';
 import { useSyncStatusStore } from './store/syncStatusStore';
 import { useHouseholdProfilesStore } from './store/householdProfilesStore';
-import { usePremiumStore } from './store/premiumStore';
 import { useUiStore } from './store/uiStore';
 import { useAppLockStore } from './store/appLockStore';
 import { useDisplaySettingsStore } from './store/displaySettingsStore';
@@ -29,7 +28,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import LoadingScreen from './components/LoadingScreen';
 import Login from './pages/Login';
 import { lazyWithRetry } from './utils/lazyWithRetry';
-import type { Asset, Liability, Goal, Transaction, Snapshot, BudgetItem, FinancialProfile, HouseholdProfile, PremiumStatus } from './types';
+import type { Asset, Liability, Goal, Transaction, Snapshot, BudgetItem, FinancialProfile, HouseholdProfile } from './types';
 
 const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'));
 const Wealth = lazyWithRetry(() => import('./pages/Wealth'));
@@ -85,7 +84,6 @@ function AppShell() {
                   <Route path="/transactions" element={<Transactions />} />
                   <Route path="/import" element={<Import />} />
                   <Route path="/calculators" element={<Calculators />} />
-                  <Route path="/pro" element={<Navigate to="/settings?tab=billing" replace />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/whats-new" element={<WhatsNew />} />
                   <Route path="/install" element={<InstallApp />} />
@@ -142,7 +140,6 @@ function DataSync() {
   const setBudgetItems = useBudgetStore((s) => s.setItems);
   const setFinancialProfile = useFinancialProfileStore((s) => s.setItems);
   const setHouseholdProfiles = useHouseholdProfilesStore((s) => s.setProfiles);
-  const setPremiumItems = usePremiumStore((s) => s.setItems);
   const setAssetsSynced = useSyncStatusStore((s) => s.setAssetsSynced);
   const setLiabilitiesSynced = useSyncStatusStore((s) => s.setLiabilitiesSynced);
 
@@ -154,7 +151,6 @@ function DataSync() {
   useFirestoreCollectionSync<BudgetItem>('budgets', setBudgetItems);
   useFirestoreCollectionSync<FinancialProfile>('financialProfile', setFinancialProfile);
   useFirestoreCollectionSync<HouseholdProfile>('profiles', setHouseholdProfiles);
-  useFirestoreCollectionSync<PremiumStatus>('premium', setPremiumItems);
   useAvatarSync();
 
   // One-time backfill: data created before household profiles existed has

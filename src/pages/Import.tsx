@@ -14,7 +14,6 @@ import { formatCurrency, formatPreciseCurrency } from '../utils/currency';
 import { ASSET_TAXONOMY } from '../utils/taxonomy';
 import { exportToCsv, exportToXlsx, IMPORT_TEMPLATE_ROWS } from '../utils/exportCsv';
 import type { AssetClass } from '../types';
-import ProBadge from '../components/pro/ProBadge';
 
 interface Broker {
   key: string;
@@ -240,7 +239,7 @@ export default function Import() {
                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
             }`}
           >
-            Import from Broker <ProBadge size="xs" />
+            Import from Broker
           </button>
           <button
             onClick={() => setImportTab('standard')}
@@ -260,7 +259,6 @@ export default function Import() {
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
             <div className="flex items-center gap-2">
               <h3 className="font-semibold text-slate-900 dark:text-white">Select Broker</h3>
-              <ProBadge size="xs" />
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
               {BROKERS.map((b) => (

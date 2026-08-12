@@ -28,7 +28,6 @@ import Amount from '../components/Amount';
 import type { Goal } from '../types';
 import { CURRENCIES, formatCurrency } from '../utils/currency';
 import { useUrlTab } from '../hooks/useUrlTab';
-import ProBadge from '../components/pro/ProBadge';
 
 type Tab = 'health' | 'goals';
 
@@ -59,7 +58,6 @@ export default function Essentials() {
             }`}
           >
             {label}
-            {key === 'goals' && <ProBadge size="xs" />}
           </button>
         ))}
       </div>
@@ -578,7 +576,7 @@ function GoalsTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-base text-slate-500 dark:text-slate-400 flex items-center gap-2">
-          {goals.length} active goals <ProBadge size="xs" />
+          {goals.length} active goals
         </p>
         <button
           onClick={() => {

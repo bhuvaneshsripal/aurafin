@@ -213,8 +213,8 @@ export interface Transaction {
 }
 
 /** A household member (e.g. "Dad", "Mom", "Kid") whose assets, liabilities,
- *  goals, and transactions can be viewed separately within one login.
- *  Free accounts get one profile; adding more requires Premium. */
+ *  goals, and transactions can be viewed separately within one login. Up to
+ *  5 profiles per account. */
 export interface HouseholdProfile {
   id: string;
   name: string;
@@ -225,22 +225,6 @@ export interface HouseholdProfile {
    *  login on a *new* device should open to, instead of "All Profiles".
    *  Exactly one profile should have this set at a time. */
   isDefault?: boolean;
-}
-
-/** Single doc (id: 'status') tracking this account's Premium state.
- *  Client-side only — see utils/premiumCodes.ts for important caveats
- *  about what this can and can't actually enforce/secure. */
-export interface PremiumStatus {
-  id: string;
-  isPremium: boolean;
-  /** True if unlocked via the developer master code rather than a normal purchase/code. */
-  isDeveloper?: boolean;
-  /** Which plan was redeemed, if any (developer unlocks don't set this). */
-  planId?: 'monthly' | 'quarterly' | 'lifetime';
-  redeemedCode?: string;
-  redeemedAt?: number;
-  /** Timestamp Premium access ends. Undefined = never expires (lifetime/developer). */
-  expiresAt?: number;
 }
 
 export interface BudgetItem {

@@ -43,10 +43,6 @@ import Modal from '../components/Modal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import type { Asset, AssetClass, Liability, LiabilityClass } from '../types';
 import { CURRENCIES, formatPreciseCurrency, maskPreciseAmount, isZeroAmount } from '../utils/currency';
-import ProBadge from '../components/pro/ProBadge';
-import AssetLimitModal from '../components/pro/AssetLimitModal';
-import { useAssetLimitReached } from '../hooks/useIsPro';
-import { FREE_ASSET_LIMIT } from '../config/proFeatures';
 import {
   ASSET_TAXONOMY,
   LIABILITY_TAXONOMY,
@@ -101,8 +97,6 @@ export default function Wealth() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useUrlTab<Tab>(['assets', 'liabilities', 'networth', 'allocation'], 'assets');
   const [startCategoryKey, setStartCategoryKey] = useState<string | undefined>();
-  const assetLimitReached = useAssetLimitReached();
-  const [assetLimitModalOpen, setAssetLimitModalOpen] = useState(false);
 
   const addFlow: EntryType | null =
     searchParams.get('add') === '1'
@@ -152,14 +146,7 @@ export default function Wealth() {
     setStartCategoryKey(undefined);
   };
 
-  // Free plan is capped at FREE_ASSET_LIMIT assets — clicking "Add Asset"
-  // past that shows an upgrade prompt instead of opening the add flow.
-  // Liabilities aren't capped, so that flow is untouched.
   const handleAddAsset = () => {
-    if (assetLimitReached) {
-      setAssetLimitModalOpen(true);
-      return;
-    }
     openAdd('asset');
   };
 
@@ -175,7 +162,6 @@ export default function Wealth() {
 
   return (
     <div className="space-y-4">
-      <AssetLimitModal open={assetLimitModalOpen} onClose={() => setAssetLimitModalOpen(false)} />
       {tab === 'assets' && (
         <AssetsTab tab={tab} setTab={setTab} onAdd={handleAddAsset} />
       )}
@@ -200,7 +186,6 @@ function AddWealthPage({
 }) {
   const user = useAuthStore((s) => s.user);
   const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
-  const assetLimitReached = useAssetLimitReached();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const entryType: EntryType = searchParams.get('entry') === 'liability' ? 'liability' : initialEntryType;
@@ -264,17 +249,6 @@ function AddWealthPage({
 
   const handleSaveAsset = async (asset: Asset) => {
     if (!user) return;
-    // AddWealthPage only ever creates new assets (editing an existing one
-    // goes through AssetsTab's own "Edit Asset" modal), so this is always a
-    // net-new asset — safe to check the cap unconditionally here as a
-    // backstop for the Add flow being reached directly via URL, bypassing
-    // the "Add Asset" button's own check in the parent Wealth component.
-    if (assetLimitReached) {
-      alert(
-        `You've reached the free plan's ${FREE_ASSET_LIMIT}-asset limit. Upgrade to Aurafin Pro (Settings > Billing) for unlimited assets.`
-      );
-      return;
-    }
     try {
       await upsertDoc(user, 'assets', asset.profileId ? asset : { ...asset, profileId: activeProfileId ?? undefined });
       onClose();
@@ -651,7 +625,6 @@ function AssetsTab({
   const allAssets = useAssetsStore((s) => s.assets);
   const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
   const assets = activeProfileId ? allAssets.filter((a) => a.profileId === activeProfileId) : allAssets;
-  const navigate = useNavigate();
   const livePrices = useLivePricesStore((s) => s.prices);
   const sipValues = useLivePricesStore((s) => s.sipValues);
   const pricesAttempted = useLivePricesStore((s) => s.pricesAttempted);
@@ -1051,7 +1024,6 @@ function AssetsTab({
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Assets</h2>
-            <ProBadge size="xs" onClick={() => navigate('/settings?tab=billing')} />
           </div>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">{assets.length} assets · unlimited</p>
           <p className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1.5 mt-1">
