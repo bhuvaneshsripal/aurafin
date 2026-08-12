@@ -273,7 +273,7 @@ const WelcomeStep = memo(
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
             {isGuest
-              ? 'Explore Aurafin with temporary guest access. Your data will be cleared when you log out. Create an account anytime to save your data permanently.'
+              ? <>Explore <span className="font-luxury">Aurafin</span> with temporary guest access. Your data will be cleared when you log out. Create an account anytime to save your data permanently.</>
               : 'Your privacy-first net worth tracker. Your data lives in your own account — no ads, no selling your data. Just you and your numbers.'}
           </p>
         </div>

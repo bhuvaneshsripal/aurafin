@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Playfair+Display:ital,wght@0,500;0,600;0,700;0,800;1,600&display=swap');
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -77,7 +77,7 @@
   --font-display: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-numeric: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-hero-numeric: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-luxury: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-luxury: "Playfair Display", "Georgia", "Times New Roman", serif;
 
   /* Neutral grayscale (light: background #FAFAFA / cards #FFFFFF / primary
      text #111827 / secondary text #6B7280 / borders #E5E7EB). Reusing
@@ -147,12 +147,13 @@ body {
 }
 
 /* Reserved for the "Aurafin" brand name wherever it appears in the UI —
-   an elegant serif in place of the app's default monospace, for a more
+   an elegant serif in place of the app's default sans-serif, for a more
    luxury feel. Applied only to the brand word itself, never body copy. */
 .font-luxury {
   font-family: var(--font-luxury);
-  font-weight: 600;
-  letter-spacing: 0.01em;
+  font-weight: 700;
+  letter-spacing: 0.005em;
+  font-style: normal;
 }
 
 /* Hero amounts (Net Worth, Invested, etc.) — premium bold, flat ink color.

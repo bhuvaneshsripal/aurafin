@@ -931,7 +931,7 @@ function SharedAccessCard() {
         title="Remove this person?"
         description={
           <>
-            <strong>{pendingRemoveInvite?.email}</strong> will lose access to your Aurafin data. This can't be
+            <strong>{pendingRemoveInvite?.email}</strong> will lose access to your <span className="font-luxury">Aurafin</span> data. This can't be
             undone (though you can invite them again later).
           </>
         }
@@ -1593,7 +1593,7 @@ function ProShowcase() {
         <div className="flex items-start gap-2.5">
           <Crown size={20} className="text-brand-600 mt-0.5 shrink-0" />
           <div>
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Upgrade to Aurafin Pro</h2>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Upgrade to <span className="font-luxury">Aurafin</span> Pro</h2>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
               Every Pro feature below is already unlocked for you — pick a plan for when payments go live.
             </p>

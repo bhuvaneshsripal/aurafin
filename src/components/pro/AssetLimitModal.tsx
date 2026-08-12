@@ -19,7 +19,7 @@ export default function AssetLimitModal({ open, onClose }: { open: boolean; onCl
         </div>
         <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
           The free plan tracks up to <span className="font-semibold">{FREE_ASSET_LIMIT} assets</span>.
-          Upgrade to Aurafin Pro for unlimited assets, plus everything else Pro unlocks.
+          Upgrade to <span className="font-luxury">Aurafin</span> Pro for unlimited assets, plus everything else Pro unlocks.
         </p>
         <button
           type="button"

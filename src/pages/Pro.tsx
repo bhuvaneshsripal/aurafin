@@ -53,7 +53,7 @@ export default function Pro() {
           <p className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-amber-300 mb-3">
             <Sparkles size={12} /> Introducing
           </p>
-          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-white">
+          <h1 className="font-luxury text-4xl sm:text-5xl tracking-tight text-white">
             Aurafin <span className="bg-gradient-to-r from-amber-300 via-yellow-300 to-amber-400 bg-clip-text text-transparent">Pro</span>
           </h1>
           <p className="text-slate-300 text-base sm:text-lg mt-4 max-w-xl mx-auto leading-relaxed">
