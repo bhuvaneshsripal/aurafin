@@ -88,7 +88,7 @@ export default function Liabilities() {
                     >
                       <Pencil size={16} />
                     </button>
-                    <button onClick={() => setPendingDelete(l)} className="text-slate-400 hover:text-red-500">
+                    <button onClick={() => setPendingDelete(l)} className="text-red-500 hover:text-red-600">
                       <Trash2 size={16} />
                     </button>
                   </div>

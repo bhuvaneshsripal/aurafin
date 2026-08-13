@@ -276,7 +276,7 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
                   <button
                     onClick={() => setPendingDelete(row)}
                     title="Delete account"
-                    className="tap-scale text-slate-300 dark:text-slate-600 hover:text-green-600 dark:hover:text-green-400 p-1"
+                    className="tap-scale text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 p-1"
                   >
                     <Trash2 size={15} />
                   </button>

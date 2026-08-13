@@ -607,7 +607,7 @@ function GoalsTab() {
                   >
                     <Pencil size={16} />
                   </button>
-                  <button onClick={() => setPendingDelete(g)} className="text-slate-400 dark:text-slate-500 hover:text-green-600 dark:hover:text-green-400">
+                  <button onClick={() => setPendingDelete(g)} className="text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300">
                     <Trash2 size={16} />
                   </button>
                 </div>

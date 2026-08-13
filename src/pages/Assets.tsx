@@ -88,7 +88,7 @@ export default function Assets() {
                     <button onClick={() => openEdit(a)} className="text-slate-400 hover:text-brand-600">
                       <Pencil size={16} />
                     </button>
-                    <button onClick={() => setPendingDelete(a)} className="text-slate-400 hover:text-red-500">
+                    <button onClick={() => setPendingDelete(a)} className="text-red-500 hover:text-red-600">
                       <Trash2 size={16} />
                     </button>
                   </div>

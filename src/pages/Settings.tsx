@@ -905,7 +905,7 @@ function SharedAccessCard() {
               </div>
               <button
                 onClick={() => setPendingRemoveInvite(invite)}
-                className="text-slate-400 hover:text-green-600 dark:hover:text-green-400 p-1"
+                className="text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 p-1"
                 aria-label={`Remove ${invite.email}`}
               >
                 <Trash2 size={16} />
@@ -1361,7 +1361,7 @@ function ProfilesTab() {
                   {!isDefault && (
                     <button
                       onClick={() => setPendingDeleteProfile(p)}
-                      className="text-slate-300 dark:text-slate-600 hover:text-green-600 dark:hover:text-green-400"
+                      className="text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
                       aria-label={`Delete ${p.name}`}
                     >
                       <Trash2 size={15} />
@@ -1631,7 +1631,7 @@ function DataTab() {
             </p>
             <button
               onClick={() => setConfirmOpen(true)}
-              className="mt-3 flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+              className="mt-3 flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
             >
               <Trash2 size={16} />
               Delete All Data
@@ -1709,7 +1709,7 @@ function DataTab() {
           <button
             onClick={handleDeleteAll}
             disabled={confirmText !== 'DELETE' || status === 'deleting'}
-            className="flex-1 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white py-2.5 rounded-lg text-sm font-medium"
+            className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white py-2.5 rounded-lg text-sm font-medium"
           >
             {status === 'deleting' ? 'Deleting...' : 'Delete Everything'}
           </button>

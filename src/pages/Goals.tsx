@@ -100,7 +100,7 @@ export default function Goals() {
                   >
                     <Pencil size={14} />
                   </button>
-                  <button onClick={() => setPendingDelete(g)} className="text-slate-400 hover:text-red-500">
+                  <button onClick={() => setPendingDelete(g)} className="text-red-500 hover:text-red-600">
                     <Trash2 size={14} />
                   </button>
                 </div>

@@ -250,3 +250,15 @@ export interface UserProfile {
   email: string | null;
   baseCurrency: string;
 }
+
+/** A single account's Premium subscription state. `id` is present so this
+ *  shape lines up with `useFirestoreCollectionSync<T extends { id: string }>`
+ *  once real subscription sync is wired up (see `store/premiumStore.ts`). */
+export interface PremiumStatus {
+  id: string;
+  isPremium: boolean;
+  /** Which redeemed code/plan granted this, e.g. 'monthly' | 'quarterly' | 'lifetime' | 'developer'. */
+  planId?: string;
+  /** Epoch ms when this grant expires. `null`/`undefined` means it never expires (lifetime/developer). */
+  expiresAt?: number | null;
+}

@@ -198,8 +198,10 @@ export default function BudgetTab() {
                   />
                 </div>
                 <button
-                  onClick={() => removeCategory(item.id)}
-                  className="tap-scale text-slate-300 dark:text-slate-600 hover:text-red-500 shrink-0"
+                  onClick={() => {
+                    if (window.confirm('Remove this budget category?')) removeCategory(item.id);
+                  }}
+                  className="tap-scale text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 shrink-0"
                 >
                   <X size={16} />
                 </button>

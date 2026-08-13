@@ -493,9 +493,11 @@ function PhasedCalculator() {
                 </Field>
                 <button
                   type="button"
-                  onClick={() => removePhase(p.id)}
+                  onClick={() => {
+                    if (window.confirm('Remove this phase?')) removePhase(p.id);
+                  }}
                   disabled={phases.length <= 1}
-                  className="mb-0.5 h-[42px] w-10 shrink-0 rounded-lg border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-400 hover:text-red-500 hover:border-red-300 dark:hover:border-red-700 disabled:opacity-30 disabled:pointer-events-none"
+                  className="mb-0.5 h-[42px] w-10 shrink-0 rounded-lg border border-slate-200 dark:border-slate-800 flex items-center justify-center text-red-500 hover:text-red-600 hover:border-red-300 dark:hover:border-red-700 disabled:opacity-30 disabled:pointer-events-none"
                   aria-label="Remove phase"
                 >
                   <Trash2 size={16} />

@@ -13,9 +13,7 @@ interface ConfirmDeleteModalProps {
 }
 
 /** Shared confirmation dialog for any delete/remove action in the app.
- *  Confirm button uses the app's brand green (same green as the Add
- *  button), matching the rest of the app's destructive actions, which
- *  use green rather than red. */
+ *  Confirm button is red, signalling a destructive, irreversible action. */
 export default function ConfirmDeleteModal({
   open,
   onClose,
@@ -52,7 +50,7 @@ export default function ConfirmDeleteModal({
           type="button"
           disabled={busy}
           onClick={onConfirm}
-          className="flex-1 bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white py-2.5 rounded-lg text-sm font-medium"
+          className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white py-2.5 rounded-lg text-sm font-medium"
         >
           {busy ? 'Deleting...' : confirmLabel}
         </button>

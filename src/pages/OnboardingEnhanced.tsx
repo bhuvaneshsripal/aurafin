@@ -523,8 +523,10 @@ const AssetsStepEnhanced = memo((props: AssetsStepEnhancedProps) => {
                   </span>
                   <button
                     type="button"
-                    onClick={() => props.onRemoveAsset(asset.id)}
-                    className="text-slate-400 hover:text-red-600 dark:hover:text-red-400"
+                    onClick={() => {
+                      if (window.confirm('Remove this asset?')) props.onRemoveAsset(asset.id);
+                    }}
+                    className="text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
                   >
                     <Trash2 size={16} />
                   </button>

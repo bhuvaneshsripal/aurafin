@@ -505,8 +505,10 @@ export default function Import() {
                         <span className="text-xs text-red-500 dark:text-red-400">Skipped</span>
                       )}
                       <button
-                        onClick={() => removeRow(i)}
-                        className="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 ml-3"
+                        onClick={() => {
+                          if (window.confirm('Remove this row from the import?')) removeRow(i);
+                        }}
+                        className="text-xs text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 ml-3"
                       >
                         Remove
                       </button>
