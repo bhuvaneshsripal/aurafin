@@ -119,7 +119,19 @@ body {
 }
 
 .dark body {
-  background-color: #000000;
+  /* Gray-black page background — sits behind cards, which use pure black
+     (see --color-slate-900 override below) so surfaces read as a clear
+     step lighter than the page itself. */
+  background-color: #0a0a0a;
+}
+
+/* Card/surface backgrounds across the app reuse dark:bg-slate-900 —
+   overriding the token here (scoped to .dark) turns every card, sidebar,
+   topbar, and modal in dark mode pure black without touching each
+   component. Borders/secondary fills stay on slate-800 so edges and
+   nested chips remain visible against the black surface. */
+.dark {
+  --color-slate-900: #000000;
 }
 
 .font-display {
