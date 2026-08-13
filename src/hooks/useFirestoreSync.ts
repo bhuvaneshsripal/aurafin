@@ -3,6 +3,7 @@ import { collection, onSnapshot, doc, setDoc, deleteDoc, deleteField, writeBatch
 import { db } from '../firebase/config';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
+import { useAppLockStore, readGuestAppLock } from '../store/appLockStore';
 
 /** Every subcollection kept under users/{uid} that DataSync listens to. */
 const ALL_USER_COLLECTIONS = [
@@ -257,6 +258,44 @@ export async function saveAvatar(uid: string, dataUrl: string) {
 export async function removeAvatar(uid: string) {
   const ref = doc(db, 'users', uid, 'meta', 'avatar');
   await deleteDoc(ref);
+}
+
+/**
+ * Keeps the App Lock PIN (appLockStore) in sync with its source of truth:
+ * the doc at users/{uid}/meta/appLock for regular users, or a per-guest
+ * localStorage key for anonymous users — same split every other synced
+ * collection in this file uses. This is what makes the PIN live in data
+ * storage instead of localStorage: only the guest fallback (and a
+ * non-secret "was a lock enabled" cache flag inside appLockStore itself)
+ * ever touch localStorage.
+ */
+export function useAppLockSync() {
+  const user = useAuthStore((s) => s.user);
+  const syncFromRemote = useAppLockStore((s) => s.syncFromRemote);
+
+  useEffect(() => {
+    if (!user) {
+      syncFromRemote(null, false);
+      return;
+    }
+
+    if (isAnonymousUser(user)) {
+      const guest = readGuestAppLock(user.uid);
+      syncFromRemote(guest?.pin ?? null, !!guest?.enabled);
+      return;
+    }
+
+    const ref = doc(db, 'users', user.uid, 'meta', 'appLock');
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        const data = snap.data();
+        syncFromRemote((data?.pin as string | undefined) ?? null, !!data?.enabled);
+      },
+      () => syncFromRemote(null, false)
+    );
+    return () => unsub();
+  }, [user, syncFromRemote]);
 }
 
 /**

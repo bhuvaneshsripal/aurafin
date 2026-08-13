@@ -212,7 +212,7 @@ export default function LockScreen() {
                   key={d}
                   type="button"
                   onClick={() => pressDigit(d)}
-                  className="font-luxury aspect-square rounded-2xl bg-white shadow-[0_8px_22px_-4px_rgba(0,0,0,0.45)] text-2xl font-semibold text-slate-800 active:scale-[0.85] active:shadow-[0_2px_6px_-2px_rgba(0,0,0,0.3)] transition-transform duration-75 ease-out will-change-transform"
+                  className="font-sans aspect-square rounded-2xl bg-white shadow-[0_8px_22px_-4px_rgba(0,0,0,0.45)] text-2xl font-bold text-slate-800 active:scale-[0.85] active:shadow-[0_2px_6px_-2px_rgba(0,0,0,0.3)] transition-transform duration-75 ease-out will-change-transform"
                 >
                   {d}
                 </button>
@@ -221,7 +221,7 @@ export default function LockScreen() {
               <button
                 type="button"
                 onClick={() => pressDigit('0')}
-                className="font-luxury aspect-square rounded-2xl bg-white shadow-[0_8px_22px_-4px_rgba(0,0,0,0.45)] text-2xl font-semibold text-slate-800 active:scale-[0.85] active:shadow-[0_2px_6px_-2px_rgba(0,0,0,0.3)] transition-transform duration-75 ease-out will-change-transform"
+                className="font-sans aspect-square rounded-2xl bg-white shadow-[0_8px_22px_-4px_rgba(0,0,0,0.45)] text-2xl font-bold text-slate-800 active:scale-[0.85] active:shadow-[0_2px_6px_-2px_rgba(0,0,0,0.3)] transition-transform duration-75 ease-out will-change-transform"
               >
                 0
               </button>

@@ -75,7 +75,7 @@ export default function PinBoxInput({
           onChange={(e) => handleChange(i, e.target.value)}
           onKeyDown={(e) => handleKeyDown(i, e)}
           onPaste={i === 0 ? handlePaste : undefined}
-          className="keep-round h-12 w-12 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-center text-lg font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500"
+          className="keep-round h-12 w-12 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-center text-lg font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500"
         />
       ))}
     </div>

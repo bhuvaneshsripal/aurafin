@@ -14,7 +14,7 @@ import { useUiStore } from './store/uiStore';
 import { useAppLockStore } from './store/appLockStore';
 import { useDisplaySettingsStore } from './store/displaySettingsStore';
 import { useInstallPromptStore } from './store/installPromptStore';
-import { useFirestoreCollectionSync, useAvatarSync, assignOrphanDataToProfile } from './hooks/useFirestoreSync';
+import { useFirestoreCollectionSync, useAvatarSync, useAppLockSync, assignOrphanDataToProfile } from './hooks/useFirestoreSync';
 import { useLivePrices } from './hooks/useLivePrices';
 import { useLiveSipValues } from './hooks/useLiveSipValues';
 import { useLiveGoldPrice } from './hooks/useLiveGoldPrice';
@@ -152,6 +152,7 @@ function DataSync() {
   useFirestoreCollectionSync<FinancialProfile>('financialProfile', setFinancialProfile);
   useFirestoreCollectionSync<HouseholdProfile>('profiles', setHouseholdProfiles);
   useAvatarSync();
+  useAppLockSync();
 
   // One-time backfill: data created before household profiles existed has
   // no profileId. While there's exactly one profile, "whose data is this"
