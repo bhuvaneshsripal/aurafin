@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   Link2Off,
   Tag,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   PieChart,
@@ -540,6 +541,10 @@ function TotalStatCard({
   pnlPercent: number;
   currency?: string;
   privacyMode: boolean;
+  /** Whether CURRENT VALUE and P&L are still waiting on a live price fetch.
+   *  Invested is pure cost-basis and never depends on that fetch, so it
+   *  always renders immediately regardless of this flag — see the two
+   *  independent branches below instead of one shared skeleton. */
   loading?: boolean;
 }) {
   const positive = pnl >= 0;
@@ -547,49 +552,51 @@ function TotalStatCard({
   return (
     <div className="keep-round-card bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6">
       <p className="text-xs font-semibold tracking-wide text-slate-400 mb-4 sm:mb-5">{title}</p>
-      {loading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-6">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className={i === 2 ? 'col-span-2 sm:col-span-1' : undefined}>
-              <p className="text-xs font-medium text-slate-400 mb-1">
-                {i === 0 ? 'INVESTED' : i === 1 ? 'CURRENT VALUE' : 'P&L'}
-              </p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-6">
+        <div>
+          <p className="text-xs font-medium text-slate-400 mb-1">INVESTED</p>
+          <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white break-words">
+            {maskPreciseAmount(invested, currency, privacyMode)}
+          </p>
+        </div>
+        {loading ? (
+          <>
+            <div>
+              <p className="text-xs font-medium text-slate-400 mb-1">CURRENT VALUE</p>
               <div className="h-7 sm:h-8 w-24 rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />
             </div>
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-6">
-          <div>
-            <p className="text-xs font-medium text-slate-400 mb-1">INVESTED</p>
-            <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white break-words">
-              {maskPreciseAmount(invested, currency, privacyMode)}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs font-medium text-slate-400 mb-1">CURRENT VALUE</p>
-            <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white break-words">
-              {maskPreciseAmount(currentValue, currency, privacyMode)}
-            </p>
-          </div>
-          <div className="col-span-2 sm:col-span-1">
-            <p className="text-xs font-medium text-slate-400 mb-1">P&L</p>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className={`text-xl sm:text-2xl font-bold break-words ${positive ? 'text-brand-600 dark:text-brand-300' : 'text-red-500 dark:text-red-400'}`}>
-                {isMasked ? '••••••' : `${positive ? '+' : ''}${formatPreciseCurrency(pnl, currency)}`}
-              </span>
-              <span
-                className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                  positive ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-300' : 'bg-red-50 dark:bg-red-900/30 text-red-500 dark:text-red-400'
-                }`}
-              >
-                {positive ? '+' : ''}
-                {pnlPercent.toFixed(1)}%
-              </span>
+            <div className="col-span-2 sm:col-span-1">
+              <p className="text-xs font-medium text-slate-400 mb-1">P&L</p>
+              <div className="h-7 sm:h-8 w-24 rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        ) : (
+          <>
+            <div>
+              <p className="text-xs font-medium text-slate-400 mb-1">CURRENT VALUE</p>
+              <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white break-words">
+                {maskPreciseAmount(currentValue, currency, privacyMode)}
+              </p>
+            </div>
+            <div className="col-span-2 sm:col-span-1">
+              <p className="text-xs font-medium text-slate-400 mb-1">P&L</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`text-xl sm:text-2xl font-bold break-words ${positive ? 'text-brand-600 dark:text-brand-300' : 'text-red-500 dark:text-red-400'}`}>
+                  {isMasked ? '••••••' : `${positive ? '+' : ''}${formatPreciseCurrency(pnl, currency)}`}
+                </span>
+                <span
+                  className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                    positive ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-300' : 'bg-red-50 dark:bg-red-900/30 text-red-500 dark:text-red-400'
+                  }`}
+                >
+                  {positive ? '+' : ''}
+                  {pnlPercent.toFixed(1)}%
+                </span>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -649,6 +656,14 @@ function AssetsTab({
     assetsServerConfirmed &&
     (!hasLivePriced || pricesAttempted || pricesCached) &&
     (!hasSipLinked || sipValuesAttempted || sipCached);
+  // Per-row version of the same readiness check — an asset only needs to
+  // wait on totalsReady if it's actually live-priced (a market symbol with
+  // quantity, or a linked SIP). Everything else (FDs, cash, manually
+  // entered gold, etc.) never depends on a price fetch, so it should never
+  // sit behind a loading skeleton.
+  const isAssetLivePriced = (a: Asset) =>
+    (!!a.symbol && !!a.quantity && a.quantity > 0) ||
+    (a.assetClass === 'sip' && !!a.symbol && /^\d+$/.test(a.symbol));
   const user = useAuthStore((s) => s.user);
   const privacyMode = useUiStore((s) => s.privacyMode);
   const [modalOpen, setModalOpen] = useState(false);
@@ -1182,14 +1197,22 @@ function AssetsTab({
                   <p className="font-semibold text-slate-800 truncate uppercase">{a.name}</p>
                   <div className="text-right shrink-0">
                     <p className="font-semibold text-slate-800">
-                      {maskPreciseAmount(value, a.currency, privacyMode)}
+                      {isAssetLivePriced(a) && !totalsReady ? (
+                        <span className="inline-block h-4 w-16 rounded bg-slate-100 animate-pulse align-middle" />
+                      ) : (
+                        maskPreciseAmount(value, a.currency, privacyMode)
+                      )}
                     </p>
-                    {pnl !== undefined && (
-                      <p className={`text-xs ${pnl >= 0 ? 'text-brand-600 dark:text-brand-300' : 'text-red-500 dark:text-red-400'}`}>
-                        {privacyMode && !isZeroAmount(pnl, 2)
-                          ? '••••••'
-                          : `${pnl >= 0 ? '+' : ''}${formatPreciseCurrency(pnl, a.currency)}`}
-                      </p>
+                    {isAssetLivePriced(a) && !totalsReady ? (
+                      <span className="inline-block h-3.5 w-12 mt-1 rounded bg-slate-100 animate-pulse" />
+                    ) : (
+                      pnl !== undefined && (
+                        <p className={`text-xs ${pnl >= 0 ? 'text-brand-600 dark:text-brand-300' : 'text-red-500 dark:text-red-400'}`}>
+                          {privacyMode && !isZeroAmount(pnl, 2)
+                            ? '••••••'
+                            : `${pnl >= 0 ? '+' : ''}${formatPreciseCurrency(pnl, a.currency)}`}
+                        </p>
+                      )
                     )}
                   </div>
                 </button>
@@ -1395,16 +1418,28 @@ function AssetsTab({
                     {a.avgCost !== undefined ? formatPreciseCurrency(a.avgCost, a.currency) : '—'}
                   </td>
                   <td className="px-4 py-3.5 text-right text-slate-600">
-                    {currentPrice !== undefined ? formatPreciseCurrency(currentPrice, a.currency) : '—'}
+                    {isAssetLivePriced(a) && !totalsReady ? (
+                      <span className="inline-block h-4 w-14 rounded bg-slate-100 dark:bg-slate-800 animate-pulse align-middle" />
+                    ) : currentPrice !== undefined ? (
+                      formatPreciseCurrency(currentPrice, a.currency)
+                    ) : (
+                      '—'
+                    )}
                   </td>
                   <td className="px-4 py-3.5 text-right text-slate-600">
                     {invested !== undefined ? formatPreciseCurrency(invested, a.currency) : '—'}
                   </td>
                   <td className="px-4 py-3.5 text-right font-semibold text-slate-800">
-                    {maskPreciseAmount(value, a.currency, privacyMode)}
+                    {isAssetLivePriced(a) && !totalsReady ? (
+                      <span className="inline-block h-4 w-16 rounded bg-slate-100 dark:bg-slate-800 animate-pulse align-middle" />
+                    ) : (
+                      maskPreciseAmount(value, a.currency, privacyMode)
+                    )}
                   </td>
                   <td className="px-4 py-3.5 text-right">
-                    {pnl !== undefined ? (
+                    {isAssetLivePriced(a) && !totalsReady ? (
+                      <span className="inline-block h-4 w-16 rounded bg-slate-100 dark:bg-slate-800 animate-pulse align-middle" />
+                    ) : pnl !== undefined ? (
                       <>
                         <p className={`font-semibold ${pnl >= 0 ? 'text-brand-600 dark:text-brand-300' : 'text-red-500 dark:text-red-400'}`}>
                           {pnl >= 0 ? '+' : ''}
@@ -1525,18 +1560,26 @@ function AssetsTab({
                     {a.maturityDate && !isMatured ? ` · Matures ${a.maturityDate}` : ''}
                   </p>
                   <p className="text-lg font-semibold text-slate-900">
-                    {maskPreciseAmount(value, a.currency, privacyMode)}
+                    {isAssetLivePriced(a) && !totalsReady ? (
+                      <span className="inline-block h-5 w-24 rounded bg-slate-100 animate-pulse align-middle" />
+                    ) : (
+                      maskPreciseAmount(value, a.currency, privacyMode)
+                    )}
                   </p>
                   {maturityAmount !== undefined && !isMatured && (
                     <p className="text-xs text-brand-600 font-medium mt-0.5">
                       Maturity amount: {maskPreciseAmount(maturityAmount, a.currency, privacyMode)}
                     </p>
                   )}
-                  {pnl !== undefined && (
-                    <p className={`text-xs font-medium ${pnl >= 0 ? 'text-brand-600 dark:text-brand-300' : 'text-red-500 dark:text-red-400'}`}>
-                      {pnl >= 0 ? '+' : ''}
-                      {formatPreciseCurrency(pnl, a.currency)}
-                    </p>
+                  {isAssetLivePriced(a) && !totalsReady ? (
+                    <span className="inline-block h-4 w-16 mt-1 rounded bg-slate-100 animate-pulse" />
+                  ) : (
+                    pnl !== undefined && (
+                      <p className={`text-xs font-medium ${pnl >= 0 ? 'text-brand-600 dark:text-brand-300' : 'text-red-500 dark:text-red-400'}`}>
+                        {pnl >= 0 ? '+' : ''}
+                        {formatPreciseCurrency(pnl, a.currency)}
+                      </p>
+                    )
                   )}
                   <div className="flex items-center gap-3 mt-3">
                     <button
@@ -1664,6 +1707,8 @@ function AssetDetailPage({
 }) {
   const livePrices = useLivePricesStore((s) => s.prices);
   const sipValues = useLivePricesStore((s) => s.sipValues);
+  const pricesAttempted = useLivePricesStore((s) => s.pricesAttempted);
+  const sipValuesAttempted = useLivePricesStore((s) => s.sipValuesAttempted);
   const privacyMode = useUiStore((s) => s.privacyMode);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const extra = asset as unknown as {
@@ -1674,6 +1719,18 @@ function AssetDetailPage({
   };
 
   const { invested, value, pnl } = resolveAssetValues(asset, livePrices, sipValues);
+  // Same reasoning as the list view: Current Value/P&L for a live-priced
+  // asset (market symbol, or linked SIP) shouldn't show a stale cached
+  // number while this session's price fetch is still in flight — Invested
+  // is pure cost-basis and is never gated by this.
+  const isLivePricedAsset =
+    (!!asset.symbol && !!asset.quantity && asset.quantity > 0) ||
+    (asset.assetClass === 'sip' && !!asset.symbol && /^\d+$/.test(asset.symbol));
+  const isSipLinked = asset.assetClass === 'sip' && !!asset.symbol && /^\d+$/.test(asset.symbol);
+  const priceReady = isSipLinked
+    ? sipValuesAttempted || sipValues[asset.symbol!.trim()] !== undefined
+    : pricesAttempted || livePrices[(asset.symbol ?? '').toUpperCase()] !== undefined;
+  const valuePending = isLivePricedAsset && !priceReady;
   const category = ASSET_CLASS_TO_CATEGORY[asset.assetClass];
   const positive = (pnl ?? 0) >= 0;
   const recurringSip = asset.recurringInvestment ? computeSipProgress(asset) : undefined;
@@ -1751,14 +1808,22 @@ function AssetDetailPage({
           </div>
         </div>
         <p className="text-3xl font-bold text-slate-900 mt-3">
-          {maskPreciseAmount(value, asset.currency, privacyMode)}
+          {valuePending ? (
+            <span className="inline-block h-8 w-32 rounded-lg bg-slate-100 animate-pulse align-middle" />
+          ) : (
+            maskPreciseAmount(value, asset.currency, privacyMode)
+          )}
         </p>
-        {pnl !== undefined && (
-          <p className={`flex items-center gap-1 text-sm font-medium mt-1 ${positive ? 'text-brand-600 dark:text-brand-300' : 'text-red-500 dark:text-red-400'}`}>
-            {positive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-            {positive ? '+' : ''}
-            {formatPreciseCurrency(pnl, asset.currency)}
-          </p>
+        {valuePending ? (
+          <span className="inline-block h-4 w-20 mt-1 rounded bg-slate-100 animate-pulse" />
+        ) : (
+          pnl !== undefined && (
+            <p className={`flex items-center gap-1 text-sm font-medium mt-1 ${positive ? 'text-brand-600 dark:text-brand-300' : 'text-red-500 dark:text-red-400'}`}>
+              {positive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+              {positive ? '+' : ''}
+              {formatPreciseCurrency(pnl, asset.currency)}
+            </p>
+          )
         )}
       </div>
 
@@ -2514,9 +2579,16 @@ function AssetDetailsForm({
           : undefined,
       order: initial?.order,
       updatedAt: Date.now(),
+      // Only keep purchase rows the person actually finished filling in —
+      // a row with just grams or just an amount (not both) contributes
+      // nothing to the totals anyway (see totalShareQty/weightedAvgCost
+      // above), so saving it as quantity/amount: 0 would silently persist
+      // a broken half-entered row instead of just dropping it. The inline
+      // warning under each row (rendered below) tells the person why
+      // before they hit Save, so nothing vanishes as a surprise.
       purchaseLots: isWeightTracked
         ? purchaseLots
-            .filter((l) => Number(l.grams) > 0 || Number(l.amount) > 0)
+            .filter((l) => Number(l.grams) > 0 && Number(l.amount) > 0)
             .map((l) => ({
               id: l.id,
               date: l.date || undefined,
@@ -2526,7 +2598,7 @@ function AssetDetailsForm({
         : undefined,
       shareLots: isUnitTracked
         ? shareLots
-            .filter((l) => Number(l.quantity) > 0 || Number(l.price) > 0)
+            .filter((l) => Number(l.quantity) > 0 && Number(l.price) > 0)
             .map((l) => ({
               id: l.id,
               date: l.date || undefined,
@@ -2663,48 +2735,69 @@ function AssetDetailsForm({
               {formatPreciseCurrency(totalPurchaseAmount, currency)}
             </p>
           </div>
-          <div className="space-y-2">
-            {purchaseLots.map((lot, i) => (
-              <div key={lot.id} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
-                <Field label={i === 0 ? 'Date' : ''}>
-                  <input
-                    type="date"
-                    value={lot.date ?? ''}
-                    onChange={(e) => updatePurchaseLot(lot.id, { date: e.target.value })}
-                    className={inputClass}
-                  />
-                </Field>
-                <Field label={i === 0 ? 'Grams' : ''}>
-                  <input
-                    type="number"
-                    step="any"
-                    value={lot.grams}
-                    onChange={(e) => updatePurchaseLot(lot.id, { grams: e.target.value })}
-                    className={inputClass}
-                    placeholder="e.g. 10"
-                  />
-                </Field>
-                <Field label={i === 0 ? 'Amount Paid' : ''}>
-                  <input
-                    type="number"
-                    step="any"
-                    value={lot.amount}
-                    onChange={(e) => updatePurchaseLot(lot.id, { amount: e.target.value })}
-                    className={inputClass}
-                    placeholder="e.g. 65000"
-                  />
-                </Field>
-                <button
-                  type="button"
-                  onClick={() => removePurchaseLot(lot.id)}
-                  disabled={purchaseLots.length === 1}
-                  className="h-[42px] w-[42px] shrink-0 flex items-center justify-center border border-slate-200 rounded-lg text-slate-400 hover:text-green-600 hover:border-green-200 disabled:opacity-30 disabled:cursor-not-allowed"
-                  title="Remove this purchase"
+          <div className="space-y-2.5">
+            {purchaseLots.map((lot, i) => {
+              const gramsFilled = Number(lot.grams) > 0;
+              const amountFilled = Number(lot.amount) > 0;
+              const lotIncomplete = gramsFilled !== amountFilled;
+              return (
+                <div
+                  key={lot.id}
+                  className="rounded-lg border border-slate-200 bg-white dark:bg-slate-800/60 dark:border-slate-700 p-3 space-y-2"
                 >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-slate-400">Purchase {i + 1}</span>
+                    <button
+                      type="button"
+                      onClick={() => removePurchaseLot(lot.id)}
+                      disabled={purchaseLots.length === 1}
+                      className="h-7 w-7 shrink-0 flex items-center justify-center rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                      title="Remove this purchase"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    <Field label="Date">
+                      <input
+                        type="date"
+                        value={lot.date ?? ''}
+                        onChange={(e) => updatePurchaseLot(lot.id, { date: e.target.value })}
+                        className={inputClass}
+                      />
+                    </Field>
+                    <Field label="Grams">
+                      <input
+                        type="number"
+                        step="any"
+                        value={lot.grams}
+                        onChange={(e) => updatePurchaseLot(lot.id, { grams: e.target.value })}
+                        className={inputClass}
+                        placeholder="e.g. 10"
+                      />
+                    </Field>
+                    <Field label="Amount Paid">
+                      <input
+                        type="number"
+                        step="any"
+                        value={lot.amount}
+                        onChange={(e) => updatePurchaseLot(lot.id, { amount: e.target.value })}
+                        className={inputClass}
+                        placeholder="e.g. 65000"
+                      />
+                    </Field>
+                  </div>
+                  {lotIncomplete && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400 flex items-start gap-1">
+                      <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                      {gramsFilled
+                        ? "Add an Amount Paid for this purchase — it won't count toward the total until both are filled in."
+                        : "Add the Grams for this purchase — it won't count toward the total until both are filled in."}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </div>
           <button
             type="button"
@@ -2892,15 +2985,42 @@ function AssetDetailsForm({
                 </span>
               </p>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {shareLots.map((lot, i) => {
                 const mode = lotInputMode[lot.id] ?? 'qty';
                 const amtCurrency = lotAmountCurrency[lot.id] ?? otherCurrency;
                 const priceCurrency = lotPriceCurrency[lot.id] ?? currency;
+                // A row only counts toward Quantity/Avg. Cost/Invested once
+                // BOTH its "how much" field (Quantity, or Amount Invested in
+                // amount mode) AND Price/Unit are filled in — see
+                // totalShareQty above. Flag the common half-filled case
+                // (e.g. typing a Price/Unit but leaving Quantity blank)
+                // instead of just silently leaving the totals unchanged,
+                // which otherwise looks like the app ignored what was typed.
+                const qtyOrAmountRaw = mode === 'amount' ? lotAmount[lot.id] : lot.quantity;
+                const priceRaw = isMarketSelectable ? (lotPriceRaw[lot.id] ?? lot.price) : lot.price;
+                const qtyOrAmountFilled = Number(qtyOrAmountRaw) > 0;
+                const priceFilled = Number(priceRaw) > 0;
+                const lotIncomplete = qtyOrAmountFilled !== priceFilled;
                 return (
-                  <div key={lot.id} className="space-y-1.5 pb-2 border-b border-slate-100 last:border-0 last:pb-0">
-                    <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
-                      <Field label={i === 0 ? 'Date' : ''}>
+                  <div
+                    key={lot.id}
+                    className="rounded-lg border border-slate-200 bg-white dark:bg-slate-800/60 dark:border-slate-700 p-3 space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-slate-400">Purchase {i + 1}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeShareLot(lot.id)}
+                        disabled={shareLots.length === 1}
+                        className="h-7 w-7 shrink-0 flex items-center justify-center rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                        title="Remove this purchase"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      <Field label="Date">
                         <input
                           type="date"
                           value={lot.date ?? ''}
@@ -2909,7 +3029,7 @@ function AssetDetailsForm({
                         />
                       </Field>
                       {mode === 'qty' ? (
-                        <Field label={i === 0 ? 'Quantity' : ''}>
+                        <Field label="Quantity">
                           <input
                             type="number"
                             step="any"
@@ -2920,7 +3040,7 @@ function AssetDetailsForm({
                           />
                         </Field>
                       ) : (
-                        <Field label={i === 0 ? 'Amount Invested' : ''}>
+                        <Field label="Amount Invested">
                           <div className="flex gap-1">
                             <input
                               type="number"
@@ -2935,7 +3055,7 @@ function AssetDetailsForm({
                               onChange={(e) =>
                                 setLotAmountCurrency((m) => ({ ...m, [lot.id]: e.target.value }))
                               }
-                              className={`${fieldBaseClass} w-14 shrink-0 px-1`}
+                              className={`${fieldBaseClass} w-16 shrink-0 px-1.5`}
                             >
                               <option value={currency}>{currency}</option>
                               <option value={otherCurrency}>{otherCurrency}</option>
@@ -2943,7 +3063,7 @@ function AssetDetailsForm({
                           </div>
                         </Field>
                       )}
-                      <Field label={i === 0 ? 'Price / Unit' : ''}>
+                      <Field label="Price / Unit">
                         {isMarketSelectable ? (
                           <div className="flex gap-1">
                             <input
@@ -2985,7 +3105,7 @@ function AssetDetailsForm({
                                   setLotPriceRaw((m) => ({ ...m, [lot.id]: '' }));
                                 }
                               }}
-                              className={`${fieldBaseClass} w-14 shrink-0 px-1`}
+                              className={`${fieldBaseClass} w-16 shrink-0 px-1.5`}
                             >
                               <option value={currency}>{currency}</option>
                               <option value={otherCurrency}>{otherCurrency}</option>
@@ -3002,16 +3122,17 @@ function AssetDetailsForm({
                           />
                         )}
                       </Field>
-                      <button
-                        type="button"
-                        onClick={() => removeShareLot(lot.id)}
-                        disabled={shareLots.length === 1}
-                        className="h-[42px] w-[42px] shrink-0 flex items-center justify-center border border-slate-200 rounded-lg text-slate-400 hover:text-green-600 hover:border-green-200 disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="Remove this purchase"
-                      >
-                        <Trash2 size={16} />
-                      </button>
                     </div>
+                    {lotIncomplete && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 flex items-start gap-1">
+                        <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                        {qtyOrAmountFilled
+                          ? "Add a Price/Unit for this purchase — it won't count toward the total until both are filled in."
+                          : mode === 'amount'
+                            ? "Add an Amount Invested for this purchase — it won't count toward the total until both are filled in."
+                            : "Add a Quantity for this purchase — it won't count toward the total until both are filled in."}
+                      </p>
+                    )}
                     {isMarketSelectable && (
                       <div className="text-xs text-slate-400 flex items-center gap-2 flex-wrap">
                         {mode === 'qty' ? (

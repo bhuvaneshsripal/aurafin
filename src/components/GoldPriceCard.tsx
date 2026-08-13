@@ -65,12 +65,12 @@ export default function GoldPriceCard() {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="w-full flex items-center justify-between gap-2 text-left"
+        className="w-full flex items-center justify-between gap-2 text-left p-6"
       >
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-amber-500 bg-amber-50 dark:bg-amber-900/20 rounded-xl p-2 flex items-center justify-center shrink-0">
@@ -97,21 +97,21 @@ export default function GoldPriceCard() {
       </button>
 
       {expanded && (
-        <>
+        <div className="px-6 pb-6">
           {price24k === null && loading && (
-            <div className="mt-4 flex items-center gap-2 rounded-lg bg-slate-100 dark:bg-slate-800 px-3 py-3">
+            <div className="flex items-center gap-2 rounded-lg bg-slate-100 dark:bg-slate-800 px-3 py-3">
               <RefreshCw className="w-3.5 h-3.5 text-slate-400 animate-spin" />
               <span className="text-xs text-slate-400 dark:text-slate-500">Fetching live gold rate…</span>
             </div>
           )}
 
           {price24k === null && !loading && error && (
-            <p className="mt-4 text-sm text-slate-400">Couldn't fetch a live gold rate right now. Try again shortly.</p>
+            <p className="text-sm text-slate-400">Couldn't fetch a live gold rate right now. Try again shortly.</p>
           )}
 
           {price24k !== null && (
             <>
-              <div className="flex flex-col sm:flex-row gap-3 mt-4">
+              <div className="flex flex-col sm:flex-row gap-3">
                 <RateBlock label="24K (999)" perGram={price24k} accent="bg-amber-500" />
                 <RateBlock label="22K (916)" perGram={goldPricePerGram22k(price24k)} accent="bg-amber-300" />
               </div>
@@ -120,7 +120,7 @@ export default function GoldPriceCard() {
               </p>
             </>
           )}
-        </>
+        </div>
       )}
     </div>
   );

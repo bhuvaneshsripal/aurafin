@@ -20,11 +20,13 @@ export default function Modal({ open, onClose, title, children, widthClassName =
       onClick={onClose}
     >
       <div
-        className={`animate-menu-in bg-white dark:bg-slate-800 shadow-xl w-full ${widthClassName} p-6 max-h-[90vh] overflow-y-auto`}
+        className={`animate-menu-in bg-white dark:bg-slate-800 shadow-xl w-full ${widthClassName} max-h-[90vh] flex flex-col`}
         style={{ borderRadius: 'var(--radius-modal)', transformOrigin: 'center' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between mb-5">
+        {/* Header stays outside the scroll area — pinned in place, and its
+           padding is never eaten by the scrollbar (see body below). */}
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
           <h3 className="text-[18px] font-semibold text-slate-900 dark:text-white tracking-tight">{title}</h3>
           <button
             onClick={onClose}
@@ -33,7 +35,14 @@ export default function Modal({ open, onClose, title, children, widthClassName =
             <X size={16} />
           </button>
         </div>
-        {children}
+        {/* Scroll lives on its own box, and scrollbar-gutter reserves the
+           scrollbar's track whether or not it's actually showing. Without
+           this, the browser's scrollbar carves into the right p-6 padding
+           the moment content overflows, so right-aligned controls (e.g. a
+           delete button) visually jump to the very edge and look clipped. */}
+        <div className="px-6 pb-6 overflow-y-auto" style={{ scrollbarGutter: 'stable' }}>
+          {children}
+        </div>
       </div>
     </div>
   );

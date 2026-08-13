@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, writeBatch, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, deleteField, writeBatch, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
@@ -103,6 +103,23 @@ export function useFirestoreCollectionSync<T extends { id: string }>(
   }, [user, collectionName, setLocal, onSyncChange]);
 }
 
+/** Merges `incoming` on top of `existing`, but treats any key in `incoming`
+ *  that's explicitly `undefined` as "clear this field" rather than "leave it
+ *  alone" — matching what setDoc(..., {merge:true}) + deleteField() does for
+ *  Firestore users (see upsertDoc below). Used for guest (localStorage)
+ *  users so both storage paths behave identically. */
+function mergeWithDeletes<T extends { id: string }>(existing: T, incoming: T): T {
+  const merged: Record<string, unknown> = { ...existing };
+  for (const [key, value] of Object.entries(incoming as Record<string, unknown>)) {
+    if (value === undefined) {
+      delete merged[key];
+    } else {
+      merged[key] = value;
+    }
+  }
+  return merged as T;
+}
+
 export async function upsertDoc<T extends { id: string }>(
   uidOrUser: string | { uid: string; isAnonymous?: boolean },
   collectionName: string,
@@ -111,20 +128,47 @@ export async function upsertDoc<T extends { id: string }>(
   const uid = typeof uidOrUser === 'string' ? uidOrUser : uidOrUser.uid;
   const isGuest = typeof uidOrUser === 'object' && isAnonymousUser(uidOrUser);
 
-  // For guests, save to localStorage
+  // For guests, save to localStorage.
   if (isGuest) {
     const items = loadGuestData<T>(uid, collectionName);
-    const exists = items.some((i) => i.id === item.id);
-    const updated = exists
-      ? items.map((i) => (i.id === item.id ? item : i))
+    const existing = items.find((i) => i.id === item.id);
+    const updated = existing
+      ? items.map((i) => (i.id === item.id ? mergeWithDeletes(existing, item) : i))
       : [...items, item];
     saveGuestData(uid, collectionName, updated);
     return;
   }
 
-  // For regular users, save to Firestore
+  // For regular users, save to Firestore with a field-level merge.
+  //
+  // Every save here goes through `merge: true` because callers only ever
+  // send the fields *they* manage — e.g. the Edit Asset form doesn't know
+  // about (and never sends) `colour`/`icon`/`accountType` from the Accounts
+  // tab, or which household `profileId` the asset belongs to. A full
+  // overwrite would silently wipe those out on every edit — which looks
+  // exactly like the asset "disappearing" if the wiped `profileId` no
+  // longer matches whichever household profile is currently active.
+  //
+  // But a plain merge has its own problem: with `ignoreUndefinedProperties:
+  // true` (see firebase/config.ts), a field a form DOES manage but has
+  // explicitly cleared — or that no longer applies after switching type
+  // (e.g. dropping Symbol/quantity/shareLots when switching a Stock to Real
+  // Estate) — comes through as `undefined` in `item`, which Firestore then
+  // just omits from the write entirely rather than clearing it. Merged with
+  // the old document, the stale value silently survives and can reappear
+  // later, making Save look like it isn't applying the new values.
+  //
+  // The fix is to tell the two cases apart before writing: a key that's
+  // simply absent from `item` (never touched by this form) is left alone by
+  // `merge: true` as normal, while a key that IS present but `undefined`
+  // (this form manages it and just cleared it) is converted to Firestore's
+  // `deleteField()` sentinel so it's actually removed, merge or not.
   const ref = doc(db, 'users', uid, collectionName, item.id);
-  await setDoc(ref, item, { merge: true });
+  const withDeletes: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(item as Record<string, unknown>)) {
+    withDeletes[key] = value === undefined ? deleteField() : value;
+  }
+  await setDoc(ref, withDeletes, { merge: true });
 }
 
 /**

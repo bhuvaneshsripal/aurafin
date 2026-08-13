@@ -38,6 +38,7 @@ const INVESTMENT_CLASSES = new Set([
 ]);
 
 export default function Dashboard() {
+  const [cashflowOpen, setCashflowOpen] = useState(false);
   const allAssets = useAssetsStore((s) => s.assets);
   const allLiabilities = useLiabilitiesStore((s) => s.liabilities);
   const allTransactions = useTransactionsStore((s) => s.transactions);
@@ -183,34 +184,61 @@ export default function Dashboard() {
 
       <GoldPriceCard />
 
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Cashflow</p>
-          <RangePills />
-        </div>
-        {hasCashflow ? (
-          <div className="grid grid-cols-2 gap-4 mt-4">
-            <div>
-              <p className="text-sm text-slate-500">Income</p>
-              <Amount value={monthIncome} className="font-display text-2xl font-semibold text-brand-700 dark:text-brand-300 block" />
-            </div>
-            <div>
-              <p className="text-sm text-slate-500">Expenses</p>
-              <Amount value={monthExpense} className="font-display text-2xl font-semibold text-orange-500 block" />
-            </div>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+        {/* The whole header row toggles — not just the tiny chevron+label —
+           and padding lives here on the clickable row itself (not on the
+           outer card), so there's no dead padding gutter around the edges
+           that silently swallows clicks. RangePills gets its own
+           stopPropagation wrapper since its 7D/30D/90D buttons need to work
+           independently without also toggling the card. */}
+        <div
+          role="button"
+          tabIndex={0}
+          aria-expanded={cashflowOpen}
+          onClick={() => setCashflowOpen((o) => !o)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setCashflowOpen((o) => !o);
+            }
+          }}
+          className="flex items-center justify-between gap-3 p-6 cursor-pointer select-none"
+        >
+          <span className="flex items-center gap-1.5 text-slate-800 dark:text-slate-100">
+            {cashflowOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Cashflow</span>
+          </span>
+          <div onClick={(e) => e.stopPropagation()}>
+            <RangePills />
           </div>
-        ) : (
-          <div className="mt-6 text-center">
-            <p className="text-slate-400 text-sm mb-3">No income or spending logged in this window.</p>
-            <span className="text-sm font-medium text-brand-700 dark:text-brand-300">
-              <Link to="/transactions" className="hover:underline">
-                Add income →
-              </Link>
-              <span className="text-slate-300 mx-1">·</span>
-              <Link to="/transactions" className="hover:underline">
-                Add expense →
-              </Link>
-            </span>
+        </div>
+        {cashflowOpen && (
+          <div className="px-6 pb-6">
+            {hasCashflow ? (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-slate-500">Income</p>
+                  <Amount value={monthIncome} className="font-display text-2xl font-semibold text-brand-700 dark:text-brand-300 block" />
+                </div>
+                <div>
+                  <p className="text-sm text-slate-500">Expenses</p>
+                  <Amount value={monthExpense} className="font-display text-2xl font-semibold text-orange-500 block" />
+                </div>
+              </div>
+            ) : (
+              <div className="text-center">
+                <p className="text-slate-400 text-sm mb-3">No income or spending logged in this window.</p>
+                <span className="text-sm font-medium text-brand-700 dark:text-brand-300">
+                  <Link to="/transactions" className="hover:underline">
+                    Add income →
+                  </Link>
+                  <span className="text-slate-300 mx-1">·</span>
+                  <Link to="/transactions" className="hover:underline">
+                    Add expense →
+                  </Link>
+                </span>
+              </div>
+            )}
           </div>
         )}
       </div>
