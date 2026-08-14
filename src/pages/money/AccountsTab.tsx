@@ -3,10 +3,12 @@ import { Trash2, Check, Pencil, Star, ChevronDown } from 'lucide-react';
 import { useAssetsStore } from '../../store/assetsStore';
 import { useLiabilitiesStore } from '../../store/liabilitiesStore';
 import { useAuthStore } from '../../store/authStore';
+import { useSyncStatusStore } from '../../store/syncStatusStore';
 import { upsertDoc, removeDoc } from '../../hooks/useFirestoreSync';
 import Modal from '../../components/Modal';
 import ConfirmDeleteModal from '../../components/ConfirmDeleteModal';
 import Amount from '../../components/Amount';
+import LoadingDots from '../../components/LoadingDots';
 import { CURRENCIES } from '../../utils/currency';
 import { COMMON_BANKS } from '../../utils/banks';
 import {
@@ -48,6 +50,13 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
   const assets = useAssetsStore((s) => s.assets);
   const liabilities = useLiabilitiesStore((s) => s.liabilities);
   const user = useAuthStore((s) => s.user);
+  const assetsServerConfirmed = useSyncStatusStore((s) => s.assetsServerConfirmed);
+  const liabilitiesServerConfirmed = useSyncStatusStore((s) => s.liabilitiesServerConfirmed);
+  // Same "already known, or server-confirmed empty" reasoning as
+  // Dashboard.tsx — otherwise Net balance briefly flashes ₹0 while
+  // assets/liabilities are still loading.
+  const accountsDataKnown =
+    assets.length > 0 || liabilities.length > 0 || (assetsServerConfirmed && liabilitiesServerConfirmed);
 
   const assetAccounts: AccountRow[] = assets
     .filter((a) => a.assetClass === 'cash')
@@ -216,7 +225,13 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
       <div>
         <p className="text-sm text-slate-500 dark:text-slate-400">Net balance</p>
         <p className="text-2xl font-bold text-slate-900 dark:text-white">
-          <Amount value={total} />
+          {accountsDataKnown ? (
+            <span className="animate-value-in inline-block">
+              <Amount value={total} />
+            </span>
+          ) : (
+            <LoadingDots />
+          )}
         </p>
       </div>
 

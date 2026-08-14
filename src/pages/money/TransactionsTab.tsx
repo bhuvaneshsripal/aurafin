@@ -3,11 +3,13 @@ import { Plus, Trash2, Download, ChevronDown, ArrowDownCircle, ArrowUpCircle } f
 import { useTransactionsStore } from '../../store/transactionsStore';
 import { useAuthStore } from '../../store/authStore';
 import { useHouseholdProfilesStore } from '../../store/householdProfilesStore';
+import { useSyncStatusStore } from '../../store/syncStatusStore';
 import { upsertDoc, removeDoc } from '../../hooks/useFirestoreSync';
 import { exportToCsv } from '../../utils/exportCsv';
 import Modal from '../../components/Modal';
 import ConfirmDeleteModal from '../../components/ConfirmDeleteModal';
 import Amount from '../../components/Amount';
+import LoadingDots from '../../components/LoadingDots';
 import type { Transaction, TransactionType } from '../../types';
 import { CURRENCIES } from '../../utils/currency';
 
@@ -15,6 +17,11 @@ export default function TransactionsTab() {
   const allTransactions = useTransactionsStore((s) => s.transactions);
   const user = useAuthStore((s) => s.user);
   const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
+  const transactionsServerConfirmed = useSyncStatusStore((s) => s.transactionsServerConfirmed);
+  // Same "already known, or server-confirmed empty" reasoning as
+  // Dashboard.tsx — otherwise this briefly flashes "0 in · 0 out" while
+  // transactions are still loading, most visible on a slower connection.
+  const cashflowDataKnown = allTransactions.length > 0 || transactionsServerConfirmed;
   const transactions = activeProfileId
     ? allTransactions.filter((t) => t.profileId === activeProfileId)
     : allTransactions;
@@ -77,7 +84,13 @@ export default function TransactionsTab() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <p className="text-slate-500 dark:text-slate-400 text-sm sm:text-base">
-          <Amount value={income} /> in · <Amount value={expense} /> out
+          {cashflowDataKnown ? (
+            <span className="animate-value-in inline-block">
+              <Amount value={income} /> in · <Amount value={expense} /> out
+            </span>
+          ) : (
+            <LoadingDots />
+          )}
         </p>
         <div className="flex items-center gap-2">
           <button

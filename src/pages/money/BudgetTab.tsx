@@ -43,15 +43,31 @@ export default function BudgetTab() {
   const [newCategory, setNewCategory] = useState('');
   const [saving, setSaving] = useState(false);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  // True once the person has actually touched this month's draft (added/
+  // removed/edited a category). Guards the resync effect below so a
+  // Firestore update that arrives mid-edit doesn't clobber unsaved changes.
+  const [draftDirty, setDraftDirty] = useState(false);
 
-  // (Re)load the draft whenever the visible month (or the synced data for
-  // it) changes, so switching months always starts from what's saved.
+  // Switching months always starts from a clean slate.
   useEffect(() => {
+    setDraftDirty(false);
+  }, [month]);
+
+  // (Re)load the draft whenever the visible month changes, AND whenever the
+  // synced budgetItems for it change — the latter matters because on a
+  // slower connection (mobile especially), this component can mount and
+  // run its first sync *before* Firestore has actually delivered the
+  // person's saved budget items. Without depending on budgetItems too, the
+  // draft would permanently start empty for that month — looking like "no
+  // budget set" even though one exists, and silently deleting it on the
+  // next Save. Only skipped once the person has started actively editing,
+  // so a live update mid-edit can't overwrite unsaved changes.
+  useEffect(() => {
+    if (draftDirty) return;
     const existing = budgetItems.filter((i) => i.month === month);
     setDraft(existing);
     setSavedIds(new Set(existing.map((i) => i.id)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [month]);
+  }, [month, budgetItems, draftDirty]);
 
   const usedCategories = new Set(draft.map((d) => d.category));
   const availableChips = BUDGET_CATEGORIES.filter((c) => !usedCategories.has(c));
@@ -60,6 +76,7 @@ export default function BudgetTab() {
 
   const addCategory = (category: string) => {
     if (!category.trim() || usedCategories.has(category)) return;
+    setDraftDirty(true);
     setDraft((d) => [
       ...d,
       { id: `${month}-${slugify(category)}`, month, category, amount: 0, currency: 'INR' },
@@ -67,10 +84,12 @@ export default function BudgetTab() {
   };
 
   const updateAmount = (id: string, amount: number) => {
+    setDraftDirty(true);
     setDraft((d) => d.map((i) => (i.id === id ? { ...i, amount } : i)));
   };
 
   const removeCategory = (id: string) => {
+    setDraftDirty(true);
     setDraft((d) => d.filter((i) => i.id !== id));
   };
 
@@ -93,6 +112,7 @@ export default function BudgetTab() {
   }, [transactions, month]);
 
   const handleAutoSuggest = () => {
+    setDraftDirty(true);
     setDraft((d) => {
       const next = [...d];
       suggestedAmounts.forEach((amount, category) => {
@@ -112,6 +132,7 @@ export default function BudgetTab() {
     const prevMonth = shiftMonth(month, -1);
     const prevItems = budgetItems.filter((i) => i.month === prevMonth);
     if (prevItems.length === 0) return;
+    setDraftDirty(true);
     setDraft((d) => {
       const next = [...d];
       prevItems.forEach((p) => {
@@ -134,6 +155,10 @@ export default function BudgetTab() {
         ...removedIds.map((id) => removeDoc(user, 'budgets', id)),
       ]);
       setSavedIds(new Set(draft.map((i) => i.id)));
+      // Saved successfully — safe to let the next Firestore update resync
+      // the draft again (e.g. confirming this same save, or a later edit
+      // from another device).
+      setDraftDirty(false);
     } finally {
       setSaving(false);
     }

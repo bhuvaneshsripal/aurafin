@@ -581,6 +581,26 @@ textarea {
   animation: page-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Applied to a headline figure the moment it swaps from a loading skeleton
+   to its real value (Net Worth, Invested, Assets/Liabilities totals, etc.)
+   so the swap reads as a smooth reveal instead of an abrupt pop-in —
+   especially noticeable on a slower mobile connection where that swap
+   happens later and is more likely to catch the eye mid-scroll. */
+@keyframes value-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 3px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.animate-value-in {
+  animation: value-in 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 /* Loading ellipsis — three dots that fade/bounce in sequence. Used wherever
    a figure (like Net Worth) is waiting on a live network round-trip, so the
    wait reads as "still working" rather than a stalled placeholder. */
@@ -616,6 +636,7 @@ textarea {
 @media (prefers-reduced-motion: reduce) {
   .animate-shake,
   .animate-page-in,
+  .animate-value-in,
   .animate-menu-in,
   .animate-menu-in-3d,
   .logo-flip,

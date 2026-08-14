@@ -42,6 +42,7 @@ import { upsertDoc, removeDoc } from '../hooks/useFirestoreSync';
 import { exportToCsv } from '../utils/exportCsv';
 import Modal from '../components/Modal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import LoadingDots from '../components/LoadingDots';
 import type { Asset, AssetClass, Liability, LiabilityClass } from '../types';
 import { CURRENCIES, formatPreciseCurrency, maskPreciseAmount, isZeroAmount } from '../utils/currency';
 import {
@@ -605,17 +606,25 @@ function SummaryCard({
   label,
   value,
   tone,
+  loading,
 }: {
   label: string;
   value: string;
   tone: 'brand' | 'red' | 'slate';
+  loading?: boolean;
 }) {
   const toneClass =
     tone === 'brand' ? 'text-brand-700' : tone === 'red' ? 'text-red-500' : 'text-slate-900';
   return (
     <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
       <p className="text-sm text-slate-500 font-medium mb-1">{label}</p>
-      <p className={`text-2xl font-bold ${toneClass}`}>{value}</p>
+      {loading ? (
+        <div className="h-8 flex items-center">
+          <LoadingDots />
+        </div>
+      ) : (
+        <p className={`text-2xl font-bold ${toneClass} animate-value-in`}>{value}</p>
+      )}
     </div>
   );
 }
@@ -3780,6 +3789,15 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   const assets = useAssetsStore((s) => s.assets);
   const liabilities = useLiabilitiesStore((s) => s.liabilities);
   const privacyMode = useUiStore((s) => s.privacyMode);
+  const assetsServerConfirmed = useSyncStatusStore((s) => s.assetsServerConfirmed);
+  const liabilitiesServerConfirmed = useSyncStatusStore((s) => s.liabilitiesServerConfirmed);
+  // Same reasoning as Dashboard.tsx's wealthDataKnown: trust a `0` total
+  // only once we know it's real (already have items, or the server has
+  // actually confirmed both collections) rather than just an offline cache
+  // that hasn't loaded yet — otherwise this briefly flashes ₹0 for
+  // everyone on first paint, worse on a slower mobile connection.
+  const wealthDataKnown =
+    assets.length > 0 || liabilities.length > 0 || (assetsServerConfirmed && liabilitiesServerConfirmed);
 
   const totalAssets = assets.reduce((s, a) => s + a.value, 0);
   const totalLiabilities = liabilities.reduce((s, l) => s + l.outstanding, 0);
@@ -3799,16 +3817,19 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
           label="Assets"
           value={maskPreciseAmount(totalAssets, 'INR', privacyMode)}
           tone="brand"
+          loading={!wealthDataKnown}
         />
         <SummaryCard
           label="Liabilities"
           value={maskPreciseAmount(totalLiabilities, 'INR', privacyMode)}
           tone="red"
+          loading={!wealthDataKnown}
         />
         <SummaryCard
           label="Net Worth"
           value={maskPreciseAmount(netWorth, 'INR', privacyMode)}
           tone="slate"
+          loading={!wealthDataKnown}
         />
       </div>
     </div>

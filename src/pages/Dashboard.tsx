@@ -18,6 +18,7 @@ import { useUiStore } from '../store/uiStore';
 import { useSyncStatusStore } from '../store/syncStatusStore';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import Amount from '../components/Amount';
+import LoadingDots from '../components/LoadingDots';
 import GoldPriceCard from '../components/GoldPriceCard';
 import { ASSET_CLASS_LABELS, formatCurrency, maskPreciseAmount } from '../utils/currency';
 import { resolveAssetValues } from '../utils/assetValues';
@@ -50,6 +51,8 @@ export default function Dashboard() {
   const privacyMode = useUiStore((s) => s.privacyMode);
   const assetsServerConfirmed = useSyncStatusStore((s) => s.assetsServerConfirmed);
   const liabilitiesServerConfirmed = useSyncStatusStore((s) => s.liabilitiesServerConfirmed);
+  const transactionsServerConfirmed = useSyncStatusStore((s) => s.transactionsServerConfirmed);
+  const goalsServerConfirmed = useSyncStatusStore((s) => s.goalsServerConfirmed);
   // Assets/liabilities loading from the server isn't the whole picture — if
   // any asset is priced live (a stock/fund symbol, or a linked SIP), Net
   // Worth also has to wait for a real price before showing a number.
@@ -113,6 +116,18 @@ export default function Dashboard() {
   const investments = assets.filter((a) => INVESTMENT_CLASSES.has(a.assetClass));
   const totalInvestments = investments.reduce((s, a) => s + a.value, 0);
   const hasCashflow = transactions.length > 0;
+  // Whether "does this person actually have any wealth/cashflow/goals data"
+  // can be trusted yet, as opposed to just reflecting an offline cache that
+  // hasn't finished loading. If the (unfiltered, all-profiles) collection
+  // already has items, we already know the true answer regardless of cache
+  // state — no need to wait. Otherwise, wait for the server to actually
+  // confirm the collection is empty before treating "0 items" as real
+  // rather than "haven't loaded yet". That distinction matters most on a
+  // slow mobile connection, where the loading window is long enough to see.
+  const wealthDataKnown =
+    allAssets.length > 0 || allLiabilities.length > 0 || (assetsServerConfirmed && liabilitiesServerConfirmed);
+  const cashflowDataKnown = allTransactions.length > 0 || transactionsServerConfirmed;
+  const goalsDataKnown = allGoals.length > 0 || goalsServerConfirmed;
   const hasWealth = assets.length > 0 || liabilities.length > 0;
 
   return (
@@ -126,7 +141,11 @@ export default function Dashboard() {
             <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
             Live prices update every 60 seconds
           </p>
-          {hasWealth ? (
+          {!wealthDataKnown ? (
+            <div className="mt-3 h-11 sm:h-12 flex items-center gap-2 rounded-lg bg-slate-100 dark:bg-slate-800 px-3">
+              <LoadingDots />
+            </div>
+          ) : hasWealth ? (
             !netWorthReady ? (
               <div className="mt-3 h-11 sm:h-12 flex items-center gap-2 rounded-lg bg-slate-100 dark:bg-slate-800 px-3">
                 <LoadingDots />
@@ -135,7 +154,7 @@ export default function Dashboard() {
             ) : (
               <>
                 <div className="flex items-center gap-2.5 flex-wrap mt-2">
-                  <span className="font-hero-numeric text-4xl sm:text-5xl text-slate-900 dark:text-white break-words">
+                  <span className="font-hero-numeric text-4xl sm:text-5xl text-slate-900 dark:text-white break-words animate-value-in">
                     {maskPreciseAmount(netWorth, 'INR', privacyMode)}
                   </span>
                   {investedAssetsTotal > 0 && (
@@ -171,14 +190,19 @@ export default function Dashboard() {
             Invested · <span className="text-slate-400">₹ INR</span>
           </p>
           {/* Invested is pure cost-basis (qty × avg cost, or the SIP schedule) —
-              it never depends on a live price fetch, and the local store already
-              has it the instant the page loads (from cache if offline, from the
-              server moments later). No reason to gate this behind a loading
-              state at all; just render whatever's current, same as everywhere
-              else in the app. */}
-          <span className="font-hero-numeric text-4xl sm:text-5xl text-slate-900 dark:text-white block mt-2 break-words">
-            {maskPreciseAmount(hasWealth ? investedAssetsTotal : 0, 'INR', privacyMode)}
-          </span>
+              it never needs a live price fetch, so once we know whether this
+              account has wealth data at all (wealthDataKnown, shared with the
+              Net Worth card alongside it), there's no further reason to gate
+              it behind a loading state; it just renders whatever's current. */}
+          {!wealthDataKnown ? (
+            <div className="mt-3 h-11 sm:h-12 flex items-center rounded-lg bg-slate-100 dark:bg-slate-800 px-3">
+              <LoadingDots />
+            </div>
+          ) : (
+            <span className="font-hero-numeric text-4xl sm:text-5xl text-slate-900 dark:text-white block mt-2 break-words animate-value-in">
+              {maskPreciseAmount(hasWealth ? investedAssetsTotal : 0, 'INR', privacyMode)}
+            </span>
+          )}
         </div>
       </div>
 
@@ -257,7 +281,7 @@ export default function Dashboard() {
         title="Cashflow"
         icon={ArrowLeftRight}
         iconColor="text-violet-500"
-        summary={<Amount value={monthIncome - monthExpense} />}
+        summary={cashflowDataKnown ? <Amount value={monthIncome - monthExpense} /> : <SummarySkeleton />}
         to="/transactions"
       >
         <CashflowSummary income={monthIncome} expense={monthExpense} transactions={transactions} />
@@ -267,13 +291,13 @@ export default function Dashboard() {
         title="Investments"
         icon={TrendingUp}
         iconColor="text-brand-600"
-        summary={<Amount value={totalInvestments} />}
+        summary={wealthDataKnown ? <Amount value={totalInvestments} /> : <SummarySkeleton />}
         to="/wealth?tab=assets"
       >
         <InvestmentsSummary investments={investments} />
       </Section>
 
-      <Section title="Goals" icon={Target} iconColor="text-orange-500" summary={`${goals.length}`} to="/essentials?tab=goals">
+      <Section title="Goals" icon={Target} iconColor="text-orange-500" summary={goalsDataKnown ? `${goals.length}` : <SummarySkeleton />} to="/essentials?tab=goals">
         <GoalsSummary goals={goals} netWorth={netWorthReady ? netWorth : 0} />
       </Section>
     </div>
@@ -509,18 +533,6 @@ function GoalsSummary({
         );
       })}
     </div>
-  );
-}
-
-/** Three dots fading/bouncing in sequence — a lightweight "still working"
- * indicator for values waiting on a live network round-trip. */
-function LoadingDots() {
-  return (
-    <span className="loading-dots inline-flex items-center gap-1" role="status" aria-label="Loading">
-      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-slate-500 inline-block" />
-      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-slate-500 inline-block" />
-      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-slate-500 inline-block" />
-    </span>
   );
 }
 

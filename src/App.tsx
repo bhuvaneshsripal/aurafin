@@ -142,11 +142,13 @@ function DataSync() {
   const setHouseholdProfiles = useHouseholdProfilesStore((s) => s.setProfiles);
   const setAssetsSynced = useSyncStatusStore((s) => s.setAssetsSynced);
   const setLiabilitiesSynced = useSyncStatusStore((s) => s.setLiabilitiesSynced);
+  const setTransactionsSynced = useSyncStatusStore((s) => s.setTransactionsSynced);
+  const setGoalsSynced = useSyncStatusStore((s) => s.setGoalsSynced);
 
   useFirestoreCollectionSync<Asset>('assets', setAssets, setAssetsSynced);
   useFirestoreCollectionSync<Liability>('liabilities', setLiabilities, setLiabilitiesSynced);
-  useFirestoreCollectionSync<Goal>('goals', setGoals);
-  useFirestoreCollectionSync<Transaction>('transactions', setTransactions);
+  useFirestoreCollectionSync<Goal>('goals', setGoals, setGoalsSynced);
+  useFirestoreCollectionSync<Transaction>('transactions', setTransactions, setTransactionsSynced);
   useFirestoreCollectionSync<Snapshot>('snapshots', setSnapshots);
   useFirestoreCollectionSync<BudgetItem>('budgets', setBudgetItems);
   useFirestoreCollectionSync<FinancialProfile>('financialProfile', setFinancialProfile);
@@ -175,15 +177,17 @@ function DataSync() {
   }, [user, profiles, assets, liabilities, goals, transactions]);
 
   // Offline-safe fallback: if the server never confirms (no connection),
-  // don't leave the Net Worth figure in a skeleton state forever — show
+  // don't leave headline figures in a skeleton state forever — show
   // whatever the cache has after a few seconds.
   useEffect(() => {
     const timer = setTimeout(() => {
       setAssetsSynced(false);
       setLiabilitiesSynced(false);
+      setTransactionsSynced(false);
+      setGoalsSynced(false);
     }, 4000);
     return () => clearTimeout(timer);
-  }, [setAssetsSynced, setLiabilitiesSynced]);
+  }, [setAssetsSynced, setLiabilitiesSynced, setTransactionsSynced, setGoalsSynced]);
 
   return null;
 }

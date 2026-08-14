@@ -7,6 +7,7 @@ import { useLivePricesStore } from '../store/livePricesStore';
 import { useFinancialProfileStore } from '../store/financialProfileStore';
 import { useAuthStore } from '../store/authStore';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
+import { useSyncStatusStore } from '../store/syncStatusStore';
 import { upsertDoc, removeDoc } from '../hooks/useFirestoreSync';
 import { resolveAssetValues } from '../utils/assetValues';
 import {
@@ -25,6 +26,7 @@ import {
 import Modal from '../components/Modal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import Amount from '../components/Amount';
+import LoadingDots from '../components/LoadingDots';
 import type { Goal } from '../types';
 import { CURRENCIES, formatCurrency } from '../utils/currency';
 import { useUrlTab } from '../hooks/useUrlTab';
@@ -74,6 +76,15 @@ function HealthCheck() {
   const liabilities = useLiabilitiesStore((s) => s.liabilities);
   const livePrices = useLivePricesStore((s) => s.prices);
   const sipValues = useLivePricesStore((s) => s.sipValues);
+  const assetsServerConfirmed = useSyncStatusStore((s) => s.assetsServerConfirmed);
+  const liabilitiesServerConfirmed = useSyncStatusStore((s) => s.liabilitiesServerConfirmed);
+  // Same "already known, or server-confirmed empty" reasoning as
+  // Dashboard.tsx. Matters more here than a plain ₹0 flash would elsewhere:
+  // computing the health score/status badges (Emergency Fund, Debt Ratio,
+  // etc.) off a temporarily-empty assets/liabilities list can flash a
+  // scarier-than-real "Critical" status for a moment on a slow connection.
+  const wealthDataKnown =
+    assets.length > 0 || liabilities.length > 0 || (assetsServerConfirmed && liabilitiesServerConfirmed);
 
   const [age, setAge] = useState('');
   const [income, setIncome] = useState('');
@@ -211,6 +222,11 @@ function HealthCheck() {
       </div>
 
       {hasProfile && (
+        !wealthDataKnown ? (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 flex items-center justify-center h-32">
+            <LoadingDots />
+          </div>
+        ) : (
         <div className="space-y-4">
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
             <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
@@ -337,6 +353,7 @@ function HealthCheck() {
             </HealthCard>
           </div>
         </div>
+        )
       )}
     </div>
   );
@@ -555,6 +572,15 @@ function GoalsTab() {
   const totalLiabilities = liabilities.reduce((s, l) => s + l.outstanding, 0);
   const netWorth = totalAssets - totalLiabilities;
 
+  // Same "already known, or server-confirmed empty" reasoning as
+  // Dashboard.tsx — otherwise every goal briefly shows 0% progress while
+  // assets/liabilities (which Net Worth, and so goal progress, depend on)
+  // are still loading.
+  const assetsServerConfirmed = useSyncStatusStore((s) => s.assetsServerConfirmed);
+  const liabilitiesServerConfirmed = useSyncStatusStore((s) => s.liabilitiesServerConfirmed);
+  const wealthDataKnown =
+    allAssets.length > 0 || allLiabilities.length > 0 || (assetsServerConfirmed && liabilitiesServerConfirmed);
+
   const handleDelete = async (id: string) => {
     if (!user) return;
     await removeDoc(user, 'goals', id);
@@ -613,11 +639,17 @@ function GoalsTab() {
                 </div>
               </div>
               <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mb-2">
-                <div className="h-full bg-brand-600 rounded-full" style={{ width: `${pct}%` }} />
+                <div className="h-full bg-brand-600 rounded-full" style={{ width: `${wealthDataKnown ? pct : 0}%` }} />
               </div>
               <div className="flex items-center justify-between text-sm text-slate-500 dark:text-slate-400">
-                <span>{formatCurrency(current, g.currency)} · from Net Worth</span>
-                <span>{pct}% of {formatCurrency(g.targetAmount, g.currency)}</span>
+                {wealthDataKnown ? (
+                  <>
+                    <span>{formatCurrency(current, g.currency)} · from Net Worth</span>
+                    <span>{pct}% of {formatCurrency(g.targetAmount, g.currency)}</span>
+                  </>
+                ) : (
+                  <LoadingDots />
+                )}
               </div>
             </div>
           );

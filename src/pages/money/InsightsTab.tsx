@@ -3,8 +3,10 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { useTransactionsStore } from '../../store/transactionsStore';
 import { useBudgetStore } from '../../store/budgetStore';
+import { useSyncStatusStore } from '../../store/syncStatusStore';
 import { formatCurrency } from '../../utils/currency';
 import Amount from '../../components/Amount';
+import LoadingDots from '../../components/LoadingDots';
 
 const COLORS = ['#16a35d', '#3b82f6', '#f5b942', '#f97316', '#8b5cf6', '#ef4444', '#4ade93', '#94a3b8', '#3b82f6', '#64748b'];
 
@@ -22,6 +24,11 @@ function shiftMonth(month: string, delta: number) {
 export default function InsightsTab() {
   const transactions = useTransactionsStore((s) => s.transactions);
   const budgetItems = useBudgetStore((s) => s.items);
+  const transactionsServerConfirmed = useSyncStatusStore((s) => s.transactionsServerConfirmed);
+  // Same "already known, or server-confirmed empty" reasoning as
+  // Dashboard.tsx — otherwise Income/Spent briefly flash ₹0 while
+  // transactions are still loading.
+  const cashflowDataKnown = transactions.length > 0 || transactionsServerConfirmed;
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
 
   const monthTx = transactions.filter((t) => t.date.startsWith(month));
@@ -63,13 +70,13 @@ export default function InsightsTab() {
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
           <p className="text-sm text-slate-500 dark:text-slate-400">Income</p>
           <p className="text-xl font-bold text-brand-600 dark:text-brand-300">
-            <Amount value={income} />
+            {cashflowDataKnown ? <Amount value={income} /> : <LoadingDots />}
           </p>
         </div>
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
           <p className="text-sm text-slate-500 dark:text-slate-400">Spent</p>
           <p className="text-xl font-bold text-orange-500">
-            <Amount value={expense} />
+            {cashflowDataKnown ? <Amount value={expense} /> : <LoadingDots />}
           </p>
         </div>
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">

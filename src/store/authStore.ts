@@ -10,6 +10,7 @@ import {
   type User,
 } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase/config';
+import { useSyncStatusStore } from './syncStatusStore';
 
 // Set the moment a brand-new account is created (email/password sign-up, or
 // a Google sign-in Firebase reports as `isNewUser`), and cleared once the
@@ -171,6 +172,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
     await signOut(auth);
     writeCachedUser(null);
+    // So the next sign-in on this tab (a different account, or the same one
+    // fresh) doesn't inherit stale "server already confirmed" flags from
+    // before its own data has actually loaded — that would suppress the
+    // loading skeletons and briefly show the previous/wrong totals as if
+    // they were confirmed.
+    useSyncStatusStore.getState().reset();
   },
   completeOnboarding: () => {
     const uid = get().user?.uid;
