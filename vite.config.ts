@@ -35,8 +35,12 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
           const quote = await fetchNseQuote(bareSymbol)
           send(200, { symbol: bareSymbol, price: quote.price, currency: quote.currency, source: 'nse' })
           return
-        } catch {
-          // fall through to Yahoo
+        } catch (err) {
+          // fall through to Yahoo, but log why NSE didn't answer — this is
+          // almost always the real cause of a "couldn't reach" error in the
+          // UI (NSE blocking the request, DNS/firewall, etc.) and is
+          // otherwise invisible since the UI only sees the final failure.
+          console.error(`[dev/market] NSE quote for ${bareSymbol} failed:`, err instanceof Error ? err.message : err)
         }
       }
 
@@ -47,16 +51,21 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
           `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=1d`,
           { headers: { 'User-Agent': 'Mozilla/5.0' } }
         )
+        if (!upstream.ok) {
+          console.error(`[dev/market] Yahoo chart for ${yahooSymbol} failed: HTTP ${upstream.status}`)
+        }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const data = (await upstream.json()) as any
         const meta = data?.chart?.result?.[0]?.meta
         const price = meta?.regularMarketPrice ?? meta?.previousClose
         if (typeof price !== 'number') {
+          console.error(`[dev/market] Yahoo chart for ${yahooSymbol} had no price in response:`, JSON.stringify(data).slice(0, 300))
           send(502, { error: `Could not get a live price from ${market === 'US' ? 'the US market' : 'NSE or Yahoo'}` })
           return
         }
         send(200, { symbol: bareSymbol, price, currency: meta?.currency ?? (market === 'US' ? 'USD' : 'INR'), source: 'yahoo' })
-      } catch {
+      } catch (err) {
+        console.error(`[dev/market] Could not reach Yahoo for ${bareSymbol}:`, err instanceof Error ? err.message : err)
         send(502, { error: 'Could not reach the live price source' })
       }
       return
@@ -100,8 +109,11 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
           send(200, result)
           return
         }
-      } catch {
-        // fall through to Yahoo
+      } catch (err) {
+        // fall through to Yahoo — logged so a "couldn't reach symbol
+        // search" error in the UI can actually be diagnosed from the
+        // terminal instead of just failing silently.
+        console.error(`[dev/market] NSE search for "${q}" failed:`, err instanceof Error ? err.message : err)
       }
 
       try {
@@ -109,8 +121,12 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
           `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=5&newsCount=0`,
           { headers: { 'User-Agent': 'Mozilla/5.0' } }
         )
+        if (!upstream.ok) {
+          console.error(`[dev/market] Yahoo search for "${q}" failed: HTTP ${upstream.status}`)
+        }
         send(200, await upstream.json())
-      } catch {
+      } catch (err) {
+        console.error(`[dev/market] Could not reach NSE or Yahoo Finance for "${q}":`, err instanceof Error ? err.message : err)
         send(502, { error: 'Could not reach NSE or Yahoo Finance' })
       }
       return
