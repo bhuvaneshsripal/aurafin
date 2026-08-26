@@ -126,6 +126,15 @@ export interface Asset {
    */
   purchaseLots?: { id: string; date?: string; grams: number; amount: number }[];
   /**
+   * Purity used to price this holding off the live 24K gold rate (Gold
+   * asset class only). '24k' uses the live rate as-is; '22k' derives from
+   * it at the standard 22/24 ratio (see goldPricePerGram22k). Persisted so
+   * Current Value / Return can keep tracking the live rate everywhere the
+   * asset is shown, not just while the add/edit form is open. Undefined on
+   * older entries saved before this existed — treated as '24k'.
+   */
+  goldPurity?: '24k' | '22k';
+  /**
    * Individual buy lots for unit-tracked equities/funds (Stocks, ETFs, Mutual
    * Funds, Crypto, etc.). Each time more is bought at a different price, a new
    * lot is appended instead of overwriting the total — `quantity` and

@@ -19,6 +19,7 @@ export default function Goals() {
   const liabilities = useLiabilitiesStore((s) => s.liabilities);
   const livePrices = useLivePricesStore((s) => s.prices);
   const sipValues = useLivePricesStore((s) => s.sipValues);
+  const liveGoldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Goal | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Goal | null>(null);
@@ -28,7 +29,7 @@ export default function Goals() {
   // sync here so a goal linked to Net Worth always shows the live number,
   // not whatever was typed in when the goal was created.
   const totalAssets = assets.reduce(
-    (s, a) => s + resolveAssetValues(a, livePrices, sipValues).value,
+    (s, a) => s + resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).value,
     0
   );
   const totalLiabilities = liabilities.reduce((s, l) => s + l.outstanding, 0);

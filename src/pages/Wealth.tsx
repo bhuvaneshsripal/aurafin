@@ -645,6 +645,8 @@ function AssetsTab({
   const sipValues = useLivePricesStore((s) => s.sipValues);
   const pricesAttempted = useLivePricesStore((s) => s.pricesAttempted);
   const sipValuesAttempted = useLivePricesStore((s) => s.sipValuesAttempted);
+  const liveGoldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
+  const goldPriceError = useLivePricesStore((s) => s.goldPriceError);
   const assetsServerConfirmed = useSyncStatusStore((s) => s.assetsServerConfirmed);
   // Same reasoning as the Dashboard's Net Worth card: show totals as soon as
   // either (a) a real price fetch has completed this session, or (b) we
@@ -661,18 +663,27 @@ function AssetsTab({
   );
   const hasSipLinked = sipLinkedAssets.length > 0;
   const sipCached = hasSipLinked && sipLinkedAssets.every((a) => sipValues[a.symbol!.trim()] !== undefined);
+  const liveGoldAssets = allAssets.filter((a) => a.assetClass === 'gold' && a.quantity && a.quantity > 0);
+  const hasLiveGold = liveGoldAssets.length > 0;
+  // A failed gold-price fetch (goldPriceError) also counts as "attempted" —
+  // otherwise a first-ever visit with no cached rate and a network failure
+  // would leave totalsReady stuck false forever.
+  const goldPriceCached = hasLiveGold && (liveGoldPricePerGram !== null || goldPriceError);
   const totalsReady =
     assetsServerConfirmed &&
     (!hasLivePriced || pricesAttempted || pricesCached) &&
-    (!hasSipLinked || sipValuesAttempted || sipCached);
+    (!hasSipLinked || sipValuesAttempted || sipCached) &&
+    (!hasLiveGold || goldPriceCached);
   // Per-row version of the same readiness check — an asset only needs to
   // wait on totalsReady if it's actually live-priced (a market symbol with
-  // quantity, or a linked SIP). Everything else (FDs, cash, manually
-  // entered gold, etc.) never depends on a price fetch, so it should never
-  // sit behind a loading skeleton.
+  // quantity, a linked SIP, or a Gold holding with grams tracked, which is
+  // priced off the live per-gram rate). Everything else (FDs, cash, etc.)
+  // never depends on a price fetch, so it should never sit behind a
+  // loading skeleton.
   const isAssetLivePriced = (a: Asset) =>
     (!!a.symbol && !!a.quantity && a.quantity > 0) ||
-    (a.assetClass === 'sip' && !!a.symbol && /^\d+$/.test(a.symbol));
+    (a.assetClass === 'sip' && !!a.symbol && /^\d+$/.test(a.symbol)) ||
+    (a.assetClass === 'gold' && !!a.quantity && a.quantity > 0);
   const user = useAuthStore((s) => s.user);
   const privacyMode = useUiStore((s) => s.privacyMode);
   const [modalOpen, setModalOpen] = useState(false);
@@ -871,7 +882,7 @@ function AssetsTab({
     exportToCsv(
       'assets',
       assets.map((a) => {
-        const { invested, currentPrice, value, pnl, pnlPercent } = resolveAssetValues(a, livePrices, sipValues);
+        const { invested, currentPrice, value, pnl, pnlPercent } = resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram);
         return {
           Name: a.name,
           Symbol: a.symbol ?? '',
@@ -908,10 +919,10 @@ function AssetsTab({
     setSelectedIds(allFilteredSelected ? new Set() : new Set(filtered.map((a) => a.id)));
   };
 
-  const totalValue = assets.reduce((s, a) => s + resolveAssetValues(a, livePrices, sipValues).value, 0);
+  const totalValue = assets.reduce((s, a) => s + resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).value, 0);
 
   const rows = filtered.map((a) => {
-    const computed = resolveAssetValues(a, livePrices, sipValues);
+    const computed = resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram);
     const alloc = totalValue > 0 ? (computed.value / totalValue) * 100 : 0;
     return { asset: a, ...computed, alloc };
   });
@@ -1510,7 +1521,7 @@ function AssetsTab({
       ) : filtered.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {filtered.map((a, idx) => {
-              const { value, pnl } = resolveAssetValues(a, livePrices, sipValues);
+              const { value, pnl } = resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram);
               const { maturityAmount, isMatured } = computeMaturityInfo(a);
               return (
                 <div
@@ -1718,6 +1729,8 @@ function AssetDetailPage({
   const sipValues = useLivePricesStore((s) => s.sipValues);
   const pricesAttempted = useLivePricesStore((s) => s.pricesAttempted);
   const sipValuesAttempted = useLivePricesStore((s) => s.sipValuesAttempted);
+  const liveGoldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
+  const goldPriceError = useLivePricesStore((s) => s.goldPriceError);
   const privacyMode = useUiStore((s) => s.privacyMode);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const extra = asset as unknown as {
@@ -1727,18 +1740,22 @@ function AssetDetailPage({
     notes?: string;
   };
 
-  const { invested, value, pnl } = resolveAssetValues(asset, livePrices, sipValues);
+  const { invested, value, pnl } = resolveAssetValues(asset, livePrices, sipValues, liveGoldPricePerGram);
   // Same reasoning as the list view: Current Value/P&L for a live-priced
   // asset (market symbol, or linked SIP) shouldn't show a stale cached
   // number while this session's price fetch is still in flight — Invested
   // is pure cost-basis and is never gated by this.
+  const isGoldAsset = asset.assetClass === 'gold' && !!asset.quantity && asset.quantity > 0;
   const isLivePricedAsset =
     (!!asset.symbol && !!asset.quantity && asset.quantity > 0) ||
-    (asset.assetClass === 'sip' && !!asset.symbol && /^\d+$/.test(asset.symbol));
+    (asset.assetClass === 'sip' && !!asset.symbol && /^\d+$/.test(asset.symbol)) ||
+    isGoldAsset;
   const isSipLinked = asset.assetClass === 'sip' && !!asset.symbol && /^\d+$/.test(asset.symbol);
   const priceReady = isSipLinked
     ? sipValuesAttempted || sipValues[asset.symbol!.trim()] !== undefined
-    : pricesAttempted || livePrices[(asset.symbol ?? '').toUpperCase()] !== undefined;
+    : isGoldAsset
+      ? liveGoldPricePerGram !== null || goldPriceError
+      : pricesAttempted || livePrices[(asset.symbol ?? '').toUpperCase()] !== undefined;
   const valuePending = isLivePricedAsset && !priceReady;
   const category = ASSET_CLASS_TO_CATEGORY[asset.assetClass];
   const positive = (pnl ?? 0) >= 0;
@@ -2199,14 +2216,15 @@ function AssetDetailsForm({
   // livePricesStore, already polling in the background) × total grams
   // purchased — the same "digital gold app" style quote as the Dashboard
   // ticker. 22K is derived from the live 24K rate at the standard 22/24
-  // purity ratio. This is estimate-only and isn't saved on the asset
-  // itself; picking a purity just drives the one-off/auto Current Value
-  // calculation below, same as the equity live-price auto-calc elsewhere
-  // in this form. Selecting a purity re-enables auto-fill even if the
-  // person had previously hand-edited Current Value, since that's a fresh,
-  // explicit choice to go live.
+  // purity ratio. This is estimate-only, but the chosen purity IS saved on
+  // the asset (see onSave below) so Current Value / Return can keep
+  // tracking the live rate everywhere the asset is shown afterwards
+  // (resolveAssetValues), not just refresh once here while the form is
+  // open. Selecting a purity re-enables auto-fill even if the person had
+  // previously hand-edited Current Value, since that's a fresh, explicit
+  // choice to go live.
   const isGold = assetClass === 'gold';
-  const [goldPurity, setGoldPurity] = useState<'24k' | '22k' | null>(null);
+  const [goldPurity, setGoldPurity] = useState<'24k' | '22k' | null>(initial?.goldPurity ?? null);
   const liveGold24k = useLivePricesStore((s) => s.goldPricePerGram);
   const liveGoldLoading = useLivePricesStore((s) => s.goldPriceLoading);
   const liveGoldError = useLivePricesStore((s) => s.goldPriceError);
@@ -2587,6 +2605,7 @@ function AssetDetailsForm({
           ? Number(sipDay)
           : undefined,
       order: initial?.order,
+      goldPurity: isGold ? (goldPurity ?? initial?.goldPurity) : undefined,
       updatedAt: Date.now(),
       // Only keep purchase rows the person actually finished filling in —
       // a row with just grams or just an amount (not both) contributes

@@ -48,6 +48,7 @@ export default function Dashboard() {
   const sipValues = useLivePricesStore((s) => s.sipValues);
   const pricesAttempted = useLivePricesStore((s) => s.pricesAttempted);
   const sipValuesAttempted = useLivePricesStore((s) => s.sipValuesAttempted);
+  const liveGoldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
   const privacyMode = useUiStore((s) => s.privacyMode);
   const assetsServerConfirmed = useSyncStatusStore((s) => s.assetsServerConfirmed);
   const liabilitiesServerConfirmed = useSyncStatusStore((s) => s.liabilitiesServerConfirmed);
@@ -92,14 +93,14 @@ export default function Dashboard() {
   const goals = activeProfileId ? allGoals.filter((g) => g.profileId === activeProfileId) : allGoals;
 
   const totalAssets = assets.reduce(
-    (s, a) => s + resolveAssetValues(a, livePrices, sipValues).value,
+    (s, a) => s + resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).value,
     0
   );
   const totalLiabilities = liabilities.reduce((s, l) => s + l.outstanding, 0);
   const netWorth = totalAssets - totalLiabilities;
 
   const investedAssetsTotal = assets.reduce(
-    (s, a) => s + (resolveAssetValues(a, livePrices, sipValues).invested ?? a.value),
+    (s, a) => s + (resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).invested ?? a.value),
     0
   );
   const netWorthPnl = totalAssets - investedAssetsTotal;
@@ -459,6 +460,7 @@ function InvestmentsSummary({
 }) {
   const livePrices = useLivePricesStore((s) => s.prices);
   const sipValues = useLivePricesStore((s) => s.sipValues);
+  const liveGoldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
   const privacyMode = useUiStore((s) => s.privacyMode);
 
   if (investments.length === 0) {
@@ -477,7 +479,7 @@ function InvestmentsSummary({
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {visible.map((a) => {
-          const { invested } = resolveAssetValues(a, livePrices, sipValues);
+          const { invested } = resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram);
           return (
             <div key={a.id} className="border border-slate-100 dark:border-slate-800 rounded-xl p-4">
               <p className="font-medium text-slate-800 dark:text-slate-100 uppercase">{a.name}</p>

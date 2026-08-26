@@ -76,6 +76,7 @@ function HealthCheck() {
   const liabilities = useLiabilitiesStore((s) => s.liabilities);
   const livePrices = useLivePricesStore((s) => s.prices);
   const sipValues = useLivePricesStore((s) => s.sipValues);
+  const liveGoldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
   const assetsServerConfirmed = useSyncStatusStore((s) => s.assetsServerConfirmed);
   const liabilitiesServerConfirmed = useSyncStatusStore((s) => s.liabilitiesServerConfirmed);
   // Same "already known, or server-confirmed empty" reasoning as
@@ -127,7 +128,7 @@ function HealthCheck() {
   }, [hasProfile]);
 
   // --- Derived figures for the dashboard ---
-  const totalAssets = assets.reduce((s, a) => s + resolveAssetValues(a, livePrices, sipValues).value, 0);
+  const totalAssets = assets.reduce((s, a) => s + resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).value, 0);
   const totalLiabilities = liabilities.reduce((s, l) => s + l.outstanding, 0);
   const netWorth = totalAssets - totalLiabilities;
   const liquidAssets = computeLiquidAssets(assets, livePrices, sipValues);
@@ -555,6 +556,7 @@ function GoalsTab() {
   const allLiabilities = useLiabilitiesStore((s) => s.liabilities);
   const livePrices = useLivePricesStore((s) => s.prices);
   const sipValues = useLivePricesStore((s) => s.sipValues);
+  const liveGoldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
   const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Goal | null>(null);
@@ -568,7 +570,7 @@ function GoalsTab() {
 
   // Same calc the Dashboard uses for the headline Net Worth figure, so every
   // goal's progress always reflects the live number — never a stale manual entry.
-  const totalAssets = assets.reduce((s, a) => s + resolveAssetValues(a, livePrices, sipValues).value, 0);
+  const totalAssets = assets.reduce((s, a) => s + resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).value, 0);
   const totalLiabilities = liabilities.reduce((s, l) => s + l.outstanding, 0);
   const netWorth = totalAssets - totalLiabilities;
 

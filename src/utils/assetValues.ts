@@ -1,5 +1,6 @@
 import type { Asset } from '../types';
 import { resolveLivePrice, resolveSipLiveValue, type SipLiveEntry } from '../store/livePricesStore';
+import { goldPricePerGram22k } from './goldPrice';
 
 export interface ResolvedAssetValues {
   invested: number | undefined;
@@ -16,21 +17,41 @@ export interface ResolvedAssetValues {
  * (refreshed in the background by useLiveSipValues), keyed by mfapi.in
  * scheme code — the same value the SIP edit form computes on the fly, kept
  * current everywhere the asset is shown instead of only while editing.
+ * `goldPricePerGram` is the live 24K rate polled by useLiveGoldPrice
+ * (see livePricesStore.goldPricePerGram) — used to keep Gold holdings'
+ * Current Value / Return tracking the live rate everywhere the asset is
+ * shown, the same way `livePrices` does for equities/ETFs.
  */
 export function resolveAssetValues(
   asset: Asset,
   livePrices: Record<string, number>,
-  sipValues: Record<string, SipLiveEntry> = {}
+  sipValues: Record<string, SipLiveEntry> = {},
+  goldPricePerGram: number | null = null
 ): ResolvedAssetValues {
   const isSipLinked = asset.assetClass === 'sip' && !!asset.symbol && /^\d+$/.test(asset.symbol);
   const liveSip = isSipLinked ? resolveSipLiveValue(asset.symbol, sipValues) : undefined;
 
   const livePrice = resolveLivePrice(asset.symbol, livePrices);
-  const isLive = liveSip !== undefined || livePrice !== undefined;
+
+  // Gold holdings aren't priced via `symbol` (there's no ticker) — they're
+  // weight-tracked, so the live per-gram rate is scaled by the saved
+  // purity (defaulting to 24K for older entries with no purity saved) and
+  // multiplied by grams held, mirroring the auto-fill math in the Wealth
+  // add/edit form's Gold Purity picker.
+  const isGold = asset.assetClass === 'gold';
+  const liveGoldPrice =
+    isGold && goldPricePerGram !== null
+      ? asset.goldPurity === '22k'
+        ? goldPricePerGram22k(goldPricePerGram)
+        : goldPricePerGram
+      : undefined;
+
+  const isLive = liveSip !== undefined || livePrice !== undefined || liveGoldPrice !== undefined;
 
   const currentPrice =
     liveSip?.latestNav ??
     livePrice ??
+    liveGoldPrice ??
     (asset.quantity && asset.quantity > 0 ? asset.value / asset.quantity : undefined);
 
   const invested =
@@ -43,9 +64,11 @@ export function resolveAssetValues(
 
   const value = liveSip
     ? liveSip.value
-    : livePrice !== undefined && asset.quantity && asset.quantity > 0
-      ? asset.quantity * livePrice
-      : asset.value;
+    : liveGoldPrice !== undefined && asset.quantity && asset.quantity > 0
+      ? asset.quantity * liveGoldPrice
+      : livePrice !== undefined && asset.quantity && asset.quantity > 0
+        ? asset.quantity * livePrice
+        : asset.value;
 
   const pnl = invested !== undefined ? value - invested : asset.pnl;
   const pnlPercent =
