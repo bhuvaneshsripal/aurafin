@@ -4,9 +4,12 @@ import { db } from '../firebase/config';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
 import { useAppLockStore, readGuestAppLock } from '../store/appLockStore';
+import { useSyncStatusStore } from '../store/syncStatusStore';
 
-/** Every subcollection kept under users/{uid} that DataSync listens to. */
-const ALL_USER_COLLECTIONS = [
+/** Every subcollection kept under users/{uid} that DataSync listens to.
+ *  Exported so App.tsx can check that every one of them has completed its
+ *  first load before it renders the real app instead of a loading screen. */
+export const ALL_USER_COLLECTIONS = [
   'assets',
   'liabilities',
   'goals',
@@ -81,27 +84,43 @@ export function useFirestoreCollectionSync<T extends { id: string }>(
   onSyncChange?: (fromCache: boolean) => void
 ) {
   const user = useAuthStore((s) => s.user);
+  const markCollectionLoaded = useSyncStatusStore((s) => s.markCollectionLoaded);
+
+  // Depend on `uid`/`anonymous` rather than the `user` object itself.
+  // Firebase can hand `onAuthStateChanged` a fresh User object for the same
+  // signed-in account (not just on genuine sign-in/sign-out), and since
+  // that object is stored as-is in authStore, it changes reference too.
+  // Keying the effect on the object would tear the listener down and
+  // re-subscribe on every such change — and the replacement listener
+  // starts from nothing, so `setLocal` gets called with `[]`/cached-stale
+  // data for a moment, overwriting whatever real data was already on
+  // screen. Keying on the primitives that actually determine which
+  // Firestore path we're listening to avoids that entirely.
+  const uid = user?.uid;
+  const anonymous = user ? isAnonymousUser(user) : false;
 
   useEffect(() => {
-    if (!user) return;
+    if (!uid) return;
 
     // For guest users, load from localStorage instead of Firestore
-    if (isAnonymousUser(user)) {
-      const items = loadGuestData<T>(user.uid, collectionName);
+    if (anonymous) {
+      const items = loadGuestData<T>(uid, collectionName);
       setLocal(items);
       onSyncChange?.(false);
+      markCollectionLoaded(collectionName);
       return;
     }
 
     // For regular users, sync with Firestore
-    const colRef = collection(db, 'users', user.uid, collectionName);
+    const colRef = collection(db, 'users', uid, collectionName);
     const unsub = onSnapshot(colRef, { includeMetadataChanges: true }, (snap) => {
       const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as T);
       setLocal(items);
       onSyncChange?.(snap.metadata.fromCache);
+      markCollectionLoaded(collectionName);
     });
     return () => unsub();
-  }, [user, collectionName, setLocal, onSyncChange]);
+  }, [uid, anonymous, collectionName, setLocal, onSyncChange, markCollectionLoaded]);
 }
 
 /** Merges `incoming` on top of `existing`, but treats any key in `incoming`

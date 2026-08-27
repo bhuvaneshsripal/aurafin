@@ -14,7 +14,13 @@ import { useUiStore } from './store/uiStore';
 import { useAppLockStore } from './store/appLockStore';
 import { useDisplaySettingsStore } from './store/displaySettingsStore';
 import { useInstallPromptStore } from './store/installPromptStore';
-import { useFirestoreCollectionSync, useAvatarSync, useAppLockSync, assignOrphanDataToProfile } from './hooks/useFirestoreSync';
+import {
+  useFirestoreCollectionSync,
+  useAvatarSync,
+  useAppLockSync,
+  assignOrphanDataToProfile,
+  ALL_USER_COLLECTIONS,
+} from './hooks/useFirestoreSync';
 import { useLivePrices } from './hooks/useLivePrices';
 import { useLiveSipValues } from './hooks/useLiveSipValues';
 import { useLiveGoldPrice } from './hooks/useLiveGoldPrice';
@@ -178,18 +184,51 @@ function DataSync() {
 
   // Offline-safe fallback: if the server never confirms (no connection),
   // don't leave headline figures in a skeleton state forever — show
-  // whatever the cache has after a few seconds.
+  // whatever the cache has after a few seconds. Also force every
+  // collection's "initial load" flag on, so a genuinely unreachable
+  // Firestore (no persisted cache available at all, e.g. a first-ever
+  // visit with no network) doesn't leave the whole app stuck behind the
+  // full-screen loading gate in App() below forever.
+  const forceMarkAllLoaded = useSyncStatusStore((s) => s.forceMarkAllLoaded);
   useEffect(() => {
     const timer = setTimeout(() => {
       setAssetsSynced(false);
       setLiabilitiesSynced(false);
       setTransactionsSynced(false);
       setGoalsSynced(false);
+      forceMarkAllLoaded(ALL_USER_COLLECTIONS);
     }, 4000);
     return () => clearTimeout(timer);
-  }, [setAssetsSynced, setLiabilitiesSynced, setTransactionsSynced, setGoalsSynced]);
+  }, [setAssetsSynced, setLiabilitiesSynced, setTransactionsSynced, setGoalsSynced, forceMarkAllLoaded]);
 
   return null;
+}
+
+/**
+ * Gates rendering of the real app behind two async things finishing:
+ * Firebase confirming who's signed in (handled above in App by `loading`),
+ * and — this component's job — every Firestore collection DataSync
+ * subscribes to having delivered its first snapshot. Without this second
+ * gate, `<AppShell />` would mount immediately after auth resolves while
+ * every store (assets, goals, transactions, ...) was still sitting at its
+ * initial `[]`, so every page briefly rendered its real "you have no
+ * data yet" empty state before the first snapshot arrived and replaced it
+ * — indistinguishable, for that flash, from an account that's genuinely
+ * empty.
+ *
+ * `needsOnboarding` skips the gate: a brand-new account has no data to
+ * wait for, and the onboarding wizard doesn't render anything
+ * data-dependent, so making it wait here would just be a pointless delay.
+ */
+function AppReady({ children }: { children: React.ReactNode }) {
+  const needsOnboarding = useAuthStore((s) => s.needsOnboarding);
+  const loadedCollections = useSyncStatusStore((s) => s.loadedCollections);
+  const initialDataLoaded = ALL_USER_COLLECTIONS.every((c) => loadedCollections[c]);
+
+  if (!needsOnboarding && !initialDataLoaded) {
+    return <LoadingScreen />;
+  }
+  return <>{children}</>;
 }
 
 export default function App() {
@@ -217,10 +256,14 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      {/* DataSync mounts unconditionally so its Firestore listeners start
+          right away — it's what AppReady above is waiting to hear from. */}
       <DataSync />
       <LivePriceSync />
       <InstallPromptListener />
-      <AppShell />
+      <AppReady>
+        <AppShell />
+      </AppReady>
     </BrowserRouter>
   );
 }
