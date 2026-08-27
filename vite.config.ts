@@ -33,7 +33,13 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
       if (market === 'IN') {
         try {
           const quote = await fetchNseQuote(bareSymbol)
-          send(200, { symbol: bareSymbol, price: quote.price, currency: quote.currency, source: 'nse' })
+          send(200, {
+            symbol: bareSymbol,
+            price: quote.price,
+            previousClose: quote.previousClose,
+            currency: quote.currency,
+            source: 'nse',
+          })
           return
         } catch (err) {
           // fall through to Yahoo, but log why NSE didn't answer — this is
@@ -63,7 +69,14 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
           send(502, { error: `Could not get a live price from ${market === 'US' ? 'the US market' : 'NSE or Yahoo'}` })
           return
         }
-        send(200, { symbol: bareSymbol, price, currency: meta?.currency ?? (market === 'US' ? 'USD' : 'INR'), source: 'yahoo' })
+        const previousClose = meta?.previousClose ?? meta?.chartPreviousClose
+        send(200, {
+          symbol: bareSymbol,
+          price,
+          previousClose: typeof previousClose === 'number' ? previousClose : undefined,
+          currency: meta?.currency ?? (market === 'US' ? 'USD' : 'INR'),
+          source: 'yahoo',
+        })
       } catch (err) {
         console.error(`[dev/market] Could not reach Yahoo for ${bareSymbol}:`, err instanceof Error ? err.message : err)
         send(502, { error: 'Could not reach the live price source' })

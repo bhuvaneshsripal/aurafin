@@ -10,18 +10,19 @@ import {
   TrendingDown,
   ArrowLeft,
   Search,
-  LayoutGrid,
-  List as ListIcon,
   ChevronUp,
   ChevronDown,
   ArrowUpDown,
-  GripVertical,
   X,
   Loader2,
   CheckCircle2,
   Link2Off,
-  Tag,
   AlertTriangle,
+  Eye,
+  EyeOff,
+  MoreVertical,
+  BarChart2,
+  GripVertical,
 } from 'lucide-react';
 import {
   PieChart,
@@ -31,7 +32,7 @@ import {
   Tooltip,
 } from 'recharts';
 import { useAssetsStore } from '../store/assetsStore';
-import { useLivePricesStore } from '../store/livePricesStore';
+import { useLivePricesStore, resolvePreviousClose } from '../store/livePricesStore';
 import { goldPricePerGram22k } from '../utils/goldPrice';
 import { useSyncStatusStore } from '../store/syncStatusStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
@@ -44,7 +45,7 @@ import Modal from '../components/Modal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import LoadingDots from '../components/LoadingDots';
 import type { Asset, AssetClass, Liability, LiabilityClass } from '../types';
-import { CURRENCIES, formatPreciseCurrency, maskPreciseAmount, isZeroAmount } from '../utils/currency';
+import { CURRENCIES, formatPreciseCurrency, maskPreciseAmount, maskAmount } from '../utils/currency';
 import {
   ASSET_TAXONOMY,
   LIABILITY_TAXONOMY,
@@ -91,6 +92,84 @@ type EntryType = 'asset' | 'liability';
  */
 function formatGrams(qty: number): string {
   return (Math.round(qty * 10000) / 10000).toString();
+}
+
+/** "+₹1.80" / "-₹118.41" — signed amount, sign shown once up front rather
+ *  than relying on the currency formatter's own minus placement (which
+ *  varies by locale/currency and doesn't add a "+" for gains). Used by the
+ *  Holdings widget, which — like a brokerage app — always shows the sign
+ *  explicitly and leaves color to carry it too. */
+function formatSignedCurrency(amount: number, currency: string = 'INR'): string {
+  const sign = amount > 0 ? '+' : amount < 0 ? '-' : '';
+  return `${sign}${formatPreciseCurrency(Math.abs(amount), currency)}`;
+}
+
+/** "0.64%" — always unsigned; the Holdings widget shows direction via
+ *  color and the paired signed amount, not a second minus sign here. */
+function formatPercentMagnitude(percent: number): string {
+  return `${Math.abs(percent).toFixed(2)}%`;
+}
+
+/** Tiny deterministic PRNG (mulberry32) seeded from a string, so a given
+ *  symbol's sparkline looks the same on every render/refresh instead of
+ *  reshuffling — same idea as a real chart being stable between renders. */
+function seededRandom(seed: string): () => number {
+  let h = 1779033703 ^ seed.length;
+  for (let i = 0; i < seed.length; i++) {
+    h = Math.imul(h ^ seed.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return () => {
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    h ^= h >>> 16;
+    return (h >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Builds a stylized intraday-looking sparkline path for a holding. There's
+ * no free source of real intraday tick history for NSE symbols (only the
+ * current price + previous close), so this generates a plausible-looking
+ * wiggle that starts near yesterday's close and drifts to today's price —
+ * matching the day's real direction and magnitude even though the ticks
+ * in between are synthetic. Deterministic per symbol so it doesn't jump
+ * around on every 10s price refresh.
+ */
+function buildSparklinePath(symbol: string, trendUp: boolean, width = 108, height = 32): string {
+  const rand = seededRandom(symbol);
+  const points = 16;
+  const vals: number[] = [0.5];
+  for (let i = 1; i < points - 1; i++) {
+    const drift = (trendUp ? 1 : -1) * (i / points) * 0.35;
+    const noise = (rand() - 0.5) * 0.5;
+    vals.push(Math.min(1, Math.max(0, 0.5 + drift + noise)));
+  }
+  vals.push(trendUp ? 0.85 : 0.15);
+  const min = Math.min(...vals);
+  const max = Math.max(...vals);
+  const range = max - min || 1;
+  const pad = 3;
+  return vals
+    .map((v, i) => {
+      const x = (i / (points - 1)) * width;
+      const y = pad + (1 - (v - min) / range) * (height - pad * 2);
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
+}
+
+/** Small inline sparkline used in the Holdings table — see buildSparklinePath. */
+function Sparkline({ symbol, trendUp }: { symbol: string; trendUp: boolean }) {
+  const width = 108;
+  const height = 32;
+  const path = buildSparklinePath(symbol, trendUp, width, height);
+  const stroke = trendUp ? '#10b981' : '#ef4444';
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="shrink-0" aria-hidden="true">
+      <path d={path} fill="none" stroke={stroke} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
 export default function Wealth() {
@@ -525,83 +604,6 @@ function FilterDropdown({
   );
 }
 
-function TotalStatCard({
-  title,
-  invested,
-  currentValue,
-  pnl,
-  pnlPercent,
-  currency = 'INR',
-  privacyMode,
-  loading = false,
-}: {
-  title: string;
-  invested: number;
-  currentValue: number;
-  pnl: number;
-  pnlPercent: number;
-  currency?: string;
-  privacyMode: boolean;
-  /** Whether CURRENT VALUE and P&L are still waiting on a live price fetch.
-   *  Invested is pure cost-basis and never depends on that fetch, so it
-   *  always renders immediately regardless of this flag — see the two
-   *  independent branches below instead of one shared skeleton. */
-  loading?: boolean;
-}) {
-  const positive = pnl >= 0;
-  const isMasked = privacyMode && !isZeroAmount(pnl, 2);
-  return (
-    <div className="keep-round-card bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6">
-      <p className="text-xs font-semibold tracking-wide text-slate-400 mb-4 sm:mb-5">{title}</p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-6">
-        <div>
-          <p className="text-xs font-medium text-slate-400 mb-1">INVESTED</p>
-          <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white break-words">
-            {maskPreciseAmount(invested, currency, privacyMode)}
-          </p>
-        </div>
-        {loading ? (
-          <>
-            <div>
-              <p className="text-xs font-medium text-slate-400 mb-1">CURRENT VALUE</p>
-              <div className="h-7 sm:h-8 w-24 rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />
-            </div>
-            <div className="col-span-2 sm:col-span-1">
-              <p className="text-xs font-medium text-slate-400 mb-1">P&L</p>
-              <div className="h-7 sm:h-8 w-24 rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />
-            </div>
-          </>
-        ) : (
-          <>
-            <div>
-              <p className="text-xs font-medium text-slate-400 mb-1">CURRENT VALUE</p>
-              <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white break-words">
-                {maskPreciseAmount(currentValue, currency, privacyMode)}
-              </p>
-            </div>
-            <div className="col-span-2 sm:col-span-1">
-              <p className="text-xs font-medium text-slate-400 mb-1">P&L</p>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className={`text-xl sm:text-2xl font-bold break-words ${positive ? 'text-brand-600 dark:text-brand-300' : 'text-red-500 dark:text-red-400'}`}>
-                  {isMasked ? '••••••' : `${positive ? '+' : ''}${formatPreciseCurrency(pnl, currency)}`}
-                </span>
-                <span
-                  className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                    positive ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-300' : 'bg-red-50 dark:bg-red-900/30 text-red-500 dark:text-red-400'
-                  }`}
-                >
-                  {positive ? '+' : ''}
-                  {pnlPercent.toFixed(1)}%
-                </span>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function SummaryCard({
   label,
   value,
@@ -642,6 +644,7 @@ function AssetsTab({
   const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
   const assets = activeProfileId ? allAssets.filter((a) => a.profileId === activeProfileId) : allAssets;
   const livePrices = useLivePricesStore((s) => s.prices);
+  const previousCloses = useLivePricesStore((s) => s.previousCloses);
   const sipValues = useLivePricesStore((s) => s.sipValues);
   const pricesAttempted = useLivePricesStore((s) => s.pricesAttempted);
   const sipValuesAttempted = useLivePricesStore((s) => s.sipValuesAttempted);
@@ -689,8 +692,8 @@ function AssetsTab({
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Asset | null>(null);
   useModalBackClose(modalOpen, () => setModalOpen(false));
-  const [search, setSearch] = useState('');
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [searchParams] = useSearchParams();
+  const [search, setSearch] = useState(() => searchParams.get('q') ?? '');
   const [sortKey, setSortKey] = useState<SortKey>('manual');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -702,94 +705,11 @@ function AssetsTab({
   // back on the list — not skip past it to whatever page was open before
   // Wealth. Same guard-history-entry trick already used for the modals below.
   useModalBackClose(!!viewingAsset, () => setViewingAsset(null));
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [tagModalOpen, setTagModalOpen] = useState(false);
-  useModalBackClose(tagModalOpen, () => setTagModalOpen(false));
-  const [tagDraft, setTagDraft] = useState('');
-  const setHideFab = useUiStore((s) => s.setHideFab);
-
-  // After a manual up/down reorder, the moved row's new position can end up
-  // off-screen (e.g. moving something to the very top of a long list while
-  // scrolled halfway down). rowRefs keeps a live DOM-node lookup by asset id;
-  // once the Firestore write round-trips and `allAssets` updates with the
-  // new order, the effect below scrolls that row into view automatically.
-  const rowRefs = useRef<Map<string, HTMLElement>>(new Map());
-  const [scrollToId, setScrollToId] = useState<string | null>(null);
-  const setRowRef = (id: string) => (el: HTMLElement | null) => {
-    if (el) rowRefs.current.set(id, el);
-    else rowRefs.current.delete(id);
-  };
-  useEffect(() => {
-    if (!scrollToId) return;
-    const el = rowRefs.current.get(scrollToId);
-    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    setScrollToId(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allAssets]);
-
-  // Long-press-to-drag reordering is a desktop-only affordance — on a
-  // touchscreen, a long press already means something else (context menu /
-  // text selection) and a real drag gesture there is finicky at best, so
-  // this checks for a precise pointer (mouse/trackpad) rather than screen
-  // size, which also correctly excludes touch-first "desktop mode" tablets.
-  const [isDesktopPointer, setIsDesktopPointer] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia('(pointer: fine)');
-    setIsDesktopPointer(mq.matches);
-    const onChange = (e: MediaQueryListEvent) => setIsDesktopPointer(e.matches);
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
-
-  // armedId: draggable={true} kicks in only after a short hold, so a quick
-  // click still behaves like a normal click. draggingId/overId drive the
-  // visual feedback while an actual drag is in flight.
-  const [armedId, setArmedId] = useState<string | null>(null);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [overId, setOverId] = useState<string | null>(null);
-  const longPressTimer = useRef<number | null>(null);
-
-  const clearLongPress = () => {
-    if (longPressTimer.current !== null) {
-      window.clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
-
-  const armDrag = (id: string, e: ReactPointerEvent) => {
-    if (!isDesktopPointer) return;
-    // Starting the press on a button/checkbox/link should never arm a
-    // drag — those need their normal click behavior untouched.
-    if ((e.target as HTMLElement).closest('button, input, a, select')) return;
-    clearLongPress();
-    longPressTimer.current = window.setTimeout(() => setArmedId(id), 180);
-  };
-
-  const resetDragState = () => {
-    clearLongPress();
-    setArmedId(null);
-    setDraggingId(null);
-    setOverId(null);
-  };
-
-  // The bulk-selection bar and the global "+" FAB sit in the same bottom-right
-  // corner on mobile — hide the FAB while the bar is up so they don't overlap.
-  useEffect(() => {
-    setHideFab(selectedIds.size > 0);
-    return () => setHideFab(false);
-  }, [selectedIds.size, setHideFab]);
-
-  const toggleRowSelect = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  const togglePrivacy = useUiStore((s) => s.togglePrivacy);
+  const [holdingsMenuOpenId, setHoldingsMenuOpenId] = useState<string | null>(null);
+  const holdingsMenuRef = useOutsideClose(() => setHoldingsMenuOpenId(null));
 
   const [confirmDeleteAsset, setConfirmDeleteAsset] = useState<Asset | null>(null);
-  const [confirmBulkDeleteOpen, setConfirmBulkDeleteOpen] = useState(false);
 
   const handleDelete = async (id: string) => {
     if (!user) return;
@@ -806,56 +726,147 @@ function AssetsTab({
     });
   };
 
-  /** Manual reorder for the grid view — swaps this asset's position with
-   *  its neighbor above/below. Falls back to each asset's current index
-   *  as its order the first time it's moved. */
+  /** Manual reorder from the Holdings table — swaps this asset's position
+   *  with its neighbor above/below. Falls back to each asset's current
+   *  index as its order the first time it's moved. */
   const handleMove = async (id: string, direction: 'up' | 'down') => {
     if (!user) return;
     setSortKey('manual');
-    setScrollToId(id);
     const ordered = [...assets].sort(
       (a, b) => (a.order ?? 0) - (b.order ?? 0) || a.updatedAt - b.updatedAt
     );
     const idx = ordered.findIndex((a) => a.id === id);
     const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
     if (idx === -1 || swapIdx < 0 || swapIdx >= ordered.length) return;
-    const current = ordered[idx];
-    const neighbor = ordered[swapIdx];
-    const currentOrder = current.order ?? idx;
-    const neighborOrder = neighbor.order ?? swapIdx;
+
+    // Swap the two positions, then re-stamp *every* asset's `order` field to
+    // its position in `ordered`. Writing only the two swapped docs isn't
+    // enough: any asset that never had an explicit `order` yet falls back to
+    // 0 in the sort comparator above, so it collides with the freshly
+    // assigned index-based values and the whole list can jump around instead
+    // of the intended item moving one slot. Re-stamping the full list keeps
+    // every asset's order value explicit and collision-free going forward.
+    const reordered = [...ordered];
+    [reordered[idx], reordered[swapIdx]] = [reordered[swapIdx], reordered[idx]];
+
     try {
-      await upsertDoc(user, 'assets', { ...current, order: neighborOrder });
-      await upsertDoc(user, 'assets', { ...neighbor, order: currentOrder });
+      await Promise.all(
+        reordered.map((asset, position) =>
+          asset.order === position ? null : upsertDoc(user, 'assets', { ...asset, order: position })
+        )
+      );
     } catch (err) {
       console.error('Failed to reorder assets', err);
     }
   };
 
-  /** Drag-and-drop reorder — drops `draggedId` into `targetId`'s slot and
-   *  shifts everything else, then persists the new order for every asset
-   *  whose position actually changed. */
-  const handleReorderTo = async (draggedId: string, targetId: string) => {
-    if (!user || draggedId === targetId) return;
-    const ordered = [...assets].sort(
-      (a, b) => (a.order ?? 0) - (b.order ?? 0) || a.updatedAt - b.updatedAt
-    );
-    const fromIdx = ordered.findIndex((x) => x.id === draggedId);
-    const toIdx = ordered.findIndex((x) => x.id === targetId);
-    if (fromIdx === -1 || toIdx === -1) return;
-    const reordered = [...ordered];
-    const [moved] = reordered.splice(fromIdx, 1);
-    reordered.splice(toIdx, 0, moved);
-    setSortKey('manual');
-    try {
-      await Promise.all(
-        reordered
-          .map((asset, idx) => ({ asset, idx }))
-          .filter(({ asset, idx }) => (asset.order ?? -1) !== idx)
-          .map(({ asset, idx }) => upsertDoc(user, 'assets', { ...asset, order: idx }))
-      );
-    } catch (err) {
-      console.error('Failed to reorder assets', err);
+  // --- Long-press-to-drag reordering for the Holdings table -------------
+  // Press and hold a row for LONG_PRESS_MS without moving more than
+  // DRAG_MOVE_CANCEL_PX (so a scroll/tap isn't mistaken for a drag start).
+  // Once active, the row follows the pointer between the other rows and,
+  // on release, the new order is written back via the same `order` field
+  // the Move up/down menu items already use.
+  const LONG_PRESS_MS = 350;
+  const DRAG_MOVE_CANCEL_PX = 6;
+  const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
+  const dragRef = useRef<{
+    id: string;
+    startY: number;
+    timer: ReturnType<typeof setTimeout> | null;
+    dragging: boolean;
+  } | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [manualDragIds, setManualDragIds] = useState<string[] | null>(null);
+  const suppressRowClickRef = useRef(false);
+
+  const handleRowPointerDown = (e: ReactPointerEvent<HTMLTableRowElement>, id: string) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const startY = e.clientY;
+    const timer = setTimeout(() => {
+      if (!dragRef.current || dragRef.current.id !== id) return;
+      dragRef.current.dragging = true;
+      if (sortKey !== 'manual') setSortKey('manual');
+      const orderedIds = [...assets]
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.updatedAt - b.updatedAt)
+        .map((x) => x.id);
+      setManualDragIds(orderedIds);
+      setDraggingId(id);
+      try {
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      } catch {
+        /* pointer capture isn't critical — dragging still works without it */
+      }
+      navigator.vibrate?.(12);
+    }, LONG_PRESS_MS);
+    dragRef.current = { id, startY, timer, dragging: false };
+  };
+
+  const handleRowPointerMove = (e: ReactPointerEvent<HTMLTableRowElement>, id: string) => {
+    const info = dragRef.current;
+    if (!info || info.id !== id) return;
+    if (!info.dragging) {
+      if (Math.abs(e.clientY - info.startY) > DRAG_MOVE_CANCEL_PX && info.timer) {
+        clearTimeout(info.timer);
+        dragRef.current = null;
+      }
+      return;
     }
+    e.preventDefault();
+    setManualDragIds((ids) => {
+      if (!ids) return ids;
+      const currentIndex = ids.indexOf(id);
+      if (currentIndex === -1) return ids;
+      let targetIndex = ids.length - 1;
+      for (let i = 0; i < ids.length; i++) {
+        const el = rowRefs.current[ids[i]];
+        if (!el) continue;
+        const rect = el.getBoundingClientRect();
+        if (e.clientY < rect.top + rect.height / 2) {
+          targetIndex = i;
+          break;
+        }
+      }
+      if (targetIndex === currentIndex) return ids;
+      const next = [...ids];
+      next.splice(currentIndex, 1);
+      next.splice(targetIndex, 0, id);
+      return next;
+    });
+  };
+
+  const finishDrag = async () => {
+    const info = dragRef.current;
+    if (info?.timer) clearTimeout(info.timer);
+    const wasDragging = info?.dragging;
+    dragRef.current = null;
+    if (!wasDragging) return;
+    suppressRowClickRef.current = true;
+    setTimeout(() => {
+      suppressRowClickRef.current = false;
+    }, 0);
+    const ids = manualDragIds;
+    setDraggingId(null);
+    setManualDragIds(null);
+    if (ids && user) {
+      for (let i = 0; i < ids.length; i++) {
+        const asset = assets.find((x) => x.id === ids[i]);
+        if (asset && (asset.order ?? -1) !== i) {
+          try {
+            await upsertDoc(user, 'assets', { ...asset, order: i });
+          } catch (err) {
+            console.error('Failed to reorder assets', err);
+          }
+        }
+      }
+    }
+  };
+
+  const handleRowPointerCancel = () => {
+    const info = dragRef.current;
+    if (info?.timer) clearTimeout(info.timer);
+    dragRef.current = null;
+    setDraggingId(null);
+    setManualDragIds(null);
   };
 
   const toggleSort = (key: SortKey) => {
@@ -914,23 +925,46 @@ function AssetsTab({
     })
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.updatedAt - b.updatedAt);
 
-  const allFilteredSelected = filtered.length > 0 && filtered.every((a) => selectedIds.has(a.id));
-  const toggleSelectAll = () => {
-    setSelectedIds(allFilteredSelected ? new Set() : new Set(filtered.map((a) => a.id)));
-  };
-
   const totalValue = assets.reduce((s, a) => s + resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).value, 0);
 
   const rows = filtered.map((a) => {
     const computed = resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram);
     const alloc = totalValue > 0 ? (computed.value / totalValue) * 100 : 0;
-    return { asset: a, ...computed, alloc };
+    // Per-unit 1D change (only meaningful for symbol-priced holdings that
+    // have a previous close — e.g. direct stocks; undefined for everything
+    // else, which the Holdings table below renders as "—" rather than 0).
+    const previousClose = resolvePreviousClose(a.symbol, previousCloses);
+    const dayChangePerUnit =
+      previousClose !== undefined && computed.currentPrice !== undefined
+        ? computed.currentPrice - previousClose
+        : undefined;
+    const dayChangePercent =
+      dayChangePerUnit !== undefined && previousClose ? (dayChangePerUnit / previousClose) * 100 : undefined;
+    return { asset: a, ...computed, alloc, previousClose, dayChangePerUnit, dayChangePercent };
   });
 
   const totalInvested = rows.reduce((s, r) => s + (r.invested ?? r.value), 0);
   const totalCurrentValue = rows.reduce((s, r) => s + r.value, 0);
   const totalPnl = totalCurrentValue - totalInvested;
   const totalPnlPercent = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
+
+  // 1D return on the filtered book: sum of each holding's per-unit change ×
+  // quantity, expressed as a % of what the book was worth at yesterday's
+  // close (not today's) — the standard way brokers compute this, so a
+  // holding you bought today at a gain doesn't inflate "how much did my
+  // *existing* portfolio move today". Only holdings with a known previous
+  // close (i.e. actual live symbol quotes) contribute.
+  const rowsWithDayChange = rows.filter((r) => r.dayChangePerUnit !== undefined);
+  const has1dData = rowsWithDayChange.length > 0;
+  const total1dAbs = rowsWithDayChange.reduce(
+    (s, r) => s + r.dayChangePerUnit! * (r.asset.quantity ?? 0),
+    0
+  );
+  const prev1dTotalValue = rowsWithDayChange.reduce(
+    (s, r) => s + (r.previousClose ?? 0) * (r.asset.quantity ?? 0),
+    0
+  );
+  const total1dPercent = prev1dTotalValue > 0 ? (total1dAbs / prev1dTotalValue) * 100 : 0;
 
   const categoryOptions = ASSET_TAXONOMY.filter((cat) =>
     assets.some((a) => (ASSET_CLASS_TO_CATEGORY[a.assetClass] ?? cat).key === cat.key)
@@ -994,6 +1028,14 @@ function AssetsTab({
           }
           return (av - bv) * dir;
         });
+
+  // While a long-press drag is in progress, render rows in the live drag
+  // order instead of sortedRows, so the row visibly moves as you drag it.
+  const displayRows = manualDragIds
+    ? (manualDragIds
+        .map((id) => sortedRows.find((r) => r.asset.id === id))
+        .filter((r): r is (typeof sortedRows)[number] => !!r))
+    : sortedRows;
 
   const openEdit = (a: Asset) => {
     setEditing(a);
@@ -1076,24 +1118,6 @@ function AssetsTab({
               className="pl-9 pr-3 py-2 border-2 border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg text-sm w-full sm:w-48 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
             />
           </div>
-          <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden shrink-0">
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`h-9 w-9 flex items-center justify-center ${
-                viewMode === 'grid' ? 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-white' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
-              }`}
-            >
-              <LayoutGrid size={16} />
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`h-9 w-9 flex items-center justify-center border-l border-slate-200 dark:border-slate-700 ${
-                viewMode === 'list' ? 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-white' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
-              }`}
-            >
-              <ListIcon size={16} />
-            </button>
-          </div>
           <button
             onClick={handleExport}
             disabled={assets.length === 0}
@@ -1113,61 +1137,32 @@ function AssetsTab({
 
       <TabNav tab={tab} setTab={setTab} />
 
-      <div className="flex flex-col sm:flex-row sm:items-end gap-3">
-        <div className="grid grid-cols-2 gap-2.5 sm:contents">
-          <FilterDropdown
-            label="Filter"
-            placeholder="Category"
-            options={categoryOptions}
-            selected={selectedCategories}
-            onChange={setSelectedCategories}
-          />
-          <FilterDropdown
-            label="Type"
-            placeholder="Type"
-            options={typeOptions}
-            selected={selectedTypes}
-            onChange={setSelectedTypes}
-          />
-          <FilterDropdown label="Tags" placeholder="Tag" options={[]} selected={[]} onChange={() => {}} />
-          <FilterDropdown
-            label="Currency"
-            placeholder="Currency"
-            options={currencyOptions}
-            selected={selectedCurrencies}
-            onChange={setSelectedCurrencies}
-          />
-        </div>
-        <div className="flex items-center gap-2 sm:contents">
-          {sortKey !== 'manual' && viewMode === 'list' && (
-            <button
-              onClick={() => setSortKey('manual')}
-              className="h-[32px] sm:h-[34px] shrink-0 px-3 flex items-center justify-center border border-slate-200 rounded-lg text-sm text-slate-500 hover:bg-slate-50 whitespace-nowrap"
-            >
-              Manual order
-            </button>
-          )}
-          <button
-            onClick={() => toggleSort(sortKey)}
-            title="Flip sort direction"
-            className="h-[32px] w-[32px] sm:h-[34px] sm:w-[34px] shrink-0 flex items-center justify-center border border-slate-200 rounded-lg text-slate-500 hover:bg-slate-50"
-          >
-            <ArrowUpDown size={16} />
-          </button>
-        </div>
+      <div className="grid grid-cols-2 sm:flex sm:items-end gap-2.5 sm:gap-3">
+        <FilterDropdown
+          label="Filter"
+          placeholder="Category"
+          options={categoryOptions}
+          selected={selectedCategories}
+          onChange={setSelectedCategories}
+        />
+        <FilterDropdown
+          label="Type"
+          placeholder="Type"
+          options={typeOptions}
+          selected={selectedTypes}
+          onChange={setSelectedTypes}
+        />
+        <FilterDropdown label="Tags" placeholder="Tag" options={[]} selected={[]} onChange={() => {}} />
+        <FilterDropdown
+          label="Currency"
+          placeholder="Currency"
+          options={currencyOptions}
+          selected={selectedCurrencies}
+          onChange={setSelectedCurrencies}
+        />
       </div>
 
-      <TotalStatCard
-        title="TOTAL ASSETS"
-        invested={totalInvested}
-        currentValue={totalCurrentValue}
-        pnl={totalPnl}
-        pnlPercent={totalPnlPercent}
-        privacyMode={privacyMode}
-        loading={!totalsReady}
-      />
-
-      {filtered.length === 0 && (
+      {filtered.length === 0 ? (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 px-4 py-14 flex flex-col items-center justify-center text-center gap-4">
           <p className="text-slate-400">
             {assets.length === 0 ? 'No assets yet. Add your first one to get started.' : 'No assets match your search.'}
@@ -1181,463 +1176,287 @@ function AssetsTab({
             </button>
           )}
         </div>
-      )}
-
-      {filtered.length > 0 && viewMode === 'list' ? (
-        <>
-          <div className="md:hidden flex items-center justify-between px-1">
-            <button
-              onClick={toggleSelectAll}
-              className="text-xs font-medium text-brand-600 hover:text-brand-700 py-1"
-            >
-              {allFilteredSelected ? 'Deselect all' : `Select all ${filtered.length}`}
-            </button>
-          </div>
-
-          {/* Mobile: simplified rows — name, current value, P&L only. Tap a row to view details;
-              tap the checkbox (or tap a row while others are selected) to multi-select. */}
-          <div className="md:hidden bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
-            {sortedRows.map(({ asset: a, value, pnl }) => (
-              <div
-                key={a.id}
-                className={`w-full flex items-center gap-3 px-4 py-3.5 active:bg-slate-50 ${
-                  selectedIds.has(a.id) ? 'bg-brand-50/60' : ''
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedIds.has(a.id)}
-                  onChange={() => toggleRowSelect(a.id)}
-                  className="h-4 w-4 rounded border-slate-300 shrink-0"
-                />
+      ) : (
+        <div className="space-y-3">
+          {/* Summary card */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <span className="text-[11px] font-semibold tracking-wide text-slate-400 uppercase">
+                  Holdings ({rows.length})
+                </span>
+                <div className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mt-1">
+                  {!totalsReady ? (
+                    <span className="inline-block h-8 w-28 rounded bg-slate-100 dark:bg-slate-800 animate-pulse align-middle" />
+                  ) : (
+                    maskAmount(totalCurrentValue, 'INR', privacyMode, { fractionDigits: 0 })
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
                 <button
-                  onClick={() => (selectedIds.size > 0 ? toggleRowSelect(a.id) : setViewingAsset(a))}
-                  className="flex-1 flex items-center justify-between gap-3 text-left min-w-0"
+                  onClick={() => setTab('allocation')}
+                  className="flex items-center gap-1.5 text-xs sm:text-sm font-medium border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
                 >
-                  <p className="font-semibold text-slate-800 truncate uppercase">{a.name}</p>
-                  <div className="text-right shrink-0">
-                    <p className="font-semibold text-slate-800">
-                      {isAssetLivePriced(a) && !totalsReady ? (
-                        <span className="inline-block h-4 w-16 rounded bg-slate-100 animate-pulse align-middle" />
-                      ) : (
-                        maskPreciseAmount(value, a.currency, privacyMode)
-                      )}
-                    </p>
-                    {isAssetLivePriced(a) && !totalsReady ? (
-                      <span className="inline-block h-3.5 w-12 mt-1 rounded bg-slate-100 animate-pulse" />
-                    ) : (
-                      pnl !== undefined && (
-                        <p className={`text-xs ${pnl >= 0 ? 'text-brand-600 dark:text-brand-300' : 'text-red-500 dark:text-red-400'}`}>
-                          {privacyMode && !isZeroAmount(pnl, 2)
-                            ? '••••••'
-                            : `${pnl >= 0 ? '+' : ''}${formatPreciseCurrency(pnl, a.currency)}`}
-                        </p>
-                      )
-                    )}
-                  </div>
+                  <BarChart2 size={15} /> Analyse
+                </button>
+                <button
+                  onClick={togglePrivacy}
+                  title={privacyMode ? 'Show amounts' : 'Hide amounts'}
+                  className="h-8 w-8 flex items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+                >
+                  {privacyMode ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+                <button
+                  onClick={handleExport}
+                  title="Export holdings"
+                  className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+                >
+                  <MoreVertical size={16} />
                 </button>
               </div>
-            ))}
-          </div>
+            </div>
 
-          {/* Bottom action bar — appears once one or more rows are checked.
-              Sits above BottomNav on mobile, floats bottom-right on desktop
-              (where there's no BottomNav to clash with). */}
-          {selectedIds.size > 0 && (
-            <div className="fixed z-30 bottom-20 left-4 right-4 md:bottom-6 md:left-auto md:right-6 md:w-auto">
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-lg flex items-center justify-between gap-4 px-4 py-3">
-                <span className="text-sm font-medium text-slate-700 whitespace-nowrap">
-                  {selectedIds.size} selected
-                </span>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => setTagModalOpen(true)}
-                    title="Tag"
-                    className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500"
-                  >
-                    <Tag size={16} />
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (selectedIds.size !== 1) {
-                        alert('Select exactly one asset to change it.');
-                        return;
-                      }
-                      const id = Array.from(selectedIds)[0];
-                      const a = assets.find((x) => x.id === id);
-                      if (a) {
-                        setSelectedIds(new Set());
-                        openEdit(a);
-                      }
-                    }}
-                    title="Change asset"
-                    className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500"
-                  >
-                    <LayoutGrid size={16} />
-                  </button>
-                  <button
-                    onClick={() => setConfirmBulkDeleteOpen(true)}
-                    title="Delete"
-                    className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-red-50 text-red-600"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                  <button
-                    onClick={() => setSelectedIds(new Set())}
-                    title="Clear selection"
-                    className="h-9 w-9 flex items-center justify-center rounded-full bg-brand-600 hover:bg-brand-700 text-white ml-1"
-                  >
-                    <X size={16} />
-                  </button>
+            <div className="border-t border-dashed border-slate-200 dark:border-slate-700 my-4" />
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="text-left">
+                <div className="text-xs text-slate-400 mb-1">Invested value</div>
+                <div className="font-semibold text-slate-800 dark:text-slate-100">
+                  {!totalsReady ? (
+                    <span className="inline-block h-5 w-20 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
+                  ) : (
+                    maskAmount(totalInvested, 'INR', privacyMode, { fractionDigits: 0 })
+                  )}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-xs text-slate-400 mb-1">1D returns</div>
+                {!totalsReady ? (
+                  <span className="inline-block h-5 w-24 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
+                ) : has1dData ? (
+                  <div className={`font-semibold ${total1dAbs >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                    {privacyMode
+                      ? '••••••'
+                      : `${formatSignedCurrency(total1dAbs)} (${formatPercentMagnitude(total1dPercent)})`}
+                  </div>
+                ) : (
+                  <div className="font-semibold text-slate-300">—</div>
+                )}
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-slate-400 mb-1">Total returns</div>
+                <div className={`font-semibold ${totalPnl >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                  {!totalsReady ? (
+                    <span className="inline-block h-5 w-24 rounded bg-slate-100 dark:bg-slate-800 animate-pulse ml-auto" />
+                  ) : privacyMode ? (
+                    '••••••'
+                  ) : (
+                    `${formatSignedCurrency(totalPnl)} (${formatPercentMagnitude(totalPnlPercent)})`
+                  )}
                 </div>
               </div>
             </div>
-          )}
+          </div>
 
-          <Modal open={tagModalOpen} onClose={() => setTagModalOpen(false)} title="Add Tag">
-            <div className="space-y-3">
-              <Field label="Tag name">
-                <input
-                  value={tagDraft}
-                  onChange={(e) => setTagDraft(e.target.value.toUpperCase())}
-                  placeholder="e.g. Long-term"
-                  className={`${inputClass} uppercase`}
-                />
-              </Field>
-              <p className="text-xs text-slate-400">
-                Tags aren't part of the asset data model yet — this confirms the action but doesn't
-                persist anything until a `tags` field is added to the schema.
-              </p>
-              <button
-                onClick={() => {
-                  alert(`Tagged ${selectedIds.size} asset(s) as "${tagDraft || 'Untitled'}".`);
-                  setTagDraft('');
-                  setTagModalOpen(false);
-                  setSelectedIds(new Set());
-                }}
-                className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-base font-medium"
-              >
-                Save Tag
-              </button>
-            </div>
-          </Modal>
-
-          {/* Desktop/laptop: full table, every column. */}
-          <div className="hidden md:block bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-x-auto">
-          <table className="w-full text-sm min-w-[900px]">
-            <thead className="bg-slate-50 dark:bg-slate-900/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
-              <tr>
-                <th className="px-4 py-3 w-10">
-                  <input
-                    type="checkbox"
-                    checked={allFilteredSelected}
-                    onChange={toggleSelectAll}
-                    className="h-4 w-4 rounded border-slate-300 dark:border-slate-600"
-                  />
-                </th>
-                <SortHeader label="NAME" sortKeyName="name" />
-                <SortHeader label="QTY" sortKeyName="qty" align="right" />
-                <SortHeader label="AVG. COST" sortKeyName="avgCost" align="right" />
-                <SortHeader label="PER UNIT" sortKeyName="perUnit" align="right" />
-                <SortHeader label="INVESTED" sortKeyName="invested" align="right" />
-                <SortHeader label="CUR. VAL" sortKeyName="value" align="right" />
-                <SortHeader label="P&L" sortKeyName="pnl" align="right" />
-                <SortHeader label="% ALLOC" sortKeyName="alloc" align="right" />
-                <th className="px-4 py-3 w-44"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-              {sortedRows.map(({ asset: a, invested, currentPrice, value, pnl, alloc }) => (
-                <tr
-                  key={a.id}
-                  ref={setRowRef(a.id)}
-                  draggable={armedId === a.id}
-                  onPointerDown={(e) => armDrag(a.id, e)}
-                  onPointerUp={clearLongPress}
-                  onPointerLeave={clearLongPress}
-                  onDragStart={(e) => {
-                    setDraggingId(a.id);
-                    e.dataTransfer.effectAllowed = 'move';
-                  }}
-                  onDragOver={(e) => {
-                    if (!draggingId) return;
-                    e.preventDefault();
-                    setOverId(a.id);
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    if (draggingId) handleReorderTo(draggingId, a.id);
-                    resetDragState();
-                  }}
-                  onDragEnd={resetDragState}
-                  className={`group hover:bg-slate-50/60 transition-colors ${
-                    draggingId === a.id ? 'opacity-40' : ''
-                  } ${
-                    overId === a.id && draggingId && draggingId !== a.id
-                      ? 'bg-brand-50/70 outline outline-2 outline-brand-300 -outline-offset-2'
-                      : ''
-                  }`}
-                >
-                  <td className="px-4 py-3.5">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(a.id)}
-                      onChange={() => toggleRowSelect(a.id)}
-                      className="h-4 w-4 rounded border-slate-300"
-                    />
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-start gap-2">
-                      {isDesktopPointer && (
-                        <GripVertical
-                          size={14}
-                          className="mt-1 text-slate-300 group-hover:text-slate-400 shrink-0 cursor-grab active:cursor-grabbing"
-                        />
-                      )}
-                      <div>
-                        <p className="font-semibold text-slate-800 uppercase">
-                          {a.name}
-                          {a.market === 'US' && (
-                            <span className="ml-1.5 align-middle inline-block bg-blue-50 text-blue-600 text-[10px] font-semibold px-1.5 py-0.5 rounded normal-case">
-                              US
-                            </span>
-                          )}
-                          {a.recurringInvestment && (
-                            <span className="ml-1.5 align-middle inline-block bg-amber-50 text-amber-600 text-[10px] font-semibold px-1.5 py-0.5 rounded normal-case">
-                              SIP
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          {ASSET_CLASS_LABELS[a.assetClass]}
-                          {a.institution ? ` · ${a.institution}` : ''}
-                          {a.interestRate ? ` · ${a.interestRate}% p.a.` : ''}
-                          {a.maturityDate && !computeMaturityInfo(a).isMatured
-                            ? ` · Matures ${a.maturityDate}`
-                            : ''}
-                        </p>
-                        {(() => {
-                          const { maturityAmount, isMatured } = computeMaturityInfo(a);
-                          return maturityAmount !== undefined && !isMatured ? (
-                            <p className="text-xs text-brand-600 font-medium">
-                              Maturity amount: {formatPreciseCurrency(maturityAmount, a.currency)}
-                            </p>
-                          ) : null;
-                        })()}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3.5 text-right text-slate-600">
-                    {a.quantity !== undefined
-                      ? WEIGHT_TRACKED_CLASSES.has(a.assetClass)
-                        ? `${formatGrams(a.quantity)} g`
-                        : a.quantity
-                      : '—'}
-                  </td>
-                  <td className="px-4 py-3.5 text-right text-slate-600">
-                    {a.avgCost !== undefined ? formatPreciseCurrency(a.avgCost, a.currency) : '—'}
-                  </td>
-                  <td className="px-4 py-3.5 text-right text-slate-600">
-                    {isAssetLivePriced(a) && !totalsReady ? (
-                      <span className="inline-block h-4 w-14 rounded bg-slate-100 dark:bg-slate-800 animate-pulse align-middle" />
-                    ) : currentPrice !== undefined ? (
-                      formatPreciseCurrency(currentPrice, a.currency)
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                  <td className="px-4 py-3.5 text-right text-slate-600">
-                    {invested !== undefined ? formatPreciseCurrency(invested, a.currency) : '—'}
-                  </td>
-                  <td className="px-4 py-3.5 text-right font-semibold text-slate-800">
-                    {isAssetLivePriced(a) && !totalsReady ? (
-                      <span className="inline-block h-4 w-16 rounded bg-slate-100 dark:bg-slate-800 animate-pulse align-middle" />
-                    ) : (
-                      maskPreciseAmount(value, a.currency, privacyMode)
-                    )}
-                  </td>
-                  <td className="px-4 py-3.5 text-right">
-                    {isAssetLivePriced(a) && !totalsReady ? (
-                      <span className="inline-block h-4 w-16 rounded bg-slate-100 dark:bg-slate-800 animate-pulse align-middle" />
-                    ) : pnl !== undefined ? (
-                      <>
-                        <p className={`font-semibold ${pnl >= 0 ? 'text-brand-600 dark:text-brand-300' : 'text-red-500 dark:text-red-400'}`}>
-                          {pnl >= 0 ? '+' : ''}
-                          {formatPreciseCurrency(pnl, a.currency)}
-                        </p>
-                      </>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                  <td className="px-4 py-3.5 text-right text-slate-600">{alloc.toFixed(1)}%</td>
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => handleMove(a.id, 'up')}
-                        disabled={filtered.findIndex((x) => x.id === a.id) === 0}
-                        title="Move up"
-                        className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-black hover:border-2 hover:bg-brand-50 disabled:border-slate-200 disabled:text-slate-300 disabled:hover:border-slate-200 disabled:hover:bg-transparent disabled:hover:text-slate-300 rounded-md p-1 transition-colors"
-                      >
-                        <ChevronUp size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleMove(a.id, 'down')}
-                        disabled={filtered.findIndex((x) => x.id === a.id) === filtered.length - 1}
-                        title="Move down"
-                        className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-black hover:border-2 hover:bg-brand-50 disabled:border-slate-200 disabled:text-slate-300 disabled:hover:border-slate-200 disabled:hover:bg-transparent disabled:hover:text-slate-300 rounded-md p-1 transition-colors"
-                      >
-                        <ChevronDown size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleDuplicate(a)}
-                        title="Duplicate"
-                        className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-black hover:border-2 hover:bg-brand-50 rounded-md p-1 transition-colors"
-                      >
-                        <Copy size={16} />
-                      </button>
-                      <button
-                        onClick={() => openEdit(a)}
-                        title="Edit"
-                        className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-black hover:border-2 hover:bg-brand-50 rounded-md p-1 transition-colors"
-                      >
-                        <Pencil size={16} />
-                      </button>
-                      <button
-                        onClick={() => setConfirmDeleteAsset(a)}
-                        title="Delete"
-                        className="text-red-600 border border-red-200 hover:border-red-400 hover:bg-red-50 rounded-md p-1 transition-colors"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
+          {/* Per-holding table — headers are clickable and sort the rows below
+              (click again to flip direction), same mechanism as SortHeader. */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
+            <table className="w-full text-sm min-w-[760px]">
+              <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400">
+                <tr>
+                  <SortHeader label="Company" sortKeyName="name" />
+                  <th className="px-4 py-3" aria-hidden="true" />
+                  <SortHeader label="Market price (1D%)" sortKeyName="perUnit" align="right" />
+                  <SortHeader label="Returns (%)" sortKeyName="pnl" align="right" />
+                  <SortHeader label="Current (Invested)" sortKeyName="value" align="right" />
+                  <th className="px-2 py-3 w-10" aria-hidden="true" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {displayRows.map((r, idx) => {
+                  const a = r.asset;
+                  const trendUp = (r.dayChangePerUnit ?? r.pnl ?? 0) >= 0;
+                  const invested = r.invested ?? r.value;
+                  const qty = a.quantity ?? 0;
+                  const subtitle =
+                    a.assetClass === 'stock' && qty > 0
+                      ? `${qty} share${qty === 1 ? '' : 's'} • Avg ${maskPreciseAmount(a.avgCost ?? 0, a.currency, privacyMode)}`
+                      : WEIGHT_TRACKED_CLASSES.has(a.assetClass) && qty > 0
+                        ? `${formatGrams(qty)}g • Avg ${maskPreciseAmount(a.avgCost ?? 0, a.currency, privacyMode)}/g`
+                        : qty > 0 && a.avgCost
+                          ? `${qty} unit${qty === 1 ? '' : 's'} • Avg ${maskPreciseAmount(a.avgCost, a.currency, privacyMode)}`
+                          : ASSET_CLASS_LABELS[a.assetClass];
+                  const isBeingDragged = draggingId === a.id;
+                  return (
+                    <tr
+                      key={a.id}
+                      ref={(el) => {
+                        rowRefs.current[a.id] = el;
+                      }}
+                      className={`group hover:bg-slate-50/70 dark:hover:bg-slate-800/40 cursor-pointer select-none ${
+                        isBeingDragged
+                          ? 'relative z-10 opacity-70 shadow-lg ring-2 ring-brand-400 bg-white dark:bg-slate-800 touch-none cursor-grabbing'
+                          : ''
+                      }`}
+                      onClick={() => {
+                        if (suppressRowClickRef.current) return;
+                        setViewingAsset(a);
+                      }}
+                      onPointerDown={(e) => handleRowPointerDown(e, a.id)}
+                      onPointerMove={(e) => handleRowPointerMove(e, a.id)}
+                      onPointerUp={finishDrag}
+                      onPointerCancel={handleRowPointerCancel}
+                    >
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-2">
+                          <GripVertical
+                            size={14}
+                            className={`shrink-0 text-slate-300 dark:text-slate-600 cursor-grab ${
+                              isBeingDragged ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                            }`}
+                          />
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-800 dark:text-slate-100 truncate uppercase">{a.name}</p>
+                            <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        {r.previousClose !== undefined && <Sparkline symbol={a.symbol ?? a.id} trendUp={trendUp} />}
+                      </td>
+                      <td className="px-4 py-4 text-right whitespace-nowrap">
+                        {isAssetLivePriced(a) && !totalsReady ? (
+                          <span className="inline-block h-4 w-16 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
+                        ) : (
+                          <>
+                            <div className="font-semibold text-slate-800 dark:text-slate-100">
+                              {r.currentPrice !== undefined
+                                ? maskPreciseAmount(r.currentPrice, a.currency, privacyMode)
+                                : '—'}
+                            </div>
+                            {r.dayChangePerUnit !== undefined && r.dayChangePercent !== undefined ? (
+                              <div className={`text-xs mt-0.5 ${r.dayChangePerUnit >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                                {privacyMode
+                                  ? '••••'
+                                  : `${formatSignedCurrency(r.dayChangePerUnit, a.currency)} (${formatPercentMagnitude(r.dayChangePercent)})`}
+                              </div>
+                            ) : (
+                              <div className="text-xs mt-0.5 text-slate-300">—</div>
+                            )}
+                          </>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 text-right whitespace-nowrap">
+                        {isAssetLivePriced(a) && !totalsReady ? (
+                          <span className="inline-block h-4 w-16 rounded bg-slate-100 dark:bg-slate-800 animate-pulse ml-auto" />
+                        ) : (
+                          <>
+                            <div className={`font-semibold ${(r.pnl ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                              {r.pnl !== undefined
+                                ? privacyMode
+                                  ? '••••••'
+                                  : formatSignedCurrency(r.pnl, a.currency)
+                                : '—'}
+                            </div>
+                            <div className={`text-xs mt-0.5 ${(r.pnl ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                              {r.pnlPercent !== undefined && !privacyMode ? formatPercentMagnitude(r.pnlPercent) : ''}
+                            </div>
+                          </>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 text-right whitespace-nowrap">
+                        {isAssetLivePriced(a) && !totalsReady ? (
+                          <span className="inline-block h-4 w-16 rounded bg-slate-100 dark:bg-slate-800 animate-pulse ml-auto" />
+                        ) : (
+                          <>
+                            <div className="font-semibold text-slate-800 dark:text-slate-100">
+                              {maskPreciseAmount(r.value, a.currency, privacyMode)}
+                            </div>
+                            <div className="text-xs mt-0.5 text-slate-400">
+                              {maskPreciseAmount(invested, a.currency, privacyMode)}
+                            </div>
+                          </>
+                        )}
+                      </td>
+                      <td className="px-2 py-4 relative">
+                        <div
+                          className="opacity-0 group-hover:opacity-100 focus-within:opacity-100"
+                          ref={holdingsMenuOpenId === a.id ? holdingsMenuRef : undefined}
+                        >
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setHoldingsMenuOpenId((id) => (id === a.id ? null : a.id));
+                            }}
+                            className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400"
+                          >
+                            <MoreVertical size={16} />
+                          </button>
+                          {holdingsMenuOpenId === a.id && (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              className="absolute right-2 top-11 z-20 w-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1"
+                            >
+                              <button
+                                onClick={() => {
+                                  setHoldingsMenuOpenId(null);
+                                  openEdit(a);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+                              >
+                                <Pencil size={14} /> Edit
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setHoldingsMenuOpenId(null);
+                                  handleDuplicate(a);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+                              >
+                                <Copy size={14} /> Duplicate
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setHoldingsMenuOpenId(null);
+                                  handleMove(a.id, 'up');
+                                }}
+                                disabled={idx === 0}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent"
+                              >
+                                <ChevronUp size={14} /> Move up
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setHoldingsMenuOpenId(null);
+                                  handleMove(a.id, 'down');
+                                }}
+                                disabled={idx === displayRows.length - 1}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent"
+                              >
+                                <ChevronDown size={14} /> Move down
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setHoldingsMenuOpenId(null);
+                                  setConfirmDeleteAsset(a);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+                              >
+                                <Trash2 size={14} /> Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        </>
-      ) : filtered.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map((a, idx) => {
-              const { value, pnl } = resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram);
-              const { maturityAmount, isMatured } = computeMaturityInfo(a);
-              return (
-                <div
-                  key={a.id}
-                  ref={setRowRef(a.id)}
-                  draggable={armedId === a.id}
-                  onPointerDown={(e) => armDrag(a.id, e)}
-                  onPointerUp={clearLongPress}
-                  onPointerLeave={clearLongPress}
-                  onDragStart={(e) => {
-                    setDraggingId(a.id);
-                    e.dataTransfer.effectAllowed = 'move';
-                  }}
-                  onDragOver={(e) => {
-                    if (!draggingId) return;
-                    e.preventDefault();
-                    setOverId(a.id);
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    if (draggingId) handleReorderTo(draggingId, a.id);
-                    resetDragState();
-                  }}
-                  onDragEnd={resetDragState}
-                  className={`relative bg-white rounded-2xl border border-slate-200 p-4 transition-all ${
-                    draggingId === a.id ? 'opacity-40' : ''
-                  } ${
-                    overId === a.id && draggingId && draggingId !== a.id
-                      ? 'ring-2 ring-brand-300'
-                      : ''
-                  }`}
-                >
-                  {isDesktopPointer && (
-                    <GripVertical
-                      size={14}
-                      className="absolute top-4 right-4 text-slate-300 cursor-grab active:cursor-grabbing"
-                    />
-                  )}
-                  <p className="font-semibold text-slate-800 pr-5 uppercase">
-                    {a.name}
-                    {a.market === 'US' && (
-                      <span className="ml-1.5 align-middle inline-block bg-blue-50 text-blue-600 text-[10px] font-semibold px-1.5 py-0.5 rounded normal-case">
-                        US
-                      </span>
-                    )}
-                    {a.recurringInvestment && (
-                      <span className="ml-1.5 align-middle inline-block bg-amber-50 text-amber-600 text-[10px] font-semibold px-1.5 py-0.5 rounded normal-case">
-                        SIP
-                      </span>
-                    )}
-                  </p>
-                  <p className="text-xs text-slate-400 mb-2">
-                    {ASSET_CLASS_LABELS[a.assetClass]}
-                    {a.institution ? ` · ${a.institution}` : ''}
-                    {a.interestRate ? ` · ${a.interestRate}% p.a.` : ''}
-                    {a.maturityDate && !isMatured ? ` · Matures ${a.maturityDate}` : ''}
-                  </p>
-                  <p className="text-lg font-semibold text-slate-900">
-                    {isAssetLivePriced(a) && !totalsReady ? (
-                      <span className="inline-block h-5 w-24 rounded bg-slate-100 animate-pulse align-middle" />
-                    ) : (
-                      maskPreciseAmount(value, a.currency, privacyMode)
-                    )}
-                  </p>
-                  {maturityAmount !== undefined && !isMatured && (
-                    <p className="text-xs text-brand-600 font-medium mt-0.5">
-                      Maturity amount: {maskPreciseAmount(maturityAmount, a.currency, privacyMode)}
-                    </p>
-                  )}
-                  {isAssetLivePriced(a) && !totalsReady ? (
-                    <span className="inline-block h-4 w-16 mt-1 rounded bg-slate-100 animate-pulse" />
-                  ) : (
-                    pnl !== undefined && (
-                      <p className={`text-xs font-medium ${pnl >= 0 ? 'text-brand-600 dark:text-brand-300' : 'text-red-500 dark:text-red-400'}`}>
-                        {pnl >= 0 ? '+' : ''}
-                        {formatPreciseCurrency(pnl, a.currency)}
-                      </p>
-                    )
-                  )}
-                  <div className="flex items-center gap-3 mt-3">
-                    <button
-                      onClick={() => handleMove(a.id, 'up')}
-                      disabled={idx === 0}
-                      title="Move up"
-                      className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-black hover:border-2 hover:bg-brand-50 disabled:border-slate-200 disabled:text-slate-300 disabled:hover:border-slate-200 disabled:hover:bg-transparent disabled:hover:text-slate-300 rounded-md p-1 transition-colors"
-                    >
-                      <ChevronUp size={16} />
-                    </button>
-                    <button
-                      onClick={() => handleMove(a.id, 'down')}
-                      disabled={idx === filtered.length - 1}
-                      title="Move down"
-                      className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-black hover:border-2 hover:bg-brand-50 disabled:border-slate-200 disabled:text-slate-300 disabled:hover:border-slate-200 disabled:hover:bg-transparent disabled:hover:text-slate-300 rounded-md p-1 transition-colors"
-                    >
-                      <ChevronDown size={16} />
-                    </button>
-                    <button
-                      onClick={() => openEdit(a)}
-                      title="Edit"
-                      className="text-slate-600 border border-slate-300 hover:text-brand-700 hover:border-black hover:border-2 hover:bg-brand-50 rounded-md p-1 transition-colors"
-                    >
-                      <Pencil size={16} />
-                    </button>
-                    <button
-                      onClick={() => setConfirmDeleteAsset(a)}
-                      title="Delete"
-                      className="text-red-600 border border-red-200 hover:border-red-400 hover:bg-red-50 rounded-md p-1 transition-colors"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-      ) : null}
+        </div>
+      )}
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Edit Asset" widthClassName="max-w-xl">
         {editing && <AssetDetailsForm initial={editing} onSave={handleSave} />}
@@ -1666,41 +1485,6 @@ function AssetsTab({
             className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg text-sm font-medium"
           >
             Delete
-          </button>
-        </div>
-      </Modal>
-
-      <Modal
-        open={confirmBulkDeleteOpen}
-        onClose={() => setConfirmBulkDeleteOpen(false)}
-        title={`Delete ${selectedIds.size} asset${selectedIds.size === 1 ? '' : 's'}?`}
-      >
-        <p className="text-sm text-slate-500 mb-6">
-          {selectedIds.size === filtered.length && filtered.length === assets.length
-            ? 'This will permanently delete every asset in your portfolio.'
-            : `This will permanently delete the ${selectedIds.size} selected asset${
-                selectedIds.size === 1 ? '' : 's'
-              }.`}{' '}
-          This can't be undone.
-        </p>
-        <div className="flex gap-3">
-          <button
-            onClick={() => setConfirmBulkDeleteOpen(false)}
-            className="flex-1 border border-slate-200 text-slate-600 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={async () => {
-              for (const id of selectedIds) {
-                await handleDelete(id);
-              }
-              setSelectedIds(new Set());
-              setConfirmBulkDeleteOpen(false);
-            }}
-            className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg text-sm font-medium"
-          >
-            Delete All Selected
           </button>
         </div>
       </Modal>

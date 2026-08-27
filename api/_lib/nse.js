@@ -70,7 +70,12 @@ async function fetchNseQuote(symbol) {
   if (typeof price !== 'number' || !Number.isFinite(price)) {
     throw new Error('NSE quote response missing lastPrice');
   }
-  return { price, currency: 'INR' };
+  const previousClose = data?.priceInfo?.previousClose;
+  return {
+    price,
+    currency: 'INR',
+    previousClose: typeof previousClose === 'number' && Number.isFinite(previousClose) ? previousClose : undefined,
+  };
 }
 
 /** Search NSE's autocomplete for a symbol matching an ISIN or company name. */

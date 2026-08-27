@@ -16,6 +16,13 @@ export interface LiveQuote {
   currency: string;
 }
 
+/** Richer quote used by the Holdings widget — same price lookup, plus
+ *  yesterday's close so 1D change (₹ and %) can be computed client-side. */
+export interface LiveQuoteDetail {
+  price: number;
+  previousClose?: number;
+}
+
 /** Something we need a live price for, identified however the import gave it to us. */
 export interface PriceLookup {
   /** The key the result should be stored under (usually asset.symbol, uppercased). */
@@ -121,7 +128,7 @@ async function searchYahooSymbol(query: string): Promise<string | null> {
   return resolved;
 }
 
-async function fetchQuote(symbol: string, market: 'IN' | 'US' = 'IN'): Promise<{ price: number } | null> {
+async function fetchQuote(symbol: string, market: 'IN' | 'US' = 'IN'): Promise<LiveQuoteDetail | null> {
   try {
     const res = await fetch(
       `${QUOTE_BASE}/${encodeURIComponent(symbol)}?market=${market}`
@@ -131,22 +138,25 @@ async function fetchQuote(symbol: string, market: 'IN' | 'US' = 'IN'): Promise<{
     const json = await res.json();
     const price = json?.price;
     if (typeof price !== 'number' || !Number.isFinite(price)) return null;
+    const previousClose = json?.previousClose;
 
-    return { price };
+    return {
+      price,
+      previousClose: typeof previousClose === 'number' && Number.isFinite(previousClose) ? previousClose : undefined,
+    };
   } catch {
     return null;
   }
 }
 
 /**
- * Fetch live prices for a batch of holdings. Each lookup is keyed by
- * whatever identifier the caller wants the result stored under (usually
- * asset.symbol). If that identifier isn't a real trading symbol (e.g. a
- * Groww export gave a full company name), we resolve the actual ticker
- * first via ISIN, then via name, before fetching the quote.
+ * Fetch live quotes (price + previous close) for a batch of holdings. Same
+ * lookup/resolution logic as `fetchLivePrices` below, just returning the
+ * richer per-symbol detail that a 1D-change figure needs instead of only
+ * the price.
  */
-export async function fetchLivePrices(lookups: PriceLookup[]): Promise<Map<string, number>> {
-  const results = new Map<string, number>();
+export async function fetchLiveQuotes(lookups: PriceLookup[]): Promise<Map<string, LiveQuoteDetail>> {
+  const results = new Map<string, LiveQuoteDetail>();
 
   // Dedupe by key so we don't fetch the same holding twice.
   const unique = new Map<string, PriceLookup>();
@@ -177,11 +187,28 @@ export async function fetchLivePrices(lookups: PriceLookup[]): Promise<Map<strin
 
         if (!yahooSymbol) return;
         const quote = await fetchQuote(yahooSymbol, market);
-        if (quote) results.set(lookup.key, quote.price);
+        if (quote) results.set(lookup.key, quote);
       })
     );
   }
 
+  return results;
+}
+
+/**
+ * Fetch live prices for a batch of holdings. Each lookup is keyed by
+ * whatever identifier the caller wants the result stored under (usually
+ * asset.symbol). If that identifier isn't a real trading symbol (e.g. a
+ * Groww export gave a full company name), we resolve the actual ticker
+ * first via ISIN, then via name, before fetching the quote.
+ *
+ * Thin wrapper around `fetchLiveQuotes` for callers that only need the
+ * price itself (e.g. the Add Asset form's live-price preview).
+ */
+export async function fetchLivePrices(lookups: PriceLookup[]): Promise<Map<string, number>> {
+  const quotes = await fetchLiveQuotes(lookups);
+  const results = new Map<string, number>();
+  quotes.forEach((q, key) => results.set(key, q.price));
   return results;
 }
 

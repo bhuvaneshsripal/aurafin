@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLivePricesStore } from '../store/livePricesStore';
-import { fetchLivePrices, type PriceLookup } from '../utils/marketPrices';
+import { fetchLiveQuotes, type PriceLookup } from '../utils/marketPrices';
 
 const REFRESH_MS = 10_000;
 
@@ -12,6 +12,7 @@ const REFRESH_MS = 10_000;
 export function useLivePrices() {
   const assets = useAssetsStore((s) => s.assets);
   const setPrices = useLivePricesStore((s) => s.setPrices);
+  const setPreviousCloses = useLivePricesStore((s) => s.setPreviousCloses);
   const setLoading = useLivePricesStore((s) => s.setLoading);
   const setPricesAttempted = useLivePricesStore((s) => s.setPricesAttempted);
   const fetching = useRef(false);
@@ -36,13 +37,19 @@ export function useLivePrices() {
           isin: a.isin,
           name: a.name,
         }));
-        const priceMap = await fetchLivePrices(lookups);
+        const quoteMap = await fetchLiveQuotes(lookups);
         const prices: Record<string, number> = {};
-        priceMap.forEach((price, symbol) => {
-          prices[symbol] = price;
+        const previousCloses: Record<string, number> = {};
+        quoteMap.forEach((quote, symbol) => {
+          prices[symbol] = quote.price;
+          if (quote.previousClose !== undefined) previousCloses[symbol] = quote.previousClose;
         });
-        if (Object.keys(prices).length > 0) setPrices(prices);
-        else setLoading(false);
+        if (Object.keys(prices).length > 0) {
+          setPrices(prices);
+          if (Object.keys(previousCloses).length > 0) setPreviousCloses(previousCloses);
+        } else {
+          setLoading(false);
+        }
       } catch {
         setLoading(false);
       } finally {
@@ -55,5 +62,5 @@ export function useLivePrices() {
     const id = setInterval(refresh, REFRESH_MS);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lookupKey, setPrices, setLoading, setPricesAttempted]);
+  }, [lookupKey, setPrices, setPreviousCloses, setLoading, setPricesAttempted]);
 }

@@ -26,7 +26,12 @@ async function fetchYahooFallback(rawSymbol, market) {
   const meta = data?.chart?.result?.[0]?.meta;
   const price = meta?.regularMarketPrice ?? meta?.previousClose;
   if (typeof price !== 'number' || !Number.isFinite(price)) return null;
-  return { price, currency: meta?.currency ?? (market === 'US' ? 'USD' : 'INR') };
+  const previousClose = meta?.previousClose ?? meta?.chartPreviousClose;
+  return {
+    price,
+    currency: meta?.currency ?? (market === 'US' ? 'USD' : 'INR'),
+    previousClose: typeof previousClose === 'number' && Number.isFinite(previousClose) ? previousClose : undefined,
+  };
 }
 
 export default async function handler(req, res) {
@@ -50,7 +55,13 @@ export default async function handler(req, res) {
     try {
       const quote = await fetchNseQuote(bareSymbol);
       res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60');
-      res.status(200).json({ symbol: bareSymbol, price: quote.price, currency: quote.currency, source: 'nse' });
+      res.status(200).json({
+        symbol: bareSymbol,
+        price: quote.price,
+        previousClose: quote.previousClose,
+        currency: quote.currency,
+        source: 'nse',
+      });
       return;
     } catch {
       // fall through to Yahoo below
@@ -66,7 +77,13 @@ export default async function handler(req, res) {
       return;
     }
     res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60');
-    res.status(200).json({ symbol: bareSymbol, price: quote.price, currency: quote.currency, source: 'yahoo' });
+    res.status(200).json({
+      symbol: bareSymbol,
+      price: quote.price,
+      previousClose: quote.previousClose,
+      currency: quote.currency,
+      source: 'yahoo',
+    });
   } catch {
     res.status(502).json({ error: 'Could not reach the live price source' });
   }

@@ -12,6 +12,13 @@ export interface SipLiveEntry {
 
 interface LivePricesState {
   prices: Record<string, number>;
+  /** Yesterday's close per symbol (same uppercased keys as `prices`) — lets
+   *  the Holdings widget compute each holding's 1D change (₹ and %)
+   *  without a second round trip. Populated alongside `prices` whenever a
+   *  quote includes it; a symbol simply won't have an entry if its source
+   *  didn't provide one, and 1D-change UI treats that as "unavailable"
+   *  rather than assuming zero change. */
+  previousCloses: Record<string, number>;
   /** Keyed by mfapi.in scheme code (i.e. the asset's `symbol` for SIPs). */
   sipValues: Record<string, SipLiveEntry>;
   lastUpdated: number | null;
@@ -25,6 +32,7 @@ interface LivePricesState {
   /** Same idea as `pricesAttempted`, for linked-SIP NAV values. */
   sipValuesAttempted: boolean;
   setPrices: (prices: Record<string, number>) => void;
+  setPreviousCloses: (previousCloses: Record<string, number>) => void;
   setSipValues: (sipValues: Record<string, SipLiveEntry>) => void;
   setLoading: (loading: boolean) => void;
   setPricesAttempted: (attempted: boolean) => void;
@@ -44,12 +52,15 @@ export const useLivePricesStore = create<LivePricesState>()(
   persist(
     (set) => ({
       prices: {},
+      previousCloses: {},
       sipValues: {},
       lastUpdated: null,
       loading: false,
       pricesAttempted: false,
       sipValuesAttempted: false,
       setPrices: (prices) => set({ prices, lastUpdated: Date.now(), loading: false }),
+      setPreviousCloses: (previousCloses) =>
+        set((s) => ({ previousCloses: { ...s.previousCloses, ...previousCloses } })),
       setSipValues: (sipValues) =>
         set((s) => ({ sipValues: { ...s.sipValues, ...sipValues }, lastUpdated: Date.now() })),
       setLoading: (loading) => set({ loading }),
@@ -74,6 +85,7 @@ export const useLivePricesStore = create<LivePricesState>()(
       name: 'aurafin-live-prices-cache',
       partialize: (s) => ({
         prices: s.prices,
+        previousCloses: s.previousCloses,
         sipValues: s.sipValues,
         lastUpdated: s.lastUpdated,
         goldPricePerGram: s.goldPricePerGram,
@@ -92,6 +104,15 @@ export function resolveLivePrice(
   if (!symbol) return fallback;
   const live = prices[symbol.toUpperCase()];
   return live ?? fallback;
+}
+
+/** Resolve yesterday's close for a symbol, if the last quote included one. */
+export function resolvePreviousClose(
+  symbol: string | undefined,
+  previousCloses: Record<string, number>
+): number | undefined {
+  if (!symbol) return undefined;
+  return previousCloses[symbol.toUpperCase()];
 }
 
 /** Resolve the live auto-calculated value for a linked SIP, keyed by scheme code. */

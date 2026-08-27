@@ -9,6 +9,7 @@ import Modal from './Modal';
 import QuickAddMenu from './QuickAddMenu';
 import ProfileSwitcher from './ProfileSwitcher';
 import AppLogo from './AppLogo';
+import GlobalSearch from './GlobalSearch';
 
 export default function Topbar() {
   const user = useAuthStore((s) => s.user);
@@ -75,8 +76,13 @@ export default function Topbar() {
           )}
         </span>
 
-        {/* Desktop toolbar — unchanged */}
-        <div className="hidden md:flex items-center gap-1 sm:gap-3 ml-auto">
+        {/* Desktop: full-size search pinned to the top left */}
+        <div className="hidden md:flex items-center flex-1 min-w-0">
+          <GlobalSearch variant="full" />
+        </div>
+
+        {/* Desktop toolbar — rest of the icons, grouped on the right */}
+        <div className="hidden md:flex items-center gap-1 sm:gap-3">
           <button
             onClick={toggleTheme}
             title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
@@ -166,6 +172,8 @@ export default function Topbar() {
 
         {/* Mobile toolbar — eye toggle restored here, plus a second copy floats bottom-right */}
         <div className="flex md:hidden items-center gap-1 shrink-0">
+          <GlobalSearch />
+
           <button
             onClick={togglePrivacy}
             title={privacyMode ? 'Show amounts' : 'Hide amounts'}
