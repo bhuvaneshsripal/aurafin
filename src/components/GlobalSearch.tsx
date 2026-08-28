@@ -21,7 +21,7 @@ const MAX_PER_GROUP = 5;
  * Topbar; picking a result jumps straight to the right tab (and, for
  * holdings, pre-fills the Assets table's own search box via ?q=).
  */
-export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 'full' }) {
+export default function GlobalSearch() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -111,28 +111,15 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
 
   return (
     <>
-      {variant === 'full' ? (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          title="Search Aurafin"
-          aria-label="Search Aurafin"
-          className="tap-scale flex items-center gap-2.5 h-10 w-full max-w-md rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-3.5 text-left text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-600 transition-colors shrink-0"
-        >
-          <Search size={18} className="shrink-0" />
-          <span className="text-sm font-medium truncate">Search Aurafin...</span>
-        </button>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          title="Search Aurafin"
-          aria-label="Search Aurafin"
-          className="tap-scale h-10 w-10 flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
-        >
-          <Search size={20} />
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        title="Search Aurafin"
+        aria-label="Search Aurafin"
+        className="tap-scale h-10 w-10 flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
+      >
+        <Search size={20} />
+      </button>
 
       {open && (
         <div className="animate-backdrop-in fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-[2px] px-4 pt-[10vh] sm:pt-24 flex justify-center">

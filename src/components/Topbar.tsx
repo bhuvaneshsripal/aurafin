@@ -76,13 +76,10 @@ export default function Topbar() {
           )}
         </span>
 
-        {/* Desktop: full-size search pinned to the top left */}
-        <div className="hidden md:flex items-center flex-1 min-w-0">
-          <GlobalSearch variant="full" />
-        </div>
+        {/* Desktop toolbar — unchanged */}
+        <div className="hidden md:flex items-center gap-1 sm:gap-3 ml-auto">
+          <GlobalSearch />
 
-        {/* Desktop toolbar — rest of the icons, grouped on the right */}
-        <div className="hidden md:flex items-center gap-1 sm:gap-3">
           <button
             onClick={toggleTheme}
             title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}

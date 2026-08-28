@@ -12,6 +12,8 @@ import {
   Search,
   ChevronUp,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ArrowUpDown,
   X,
   Loader2,
@@ -23,6 +25,9 @@ import {
   MoreVertical,
   BarChart2,
   GripVertical,
+  ListFilter,
+  ArrowDown,
+  ArrowUp,
 } from 'lucide-react';
 import {
   PieChart,
@@ -76,11 +81,12 @@ import {
   type MfSearchResult,
 } from '../utils/mutualFunds';
 import { fetchLivePrices, fetchFxRate, searchStockSymbols, type StockSearchResult } from '../utils/marketPrices';
+import { useDayChangeResetWindow } from '../utils/marketHours';
 import { useUrlTab } from '../hooks/useUrlTab';
 import { useModalBackClose } from '../hooks/useModalBackClose';
 
 type Tab = 'assets' | 'liabilities' | 'networth' | 'allocation';
-type SortKey = 'manual' | 'name' | 'qty' | 'avgCost' | 'perUnit' | 'invested' | 'value' | 'pnl' | 'alloc';
+type SortKey = 'manual' | 'name' | 'qty' | 'avgCost' | 'perUnit' | 'invested' | 'value' | 'pnl' | 'alloc' | 'dayChange';
 type EntryType = 'asset' | 'liability';
 
 /**
@@ -159,10 +165,20 @@ function buildSparklinePath(symbol: string, trendUp: boolean, width = 108, heigh
     .join(' ');
 }
 
-/** Small inline sparkline used in the Holdings table — see buildSparklinePath. */
-function Sparkline({ symbol, trendUp }: { symbol: string; trendUp: boolean }) {
-  const width = 108;
-  const height = 32;
+/** Small inline sparkline used in the Holdings table — see buildSparklinePath.
+ *  width/height are overridable so the compact mobile list can use a
+ *  smaller version than the desktop table without duplicating the component. */
+function Sparkline({
+  symbol,
+  trendUp,
+  width = 108,
+  height = 32,
+}: {
+  symbol: string;
+  trendUp: boolean;
+  width?: number;
+  height?: number;
+}) {
   const path = buildSparklinePath(symbol, trendUp, width, height);
   const stroke = trendUp ? '#10b981' : '#ef4444';
   return (
@@ -645,6 +661,7 @@ function AssetsTab({
   const assets = activeProfileId ? allAssets.filter((a) => a.profileId === activeProfileId) : allAssets;
   const livePrices = useLivePricesStore((s) => s.prices);
   const previousCloses = useLivePricesStore((s) => s.previousCloses);
+  const dayChangeResetActive = useDayChangeResetWindow();
   const sipValues = useLivePricesStore((s) => s.sipValues);
   const pricesAttempted = useLivePricesStore((s) => s.pricesAttempted);
   const sipValuesAttempted = useLivePricesStore((s) => s.sipValuesAttempted);
@@ -738,23 +755,13 @@ function AssetsTab({
     const idx = ordered.findIndex((a) => a.id === id);
     const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
     if (idx === -1 || swapIdx < 0 || swapIdx >= ordered.length) return;
-
-    // Swap the two positions, then re-stamp *every* asset's `order` field to
-    // its position in `ordered`. Writing only the two swapped docs isn't
-    // enough: any asset that never had an explicit `order` yet falls back to
-    // 0 in the sort comparator above, so it collides with the freshly
-    // assigned index-based values and the whole list can jump around instead
-    // of the intended item moving one slot. Re-stamping the full list keeps
-    // every asset's order value explicit and collision-free going forward.
-    const reordered = [...ordered];
-    [reordered[idx], reordered[swapIdx]] = [reordered[swapIdx], reordered[idx]];
-
+    const current = ordered[idx];
+    const neighbor = ordered[swapIdx];
+    const currentOrder = current.order ?? idx;
+    const neighborOrder = neighbor.order ?? swapIdx;
     try {
-      await Promise.all(
-        reordered.map((asset, position) =>
-          asset.order === position ? null : upsertDoc(user, 'assets', { ...asset, order: position })
-        )
-      );
+      await upsertDoc(user, 'assets', { ...current, order: neighborOrder });
+      await upsertDoc(user, 'assets', { ...neighbor, order: currentOrder });
     } catch (err) {
       console.error('Failed to reorder assets', err);
     }
@@ -878,6 +885,51 @@ function AssetsTab({
     }
   };
 
+  // Compact "Sort  < Current (Invested) > " control above the Holdings
+  // table. This is purely a DISPLAY toggle — it switches which figure is
+  // shown per row on mobile (mirrors the three data columns of the desktop
+  // table: Current/Invested value, Returns, and Market price), but never
+  // touches sortKey/sortDir, so the holdings stay in their existing order
+  // when you flip it. Actual re-sorting is still done via the clickable
+  // column headers below (toggleSort).
+  const DISPLAY_METRIC_OPTIONS: { key: 'valueInvested' | 'returns' | 'marketPrice'; label: string }[] = [
+    { key: 'valueInvested', label: 'Current (Invested)' },
+    { key: 'returns', label: 'Returns (%)' },
+    { key: 'marketPrice', label: 'Market price (1D%)' },
+  ];
+  const [displayMetric, setDisplayMetric] = useState<'valueInvested' | 'returns' | 'marketPrice'>('valueInvested');
+  const compactSortIndex = DISPLAY_METRIC_OPTIONS.findIndex((o) => o.key === displayMetric);
+  const compactSortLabel = DISPLAY_METRIC_OPTIONS[compactSortIndex].label;
+  const cycleCompactSort = (direction: 1 | -1) => {
+    const nextIndex = (compactSortIndex + direction + DISPLAY_METRIC_OPTIONS.length) % DISPLAY_METRIC_OPTIONS.length;
+    setDisplayMetric(DISPLAY_METRIC_OPTIONS[nextIndex].key);
+  };
+
+  // "Sort by" bottom sheet — tapping the "Sort" label opens this instead of
+  // re-sorting directly. Choices are staged in draftSortKey/draftSortDir and
+  // only committed to the real sortKey/sortDir (which actually reorders the
+  // holdings list) when the user taps Apply, mirroring the Kite-style sheet.
+  const SORT_BY_OPTIONS: { key: SortKey; label: string }[] = [
+    { key: 'value', label: 'Current Value' },
+    { key: 'pnl', label: 'Returns %' },
+    { key: 'dayChange', label: 'Day Change %' },
+    { key: 'name', label: 'Stock name' },
+  ];
+  const [sortSheetOpen, setSortSheetOpen] = useState(false);
+  const [draftSortKey, setDraftSortKey] = useState<SortKey>(sortKey === 'manual' ? 'value' : sortKey);
+  const [draftSortDir, setDraftSortDir] = useState<'asc' | 'desc'>(sortDir);
+  const openSortSheet = () => {
+    setDraftSortKey(sortKey === 'manual' ? 'value' : sortKey);
+    setDraftSortDir(sortDir);
+    setSortSheetOpen(true);
+  };
+  const applySortSheet = () => {
+    setSortKey(draftSortKey);
+    setSortDir(draftSortDir);
+    setSortSheetOpen(false);
+  };
+
+
   const handleSave = async (asset: Asset) => {
     if (!user) return;
     try {
@@ -933,13 +985,22 @@ function AssetsTab({
     // Per-unit 1D change (only meaningful for symbol-priced holdings that
     // have a previous close — e.g. direct stocks; undefined for everything
     // else, which the Holdings table below renders as "—" rather than 0).
+    // Between 5:30 AM and market open (9:15 AM) IST, this is pinned to 0
+    // instead of showing last night's now-stale change — see
+    // useDayChangeResetWindow / isDayChangeResetWindow for why.
     const previousClose = resolvePreviousClose(a.symbol, previousCloses);
-    const dayChangePerUnit =
-      previousClose !== undefined && computed.currentPrice !== undefined
-        ? computed.currentPrice - previousClose
-        : undefined;
+    const hasDayChangeData = previousClose !== undefined && computed.currentPrice !== undefined;
+    const dayChangePerUnit = hasDayChangeData
+      ? dayChangeResetActive
+        ? 0
+        : computed.currentPrice! - previousClose!
+      : undefined;
     const dayChangePercent =
-      dayChangePerUnit !== undefined && previousClose ? (dayChangePerUnit / previousClose) * 100 : undefined;
+      dayChangePerUnit !== undefined && previousClose
+        ? dayChangeResetActive
+          ? 0
+          : (dayChangePerUnit / previousClose) * 100
+        : undefined;
     return { asset: a, ...computed, alloc, previousClose, dayChangePerUnit, dayChangePercent };
   });
 
@@ -1017,6 +1078,8 @@ function AssetsTab({
                 return r.pnl ?? 0;
               case 'alloc':
                 return r.alloc;
+              case 'dayChange':
+                return r.dayChangePercent ?? 0;
               default:
                 return 0;
             }
@@ -1259,9 +1322,226 @@ function AssetsTab({
             </div>
           </div>
 
-          {/* Per-holding table — headers are clickable and sort the rows below
-              (click again to flip direction), same mechanism as SortHeader. */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
+          {/* Compact display toggle — cycles which figure is shown per row
+              in the mobile list below (mirrors the three data columns of
+              the desktop table). Purely cosmetic — never re-sorts. */}
+          <div className="flex items-center justify-between px-1 sm:hidden">
+            <button
+              type="button"
+              onClick={openSortSheet}
+              className="inline-flex items-center gap-1 pb-1 border-b-2 border-dotted border-slate-300 dark:border-slate-600 w-fit"
+            >
+              <span className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-white">Sort</span>
+              <ListFilter size={15} strokeWidth={2.25} className="text-slate-900 dark:text-white" />
+            </button>
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => cycleCompactSort(1)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  cycleCompactSort(1);
+                }
+              }}
+              className="inline-flex items-center gap-1 pb-1 border-b-2 border-dotted border-slate-300 dark:border-slate-600 w-fit cursor-pointer select-none"
+            >
+              <div className="flex items-center text-slate-900 dark:text-white">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    cycleCompactSort(-1);
+                  }}
+                  aria-label="Previous display option"
+                  className="h-5 w-4 flex items-center justify-center hover:text-slate-500 dark:hover:text-slate-300 transition-colors"
+                >
+                  <ChevronLeft size={15} strokeWidth={2.5} />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    cycleCompactSort(1);
+                  }}
+                  aria-label="Next display option"
+                  className="h-5 w-4 flex items-center justify-center hover:text-slate-500 dark:hover:text-slate-300 transition-colors"
+                >
+                  <ChevronRight size={15} strokeWidth={2.5} />
+                </button>
+              </div>
+              <span
+                key={compactSortLabel}
+                className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-white animate-value-in whitespace-nowrap"
+              >
+                {compactSortLabel}
+              </span>
+            </div>
+          </div>
+
+          {/* Mobile holdings list — shows a single value per row (Current or
+              Invested, driven by the Sort control above) instead of the
+              wide multi-column table, so nothing gets cut off on small
+              screens. The full table below is for sm+ screens where there's
+              room for every column. */}
+          <div className="sm:hidden bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
+            {displayRows.map((r, idx) => {
+              const a = r.asset;
+              const invested = r.invested ?? r.value;
+              const qty = a.quantity ?? 0;
+              const subtitle =
+                a.assetClass === 'stock' && qty > 0
+                  ? `${qty} share${qty === 1 ? '' : 's'} • Avg ${maskPreciseAmount(a.avgCost ?? 0, a.currency, privacyMode)}`
+                  : WEIGHT_TRACKED_CLASSES.has(a.assetClass) && qty > 0
+                    ? `${formatGrams(qty)}g • Avg ${maskPreciseAmount(a.avgCost ?? 0, a.currency, privacyMode)}/g`
+                    : qty > 0 && a.avgCost
+                      ? `${qty} unit${qty === 1 ? '' : 's'} • Avg ${maskPreciseAmount(a.avgCost, a.currency, privacyMode)}`
+                      : ASSET_CLASS_LABELS[a.assetClass];
+              const trendUp = (r.dayChangePerUnit ?? r.pnl ?? 0) >= 0;
+              const loading = isAssetLivePriced(a) && !totalsReady;
+              return (
+                <div
+                  key={a.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setViewingAsset(a)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') setViewingAsset(a);
+                  }}
+                  className="grid grid-cols-[1fr_44px_1fr] items-center gap-1.5 px-3 py-2 active:bg-slate-50 dark:active:bg-slate-800/40 cursor-pointer select-none"
+                >
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate uppercase">{a.name}</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5 truncate">{subtitle}</p>
+                  </div>
+                  {/* Fixed-width center column — with the name and value+menu
+                      columns both set to 1fr on either side, this sits at
+                      the exact horizontal center of every row regardless of
+                      how long the name or value text is. */}
+                  <div className="flex items-center justify-center">
+                    {r.previousClose !== undefined && (
+                      <Sparkline symbol={a.symbol ?? a.id} trendUp={trendUp} width={44} height={18} />
+                    )}
+                  </div>
+                  <div className="flex items-center justify-end gap-0.5">
+                    <div className="text-right shrink-0">
+                      {loading ? (
+                        <span className="inline-block h-3 w-12 rounded bg-slate-100 dark:bg-slate-800 animate-pulse ml-auto" />
+                      ) : displayMetric === 'returns' ? (
+                        <>
+                          <div className={`text-xs font-semibold animate-value-in ${(r.pnl ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                            {r.pnl !== undefined ? (privacyMode ? '••••••' : formatSignedCurrency(r.pnl, a.currency)) : '—'}
+                          </div>
+                          <div className={`text-[10px] mt-0.5 ${(r.pnl ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                            {r.pnlPercent !== undefined && !privacyMode ? formatPercentMagnitude(r.pnlPercent) : ''}
+                          </div>
+                        </>
+                      ) : displayMetric === 'marketPrice' ? (
+                        <>
+                          <div className="text-xs font-semibold text-slate-800 dark:text-slate-100 animate-value-in">
+                            {r.currentPrice !== undefined ? maskPreciseAmount(r.currentPrice, a.currency, privacyMode) : '—'}
+                          </div>
+                          <div className={`text-[10px] mt-0.5 ${(r.dayChangePerUnit ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                            {r.dayChangePerUnit !== undefined && r.dayChangePercent !== undefined
+                              ? privacyMode
+                                ? '••••'
+                                : `${formatSignedCurrency(r.dayChangePerUnit, a.currency)} (${formatPercentMagnitude(r.dayChangePercent)})`
+                              : '—'}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div
+                            className={`text-xs font-semibold animate-value-in ${
+                              (r.pnl ?? r.value - invested) >= 0 ? 'text-emerald-600' : 'text-red-500'
+                            }`}
+                          >
+                            {maskPreciseAmount(r.value, a.currency, privacyMode)}
+                          </div>
+                          <div className="text-[10px] mt-0.5 text-slate-400">
+                            {maskPreciseAmount(invested, a.currency, privacyMode)}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    <div
+                      className="relative shrink-0"
+                      ref={holdingsMenuOpenId === a.id ? holdingsMenuRef : undefined}
+                    >
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setHoldingsMenuOpenId((id) => (id === a.id ? null : a.id));
+                        }}
+                        className="h-6 w-6 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400"
+                      >
+                        <MoreVertical size={13} />
+                      </button>
+                      {holdingsMenuOpenId === a.id && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute right-0 top-7 z-20 w-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1"
+                        >
+                          <button
+                            onClick={() => {
+                              setHoldingsMenuOpenId(null);
+                              openEdit(a);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+                          >
+                            <Pencil size={14} /> Edit
+                          </button>
+                          <button
+                            onClick={() => {
+                              setHoldingsMenuOpenId(null);
+                              handleDuplicate(a);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+                          >
+                            <Copy size={14} /> Duplicate
+                          </button>
+                          <button
+                            onClick={() => {
+                              setHoldingsMenuOpenId(null);
+                              handleMove(a.id, 'up');
+                            }}
+                            disabled={idx === 0}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent"
+                          >
+                            <ChevronUp size={14} /> Move up
+                          </button>
+                          <button
+                            onClick={() => {
+                              setHoldingsMenuOpenId(null);
+                              handleMove(a.id, 'down');
+                            }}
+                            disabled={idx === displayRows.length - 1}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent"
+                          >
+                            <ChevronDown size={14} /> Move down
+                          </button>
+                          <button
+                            onClick={() => {
+                              setHoldingsMenuOpenId(null);
+                              setConfirmDeleteAsset(a);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+                          >
+                            <Trash2 size={14} /> Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Per-holding table (sm and up) — headers are clickable and sort
+              the rows below (click again to flip direction), same
+              mechanism as SortHeader. */}
+          <div className="hidden sm:block bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
             <table className="w-full text-sm min-w-[760px]">
               <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400">
                 <tr>
@@ -1488,6 +1768,88 @@ function AssetsTab({
           </button>
         </div>
       </Modal>
+
+      {sortSheetOpen && (
+        <div
+          className="animate-backdrop-in fixed inset-0 z-50 bg-slate-900/40 flex items-end sm:justify-center"
+          onClick={() => setSortSheetOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="animate-sheet-in w-full sm:max-w-sm bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl sm:mb-6 sm:shadow-2xl pb-[env(safe-area-inset-bottom)] max-h-[85vh] sm:max-h-[75vh] overflow-y-auto"
+          >
+            <div className="px-5 pt-5 pb-1">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Sort by</h3>
+            </div>
+            <div className="px-5 pb-2">
+              {SORT_BY_OPTIONS.map((opt, idx) => {
+                const selected = draftSortKey === opt.key;
+                const isName = opt.key === 'name';
+                return (
+                  <div
+                    key={opt.key}
+                    className={idx > 0 ? 'border-t border-slate-100 dark:border-slate-800 pt-3 mt-3' : 'pt-1'}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setDraftSortKey(opt.key)}
+                      className="w-full flex items-center gap-3 py-1"
+                    >
+                      <span
+                        className={`shrink-0 h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                          selected
+                            ? 'border-emerald-500'
+                            : 'border-slate-300 dark:border-slate-600'
+                        }`}
+                      >
+                        {selected && <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />}
+                      </span>
+                      <span className="text-[15px] text-slate-800 dark:text-slate-100">{opt.label}</span>
+                    </button>
+                    {selected && (
+                      <div className="flex items-center gap-2.5 pl-8 pt-3">
+                        <button
+                          type="button"
+                          onClick={() => setDraftSortDir('desc')}
+                          className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                            draftSortDir === 'desc'
+                              ? 'border-slate-800 text-slate-900 dark:border-white dark:text-white'
+                              : 'border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400'
+                          }`}
+                        >
+                          <ArrowDown size={14} />
+                          {isName ? 'Z to A' : 'High to low'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDraftSortDir('asc')}
+                          className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                            draftSortDir === 'asc'
+                              ? 'border-slate-800 text-slate-900 dark:border-white dark:text-white'
+                              : 'border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400'
+                          }`}
+                        >
+                          <ArrowUp size={14} />
+                          {isName ? 'A to Z' : 'Low to high'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="px-5 pt-4 pb-5">
+              <button
+                type="button"
+                onClick={applySortSheet}
+                className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3 rounded-xl transition-colors"
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
