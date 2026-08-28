@@ -20,6 +20,9 @@ import { auth } from '../firebase/config';
 import { CURRENCIES } from '../utils/currency';
 import { loadImageFromFile } from '../utils/imageResize';
 import AvatarCropModal from '../components/AvatarCropModal';
+import { sendSharedAccessInvite, isInviteEmailConfigured, sendWeeklyDigestEmail } from '../utils/otp';
+import { buildWeeklyDigestPayload } from '../utils/weeklyDigest';
+import { useLivePricesStore } from '../store/livePricesStore';
 import {
   SECURITY_QUESTIONS,
   saveSecurityAnswer,
@@ -774,17 +777,83 @@ function InstallAppCard() {
   );
 }
 
+interface SharedInvite {
+  id: string;
+  email: string;
+  role: 'view' | 'full';
+  status: 'sent' | 'failed';
+}
+
+function sharedAccessKey(uid: string | undefined) {
+  return `aurafin-shared-access-${uid ?? 'anon'}`;
+}
+
 function SharedAccessCard() {
+  const user = useAuthStore((s) => s.user);
+  const storageKey = sharedAccessKey(user?.uid);
+  const [invites, setInvites] = useState<SharedInvite[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(storageKey) ?? '[]');
+    } catch {
+      return [];
+    }
+  });
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<'view' | 'full'>('view');
+  const [error, setError] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const persist = (next: SharedInvite[]) => {
+    setInvites(next);
+    localStorage.setItem(storageKey, JSON.stringify(next));
+  };
+
+  const sendInvite = async () => {
+    setError('');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError('Enter a valid email address.');
+      return;
+    }
+    if (invites.some((i) => i.email.toLowerCase() === email.toLowerCase())) {
+      setError('This person already has access.');
+      return;
+    }
+
+    setSending(true);
+    try {
+      await sendSharedAccessInvite({
+        inviteeEmail: email,
+        inviterEmail: user?.email ?? '',
+        role,
+      });
+      persist([...invites, { id: crypto.randomUUID(), email, role, status: 'sent' }]);
+      setEmail('');
+      setRole('view');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send the invite.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const removeInvite = (id: string) => {
+    persist(invites.filter((i) => i.id !== id));
+  };
+
+  const [pendingRemoveInvite, setPendingRemoveInvite] = useState<SharedInvite | null>(null);
+  const confirmRemoveInvite = () => {
+    if (!pendingRemoveInvite) return;
+    removeInvite(pendingRemoveInvite.id);
+    setPendingRemoveInvite(null);
+  };
+
   return (
     <Card>
       <div className="flex gap-3">
         <Users size={20} className="text-slate-700 dark:text-slate-300 shrink-0 mt-0.5" />
-        <div className="flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
+        <div>
+          <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Shared Access</h2>
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-brand-600 bg-brand-50 dark:bg-brand-500/10 dark:text-brand-400 px-2 py-0.5 rounded-full">
-              Coming Soon
-            </span>
           </div>
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
             Share your financial data with up to 5 trusted people — spouse, financial advisor, CA, or
@@ -793,29 +862,75 @@ function SharedAccessCard() {
         </div>
       </div>
 
-      <div className="mt-4 flex flex-col sm:flex-row gap-3 opacity-50 pointer-events-none">
+      <div className="mt-4 flex flex-col sm:flex-row gap-3">
         <input
           type="email"
-          disabled
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
           placeholder="their.email@example.com"
-          className="flex-1 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm placeholder:text-slate-400"
+          className="flex-1 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
         />
         <select
-          disabled
-          className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm"
+          value={role}
+          onChange={(e) => setRole(e.target.value as 'view' | 'full')}
+          className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
         >
-          <option>View Only</option>
+          <option value="view">View Only</option>
+          <option value="full">Full Access</option>
         </select>
         <button
-          disabled
-          className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap"
+          onClick={sendInvite}
+          disabled={sending}
+          className="bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap"
         >
-          Send Invite
+          {sending ? 'Sending...' : 'Send Invite'}
         </button>
       </div>
-      <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
-        This feature is on the way — check back soon.
-      </p>
+      {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
+      {!isInviteEmailConfigured() && (
+        <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
+          Invite emails aren&apos;t configured yet on this deployment (see .env.example).
+        </p>
+      )}
+
+      {invites.length > 0 && (
+        <div className="mt-4 space-y-2">
+          {invites.map((invite) => (
+            <div
+              key={invite.id}
+              className="flex items-center justify-between border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2"
+            >
+              <div>
+                <p className="text-sm text-slate-800 dark:text-slate-100">{invite.email}</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500">
+                  {invite.role === 'view' ? 'View Only' : 'Full Access'} &middot; Invite emailed
+                </p>
+              </div>
+              <button
+                onClick={() => setPendingRemoveInvite(invite)}
+                className="text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 p-1"
+                aria-label={`Remove ${invite.email}`}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <ConfirmDeleteModal
+        open={!!pendingRemoveInvite}
+        onClose={() => setPendingRemoveInvite(null)}
+        onConfirm={confirmRemoveInvite}
+        title="Remove this person?"
+        description={
+          <>
+            <strong>{pendingRemoveInvite?.email}</strong> will lose access to your <span className="font-luxury">Aurafin</span> data. This can't be
+            undone (though you can invite them again later).
+          </>
+        }
+        confirmLabel="Remove"
+      />
     </Card>
   );
 }
@@ -1031,6 +1146,42 @@ const NOTIFICATION_ROWS: { title: string; channels: NotificationChannel[] }[] = 
 function NotificationsCard() {
   const prefs = useNotificationPreferencesStore((s) => s.prefs);
   const toggle = useNotificationPreferencesStore((s) => s.toggle);
+  const user = useAuthStore((s) => s.user);
+  const assets = useAssetsStore((s) => s.assets);
+  const liabilities = useLiabilitiesStore((s) => s.liabilities);
+  const livePrices = useLivePricesStore((s) => s.prices);
+  const sipValues = useLivePricesStore((s) => s.sipValues);
+  const goldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
+  const snapshots = useSnapshotsStore((s) => s.snapshots);
+  const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [testError, setTestError] = useState('');
+
+  // Sends with the person's real, current portfolio numbers — computed by
+  // the same builder the Saturday auto-send uses — rather than placeholder
+  // values, so this test genuinely previews what the real digest will
+  // look like. Unlike the scheduler, this ignores the "is it Saturday"
+  // check and the once-a-day guard, since it's an explicit manual action.
+  const handleSendTest = async () => {
+    if (!user?.email) return;
+    setTestStatus('sending');
+    setTestError('');
+    try {
+      const payload = buildWeeklyDigestPayload({
+        toName: user.displayName?.trim() || user.email.split('@')[0] || 'there',
+        assets,
+        liabilities,
+        livePrices,
+        sipValues,
+        goldPricePerGram,
+        snapshots,
+      });
+      await sendWeeklyDigestEmail({ toEmail: user.email, ...payload });
+      setTestStatus('sent');
+    } catch (err) {
+      setTestStatus('error');
+      setTestError(err instanceof Error ? err.message : 'Could not send the test email.');
+    }
+  };
 
   return (
     <Card>
@@ -1062,6 +1213,28 @@ function NotificationsCard() {
         ))}
       </div>
 
+      {prefs.weeklyDigestEmail && (
+        <div className="mt-4 rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-3">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            The weekly digest goes out Saturdays at 10:00 AM IST, like Zerodha's weekly summary —
+            portfolio value, returns, top holdings, sector split, and this week's move. Since Aurafin
+            runs free with no backend server, this only sends while the app is actually open in a
+            browser tab around that time, rather than from a server that keeps time in the background.
+          </p>
+          <div className="mt-2 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleSendTest}
+              disabled={testStatus === 'sending' || !user?.email}
+              className="text-xs font-medium text-brand-600 hover:text-brand-700 disabled:opacity-50"
+            >
+              {testStatus === 'sending' ? 'Sending…' : 'Send a test digest now'}
+            </button>
+            {testStatus === 'sent' && <span className="text-xs text-emerald-600">Sent — check your inbox.</span>}
+            {testStatus === 'error' && <span className="text-xs text-red-500">{testError}</span>}
+          </div>
+        </div>
+      )}
     </Card>
   );
 }

@@ -286,15 +286,6 @@ button:disabled,
   will-change: transform;
 }
 
-/* Continuous version of the same coin flip, used on full-page/route loading
-   screens instead of the one-shot click animation above — keeps looping
-   for as long as the app or a lazy-loaded page is still fetching. */
-.logo-loading-spin {
-  animation: logo-coin-flip 1100ms cubic-bezier(0.45, 0, 0.55, 1) infinite;
-  transform-style: preserve-3d;
-  will-change: transform;
-}
-
 /* Each row in that menu lifts slightly on hover for a tactile feel */
 .menu-row-3d {
   transition: transform 120ms cubic-bezier(0.16, 1, 0.3, 1), background-color 120ms ease;

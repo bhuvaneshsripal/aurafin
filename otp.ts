@@ -95,9 +95,14 @@ export async function sendSharedAccessInvite(params: {
 
 // Weekly portfolio digest — a Zerodha-style "here's how your week went"
 // email. Reuses the same EmailJS account as the other email flows here,
-// pointed at its own template. Add VITE_EMAILJS_DIGEST_TEMPLATE_ID to
-// .env with a template that expects {{to_email}}, {{net_worth}},
-// {{week_change}}, {{week_change_percent}} variables.
+// pointed at its own template. The template (see /mnt/user-data/uploads
+// for the version this was built against) expects: {{to_name}}, {{week}},
+// {{portfolio_value}}, {{total_invested}}, {{total_profit_loss}},
+// {{overall_return}}, {{weekly_profit_loss}}, {{weekly_return}},
+// {{best_performer}}, {{worst_performer}}, {{stocks_up}}, {{stocks_down}},
+// {{top_holdings}}, {{sector_allocation}}, {{transactions}}, {{insights}}.
+// Every key below must match one of those placeholders exactly, or
+// EmailJS silently renders that spot as blank.
 const EMAILJS_DIGEST_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_DIGEST_TEMPLATE_ID as
   | string
   | undefined;
@@ -106,12 +111,27 @@ export function isWeeklyDigestEmailConfigured() {
   return !!(EMAILJS_SERVICE_ID && EMAILJS_DIGEST_TEMPLATE_ID && EMAILJS_PUBLIC_KEY);
 }
 
-export async function sendWeeklyDigestEmail(params: {
+export interface WeeklyDigestEmailParams {
   toEmail: string;
-  netWorth: string;
-  weekChange: string;
-  weekChangePercent: string;
-}) {
+  toName: string;
+  week: string;
+  portfolioValue: string;
+  totalInvested: string;
+  totalProfitLoss: string;
+  overallReturn: string;
+  weeklyProfitLoss: string;
+  weeklyReturn: string;
+  bestPerformer: string;
+  worstPerformer: string;
+  stocksUp: string;
+  stocksDown: string;
+  topHoldings: string;
+  sectorAllocation: string;
+  transactions: string;
+  insights: string;
+}
+
+export async function sendWeeklyDigestEmail(params: WeeklyDigestEmailParams) {
   if (!isWeeklyDigestEmailConfigured()) {
     throw new Error(
       'Weekly digest emails aren\u2019t set up yet. Add VITE_EMAILJS_DIGEST_TEMPLATE_ID (and the other EmailJS variables) to your .env file \u2014 see .env.example.'
@@ -127,9 +147,22 @@ export async function sendWeeklyDigestEmail(params: {
       user_id: EMAILJS_PUBLIC_KEY,
       template_params: {
         to_email: params.toEmail,
-        net_worth: params.netWorth,
-        week_change: params.weekChange,
-        week_change_percent: params.weekChangePercent,
+        to_name: params.toName,
+        week: params.week,
+        portfolio_value: params.portfolioValue,
+        total_invested: params.totalInvested,
+        total_profit_loss: params.totalProfitLoss,
+        overall_return: params.overallReturn,
+        weekly_profit_loss: params.weeklyProfitLoss,
+        weekly_return: params.weeklyReturn,
+        best_performer: params.bestPerformer,
+        worst_performer: params.worstPerformer,
+        stocks_up: params.stocksUp,
+        stocks_down: params.stocksDown,
+        top_holdings: params.topHoldings,
+        sector_allocation: params.sectorAllocation,
+        transactions: params.transactions,
+        insights: params.insights,
       },
     }),
   });

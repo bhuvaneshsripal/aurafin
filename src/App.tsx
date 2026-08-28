@@ -13,6 +13,7 @@ import { useHouseholdProfilesStore } from './store/householdProfilesStore';
 import { useUiStore } from './store/uiStore';
 import { useAppLockStore } from './store/appLockStore';
 import { useDisplaySettingsStore } from './store/displaySettingsStore';
+import { useNotificationPreferencesStore } from './store/notificationPreferencesStore';
 import { useInstallPromptStore } from './store/installPromptStore';
 import {
   useFirestoreCollectionSync,
@@ -24,6 +25,7 @@ import {
 import { useLivePrices } from './hooks/useLivePrices';
 import { useLiveSipValues } from './hooks/useLiveSipValues';
 import { useLiveGoldPrice } from './hooks/useLiveGoldPrice';
+import { useWeeklyDigestScheduler } from './hooks/useWeeklyDigestScheduler';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
 import BottomNav from './components/BottomNav';
@@ -31,7 +33,6 @@ import PrivacyFab from './components/PrivacyFab';
 import LockScreen from './components/LockScreen';
 import InstallPromptModal from './components/InstallPromptModal';
 import ErrorBoundary from './components/ErrorBoundary';
-import LoadingScreen from './components/LoadingScreen';
 import Login from './pages/Login';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 import type { Asset, Liability, Goal, Transaction, Snapshot, BudgetItem, FinancialProfile, HouseholdProfile } from './types';
@@ -48,8 +49,13 @@ const InstallApp = lazyWithRetry(() => import('./pages/InstallApp'));
 const Feedback = lazyWithRetry(() => import('./pages/Feedback'));
 const Onboarding = lazyWithRetry(() => import('./pages/Onboarding'));
 
+// No branded spinner while a lazy-loaded route chunk or the initial data
+// gate is still resolving — the body background already matches the app's
+// theme (see index.css), so rendering nothing here just leaves the themed
+// background visible, the same blank-then-appear feel as a plain page
+// load, instead of flashing a custom loading widget on every refresh.
 function RouteFallback() {
-  return <LoadingScreen fullScreen={false} />;
+  return null;
 }
 
 function AppShell() {
@@ -137,6 +143,11 @@ function LivePriceSync() {
   return null;
 }
 
+function WeeklyDigestSync() {
+  useWeeklyDigestScheduler();
+  return null;
+}
+
 function DataSync() {
   const setAssets = useAssetsStore((s) => s.setAssets);
   const setLiabilities = useLiabilitiesStore((s) => s.setLiabilities);
@@ -197,7 +208,7 @@ function DataSync() {
       setTransactionsSynced(false);
       setGoalsSynced(false);
       forceMarkAllLoaded(ALL_USER_COLLECTIONS);
-    }, 4000);
+    }, 2000);
     return () => clearTimeout(timer);
   }, [setAssetsSynced, setLiabilitiesSynced, setTransactionsSynced, setGoalsSynced, forceMarkAllLoaded]);
 
@@ -226,7 +237,7 @@ function AppReady({ children }: { children: React.ReactNode }) {
   const initialDataLoaded = ALL_USER_COLLECTIONS.every((c) => loadedCollections[c]);
 
   if (!needsOnboarding && !initialDataLoaded) {
-    return <LoadingScreen />;
+    return null;
   }
   return <>{children}</>;
 }
@@ -237,6 +248,7 @@ export default function App() {
   const initPrivacy = useUiStore((s) => s.initPrivacy);
   const initLock = useAppLockStore((s) => s.init);
   const initDisplaySettings = useDisplaySettingsStore((s) => s.init);
+  const initNotificationPrefs = useNotificationPreferencesStore((s) => s.init);
 
   useEffect(() => {
     init();
@@ -244,10 +256,11 @@ export default function App() {
     initPrivacy();
     initLock();
     initDisplaySettings();
-  }, [init, initTheme, initPrivacy, initLock, initDisplaySettings]);
+    initNotificationPrefs();
+  }, [init, initTheme, initPrivacy, initLock, initDisplaySettings, initNotificationPrefs]);
 
   if (loading) {
-    return <LoadingScreen />;
+    return null;
   }
 
   if (!user) {
@@ -260,6 +273,7 @@ export default function App() {
           right away — it's what AppReady above is waiting to hear from. */}
       <DataSync />
       <LivePriceSync />
+      <WeeklyDigestSync />
       <InstallPromptListener />
       <AppReady>
         <AppShell />

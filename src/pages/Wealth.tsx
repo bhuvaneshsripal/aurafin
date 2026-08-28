@@ -81,7 +81,7 @@ import {
   type MfSearchResult,
 } from '../utils/mutualFunds';
 import { fetchLivePrices, fetchFxRate, searchStockSymbols, type StockSearchResult } from '../utils/marketPrices';
-import { useDayChangeResetWindow } from '../utils/marketHours';
+import { useDayChangeResetWindow, useMarketSessionProgress } from '../utils/marketHours';
 import { useUrlTab } from '../hooks/useUrlTab';
 import { useModalBackClose } from '../hooks/useModalBackClose';
 
@@ -117,8 +117,9 @@ function formatPercentMagnitude(percent: number): string {
 }
 
 /** Tiny deterministic PRNG (mulberry32) seeded from a string, so a given
- *  symbol's sparkline looks the same on every render/refresh instead of
- *  reshuffling — same idea as a real chart being stable between renders. */
+ *  holding's sparkline jaggedness looks the same on every render/refresh
+ *  instead of reshuffling — same idea as a real chart being stable
+ *  between renders. */
 function seededRandom(seed: string): () => number {
   let h = 1779033703 ^ seed.length;
   for (let i = 0; i < seed.length; i++) {
@@ -134,31 +135,56 @@ function seededRandom(seed: string): () => number {
 }
 
 /**
- * Builds a stylized intraday-looking sparkline path for a holding. There's
- * no free source of real intraday tick history for NSE symbols (only the
- * current price + previous close), so this generates a plausible-looking
- * wiggle that starts near yesterday's close and drifts to today's price —
- * matching the day's real direction and magnitude even though the ticks
- * in between are synthetic. Deterministic per symbol so it doesn't jump
- * around on every 10s price refresh.
+ * Builds a jagged, broker-app-style sparkline for a holding. There's no
+ * free source of real intraday tick history for NSE symbols (only the
+ * current price + previous close), so the path in between is synthetic —
+ * but the two endpoints are pinned exactly to the real previous close and
+ * real current price, so the overall slope, direction, and total % move
+ * always stay accurate even though the individual ticks are stylized.
+ * The jitter is deterministic per holding (seeded, not re-randomized on
+ * every 10s price refresh) so the line doesn't visibly reshuffle.
  */
-function buildSparklinePath(symbol: string, trendUp: boolean, width = 108, height = 32): string {
-  const rand = seededRandom(symbol);
-  const points = 16;
-  const vals: number[] = [0.5];
-  for (let i = 1; i < points - 1; i++) {
-    const drift = (trendUp ? 1 : -1) * (i / points) * 0.35;
-    const noise = (rand() - 0.5) * 0.5;
-    vals.push(Math.min(1, Math.max(0, 0.5 + drift + noise)));
+function buildSparklinePath(
+  seed: string,
+  previousClose: number,
+  currentPrice: number,
+  progress: number,
+  width = 108,
+  height = 32
+): string {
+  const rand = seededRandom(seed);
+  // Jaggedness resolution stays fixed regardless of how much of the
+  // session has elapsed — only how much of the *width* the line covers
+  // changes with progress. Otherwise, early in the day there are too few
+  // points to draw anything but a single straight diagonal segment.
+  const points = 10;
+  const priceRange = Math.abs(currentPrice - previousClose) || previousClose * 0.004 || 1;
+  const vals: number[] = [];
+  for (let i = 0; i < points; i++) {
+    const t = i / (points - 1);
+    const base = previousClose + (currentPrice - previousClose) * t;
+    if (i === 0 || i === points - 1) {
+      // Endpoints stay exact: the line always starts at the real previous
+      // close and ends at the real current price, wherever "now" falls.
+      vals.push(base);
+    } else {
+      const jitter = (rand() - 0.5) * priceRange * 1.1;
+      vals.push(base + jitter);
+    }
   }
-  vals.push(trendUp ? 0.85 : 0.15);
   const min = Math.min(...vals);
   const max = Math.max(...vals);
   const range = max - min || 1;
   const pad = 3;
+  // The line is squeezed into just the elapsed fraction of the width —
+  // e.g. ~20% across if the market's been open ~20% of the session —
+  // rather than being stretched to fill the whole column before the
+  // trading day is actually over. A small floor keeps something visible
+  // right at open instead of a zero-width line.
+  const visibleWidth = Math.max(6, width * Math.min(1, Math.max(0, progress)));
   return vals
     .map((v, i) => {
-      const x = (i / (points - 1)) * width;
+      const x = (i / (points - 1)) * visibleWidth;
       const y = pad + (1 - (v - min) / range) * (height - pad * 2);
       return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
     })
@@ -169,17 +195,22 @@ function buildSparklinePath(symbol: string, trendUp: boolean, width = 108, heigh
  *  width/height are overridable so the compact mobile list can use a
  *  smaller version than the desktop table without duplicating the component. */
 function Sparkline({
-  symbol,
-  trendUp,
+  seed,
+  previousClose,
+  currentPrice,
+  progress,
   width = 108,
   height = 32,
 }: {
-  symbol: string;
-  trendUp: boolean;
+  seed: string;
+  previousClose: number;
+  currentPrice: number;
+  progress: number;
   width?: number;
   height?: number;
 }) {
-  const path = buildSparklinePath(symbol, trendUp, width, height);
+  const trendUp = currentPrice >= previousClose;
+  const path = buildSparklinePath(seed, previousClose, currentPrice, progress, width, height);
   const stroke = trendUp ? '#10b981' : '#ef4444';
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="shrink-0" aria-hidden="true">
@@ -662,6 +693,7 @@ function AssetsTab({
   const livePrices = useLivePricesStore((s) => s.prices);
   const previousCloses = useLivePricesStore((s) => s.previousCloses);
   const dayChangeResetActive = useDayChangeResetWindow();
+  const marketSessionProgress = useMarketSessionProgress();
   const sipValues = useLivePricesStore((s) => s.sipValues);
   const pricesAttempted = useLivePricesStore((s) => s.pricesAttempted);
   const sipValuesAttempted = useLivePricesStore((s) => s.sipValuesAttempted);
@@ -1331,7 +1363,7 @@ function AssetsTab({
               onClick={openSortSheet}
               className="inline-flex items-center gap-1 pb-1 border-b-2 border-dotted border-slate-300 dark:border-slate-600 w-fit"
             >
-              <span className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-white">Sort</span>
+              <span className="text-sm font-semibold text-slate-900 dark:text-white">Sort</span>
               <ListFilter size={15} strokeWidth={2.25} className="text-slate-900 dark:text-white" />
             </button>
             <div
@@ -1372,7 +1404,7 @@ function AssetsTab({
               </div>
               <span
                 key={compactSortLabel}
-                className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-white animate-value-in whitespace-nowrap"
+                className="text-sm font-semibold text-slate-900 dark:text-white animate-value-in whitespace-nowrap"
               >
                 {compactSortLabel}
               </span>
@@ -1397,7 +1429,6 @@ function AssetsTab({
                     : qty > 0 && a.avgCost
                       ? `${qty} unit${qty === 1 ? '' : 's'} • Avg ${maskPreciseAmount(a.avgCost, a.currency, privacyMode)}`
                       : ASSET_CLASS_LABELS[a.assetClass];
-              const trendUp = (r.dayChangePerUnit ?? r.pnl ?? 0) >= 0;
               const loading = isAssetLivePriced(a) && !totalsReady;
               return (
                 <div
@@ -1411,16 +1442,23 @@ function AssetsTab({
                   className="grid grid-cols-[1fr_44px_1fr] items-center gap-1.5 px-3 py-2 active:bg-slate-50 dark:active:bg-slate-800/40 cursor-pointer select-none"
                 >
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate uppercase">{a.name}</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5 truncate">{subtitle}</p>
+                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate uppercase">{a.name}</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5 truncate">{subtitle}</p>
                   </div>
                   {/* Fixed-width center column — with the name and value+menu
                       columns both set to 1fr on either side, this sits at
                       the exact horizontal center of every row regardless of
                       how long the name or value text is. */}
                   <div className="flex items-center justify-center">
-                    {r.previousClose !== undefined && (
-                      <Sparkline symbol={a.symbol ?? a.id} trendUp={trendUp} width={44} height={18} />
+                    {r.previousClose !== undefined && r.currentPrice !== undefined && (
+                      <Sparkline
+                        seed={a.symbol ?? a.id}
+                        previousClose={r.previousClose}
+                        currentPrice={dayChangeResetActive ? r.previousClose : r.currentPrice}
+                        progress={dayChangeResetActive ? 0 : marketSessionProgress}
+                        width={44}
+                        height={18}
+                      />
                     )}
                   </div>
                   <div className="flex items-center justify-end gap-0.5">
@@ -1429,19 +1467,19 @@ function AssetsTab({
                         <span className="inline-block h-3 w-12 rounded bg-slate-100 dark:bg-slate-800 animate-pulse ml-auto" />
                       ) : displayMetric === 'returns' ? (
                         <>
-                          <div className={`text-xs font-semibold animate-value-in ${(r.pnl ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                          <div className={`text-sm font-semibold animate-value-in ${(r.pnl ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                             {r.pnl !== undefined ? (privacyMode ? '••••••' : formatSignedCurrency(r.pnl, a.currency)) : '—'}
                           </div>
-                          <div className={`text-[10px] mt-0.5 ${(r.pnl ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                          <div className={`text-[11px] mt-0.5 ${(r.pnl ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                             {r.pnlPercent !== undefined && !privacyMode ? formatPercentMagnitude(r.pnlPercent) : ''}
                           </div>
                         </>
                       ) : displayMetric === 'marketPrice' ? (
                         <>
-                          <div className="text-xs font-semibold text-slate-800 dark:text-slate-100 animate-value-in">
+                          <div className="text-sm font-semibold text-slate-800 dark:text-slate-100 animate-value-in">
                             {r.currentPrice !== undefined ? maskPreciseAmount(r.currentPrice, a.currency, privacyMode) : '—'}
                           </div>
-                          <div className={`text-[10px] mt-0.5 ${(r.dayChangePerUnit ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                          <div className={`text-[11px] mt-0.5 ${(r.dayChangePerUnit ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                             {r.dayChangePerUnit !== undefined && r.dayChangePercent !== undefined
                               ? privacyMode
                                 ? '••••'
@@ -1452,13 +1490,13 @@ function AssetsTab({
                       ) : (
                         <>
                           <div
-                            className={`text-xs font-semibold animate-value-in ${
+                            className={`text-sm font-semibold animate-value-in ${
                               (r.pnl ?? r.value - invested) >= 0 ? 'text-emerald-600' : 'text-red-500'
                             }`}
                           >
                             {maskPreciseAmount(r.value, a.currency, privacyMode)}
                           </div>
-                          <div className="text-[10px] mt-0.5 text-slate-400">
+                          <div className="text-[11px] mt-0.5 text-slate-400">
                             {maskPreciseAmount(invested, a.currency, privacyMode)}
                           </div>
                         </>
@@ -1556,7 +1594,6 @@ function AssetsTab({
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {displayRows.map((r, idx) => {
                   const a = r.asset;
-                  const trendUp = (r.dayChangePerUnit ?? r.pnl ?? 0) >= 0;
                   const invested = r.invested ?? r.value;
                   const qty = a.quantity ?? 0;
                   const subtitle =
@@ -1603,7 +1640,14 @@ function AssetsTab({
                         </div>
                       </td>
                       <td className="px-4 py-4">
-                        {r.previousClose !== undefined && <Sparkline symbol={a.symbol ?? a.id} trendUp={trendUp} />}
+                        {r.previousClose !== undefined && r.currentPrice !== undefined && (
+                          <Sparkline
+                            seed={a.symbol ?? a.id}
+                            previousClose={r.previousClose}
+                            currentPrice={dayChangeResetActive ? r.previousClose : r.currentPrice}
+                            progress={dayChangeResetActive ? 0 : marketSessionProgress}
+                          />
+                        )}
                       </td>
                       <td className="px-4 py-4 text-right whitespace-nowrap">
                         {isAssetLivePriced(a) && !totalsReady ? (
