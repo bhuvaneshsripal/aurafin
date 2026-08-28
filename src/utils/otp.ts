@@ -106,6 +106,29 @@ export function isWeeklyDigestEmailConfigured() {
   return !!(EMAILJS_SERVICE_ID && EMAILJS_DIGEST_TEMPLATE_ID && EMAILJS_PUBLIC_KEY);
 }
 
+// Shape produced by buildWeeklyDigestPayload() in ./weeklyDigest.ts. Exported
+// so that file can type its return value — this doesn't change what
+// sendWeeklyDigestEmail() below accepts.
+export interface WeeklyDigestEmailParams {
+  toEmail: string;
+  toName: string;
+  week: string;
+  portfolioValue: string;
+  totalInvested: string;
+  totalProfitLoss: string;
+  overallReturn: string;
+  weeklyProfitLoss: string;
+  weeklyReturn: string;
+  bestPerformer: string;
+  worstPerformer: string;
+  stocksUp: string;
+  stocksDown: string;
+  topHoldings: string;
+  sectorAllocation: string;
+  transactions: string;
+  insights: string;
+}
+
 export async function sendWeeklyDigestEmail(params: {
   toEmail: string;
   netWorth: string;
