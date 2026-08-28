@@ -96,11 +96,8 @@ export async function sendSharedAccessInvite(params: {
 // Weekly portfolio digest — a Zerodha-style "here's how your week went"
 // email. Reuses the same EmailJS account as the other email flows here,
 // pointed at its own template. Add VITE_EMAILJS_DIGEST_TEMPLATE_ID to
-// .env with a template that expects {{to_email}}, {{toName}}, {{week}},
-// {{portfolioValue}}, {{totalInvested}}, {{totalProfitLoss}},
-// {{overallReturn}}, {{weeklyProfitLoss}}, {{weeklyReturn}},
-// {{bestPerformer}}, {{worstPerformer}}, {{stocksUp}}, {{stocksDown}},
-// {{topHoldings}}, {{sectorAllocation}}, {{transactions}}, {{insights}}.
+// .env with a template that expects {{to_email}}, {{net_worth}},
+// {{week_change}}, {{week_change_percent}} variables.
 const EMAILJS_DIGEST_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_DIGEST_TEMPLATE_ID as
   | string
   | undefined;
@@ -109,37 +106,17 @@ export function isWeeklyDigestEmailConfigured() {
   return !!(EMAILJS_SERVICE_ID && EMAILJS_DIGEST_TEMPLATE_ID && EMAILJS_PUBLIC_KEY);
 }
 
-// Matches the shape buildWeeklyDigestPayload() in ./weeklyDigest.ts produces
-// (minus toEmail, which the caller supplies separately since the builder
-// doesn't know the recipient's address).
-export interface WeeklyDigestEmailParams {
+export async function sendWeeklyDigestEmail(params: {
   toEmail: string;
-  toName: string;
-  week: string;
-  portfolioValue: string;
-  totalInvested: string;
-  totalProfitLoss: string;
-  overallReturn: string;
-  weeklyProfitLoss: string;
-  weeklyReturn: string;
-  bestPerformer: string;
-  worstPerformer: string;
-  stocksUp: string;
-  stocksDown: string;
-  topHoldings: string;
-  sectorAllocation: string;
-  transactions: string;
-  insights: string;
-}
-
-export async function sendWeeklyDigestEmail(params: WeeklyDigestEmailParams) {
+  netWorth: string;
+  weekChange: string;
+  weekChangePercent: string;
+}) {
   if (!isWeeklyDigestEmailConfigured()) {
     throw new Error(
       'Weekly digest emails aren\u2019t set up yet. Add VITE_EMAILJS_DIGEST_TEMPLATE_ID (and the other EmailJS variables) to your .env file \u2014 see .env.example.'
     );
   }
-
-  const { toEmail, ...rest } = params;
 
   const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
     method: 'POST',
@@ -149,8 +126,10 @@ export async function sendWeeklyDigestEmail(params: WeeklyDigestEmailParams) {
       template_id: EMAILJS_DIGEST_TEMPLATE_ID,
       user_id: EMAILJS_PUBLIC_KEY,
       template_params: {
-        to_email: toEmail,
-        ...rest,
+        to_email: params.toEmail,
+        net_worth: params.netWorth,
+        week_change: params.weekChange,
+        week_change_percent: params.weekChangePercent,
       },
     }),
   });

@@ -6,10 +6,17 @@ import { useLivePricesStore } from '../store/livePricesStore';
 import { useSnapshotsStore } from '../store/snapshotsStore';
 import { useNotificationPreferencesStore } from '../store/notificationPreferencesStore';
 import { getWeeklyDigestWindow } from '../utils/marketHours';
-import { buildWeeklyDigestPayload } from '../utils/weeklyDigest';
+import { resolveAssetValues } from '../utils/assetValues';
+import { formatCurrency } from '../utils/currency';
 import { sendWeeklyDigestEmail, isWeeklyDigestEmailConfigured } from '../utils/otp';
 
 const CHECK_INTERVAL_MS = 5 * 60_000; // every 5 minutes is plenty for a once-a-week send
+const WEEK_MS = 7 * 24 * 60 * 60_000;
+// A snapshot is only usable as "a week ago" if it's within a day or so of
+// exactly 7 days back — otherwise (e.g. the person's oldest snapshot is a
+// month old) we'd be silently comparing against the wrong baseline instead
+// of just omitting the week-over-week figure.
+const WEEK_SNAPSHOT_TOLERANCE_MS = 1.5 * 24 * 60 * 60_000;
 
 /**
  * Sends the Saturday 10:00 AM IST weekly portfolio digest — a Zerodha-style
@@ -33,8 +40,6 @@ export function useWeeklyDigestScheduler() {
   const assets = useAssetsStore((s) => s.assets);
   const liabilities = useLiabilitiesStore((s) => s.liabilities);
   const livePrices = useLivePricesStore((s) => s.prices);
-  const sipValues = useLivePricesStore((s) => s.sipValues);
-  const goldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
   const snapshots = useSnapshotsStore((s) => s.snapshots);
 
   // Avoids double-sending if two checks land in the same tick (e.g. the
@@ -54,17 +59,34 @@ export function useWeeklyDigestScheduler() {
 
       sendingRef.current = true;
       try {
-        const payload = buildWeeklyDigestPayload({
-          toName: user.displayName ?? 'there',
-          assets,
-          liabilities,
-          livePrices,
-          sipValues,
-          goldPricePerGram,
-          snapshots,
-        });
+        const totalAssets = assets.reduce((s, a) => s + resolveAssetValues(a, livePrices).value, 0);
+        const totalLiabilities = liabilities.reduce((s, l) => s + l.outstanding, 0);
+        const netWorth = totalAssets - totalLiabilities;
 
-        await sendWeeklyDigestEmail({ toEmail: user.email, ...payload });
+        // Look for a snapshot taken ~7 days ago to show the week's move,
+        // like Zerodha's digest does. Snapshots are taken manually in this
+        // app (not automatic daily ones), so there's no guarantee one
+        // exists at exactly the right distance — if none is close enough,
+        // the digest just omits the week-over-week comparison rather than
+        // showing a misleading number.
+        const now = Date.now();
+        const weekAgoSnapshot = snapshots
+          .map((snap) => ({ snap, age: Math.abs(now - new Date(snap.date).getTime() - WEEK_MS) }))
+          .filter(({ age }) => age <= WEEK_SNAPSHOT_TOLERANCE_MS)
+          .sort((a, b) => a.age - b.age)[0]?.snap;
+
+        const weekChange = weekAgoSnapshot ? netWorth - weekAgoSnapshot.netWorth : null;
+        const weekChangePercent =
+          weekChange !== null && weekAgoSnapshot!.netWorth !== 0
+            ? (weekChange / weekAgoSnapshot!.netWorth) * 100
+            : null;
+
+        await sendWeeklyDigestEmail({
+          toEmail: user.email,
+          netWorth: formatCurrency(netWorth),
+          weekChange: weekChange !== null ? formatCurrency(weekChange) : 'N/A',
+          weekChangePercent: weekChangePercent !== null ? `${weekChangePercent.toFixed(2)}%` : 'N/A',
+        });
         markSent(dateKey);
       } catch {
         // Silent — a missed digest isn't worth surfacing an error toast
@@ -78,16 +100,5 @@ export function useWeeklyDigestScheduler() {
     check();
     const id = setInterval(check, CHECK_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [
-    user,
-    weeklyDigestEnabled,
-    lastSentFor,
-    markSent,
-    assets,
-    liabilities,
-    livePrices,
-    sipValues,
-    goldPricePerGram,
-    snapshots,
-  ]);
+  }, [user, weeklyDigestEnabled, lastSentFor, markSent, assets, liabilities, livePrices, snapshots]);
 }
