@@ -33,11 +33,11 @@ function RateBlock({
       </div>
       <p className="font-numeric text-2xl font-bold text-slate-900 dark:text-white mt-1.5">
         {formatCurrency(perGram, 'INR', { fractionDigits: 2 })}
-        <span className="text-xs font-medium text-slate-400 ml-1">/ gram</span>
+        <span className="text-xs font-medium text-slate-600 ml-1">/ gram</span>
       </p>
       <p className="font-numeric text-sm text-slate-500 dark:text-slate-400 mt-0.5">
         {formatCurrency(perGram * 10, 'INR', { fractionDigits: 0 })}
-        <span className="text-xs text-slate-400 ml-1">/ 10g</span>
+        <span className="text-xs text-slate-600 ml-1">/ 10g</span>
       </p>
     </div>
   );
@@ -78,7 +78,7 @@ export default function GoldPriceCard() {
           </span>
           <div className="min-w-0">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Live Gold Price</p>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500">India · per gram, calibrated live estimate</p>
+            <p className="text-[11px] text-slate-600 dark:text-slate-500">India · per gram, calibrated live estimate</p>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -89,7 +89,7 @@ export default function GoldPriceCard() {
             </span>
           )}
           <ChevronDown
-            className={`w-4 h-4 text-slate-400 dark:text-slate-500 transition-transform duration-200 ${
+            className={`w-4 h-4 text-slate-600 dark:text-slate-500 transition-transform duration-200 ${
               expanded ? 'rotate-180' : ''
             }`}
           />
@@ -100,13 +100,13 @@ export default function GoldPriceCard() {
         <div className="px-6 pb-6">
           {price24k === null && loading && (
             <div className="flex items-center gap-2 rounded-lg bg-slate-100 dark:bg-slate-800 px-3 py-3">
-              <RefreshCw className="w-3.5 h-3.5 text-slate-400 animate-spin" />
-              <span className="text-xs text-slate-400 dark:text-slate-500">Fetching live gold rate…</span>
+              <RefreshCw className="w-3.5 h-3.5 text-slate-600 animate-spin" />
+              <span className="text-xs text-slate-600 dark:text-slate-500">Fetching live gold rate…</span>
             </div>
           )}
 
           {price24k === null && !loading && error && (
-            <p className="text-sm text-slate-400">Couldn't fetch a live gold rate right now. Try again shortly.</p>
+            <p className="text-sm text-slate-600">Couldn't fetch a live gold rate right now. Try again shortly.</p>
           )}
 
           {price24k !== null && (
@@ -115,7 +115,7 @@ export default function GoldPriceCard() {
                 <RateBlock label="24K (999)" perGram={price24k} accent="bg-amber-500" />
                 <RateBlock label="22K (916)" perGram={goldPricePerGram22k(price24k)} accent="bg-amber-300" />
               </div>
-              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-3">
+              <p className="text-[11px] text-slate-600 dark:text-slate-500 mt-3">
                 {error ? 'Showing last known rate · ' : ''}Updated {timeAgo(asOf)}
               </p>
             </>

@@ -90,7 +90,7 @@ export default function Sidebar() {
             onClick={lockNow}
             title="Lock Aurafin now"
             aria-label="Lock Aurafin now"
-            className="tap-scale h-8 w-8 flex items-center justify-center rounded-full text-slate-400 dark:text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 shrink-0"
+            className="tap-scale h-8 w-8 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 shrink-0"
           >
             <Lock size={16} />
           </button>
@@ -108,7 +108,7 @@ export default function Sidebar() {
       <div className="flex-1" />
 
       <div className="mt-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-        <p className="px-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1.5">
+        <p className="px-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600 mb-1.5">
           Tools
         </p>
         <nav className="flex flex-col gap-0.5">
@@ -124,7 +124,7 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      <div className="px-2.5 pt-3 mt-2 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-400 dark:text-slate-500">
+      <div className="px-2.5 pt-3 mt-2 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-500">
         <p>
           Developed by Bhuvanesh S ·{' '}
           <a

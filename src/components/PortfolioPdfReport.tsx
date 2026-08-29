@@ -7,11 +7,26 @@ import { useUiStore } from '../store/uiStore';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import { resolveAssetValues } from '../utils/assetValues';
 import { formatCurrency, ASSET_CLASS_LABELS, maskPreciseAmount } from '../utils/currency';
-import { Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 interface PortfolioPdfReportProps {
   hideInPrint?: boolean;
 }
+
+const INVESTMENT_CLASSES = new Set([
+  'stock',
+  'etf',
+  'equity_mutual_fund',
+  'index_fund',
+  'hybrid_mutual_fund',
+  'sip',
+  'international_equity',
+  'ipo_pre_ipo',
+  'esop_rsu',
+  'equity_other',
+  'crypto_coin',
+  'nft',
+]);
 
 const ASSET_COLORS: Record<string, string> = {
   stock: '#3B82F6',
@@ -132,7 +147,7 @@ export const PortfolioPdfReport = ({ hideInPrint = false }: PortfolioPdfReportPr
     const grouped: Record<string, { label: string; value: number; count: number }> = {};
 
     liabilities.forEach((l) => {
-      const typeKey = l.liabilityClass || 'other_liability';
+      const typeKey = l.type;
       if (!grouped[typeKey]) {
         grouped[typeKey] = {
           label: ASSET_CLASS_LABELS[typeKey] || typeKey,

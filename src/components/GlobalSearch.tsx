@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, X, TrendingUp, CreditCard, Target, ArrowLeftRight } from 'lucide-react';
+import { Search, X, TrendingUp, CreditCard, Target, ArrowLeftRight, Clock } from 'lucide-react';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useGoalsStore } from '../store/goalsStore';
@@ -12,6 +12,27 @@ import { resolveAssetValues } from '../utils/assetValues';
 import { ASSET_CLASS_LABELS, maskPreciseAmount } from '../utils/currency';
 
 const MAX_PER_GROUP = 5;
+const MAX_RECENT_SEARCHES = 5;
+const RECENT_SEARCHES_KEY = 'aurafin-recent-searches';
+
+function loadRecentSearches(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_SEARCHES_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string').slice(0, MAX_RECENT_SEARCHES) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentSearches(list: string[]) {
+  try {
+    localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(list));
+  } catch {
+    // Best-effort — worst case the list just doesn't persist across reloads.
+  }
+}
 
 /**
  * Global "Search Aurafin..." — searches everything the person has actually
@@ -24,6 +45,7 @@ const MAX_PER_GROUP = 5;
 export default function GlobalSearch() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => loadRecentSearches());
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -104,7 +126,33 @@ export default function GlobalSearch() {
   const totalMatches =
     assetMatches.length + liabilityMatches.length + goalMatches.length + transactionMatches.length;
 
+  // Remembers a search term the person actually acted on (picked a result,
+  // or hit Enter), most-recent-first, deduped case-insensitively, capped to
+  // MAX_RECENT_SEARCHES — shown as quick-repeat suggestions the next time
+  // the search is opened with nothing typed yet.
+  const addRecentSearch = (term: string) => {
+    const trimmed = term.trim();
+    if (!trimmed) return;
+    setRecentSearches((prev) => {
+      const next = [trimmed, ...prev.filter((t) => t.toLowerCase() !== trimmed.toLowerCase())].slice(
+        0,
+        MAX_RECENT_SEARCHES
+      );
+      saveRecentSearches(next);
+      return next;
+    });
+  };
+
+  const removeRecentSearch = (term: string) => {
+    setRecentSearches((prev) => {
+      const next = prev.filter((t) => t !== term);
+      saveRecentSearches(next);
+      return next;
+    });
+  };
+
   const goTo = (path: string) => {
+    addRecentSearch(query);
     setOpen(false);
     navigate(path);
   };
@@ -128,26 +176,29 @@ export default function GlobalSearch() {
             className="animate-menu-in w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden h-fit max-h-[70vh] flex flex-col"
             style={{ transformOrigin: 'top center' }}
           >
-            <div className="flex items-center gap-2.5 px-4 py-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
-              <Search size={18} className="text-brand-500 shrink-0" />
+            <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+              <Search size={20} className="text-brand-500 shrink-0" />
               <input
                 ref={inputRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && query.trim()) addRecentSearch(query);
+                }}
                 placeholder="Search Aurafin..."
-                className="flex-1 min-w-0 bg-transparent text-base text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 placeholder:font-medium focus:outline-none"
+                className="flex-1 min-w-0 bg-transparent text-lg text-slate-800 dark:text-slate-100 placeholder:text-slate-600 dark:placeholder:text-slate-500 placeholder:font-medium focus:outline-none"
               />
               {query && (
                 <button
                   onClick={() => setQuery('')}
-                  className="tap-scale h-7 w-7 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
+                  className="tap-scale h-8 w-8 flex items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
                 >
-                  <X size={14} />
+                  <X size={16} />
                 </button>
               )}
               <button
                 onClick={() => setOpen(false)}
-                className="hidden sm:flex tap-scale h-7 items-center justify-center rounded-md border border-slate-200 dark:border-slate-700 px-2 text-[11px] font-medium text-slate-400 shrink-0"
+                className="hidden sm:flex tap-scale h-7 items-center justify-center rounded-md border border-slate-200 dark:border-slate-700 px-2 text-[11px] font-medium text-slate-600 shrink-0"
               >
                 Esc
               </button>
@@ -155,11 +206,53 @@ export default function GlobalSearch() {
 
             <div className="overflow-y-auto">
               {!q ? (
-                <div className="px-4 py-10 text-center text-sm text-slate-400">
-                  Search your holdings, liabilities, goals and transactions.
-                </div>
+                recentSearches.length > 0 ? (
+                  <div className="py-2">
+                    <div className="px-4 pb-1 flex items-center justify-between">
+                      <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-slate-600 uppercase">
+                        <Clock size={12} className="text-slate-600" />
+                        Recent searches
+                      </p>
+                      <button
+                        onClick={() => {
+                          setRecentSearches([]);
+                          saveRecentSearches([]);
+                        }}
+                        className="text-[11px] font-medium text-slate-600 hover:text-slate-600 dark:hover:text-slate-300"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <div className="px-2">
+                      {recentSearches.map((term) => (
+                        <div
+                          key={term}
+                          className="group w-full flex items-center gap-3 px-2.5 py-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800"
+                        >
+                          <Clock size={15} className="text-slate-300 dark:text-slate-600 shrink-0" />
+                          <button
+                            onClick={() => setQuery(term)}
+                            className="flex-1 min-w-0 text-left text-sm font-medium text-slate-700 dark:text-slate-200 truncate"
+                          >
+                            {term}
+                          </button>
+                          <button
+                            onClick={() => removeRecentSearch(term)}
+                            className="tap-scale h-6 w-6 flex items-center justify-center rounded-full text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 shrink-0 opacity-0 group-hover:opacity-100"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="px-4 py-10 text-center text-sm text-slate-600">
+                    Search your holdings, liabilities, goals and transactions.
+                  </div>
+                )
               ) : totalMatches === 0 ? (
-                <div className="px-4 py-10 text-center text-sm text-slate-400">
+                <div className="px-4 py-10 text-center text-sm text-slate-600">
                   No results for <span className="font-medium text-slate-500 dark:text-slate-300">“{query}”</span>
                 </div>
               ) : (
@@ -246,7 +339,7 @@ function ResultGroup({
 }) {
   return (
     <div className="px-2 py-1.5">
-      <p className="px-2.5 pb-1 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-slate-400 uppercase">
+      <p className="px-2.5 pb-1 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-slate-600 uppercase">
         <Icon size={12} className={iconColor} />
         {label}
       </p>
@@ -277,7 +370,7 @@ function ResultRow({
         <span className="block text-sm font-medium text-slate-800 dark:text-slate-100 truncate uppercase">
           {title}
         </span>
-        <span className="block text-xs text-slate-400 truncate normal-case">{subtitle}</span>
+        <span className="block text-xs text-slate-600 truncate normal-case">{subtitle}</span>
       </span>
       <span className={`text-sm font-medium shrink-0 ${trailingColor}`}>{trailing}</span>
     </button>

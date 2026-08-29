@@ -28,6 +28,7 @@ import {
   ListFilter,
   ArrowDown,
   ArrowUp,
+  Info,
 } from 'lucide-react';
 import {
   PieChart,
@@ -461,7 +462,7 @@ function AddWealthPage({
                     <Icon size={22} className="text-slate-600" />
                     <span className="font-medium text-slate-800 text-sm">{cat.label}</span>
                     {cat.types.length > 1 && (
-                      <span className="text-xs text-slate-400">{cat.types.length} types</span>
+                      <span className="text-xs text-slate-600">{cat.types.length} types</span>
                     )}
                   </button>
                 );
@@ -584,7 +585,7 @@ function FilterDropdown({
       >
         <div className="flex items-center gap-1 flex-wrap flex-1 min-w-0">
           {selected.length === 0 ? (
-            <span className="text-slate-400 text-xs truncate">{placeholder}</span>
+            <span className="text-slate-600 text-xs truncate">{placeholder}</span>
           ) : (
             selected.map((v) => {
               const opt = options.find((o) => o.value === v);
@@ -609,7 +610,7 @@ function FilterDropdown({
             })
           )}
         </div>
-        <div className="flex items-center gap-1 text-slate-400 shrink-0">
+        <div className="flex items-center gap-1 text-slate-600 shrink-0">
           {selected.length > 0 && (
             <span
               role="button"
@@ -628,7 +629,7 @@ function FilterDropdown({
       {open && (
         <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
           {options.length === 0 ? (
-            <p className="px-3 py-2 text-sm text-slate-400">No options yet</p>
+            <p className="px-3 py-2 text-sm text-slate-600">No options yet</p>
           ) : (
             options.map((opt) => (
               <label
@@ -1163,20 +1164,28 @@ function AssetsTab({
 
   if (viewingAsset) {
     const live = assets.find((x) => x.id === viewingAsset.id) ?? viewingAsset;
-    return (
-      <AssetDetailPage
-        asset={live}
-        onBack={() => setViewingAsset(null)}
-        onEdit={(a) => {
-          setViewingAsset(null);
-          openEdit(a);
-        }}
-        onDelete={async (id) => {
-          await handleDelete(id);
-          setViewingAsset(null);
-        }}
-      />
-    );
+    // "Holding"-style assets (equities/funds/crypto priced per-unit, or
+    // weight-tracked metals) get the brokerage-style Holding details
+    // screen; everything else (FDs, real estate, cash, etc.) keeps the
+    // simpler DETAILS-grid layout, since Mkt price/Avg price/XIRR/
+    // Breakdown don't apply to them.
+    const isHoldingStyle =
+      (SYMBOL_ENABLED_CLASSES.has(live.assetClass) || WEIGHT_TRACKED_CLASSES.has(live.assetClass)) &&
+      (live.quantity ?? 0) > 0 &&
+      buildHoldingLots(live).length > 0;
+    const detailProps = {
+      asset: live,
+      onBack: () => setViewingAsset(null),
+      onEdit: (a: Asset) => {
+        setViewingAsset(null);
+        openEdit(a);
+      },
+      onDelete: async (id: string) => {
+        await handleDelete(id);
+        setViewingAsset(null);
+      },
+    };
+    return isHoldingStyle ? <HoldingDetailView {...detailProps} /> : <AssetDetailPage {...detailProps} />;
   }
 
   function SortHeader({
@@ -1222,14 +1231,14 @@ function AssetsTab({
             <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Assets</h2>
           </div>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">{assets.length} assets · unlimited</p>
-          <p className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1.5 mt-1">
+          <p className="text-xs text-slate-600 dark:text-slate-500 flex items-center gap-1.5 mt-1">
             <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
             Live prices update every 60 seconds
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="relative flex-1 min-w-[140px] sm:flex-none">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -1283,7 +1292,7 @@ function AssetsTab({
 
       {filtered.length === 0 ? (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 px-4 py-14 flex flex-col items-center justify-center text-center gap-4">
-          <p className="text-slate-400">
+          <p className="text-slate-600">
             {assets.length === 0 ? 'No assets yet. Add your first one to get started.' : 'No assets match your search.'}
           </p>
           {assets.length === 0 && (
@@ -1297,13 +1306,18 @@ function AssetsTab({
         </div>
       ) : (
         <div className="space-y-3">
-          {/* Summary card */}
+          {/* Summary card — styled after the Groww Holdings card: label +
+              chevron, big total, a row of circular icon buttons, then a
+              stacked 1D returns / Total returns / Invested breakdown. */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <span className="text-[11px] font-semibold tracking-wide text-slate-400 uppercase">
-                  Holdings ({rows.length})
-                </span>
+                <div className="flex items-center gap-1">
+                  <span className="text-[11px] font-semibold tracking-wide text-slate-600 uppercase">
+                    Holdings ({rows.length})
+                  </span>
+                  <ChevronDown size={13} className="text-slate-600" />
+                </div>
                 <div className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mt-1">
                   {!totalsReady ? (
                     <span className="inline-block h-8 w-28 rounded bg-slate-100 dark:bg-slate-800 animate-pulse align-middle" />
@@ -1313,23 +1327,49 @@ function AssetsTab({
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                {/* Mobile: three plain icon circles (Eye, Chart, Kebab) —
+                    matches the phone Groww layout. */}
+                <button
+                  onClick={togglePrivacy}
+                  title={privacyMode ? 'Show amounts' : 'Hide amounts'}
+                  className="sm:hidden h-9 w-9 flex items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+                >
+                  {privacyMode ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
                 <button
                   onClick={() => setTab('allocation')}
-                  className="flex items-center gap-1.5 text-xs sm:text-sm font-medium border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
+                  title="Analyse"
+                  className="sm:hidden h-9 w-9 flex items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+                >
+                  <BarChart2 size={16} />
+                </button>
+                <button
+                  onClick={handleExport}
+                  title="Export holdings"
+                  className="sm:hidden h-9 w-9 flex items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+                >
+                  <MoreVertical size={16} />
+                </button>
+
+                {/* Desktop: labeled "Analyse" pill, then Eye and Kebab
+                    circles — matches the Groww web layout. */}
+                <button
+                  onClick={() => setTab('allocation')}
+                  className="hidden sm:flex items-center gap-1.5 text-sm font-medium border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
                 >
                   <BarChart2 size={15} /> Analyse
                 </button>
                 <button
                   onClick={togglePrivacy}
                   title={privacyMode ? 'Show amounts' : 'Hide amounts'}
-                  className="h-8 w-8 flex items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+                  className="hidden sm:flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
                 >
                   {privacyMode ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
                 <button
                   onClick={handleExport}
                   title="Export holdings"
-                  className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+                  className="hidden sm:flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
                 >
                   <MoreVertical size={16} />
                 </button>
@@ -1338,9 +1378,51 @@ function AssetsTab({
 
             <div className="border-t border-dashed border-slate-200 dark:border-slate-700 my-4" />
 
-            <div className="grid grid-cols-3 gap-3">
+            {/* Mobile: stacked 1D returns / Total returns / Invested rows. */}
+            <div className="space-y-2.5 sm:hidden">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-500 dark:text-slate-400">1D returns</span>
+                {!totalsReady ? (
+                  <span className="inline-block h-4 w-24 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
+                ) : has1dData ? (
+                  <span className={`text-sm font-semibold ${total1dAbs >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                    {privacyMode
+                      ? '••••••'
+                      : `${formatSignedCurrency(total1dAbs)} (${formatPercentMagnitude(total1dPercent)})`}
+                  </span>
+                ) : (
+                  <span className="text-sm font-semibold text-slate-300">—</span>
+                )}
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-500 dark:text-slate-400">Total returns</span>
+                <span className={`text-sm font-semibold ${totalPnl >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                  {!totalsReady ? (
+                    <span className="inline-block h-4 w-24 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
+                  ) : privacyMode ? (
+                    '••••••'
+                  ) : (
+                    `${formatSignedCurrency(totalPnl)} (${formatPercentMagnitude(totalPnlPercent)})`
+                  )}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-500 dark:text-slate-400">Invested</span>
+                <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  {!totalsReady ? (
+                    <span className="inline-block h-4 w-20 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
+                  ) : (
+                    maskAmount(totalInvested, 'INR', privacyMode, { fractionDigits: 0 })
+                  )}
+                </span>
+              </div>
+            </div>
+
+            {/* Desktop: Invested value / 1D returns / Total returns laid out
+                left-to-right in three columns, matching the Groww web card. */}
+            <div className="hidden sm:grid sm:grid-cols-3 sm:gap-3">
               <div className="text-left">
-                <div className="text-xs text-slate-400 mb-1">Invested value</div>
+                <div className="text-xs text-slate-600 mb-1">Invested value</div>
                 <div className="font-semibold text-slate-800 dark:text-slate-100">
                   {!totalsReady ? (
                     <span className="inline-block h-5 w-20 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
@@ -1350,7 +1432,7 @@ function AssetsTab({
                 </div>
               </div>
               <div className="text-center">
-                <div className="text-xs text-slate-400 mb-1">1D returns</div>
+                <div className="text-xs text-slate-600 mb-1">1D returns</div>
                 {!totalsReady ? (
                   <span className="inline-block h-5 w-24 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
                 ) : has1dData ? (
@@ -1364,7 +1446,7 @@ function AssetsTab({
                 )}
               </div>
               <div className="text-right">
-                <div className="text-xs text-slate-400 mb-1">Total returns</div>
+                <div className="text-xs text-slate-600 mb-1">Total returns</div>
                 <div className={`font-semibold ${totalPnl >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                   {!totalsReady ? (
                     <span className="inline-block h-5 w-24 rounded bg-slate-100 dark:bg-slate-800 animate-pulse ml-auto" />
@@ -1385,7 +1467,7 @@ function AssetsTab({
             <button
               type="button"
               onClick={openSortSheet}
-              className="inline-flex items-center gap-1 pb-1 border-b-2 border-dotted border-slate-300 dark:border-slate-600 w-fit"
+              className="inline-flex items-center gap-1 w-fit"
             >
               <span className="text-sm font-semibold text-slate-900 dark:text-white">Sort</span>
               <ListFilter size={15} strokeWidth={2.25} className="text-slate-900 dark:text-white" />
@@ -1400,7 +1482,7 @@ function AssetsTab({
                   cycleCompactSort(1);
                 }
               }}
-              className="inline-flex items-center gap-1 pb-1 border-b-2 border-dotted border-slate-300 dark:border-slate-600 w-fit cursor-pointer select-none"
+              className="inline-flex items-center gap-1 w-fit cursor-pointer select-none"
             >
               <div className="flex items-center text-slate-900 dark:text-white">
                 <button
@@ -1447,11 +1529,11 @@ function AssetsTab({
               const qty = a.quantity ?? 0;
               const subtitle =
                 a.assetClass === 'stock' && qty > 0
-                  ? `${qty} share${qty === 1 ? '' : 's'} • Avg ${maskPreciseAmount(a.avgCost ?? 0, a.currency, privacyMode)}`
+                  ? `${qty} share${qty === 1 ? '' : 's'}`
                   : WEIGHT_TRACKED_CLASSES.has(a.assetClass) && qty > 0
-                    ? `${formatGrams(qty)}g • Avg ${maskPreciseAmount(a.avgCost ?? 0, a.currency, privacyMode)}/g`
-                    : qty > 0 && a.avgCost
-                      ? `${qty} unit${qty === 1 ? '' : 's'} • Avg ${maskPreciseAmount(a.avgCost, a.currency, privacyMode)}`
+                    ? `${formatGrams(qty)}g`
+                    : qty > 0
+                      ? `${qty} unit${qty === 1 ? '' : 's'}`
                       : ASSET_CLASS_LABELS[a.assetClass];
               const loading = isAssetLivePriced(a) && !totalsReady;
               return (
@@ -1466,8 +1548,8 @@ function AssetsTab({
                   className="grid grid-cols-[1fr_44px_1fr] items-center gap-1.5 px-4 py-3 active:bg-slate-50 dark:active:bg-slate-800/40 cursor-pointer select-none"
                 >
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate uppercase">{a.name}</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5 truncate">{subtitle}</p>
+                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{a.name}</p>
+                    <p className="text-[11px] text-slate-600 mt-0.5 truncate">{subtitle}</p>
                   </div>
                   {/* Fixed-width center column — with the name and value+menu
                       columns both set to 1fr on either side, this sits at
@@ -1520,8 +1602,8 @@ function AssetsTab({
                           >
                             {maskPreciseAmount(r.value, a.currency, privacyMode)}
                           </div>
-                          <div className="text-[11px] mt-0.5 text-slate-400">
-                            {maskPreciseAmount(invested, a.currency, privacyMode)}
+                          <div className="text-[11px] mt-0.5 text-slate-600">
+                            ({maskPreciseAmount(invested, a.currency, privacyMode)})
                           </div>
                         </>
                       )}
@@ -1535,7 +1617,7 @@ function AssetsTab({
                           e.stopPropagation();
                           setHoldingsMenuOpenId((id) => (id === a.id ? null : a.id));
                         }}
-                        className="h-6 w-6 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400"
+                        className="h-6 w-6 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600"
                       >
                         <MoreVertical size={13} />
                       </button>
@@ -1658,8 +1740,8 @@ function AssetsTab({
                             }`}
                           />
                           <div className="min-w-0">
-                            <p className="font-semibold text-slate-800 dark:text-slate-100 truncate uppercase">{a.name}</p>
-                            <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>
+                            <p className="font-semibold text-slate-800 dark:text-slate-100 truncate">{a.name}</p>
+                            <p className="text-xs text-slate-600 mt-0.5">{subtitle}</p>
                           </div>
                         </div>
                       </td>
@@ -1721,7 +1803,7 @@ function AssetsTab({
                             <div className="font-semibold text-slate-800 dark:text-slate-100">
                               {maskPreciseAmount(r.value, a.currency, privacyMode)}
                             </div>
-                            <div className="text-xs mt-0.5 text-slate-400">
+                            <div className="text-xs mt-0.5 text-slate-600">
                               {maskPreciseAmount(invested, a.currency, privacyMode)}
                             </div>
                           </>
@@ -1737,7 +1819,7 @@ function AssetsTab({
                               e.stopPropagation();
                               setHoldingsMenuOpenId((id) => (id === a.id ? null : a.id));
                             }}
-                            className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400"
+                            className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600"
                           >
                             <MoreVertical size={16} />
                           </button>
@@ -1928,6 +2010,421 @@ function AssetsTab({
  * read defensively via an `any` cast and only rendered when present — extend the
  * schema with those fields to have them show up here for real.
  */
+/** One row of the "Holding details" breakdown / order history — unifies
+ *  the two different lot shapes the schema keeps (unit-tracked shareLots
+ *  vs weight-tracked purchaseLots) into a single qty/price/amount/date
+ *  shape, and synthesizes a single lot from the legacy quantity+avgCost
+ *  fields for older assets saved before per-lot tracking existed. */
+interface HoldingLot {
+  id: string;
+  date?: string;
+  qty: number;
+  price: number;
+  amount: number;
+}
+
+function buildHoldingLots(asset: Asset): HoldingLot[] {
+  if (asset.shareLots && asset.shareLots.length > 0) {
+    return asset.shareLots
+      .filter((l) => l.quantity > 0)
+      .map((l) => ({ id: l.id, date: l.date, qty: l.quantity, price: l.price, amount: l.quantity * l.price }));
+  }
+  if (asset.purchaseLots && asset.purchaseLots.length > 0) {
+    return asset.purchaseLots
+      .filter((l) => l.grams > 0)
+      .map((l) => ({ id: l.id, date: l.date, qty: l.grams, price: l.amount / l.grams, amount: l.amount }));
+  }
+  if (asset.quantity && asset.quantity > 0 && (asset.avgCost || asset.investedValue)) {
+    const price = asset.avgCost ?? asset.investedValue! / asset.quantity;
+    return [
+      {
+        id: asset.id,
+        date: asset.startDate,
+        qty: asset.quantity,
+        price,
+        amount: asset.investedValue ?? asset.quantity * price,
+      },
+    ];
+  }
+  return [];
+}
+
+/**
+ * Annualized return (XIRR) for a single holding, using every dated lot as
+ * an outflow and today's Current Value as the final inflow. Same
+ * Newton-Raphson solver as the standalone XIRR calculator (see
+ * Calculators.tsx's xirrRate) — duplicated locally rather than shared
+ * since the cashflow shape here (derived from lots) is specific to this
+ * page. Returns null when there isn't enough dated history to solve for
+ * a rate (e.g. a legacy asset with no purchase date at all).
+ */
+function computeHoldingXirr(lots: HoldingLot[], currentValue: number): number | null {
+  const outflows = lots
+    .filter((l): l is HoldingLot & { date: string } => !!l.date && l.amount > 0)
+    .map((l) => ({ date: new Date(l.date), amount: -l.amount }));
+  if (outflows.length === 0) return null;
+
+  const cashflows = [...outflows, { date: new Date(), amount: currentValue }].sort(
+    (a, b) => a.date.getTime() - b.date.getTime()
+  );
+  if (cashflows[0].date.getTime() === cashflows[cashflows.length - 1].date.getTime()) return null;
+
+  const t0 = cashflows[0].date.getTime();
+  const years = cashflows.map((c) => (c.date.getTime() - t0) / (365 * 24 * 3600 * 1000));
+  const npv = (rate: number) =>
+    cashflows.reduce((sum, c, i) => sum + c.amount / Math.pow(1 + rate, years[i]), 0);
+  const dnpv = (rate: number) =>
+    cashflows.reduce((sum, c, i) => sum - (years[i] * c.amount) / Math.pow(1 + rate, years[i] + 1), 0);
+
+  let rate = 0.1;
+  for (let i = 0; i < 100; i++) {
+    const f = npv(rate);
+    const df = dnpv(rate);
+    if (Math.abs(df) < 1e-10) break;
+    const next = rate - f / df;
+    if (!Number.isFinite(next)) break;
+    if (Math.abs(next - rate) < 1e-7) {
+      rate = next;
+      break;
+    }
+    rate = next;
+  }
+  return Number.isFinite(rate) ? rate * 100 : null;
+}
+
+/** Deterministic single-letter tile shown next to the holding name on the
+ *  detail page — colored by asset class, same palette used for its
+ *  category badge elsewhere, so it reads as "this kind of holding"
+ *  without depending on a fetched broker/exchange logo. */
+function HoldingTile({ asset }: { asset: Asset }) {
+  const letter = (asset.symbol || asset.name || '?').trim().charAt(0).toUpperCase();
+  const color = ASSET_CLASS_COLORS[asset.assetClass] ?? '#64748b';
+  return (
+    <div
+      className="h-11 w-11 shrink-0 rounded-xl flex items-center justify-center text-white font-bold text-base"
+      style={{ backgroundColor: color }}
+    >
+      {letter || '?'}
+    </div>
+  );
+}
+
+/** Broker-app-style "Holding details" screen — mirrors the layout of a
+ *  Kite/Groww holding page (Current/Invested, Unrealised/1D returns, Mkt
+ *  price/Avg price/Qty, XIRR, per-lot breakdown, order history, and a
+ *  SIP/Sell/Buy action bar) for assets that behave like a tradable
+ *  holding (quantity + a per-unit price). Everything else (FDs, real
+ *  estate, cash, etc.) keeps the simpler DETAILS-grid layout below. */
+function HoldingDetailView({
+  asset,
+  onBack,
+  onEdit,
+  onDelete,
+}: {
+  asset: Asset;
+  onBack: () => void;
+  onEdit: (a: Asset) => void;
+  onDelete: (id: string) => void;
+}) {
+  const livePrices = useLivePricesStore((s) => s.prices);
+  const sipValues = useLivePricesStore((s) => s.sipValues);
+  const previousCloses = useLivePricesStore((s) => s.previousCloses);
+  const liveGoldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
+  const privacyMode = useUiStore((s) => s.privacyMode);
+  const dayChangeResetActive = useDayChangeResetWindow();
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const BREAKDOWN_MODES: { key: 'avg' | 'current' | 'returns'; label: string }[] = [
+    { key: 'avg', label: 'Avg price (Invested)' },
+    { key: 'current', label: 'Current price (Current value)' },
+    { key: 'returns', label: 'Returns (Age)' },
+  ];
+  const [breakdownModeIdx, setBreakdownModeIdx] = useState(0);
+  const cycleBreakdownMode = (dir: 1 | -1) =>
+    setBreakdownModeIdx((i) => (i + dir + BREAKDOWN_MODES.length) % BREAKDOWN_MODES.length);
+  const breakdownMode = BREAKDOWN_MODES[breakdownModeIdx].key;
+
+  const { invested, value, pnl, currentPrice } = resolveAssetValues(
+    asset,
+    livePrices,
+    sipValues,
+    liveGoldPricePerGram
+  );
+  const positive = (pnl ?? 0) >= 0;
+  const category = ASSET_CLASS_TO_CATEGORY[asset.assetClass];
+  const qty = asset.quantity ?? 0;
+
+  const previousClose = resolvePreviousClose(asset.symbol, previousCloses);
+  const hasDayChangeData = previousClose !== undefined && currentPrice !== undefined;
+  const dayChangePerUnit = hasDayChangeData
+    ? dayChangeResetActive
+      ? 0
+      : currentPrice! - previousClose!
+    : undefined;
+  const dayChangePercent =
+    dayChangePerUnit !== undefined && previousClose
+      ? dayChangeResetActive
+        ? 0
+        : (dayChangePerUnit / previousClose) * 100
+      : undefined;
+  const dayChangeTotal = dayChangePerUnit !== undefined ? dayChangePerUnit * qty : undefined;
+
+  const lots = buildHoldingLots(asset);
+  const xirr = computeHoldingXirr(lots, value);
+
+  const orderedLots = [...lots].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <button onClick={onBack} className="p-2 -ml-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 shrink-0">
+          <ArrowLeft size={18} />
+        </button>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex-1">Holding details</h2>
+        <button
+          onClick={() => onEdit(asset)}
+          title="Edit"
+          className="h-9 w-9 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0"
+        >
+          <Pencil size={16} />
+        </button>
+        <button
+          onClick={() => setConfirmDeleteOpen(true)}
+          title="Delete"
+          className="h-9 w-9 flex items-center justify-center rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 shrink-0"
+        >
+          <Trash2 size={16} />
+        </button>
+      </div>
+
+      <Modal open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)} title="Delete this holding?">
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+          This will permanently delete <strong className="uppercase">{asset.name}</strong>. This can't be undone.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setConfirmDeleteOpen(false)}
+            className="flex-1 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => {
+              setConfirmDeleteOpen(false);
+              onDelete(asset.id);
+            }}
+            className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg text-sm font-medium"
+          >
+            Delete
+          </button>
+        </div>
+      </Modal>
+
+      {/* Symbol row — icon tile + name + last price/day-change, styled
+          after a brokerage app's holding header. */}
+      <div className="flex items-center gap-3 px-1">
+        <HoldingTile asset={asset} />
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-slate-900 dark:text-white truncate uppercase">
+            {asset.symbol || asset.name}
+          </p>
+          <p className="text-sm mt-0.5">
+            {currentPrice !== undefined && (
+              <span className="text-slate-600">{formatPreciseCurrency(currentPrice, asset.currency)}</span>
+            )}
+            {dayChangePerUnit !== undefined && dayChangePercent !== undefined && (
+              <span className={`ml-1.5 font-medium ${dayChangePerUnit >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                {formatSignedCurrency(dayChangePerUnit, asset.currency)} ({formatPercentMagnitude(dayChangePercent)})
+              </span>
+            )}
+          </p>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-xs text-slate-600">Current</p>
+            <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">
+              {maskPreciseAmount(value, asset.currency, privacyMode)}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-slate-600">Invested</p>
+            <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">
+              {maskPreciseAmount(invested ?? value, asset.currency, privacyMode)}
+            </p>
+          </div>
+        </div>
+
+        <div className="border-t border-dashed border-slate-200 dark:border-slate-700 my-4" />
+
+        <div className="space-y-3">
+          {pnl !== undefined && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-600 dark:text-slate-300">Unrealised returns</span>
+              <span className={`font-semibold ${positive ? 'text-emerald-600' : 'text-red-500'}`}>
+                {formatSignedCurrency(pnl, asset.currency)}
+                {invested ? ` (${formatPercentMagnitude((pnl / invested) * 100)})` : ''}
+              </span>
+            </div>
+          )}
+          {dayChangeTotal !== undefined && dayChangePercent !== undefined && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-600 dark:text-slate-300">1D returns</span>
+              <span className={`font-semibold ${dayChangeTotal >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                {formatSignedCurrency(dayChangeTotal, asset.currency)} ({formatPercentMagnitude(dayChangePercent)})
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-3 mt-5">
+          {currentPrice !== undefined && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-600 dark:text-slate-300">Mkt price</span>
+              <span className="font-semibold text-slate-800 dark:text-slate-100">
+                {formatPreciseCurrency(currentPrice, asset.currency)}
+              </span>
+            </div>
+          )}
+          {asset.avgCost !== undefined && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-600 dark:text-slate-300">Avg price</span>
+              <span className="font-semibold text-slate-800 dark:text-slate-100">
+                {formatPreciseCurrency(asset.avgCost, asset.currency)}
+              </span>
+            </div>
+          )}
+          {qty > 0 && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-600 dark:text-slate-300">Total qty</span>
+              <span className="font-semibold text-slate-800 dark:text-slate-100">
+                {WEIGHT_TRACKED_CLASSES.has(asset.assetClass) ? `${formatGrams(qty)} g` : qty}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {xirr !== null && (
+          <>
+            <div className="space-y-3 mt-5">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-600 dark:text-slate-300 flex items-center gap-1">
+                  XIRR <Info size={12} className="text-slate-300" />
+                </span>
+                <span className="font-semibold text-slate-800 dark:text-slate-100">{xirr.toFixed(2)}%</span>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {orderedLots.length > 0 && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="font-bold text-slate-900 dark:text-white">Breakdown</h3>
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => cycleBreakdownMode(1)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') cycleBreakdownMode(1);
+              }}
+              className="inline-flex items-center gap-1 w-fit cursor-pointer select-none"
+            >
+              <div className="flex items-center text-slate-500 dark:text-slate-400">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    cycleBreakdownMode(-1);
+                  }}
+                  aria-label="Previous breakdown mode"
+                  className="h-5 w-4 flex items-center justify-center hover:text-slate-700 dark:hover:text-slate-200"
+                >
+                  <ChevronLeft size={15} strokeWidth={2.5} />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    cycleBreakdownMode(1);
+                  }}
+                  aria-label="Next breakdown mode"
+                  className="h-5 w-4 flex items-center justify-center hover:text-slate-700 dark:hover:text-slate-200"
+                >
+                  <ChevronRight size={15} strokeWidth={2.5} />
+                </button>
+              </div>
+              <span
+                key={breakdownMode}
+                className="text-xs font-semibold text-slate-600 dark:text-slate-300 underline underline-offset-2 animate-value-in whitespace-nowrap"
+              >
+                {BREAKDOWN_MODES[breakdownModeIdx].label}
+              </span>
+            </div>
+          </div>
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            {orderedLots.map((lot, i) => {
+              const isWeight = WEIGHT_TRACKED_CLASSES.has(asset.assetClass);
+              const qtyLabel = isWeight ? `${formatGrams(lot.qty)}g` : `${lot.qty} qty`;
+
+              if (breakdownMode === 'returns') {
+                const lotCurrentPrice = currentPrice ?? lot.price;
+                const lotPnl = (lotCurrentPrice - lot.price) * lot.qty;
+                const lotPnlPercent = lot.price > 0 ? ((lotCurrentPrice - lot.price) / lot.price) * 100 : 0;
+                const lotPositive = lotPnl >= 0;
+                const ageDays = lot.date
+                  ? Math.max(0, Math.floor((Date.now() - new Date(lot.date).getTime()) / (24 * 3600 * 1000)))
+                  : undefined;
+                return (
+                  <div key={lot.id + i} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{qtyLabel}</p>
+                      <p className="text-xs text-slate-600 mt-0.5">{lot.date ?? '—'}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-sm font-semibold ${lotPositive ? 'text-emerald-600' : 'text-red-500'}`}>
+                        {formatSignedCurrency(lotPnl, asset.currency)} ({formatPercentMagnitude(lotPnlPercent)})
+                      </p>
+                      <p className="text-xs text-slate-600 mt-0.5">
+                        {ageDays !== undefined ? `${ageDays} day${ageDays === 1 ? '' : 's'}` : '—'}
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+
+              const displayPrice = breakdownMode === 'avg' ? lot.price : (currentPrice ?? lot.price);
+              const displayAmount = breakdownMode === 'avg' ? lot.amount : lot.qty * (currentPrice ?? lot.price);
+              return (
+                <div key={lot.id + i} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{qtyLabel}</p>
+                    <p className="text-xs text-slate-600 mt-0.5">{lot.date ?? '—'}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                      {formatPreciseCurrency(displayPrice, asset.currency)}
+                    </p>
+                    <p className="text-xs text-slate-600 mt-0.5">
+                      ({formatPreciseCurrency(displayAmount, asset.currency)})
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <p className="text-xs text-slate-600 text-center px-4">
+        {category?.label ?? ASSET_CLASS_LABELS[asset.assetClass]}
+      </p>
+    </div>
+  );
+}
+
 function AssetDetailPage({
   asset,
   onBack,
@@ -1994,7 +2491,7 @@ function AssetDetailPage({
         </button>
         <div className="flex-1 min-w-0">
           <h2 className="text-xl sm:text-2xl font-bold text-slate-900 uppercase truncate">{asset.name}</h2>
-          <p className="text-slate-400 text-sm">{category?.label ?? ASSET_CLASS_LABELS[asset.assetClass]}</p>
+          <p className="text-slate-600 text-sm">{category?.label ?? ASSET_CLASS_LABELS[asset.assetClass]}</p>
         </div>
         <button
           onClick={() => onEdit(asset)}
@@ -2041,7 +2538,7 @@ function AssetDetailPage({
             {category?.label ?? ASSET_CLASS_LABELS[asset.assetClass]}
           </span>
           <div className="text-right">
-            <p className="text-xs text-slate-400 font-medium">INVESTED</p>
+            <p className="text-xs text-slate-600 font-medium">INVESTED</p>
             <p className="text-base font-semibold text-slate-800">
               {formatPreciseCurrency(invested ?? value, asset.currency)}
             </p>
@@ -2068,7 +2565,7 @@ function AssetDetailPage({
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 p-5">
-        <p className="text-xs font-semibold tracking-wide text-slate-400 mb-4">DETAILS</p>
+        <p className="text-xs font-semibold tracking-wide text-slate-600 mb-4">DETAILS</p>
         <div className="grid grid-cols-2 gap-y-4 gap-x-4">
           <DetailField label="PRODUCT TYPE" value={ASSET_CLASS_LABELS[asset.assetClass]} />
           <DetailField label="CURRENCY" value={asset.currency} />
@@ -2099,7 +2596,7 @@ function AssetDetailPage({
 
       {asset.recurringInvestment && recurringSip && (
         <div className="bg-white rounded-2xl border border-slate-200 p-5">
-          <p className="text-xs font-semibold tracking-wide text-slate-400 mb-4">RECURRING INVESTMENT (SIP)</p>
+          <p className="text-xs font-semibold tracking-wide text-slate-600 mb-4">RECURRING INVESTMENT (SIP)</p>
           <div className="grid grid-cols-2 gap-y-4 gap-x-4">
             {asset.sipAmount !== undefined && (
               <DetailField
@@ -2113,7 +2610,7 @@ function AssetDetailPage({
               <DetailField label="NEXT DUE" value={recurringSip.nextInstallmentDate} />
             )}
           </div>
-          <p className="text-xs text-slate-400 mt-4">
+          <p className="text-xs text-slate-600 mt-4">
             This is a reminder only — log each purchase as a new lot when editing this asset so
             quantity and average cost stay accurate.
           </p>
@@ -2122,7 +2619,7 @@ function AssetDetailPage({
 
       {notesLine && (
         <div className="bg-white rounded-2xl border border-slate-200 p-5">
-          <p className="text-xs font-semibold tracking-wide text-slate-400 mb-3">NOTES</p>
+          <p className="text-xs font-semibold tracking-wide text-slate-600 mb-3">NOTES</p>
           <p className="text-sm text-slate-600 leading-relaxed">{notesLine}</p>
         </div>
       )}
@@ -2133,7 +2630,7 @@ function AssetDetailPage({
 function DetailField({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs text-slate-400 mb-1">{label}</p>
+      <p className="text-xs text-slate-600 mb-1">{label}</p>
       <p className="text-sm font-medium text-slate-800">{value}</p>
     </div>
   );
@@ -2960,7 +3457,7 @@ function AssetDetailsForm({
             <p className={errorTextClass}>Couldn't fetch a live gold rate — enter Current Value manually.</p>
           )}
           {goldPurity && (
-            <p className="text-xs text-slate-400 mt-1.5">
+            <p className="text-xs text-slate-600 mt-1.5">
               Current Value below is set to live {goldPurity === '24k' ? '24K' : '22K'} rate × total grams —
               this is a global spot estimate, not an exact local jeweller rate. Edit it to override.
             </p>
@@ -2988,7 +3485,7 @@ function AssetDetailsForm({
                   className="rounded-lg border border-slate-200 bg-white dark:bg-slate-800/60 dark:border-slate-700 p-3 space-y-2"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-slate-400">Purchase {i + 1}</span>
+                    <span className="text-xs font-medium text-slate-600">Purchase {i + 1}</span>
                     <button
                       type="button"
                       onClick={() => {
@@ -3050,7 +3547,7 @@ function AssetDetailsForm({
           >
             <Plus size={16} /> Add another purchase
           </button>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-600">
             Bought more later? Come back to Edit and add another purchase row — grams and amount add
             up automatically.
           </p>
@@ -3068,7 +3565,7 @@ function AssetDetailsForm({
                 <option value="IN">🇮🇳 India (NSE / BSE)</option>
                 <option value="US">🇺🇸 United States (NASDAQ / NYSE)</option>
               </select>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-slate-600 mt-1">
                 {market === 'US'
                   ? 'Live price is fetched from the US market — Currency defaults to USD below.'
                   : 'Live price is fetched from NSE, falling back to BSE/Yahoo.'}
@@ -3096,7 +3593,7 @@ function AssetDetailsForm({
               {symbolSearchLoading && (
                 <Loader2
                   size={16}
-                  className="animate-spin text-slate-400 absolute right-3 top-1/2 -translate-y-1/2"
+                  className="animate-spin text-slate-600 absolute right-3 top-1/2 -translate-y-1/2"
                 />
               )}
               {symbolSearchOpen && symbolSuggestions.length > 0 && (
@@ -3116,7 +3613,7 @@ function AssetDetailsForm({
                         )}
                       </span>
                       {s.exchDisp && (
-                        <span className="text-xs text-slate-400 shrink-0">{s.exchDisp}</span>
+                        <span className="text-xs text-slate-600 shrink-0">{s.exchDisp}</span>
                       )}
                     </button>
                   ))}
@@ -3133,7 +3630,7 @@ function AssetDetailsForm({
                         Couldn't reach symbol search — check your connection, or enter the ticker directly.
                       </span>
                     ) : (
-                      <span className="text-slate-400">
+                      <span className="text-slate-600">
                         No matches for "{symbolSearchedQuery}". Try just the company name, e.g. "Google".
                       </span>
                     )}
@@ -3141,7 +3638,7 @@ function AssetDetailsForm({
                 )}
             </div>
             {isMarketSelectable && market === 'US' && (
-              <p className="text-xs text-slate-400 mt-1">Not sure of the ticker? Just type the company name.</p>
+              <p className="text-xs text-slate-600 mt-1">Not sure of the ticker? Just type the company name.</p>
             )}
           </Field>
           {isRecurringEligible && (
@@ -3209,7 +3706,7 @@ function AssetDetailsForm({
                       {stockSipProgress.nextInstallmentDate && ` · Next due ${stockSipProgress.nextInstallmentDate}`}
                     </p>
                   )}
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-600">
                     This just tracks your plan and reminds you when the next installment is due — log
                     each actual purchase under "Purchases" below once you invest, so quantity and
                     average cost stay accurate.
@@ -3252,7 +3749,7 @@ function AssetDetailsForm({
                     className="rounded-lg border border-slate-200 bg-white dark:bg-slate-800/60 dark:border-slate-700 p-3 space-y-2"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-slate-400">Purchase {i + 1}</span>
+                      <span className="text-xs font-medium text-slate-600">Purchase {i + 1}</span>
                       <button
                         type="button"
                         onClick={() => {
@@ -3380,7 +3877,7 @@ function AssetDetailsForm({
                       </p>
                     )}
                     {isMarketSelectable && (
-                      <div className="text-xs text-slate-400 flex items-center gap-2 flex-wrap">
+                      <div className="text-xs text-slate-600 flex items-center gap-2 flex-wrap">
                         {mode === 'qty' ? (
                           <button
                             type="button"
@@ -3422,7 +3919,7 @@ function AssetDetailsForm({
                       </div>
                     )}
                     {isMarketSelectable && priceCurrency !== currency && (
-                      <div className="text-xs text-slate-400 flex items-center gap-2 flex-wrap">
+                      <div className="text-xs text-slate-600 flex items-center gap-2 flex-wrap">
                         {fxLoading && !fxRate ? (
                           <span className="flex items-center gap-1">
                             <Loader2 size={11} className="animate-spin" /> Fetching {otherCurrency}/{currency}{' '}
@@ -3454,7 +3951,7 @@ function AssetDetailsForm({
             >
               <Plus size={16} /> Add another purchase
             </button>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-600">
               Bought more later at a different price? Come back to Edit and add another purchase row —
               quantity and average cost update automatically, and returns recalculate off the new average.
             </p>
@@ -3483,7 +3980,7 @@ function AssetDetailsForm({
               {fundSearchLoading && (
                 <Loader2
                   size={16}
-                  className="animate-spin text-slate-400 absolute right-3 top-1/2 -translate-y-1/2"
+                  className="animate-spin text-slate-600 absolute right-3 top-1/2 -translate-y-1/2"
                 />
               )}
               {!fundSearchLoading && fundIsLinked && (
@@ -3519,7 +4016,7 @@ function AssetDetailsForm({
                         server if you just updated the app.
                       </span>
                     ) : (
-                      <span className="text-slate-400">
+                      <span className="text-slate-600">
                         No funds matched "{fundSearchedQuery}". Try the AMC name alone, e.g. "HDFC".
                       </span>
                     )}
@@ -3529,12 +4026,12 @@ function AssetDetailsForm({
             {fundIsLinked ? (
               <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
                 Linked to {matchedFundName ?? 'this fund'} — Current Value updates automatically.{' '}
-                <button type="button" onClick={unlinkFund} className="text-slate-400 hover:text-slate-600 underline">
+                <button type="button" onClick={unlinkFund} className="text-slate-600 hover:text-slate-600 underline">
                   unlink
                 </button>
               </p>
             ) : (
-              <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
+              <p className="text-xs text-slate-600 mt-1 flex items-center gap-1">
                 <Link2Off size={12} /> Not linked yet — pick a fund from the list to track its live NAV.
               </p>
             )}
@@ -3679,7 +4176,7 @@ function AssetDetailsForm({
               {liveValueLoading && (
                 <Loader2
                   size={16}
-                  className="animate-spin text-slate-400 absolute right-3 top-1/2 -translate-y-1/2"
+                  className="animate-spin text-slate-600 absolute right-3 top-1/2 -translate-y-1/2"
                 />
               )}
             </div>
@@ -3697,31 +4194,31 @@ function AssetDetailsForm({
             />
           )}
           {isWeightTracked && (
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-600 mt-1">
               Defaults to total amount paid ({formatPreciseCurrency(totalPurchaseAmount, currency)}) — edit if today's market value is different.
             </p>
           )}
           {isUnitTracked && !symbol.trim() && (
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-600 mt-1">
               Add a Symbol above for a live price, or enter today's value here manually.
             </p>
           )}
           {isSip && fundIsLinked && !liveValueLoading && !liveValueError && (
-            <p className="text-xs text-slate-400 mt-1">Calculated from the fund's live NAV × units bought each installment.</p>
+            <p className="text-xs text-slate-600 mt-1">Calculated from the fund's live NAV × units bought each installment.</p>
           )}
           {isSip && !fundIsLinked && !liveValueLoading && (
-            <p className="text-xs text-slate-400 mt-1">Link a fund above for a live value — using amount invested so far for now.</p>
+            <p className="text-xs text-slate-600 mt-1">Link a fund above for a live value — using amount invested so far for now.</p>
           )}
           {isSip && liveValueError && (
             <p className={errorTextClass}>Couldn't fetch this fund's live NAV — using amount invested so far instead.</p>
           )}
           {isEquityLive && equityLiveLoading && (
-            <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
+            <p className="text-xs text-slate-600 mt-1 flex items-center gap-1">
               <Loader2 size={12} className="animate-spin" /> Fetching live price for "{symbol.trim()}"…
             </p>
           )}
           {isEquityLive && !equityLiveLoading && equityLivePrice !== null && (
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-600 mt-1">
               Live price {formatPreciseCurrency(equityLivePrice, currency)} × {quantity || 0} — updates
               automatically; edit this field to override.
             </p>
@@ -3870,7 +4367,7 @@ function LiabilitiesTab({
                         setEditing(l);
                         setModalOpen(true);
                       }}
-                      className="text-slate-400 hover:text-brand-600"
+                      className="text-slate-600 hover:text-brand-600"
                     >
                       <Pencil size={18} />
                     </button>
@@ -3885,7 +4382,7 @@ function LiabilitiesTab({
               <tr>
                 <td colSpan={5} className="px-4 py-14">
                   <div className="flex flex-col items-center justify-center text-center gap-4">
-                    <p className="text-slate-400">No liabilities tracked. Add loans or credit lines here.</p>
+                    <p className="text-slate-600">No liabilities tracked. Add loans or credit lines here.</p>
                     <button
                       onClick={onAdd}
                       className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-lg text-base font-medium"
@@ -4092,7 +4589,7 @@ function AllocationTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) 
       <TabNav tab={tab} setTab={setTab} />
 
       {data.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400">
+        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-600">
           Add assets to see how your wealth is allocated.
         </div>
       ) : (
@@ -4132,7 +4629,7 @@ function AllocationChart({
               </div>
               <div className="text-right">
                 <span className="text-slate-900 font-semibold">{formatPreciseCurrency(d.value)}</span>
-                <span className="text-slate-400 ml-2 text-sm">
+                <span className="text-slate-600 ml-2 text-sm">
                   {total > 0 ? Math.round((d.value / total) * 100) : 0}%
                 </span>
               </div>

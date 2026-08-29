@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronDown, ChevronUp, ChevronRight, Scale, ArrowLeftRight, TrendingUp, Target, Download } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronRight, Scale, ArrowLeftRight, TrendingUp, Target } from 'lucide-react';
 import {
   ResponsiveContainer,
   BarChart,
@@ -20,10 +20,10 @@ import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import Amount from '../components/Amount';
 import LoadingDots from '../components/LoadingDots';
 import GoldPriceCard from '../components/GoldPriceCard';
-import { ASSET_CLASS_LABELS, formatCurrency, maskPreciseAmount } from '../utils/currency';
-import { resolveAssetValues } from '../utils/assetValues';
 import { PortfolioPdfReport } from '../components/PortfolioPdfReport';
 import { PortfolioExportModal } from '../components/PortfolioExportModal';
+import { ASSET_CLASS_LABELS, formatCurrency, maskPreciseAmount } from '../utils/currency';
+import { resolveAssetValues } from '../utils/assetValues';
 
 const INVESTMENT_CLASSES = new Set([
   'stock',
@@ -41,8 +41,8 @@ const INVESTMENT_CLASSES = new Set([
 ]);
 
 export default function Dashboard() {
-  const [exportModalOpen, setExportModalOpen] = useState(false);
   const [cashflowOpen, setCashflowOpen] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
   const allAssets = useAssetsStore((s) => s.assets);
   const allLiabilities = useLiabilitiesStore((s) => s.liabilities);
   const allTransactions = useTransactionsStore((s) => s.transactions);
@@ -136,27 +136,12 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Dashboard</h1>
-          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">Welcome back! Here's your wealth overview.</p>
-        </div>
-        <button
-          onClick={() => setExportModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 active:bg-brand-800 rounded-lg transition-colors shadow-sm"
-          title="Export portfolio as PDF"
-        >
-          <Download size={16} />
-          Export Portfolio
-        </button>
-      </div>
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-            Net Worth · <span className="text-slate-400">₹ INR</span>
+            Net Worth · <span className="text-slate-600">₹ INR</span>
           </p>
-          <p className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1.5 mt-0.5">
+          <p className="text-[11px] text-slate-600 dark:text-slate-500 flex items-center gap-1.5 mt-0.5">
             <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
             Live prices update every 60 seconds
           </p>
@@ -168,7 +153,7 @@ export default function Dashboard() {
             !netWorthReady ? (
               <div className="mt-3 h-11 sm:h-12 flex items-center gap-2 rounded-lg bg-slate-100 dark:bg-slate-800 px-3">
                 <LoadingDots />
-                <span className="text-xs text-slate-400 dark:text-slate-500">Fetching live prices…</span>
+                <span className="text-xs text-slate-600 dark:text-slate-500">Fetching live prices…</span>
               </div>
             ) : (
               <>
@@ -206,7 +191,7 @@ export default function Dashboard() {
 
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-            Invested · <span className="text-slate-400">₹ INR</span>
+            Invested · <span className="text-slate-600">₹ INR</span>
           </p>
           {/* Invested is pure cost-basis (qty × avg cost, or the SIP schedule) —
               it never needs a live price fetch, so once we know whether this
@@ -270,7 +255,7 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="text-center">
-                <p className="text-slate-400 text-sm mb-3">No income or spending logged in this window.</p>
+                <p className="text-slate-600 text-sm mb-3">No income or spending logged in this window.</p>
                 <span className="text-sm font-medium text-brand-700 dark:text-brand-300">
                   <Link to="/transactions" className="hover:underline">
                     Add income →
@@ -320,9 +305,10 @@ export default function Dashboard() {
         <GoalsSummary goals={goals} netWorth={netWorthReady ? netWorth : 0} />
       </Section>
 
-      <PortfolioExportModal
-        isOpen={exportModalOpen}
-        onClose={() => setExportModalOpen(false)}
+      {/* PDF Export Modal and Report */}
+      <PortfolioExportModal 
+        open={exportModalOpen} 
+        onClose={() => setExportModalOpen(false)} 
       />
 
       {/* Hidden report component - used only for PDF generation */}
@@ -518,7 +504,7 @@ function InvestmentsSummary({
                   privacyMode
                 )}
               </span>
-              <p className="text-xs text-slate-400 mt-1">{ASSET_CLASS_LABELS[a.assetClass]}</p>
+              <p className="text-xs text-slate-600 mt-1">{ASSET_CLASS_LABELS[a.assetClass]}</p>
             </div>
           );
         })}
@@ -554,7 +540,7 @@ function GoalsSummary({
           <div key={g.id}>
             <div className="flex items-center justify-between text-sm mb-1">
               <span className="font-medium text-slate-700 dark:text-slate-200 uppercase">{g.name}</span>
-              <span className="text-slate-400">{pct}%</span>
+              <span className="text-slate-600">{pct}%</span>
             </div>
             <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
               <div className="h-full bg-brand-600 rounded-full" style={{ width: `${pct}%` }} />
@@ -614,7 +600,7 @@ function RangePills() {
 
 function EmptyState({ text, to, cta }: { text: string; to?: string; cta?: string }) {
   return (
-    <div className="py-8 flex flex-col items-center justify-center gap-2 text-sm text-slate-400 text-center px-6">
+    <div className="py-8 flex flex-col items-center justify-center gap-2 text-sm text-slate-600 text-center px-6">
       <span>{text}</span>
       {to && (
         <Link to={to} className="text-brand-700 dark:text-brand-300 font-medium hover:underline">

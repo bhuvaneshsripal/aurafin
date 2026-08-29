@@ -84,7 +84,7 @@ export default function Liabilities() {
                         setEditing(l);
                         setModalOpen(true);
                       }}
-                      className="text-slate-400 hover:text-brand-600"
+                      className="text-slate-600 hover:text-brand-600"
                     >
                       <Pencil size={16} />
                     </button>
@@ -97,7 +97,7 @@ export default function Liabilities() {
             ))}
             {liabilities.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-slate-400">
+                <td colSpan={4} className="px-4 py-10 text-center text-slate-600">
                   No liabilities tracked. Add loans or credit lines here.
                 </td>
               </tr>

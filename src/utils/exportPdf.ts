@@ -9,17 +9,33 @@ export async function exportDomToPdf(
   title?: string
 ): Promise<void> {
   try {
+    // Clone the element to avoid modifying the original
+    const clonedElement = element.cloneNode(true) as HTMLElement;
+    
+    // Convert unsupported CSS colors to hex equivalents
+    const style = document.createElement('style');
+    style.textContent = `
+      * {
+        --color-brand-600: #16a34a !important;
+        --color-brand-700: #15803d !important;
+        --color-brand-900: #166534 !important;
+      }
+    `;
+    clonedElement.appendChild(style);
+
     // Dynamically import the required libraries
     const html2canvas = (await import('html2canvas')).default;
     const jsPDF = (await import('jspdf')).jsPDF;
 
     // Create a canvas from the DOM element
-    const canvas = await html2canvas(element, {
+    const canvas = await html2canvas(clonedElement, {
       scale: 2,
       logging: false,
       useCORS: true,
       allowTaint: true,
       backgroundColor: '#ffffff',
+      // Disable problematic features that might use oklch
+      imageTimeout: 0,
     });
 
     const imgWidth = 210; // A4 width in mm

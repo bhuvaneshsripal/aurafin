@@ -85,7 +85,7 @@ export default function Assets() {
                 <td className="px-4 py-3 text-slate-800">{formatCurrency(a.value, a.currency)}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2 justify-end">
-                    <button onClick={() => openEdit(a)} className="text-slate-400 hover:text-brand-600">
+                    <button onClick={() => openEdit(a)} className="text-slate-600 hover:text-brand-600">
                       <Pencil size={16} />
                     </button>
                     <button onClick={() => setPendingDelete(a)} className="text-red-500 hover:text-red-600">
@@ -97,7 +97,7 @@ export default function Assets() {
             ))}
             {assets.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-slate-400">
+                <td colSpan={4} className="px-4 py-10 text-center text-slate-600">
                   No assets yet. Add your first one to get started.
                 </td>
               </tr>

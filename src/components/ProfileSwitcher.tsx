@@ -43,7 +43,7 @@ export default function ProfileSwitcher({ compact = false }: { compact?: boolean
         >
           <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: activeColour }} />
           <span className="truncate text-[11px] font-medium leading-none">{activeLabel}</span>
-          <ChevronDown size={11} className={`text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+          <ChevronDown size={11} className={`text-slate-600 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
 
         {open && (
@@ -55,7 +55,7 @@ export default function ProfileSwitcher({ compact = false }: { compact?: boolean
               }}
               className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
             >
-              <Layers size={15} className="text-slate-400 shrink-0" />
+              <Layers size={15} className="text-slate-600 shrink-0" />
               <span className="flex-1 text-left">All Profiles</span>
               {activeProfileId === null && <Check size={15} className="text-brand-600 shrink-0" />}
             </button>
@@ -86,7 +86,7 @@ export default function ProfileSwitcher({ compact = false }: { compact?: boolean
               }}
               className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
             >
-              <Settings size={15} className="text-slate-400 shrink-0" />
+              <Settings size={15} className="text-slate-600 shrink-0" />
               Manage Profiles
             </button>
           </div>
@@ -104,7 +104,7 @@ export default function ProfileSwitcher({ compact = false }: { compact?: boolean
       >
         <span className="h-3 w-3 rounded-full shrink-0 border border-black/10" style={{ backgroundColor: activeColour }} />
         <span className="truncate flex-1 text-left font-bold">{activeLabel}</span>
-        <ChevronDown size={15} className={`text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown size={15} className={`text-slate-600 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
@@ -116,7 +116,7 @@ export default function ProfileSwitcher({ compact = false }: { compact?: boolean
             }}
             className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
           >
-            <Layers size={15} className="text-slate-400 shrink-0" />
+            <Layers size={15} className="text-slate-600 shrink-0" />
             <span className="flex-1 text-left font-bold">All Profiles</span>
             {activeProfileId === null && <Check size={15} className="text-brand-600 shrink-0" />}
           </button>
@@ -147,7 +147,7 @@ export default function ProfileSwitcher({ compact = false }: { compact?: boolean
             }}
             className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
           >
-            <Settings size={15} className="text-slate-400 shrink-0" />
+            <Settings size={15} className="text-slate-600 shrink-0" />
             Manage Profiles
           </button>
         </div>

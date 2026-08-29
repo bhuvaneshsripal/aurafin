@@ -69,7 +69,7 @@ export default function Topbar() {
               onClick={lockNow}
               title="Lock Aurafin now"
               aria-label="Lock Aurafin now"
-              className="tap-scale h-8 w-8 flex items-center justify-center rounded-full text-slate-400 dark:text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 shrink-0 ml-1"
+              className="tap-scale h-8 w-8 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 shrink-0 ml-1"
             >
               <Lock size={16} />
             </button>
@@ -108,7 +108,7 @@ export default function Topbar() {
                 <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
                   <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Notifications</p>
                 </div>
-                <div className="px-4 py-8 text-center text-sm text-slate-400">You're all caught up.</div>
+                <div className="px-4 py-8 text-center text-sm text-slate-600">You're all caught up.</div>
               </div>
             )}
           </div>
@@ -134,7 +134,7 @@ export default function Topbar() {
               <span className="text-sm font-medium text-slate-700 dark:text-slate-200 hidden sm:inline">
                 {user?.displayName ?? user?.email}
               </span>
-              <ChevronDown size={16} className="text-slate-400" />
+              <ChevronDown size={16} className="text-slate-600" />
             </button>
 
             {profileOpen && (
@@ -143,14 +143,14 @@ export default function Topbar() {
                   <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">
                     {user?.displayName ?? 'Your Account'}
                   </p>
-                  <p className="text-xs text-slate-400 truncate">{user?.email}</p>
+                  <p className="text-xs text-slate-600 truncate">{user?.email}</p>
                 </div>
                 <Link
                   to="/settings"
                   onClick={() => setProfileOpen(false)}
                   className="flex items-center gap-2.5 w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
                 >
-                  <SettingsIcon size={16} className="text-slate-400" />
+                  <SettingsIcon size={16} className="text-slate-600" />
                   Settings
                 </Link>
                 <button
@@ -209,16 +209,16 @@ export default function Topbar() {
                     <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">
                       {user?.displayName ?? 'Your Account'}
                     </p>
-                    <p className="text-xs text-slate-400 truncate">{user?.email ?? 'View profile & settings'}</p>
+                    <p className="text-xs text-slate-600 truncate">{user?.email ?? 'View profile & settings'}</p>
                   </div>
-                  <SettingsIcon size={16} className="text-slate-400 shrink-0" />
+                  <SettingsIcon size={16} className="text-slate-600 shrink-0" />
                 </button>
 
                 <button
                   onClick={toggleTheme}
                   className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
                 >
-                  {theme === 'dark' ? <Sun size={18} className="text-slate-400" /> : <Moon size={18} className="text-slate-400" />}
+                  {theme === 'dark' ? <Sun size={18} className="text-slate-600" /> : <Moon size={18} className="text-slate-600" />}
                   {theme === 'dark' ? 'Light mode' : 'Dark mode'}
                 </button>
 
@@ -226,11 +226,11 @@ export default function Topbar() {
                   onClick={() => setNotifOpen((o) => !o)}
                   className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
                 >
-                  <Bell size={18} className="text-slate-400" />
+                  <Bell size={18} className="text-slate-600" />
                   Notifications
                 </button>
                 {notifOpen && (
-                  <div className="px-4 pb-3 -mt-1 text-xs text-slate-400">You're all caught up.</div>
+                  <div className="px-4 pb-3 -mt-1 text-xs text-slate-600">You're all caught up.</div>
                 )}
 
                 <div className="border-t border-slate-100 dark:border-slate-700" />

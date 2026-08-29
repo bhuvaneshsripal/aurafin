@@ -145,7 +145,7 @@ export default function TransactionsTab() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="font-medium text-slate-800 dark:text-slate-100 truncate uppercase">{t.category}</p>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{t.date}</p>
+              <p className="text-xs text-slate-600 dark:text-slate-500 mt-0.5">{t.date}</p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <span
@@ -167,7 +167,7 @@ export default function TransactionsTab() {
         ))}
         {sorted.length === 0 && (
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-14 flex flex-col items-center justify-center text-center gap-4">
-            <p className="text-slate-400 dark:text-slate-500 text-sm">
+            <p className="text-slate-600 dark:text-slate-500 text-sm">
               No entries yet. Log your salary, rent, groceries, and more.
             </p>
             <button
@@ -223,7 +223,7 @@ export default function TransactionsTab() {
               <tr>
                 <td colSpan={5} className="px-4 py-14">
                   <div className="flex flex-col items-center justify-center text-center gap-4">
-                    <p className="text-slate-400 dark:text-slate-500">
+                    <p className="text-slate-600 dark:text-slate-500">
                       No entries yet. Log your salary, rent, groceries, and more.
                     </p>
                     <button

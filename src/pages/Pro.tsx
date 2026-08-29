@@ -81,9 +81,9 @@ export default function Pro() {
 
             <div className="flex items-baseline gap-1 mt-4">
               <span className="text-4xl font-bold text-slate-900 dark:text-white">₹{PRICE}</span>
-              <span className="text-slate-400 dark:text-slate-500 text-sm">/month</span>
+              <span className="text-slate-600 dark:text-slate-500 text-sm">/month</span>
             </div>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Cancel anytime. No hidden fees.</p>
+            <p className="text-xs text-slate-600 dark:text-slate-500 mt-1">Cancel anytime. No hidden fees.</p>
 
             <ul className="mt-6 space-y-3">
               {PRO_FEATURES.map((f) => (
@@ -114,7 +114,7 @@ export default function Pro() {
 
         {/* Feature checklist / illustrations */}
         <div className="lg:col-span-3 space-y-3">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 px-1">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-500 px-1">
             Everything included
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -150,7 +150,7 @@ export default function Pro() {
       </div>
 
       {/* ---- Bottom strip ---- */}
-      <div className="flex items-center justify-center gap-2 text-xs text-slate-400 dark:text-slate-500">
+      <div className="flex items-center justify-center gap-2 text-xs text-slate-600 dark:text-slate-500">
         <Zap size={13} className="text-amber-500" />
         Built for people who take their money seriously.
       </div>

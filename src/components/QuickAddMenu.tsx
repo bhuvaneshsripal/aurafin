@@ -79,7 +79,7 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
             }
             style={isFab ? { transformOrigin: 'bottom right' } : undefined}
           >
-            <p className="px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <p className="px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
               Cashflow
             </p>
             <MenuItem icon={ArrowDownCircle} color="text-orange-500" label="Expense" onClick={() => open('expense')} />
@@ -87,7 +87,7 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
             <MenuItem icon={ArrowLeftRight} color="text-sky-500" label="Transfer" onClick={() => open('transfer')} />
 
             <div className="border-t border-slate-100 dark:border-slate-700 mt-1" />
-            <p className="px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <p className="px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
               Wealth
             </p>
             <MenuItem icon={Layers} color="text-teal-600" label="Asset" onClick={() => open('asset')} />

@@ -307,7 +307,7 @@ export default function Import() {
             <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
               Drop your {selectedBroker.name} export here, or click to browse
             </p>
-            <p className="text-xs text-slate-400 dark:text-slate-500">Supports .csv, .xlsx, .xls</p>
+            <p className="text-xs text-slate-600 dark:text-slate-500">Supports .csv, .xlsx, .xls</p>
             <input
               ref={fileInputRef}
               type="file"
@@ -327,7 +327,7 @@ export default function Import() {
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
             <div className="flex-1">
               <p className="text-sm font-medium text-slate-800 dark:text-slate-100">New to importing?</p>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+              <p className="text-xs text-slate-600 dark:text-slate-500 mt-0.5">
                 Download a starter template with sample mutual funds, stocks, gold, and fixed
                 deposits — fill it in and drop it back here.
               </p>
@@ -362,7 +362,7 @@ export default function Import() {
             <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
               Drop a CSV or Excel file here, or click to browse
             </p>
-            <p className="text-xs text-slate-400 dark:text-slate-500">
+            <p className="text-xs text-slate-600 dark:text-slate-500">
               Supports .csv, .xlsx, .xls — mutual funds, stocks, gold, FDs and more. Columns like
               Name, Value, Asset Class, and Currency are auto-detected
             </p>
@@ -381,7 +381,7 @@ export default function Import() {
       )}
 
       {status === 'parsing' && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center text-slate-400 dark:text-slate-500 text-sm">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center text-slate-600 dark:text-slate-500 text-sm">
           Reading {fileName}...
         </div>
       )}
@@ -424,11 +424,11 @@ export default function Import() {
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 flex items-center justify-between text-sm">
             <div>
               <span className="font-medium text-slate-800 dark:text-slate-100">{fileName}</span>
-              <span className="text-slate-400 dark:text-slate-500 ml-2">
+              <span className="text-slate-600 dark:text-slate-500 ml-2">
                 {validRows.length} of {rows.length} rows ready · {formatCurrency(totalValue)} total
               </span>
             </div>
-            <button onClick={reset} className="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300">
+            <button onClick={reset} className="text-xs text-slate-600 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300">
               Cancel
             </button>
           </div>
@@ -530,7 +530,7 @@ export default function Import() {
               <span className="block text-sm font-medium text-slate-700 dark:text-slate-200">
                 Update matching holdings instead of duplicating them
               </span>
-              <span className="block text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+              <span className="block text-xs text-slate-600 dark:text-slate-500 mt-0.5">
                 Matches by trading symbol (or name) and asset type. Turn this on before re-importing the
                 same weekly export so prices/quantities refresh in place — turn it off if you actually want
                 a second, separate entry.

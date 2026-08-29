@@ -1,15 +1,15 @@
 import { useState } from 'react';
-import { Download, FileText, Loader } from 'lucide-react';
+import { Download, FileText, X, Loader } from 'lucide-react';
 import { exportDomToPdf } from '../utils/exportPdf';
 import Modal from './Modal';
 
 interface PortfolioExportModalProps {
-  isOpen: boolean;
+  open: boolean;
   onClose: () => void;
   reportElementId?: string;
 }
 
-export const PortfolioExportModal = ({ isOpen, onClose, reportElementId = 'portfolio-pdf-report' }: PortfolioExportModalProps) => {
+export const PortfolioExportModal = ({ open, onClose, reportElementId = 'portfolio-pdf-report' }: PortfolioExportModalProps) => {
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
 
@@ -44,21 +44,17 @@ export const PortfolioExportModal = ({ isOpen, onClose, reportElementId = 'portf
   };
 
   return (
-    <Modal open={isOpen} onClose={onClose} title="Export Portfolio">
+    <Modal open={open} onClose={onClose} title="Export Portfolio">
       <div className="space-y-6">
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-          <p className="text-sm text-blue-800 dark:text-blue-300">
-            Export your complete portfolio report as a PDF including all assets, liabilities, and financial metrics.
-          </p>
-        </div>
+          <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
+            <p className="text-blue-800 text-sm">
+              Portfolio Report Generated Successfully</p>
+          </div>
 
         {exportError && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-            <p className="text-sm text-red-800 dark:text-red-300">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-red-800 text-sm">
               <span className="font-semibold">Error:</span> {exportError}
-            </p>
-            <p className="text-xs text-red-600 dark:text-red-400 mt-2">
-              If the problem persists, please check your browser's developer console for more details.
             </p>
           </div>
         )}

@@ -423,7 +423,7 @@ const Field = memo(
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
+        className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
       />
     </div>
   )
@@ -492,7 +492,7 @@ const AssetsStepEnhanced = memo((props: AssetsStepEnhancedProps) => {
 
       <div className="flex items-center gap-3 my-5">
         <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
-        <span className="text-xs text-slate-400">or add manually</span>
+        <span className="text-xs text-slate-600">or add manually</span>
         <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
       </div>
 
@@ -565,7 +565,7 @@ const AssetsStepEnhanced = memo((props: AssetsStepEnhancedProps) => {
             >
               <Icon size={18} className="text-slate-600 dark:text-slate-300" />
               <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{cat.label}</span>
-              <span className="text-[11px] text-slate-400">
+              <span className="text-[11px] text-slate-600">
                 {cat.types.length} {cat.types.length === 1 ? 'type' : 'types'}
               </span>
             </button>
@@ -667,7 +667,7 @@ const AddAssetModal = memo((props: AddAssetModalProps) => (
           type="button"
           onClick={props.onAdd}
           disabled={!props.assetName || !props.assetValue}
-          className="flex-1 bg-brand-600 hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-400 dark:disabled:bg-slate-700 disabled:cursor-not-allowed text-white py-2 rounded-lg text-sm font-medium"
+          className="flex-1 bg-brand-600 hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-600 dark:disabled:bg-slate-700 disabled:cursor-not-allowed text-white py-2 rounded-lg text-sm font-medium"
         >
           Add Asset
         </button>
@@ -803,7 +803,7 @@ const StepNav = memo((props: StepNavProps) => (
             type="button"
             onClick={props.onNext}
             disabled={props.nextDisabled}
-            className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-400 dark:disabled:bg-slate-700 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium"
+            className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-600 dark:disabled:bg-slate-700 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium"
           >
             {props.nextLabel || 'Continue'}
             <ArrowRight size={15} />

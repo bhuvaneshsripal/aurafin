@@ -267,13 +267,13 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
                       ) : (
                         <button
                           onClick={() => handleSetDefault(row)}
-                          className="text-[11px] font-medium text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 shrink-0"
+                          className="text-[11px] font-medium text-slate-600 hover:text-brand-600 dark:hover:text-brand-400 shrink-0"
                         >
                           Set default
                         </button>
                       )}
                     </div>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 truncate">
+                    <p className="text-xs text-slate-600 dark:text-slate-500 mt-0.5 truncate">
                       {typeLabel}
                       {row.institution ? ` · ${row.institution}` : ''}
                       {row.last4 ? `  •• ${row.last4}` : ''}
@@ -313,19 +313,19 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
                 {row.kind === 'liability' ? '-' : ''}
                 <Amount value={row.value} currency={row.currency} />
               </p>
-              <p className="text-[11px] font-semibold tracking-wide uppercase text-slate-400 dark:text-slate-500 mt-0.5">
+              <p className="text-[11px] font-semibold tracking-wide uppercase text-slate-600 dark:text-slate-500 mt-0.5">
                 Current balance
               </p>
 
               {isExpanded && (
                 <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-3 text-xs">
                   <div>
-                    <p className="text-slate-400 dark:text-slate-500">Type</p>
+                    <p className="text-slate-600 dark:text-slate-500">Type</p>
                     <p className="text-slate-700 dark:text-slate-200 font-medium mt-0.5">{typeLabel}</p>
                   </div>
                   {row.balanceAsOf && (
                     <div>
-                      <p className="text-slate-400 dark:text-slate-500">Balance as of</p>
+                      <p className="text-slate-600 dark:text-slate-500">Balance as of</p>
                       <p className="text-slate-700 dark:text-slate-200 font-medium mt-0.5">{row.balanceAsOf}</p>
                     </div>
                   )}
@@ -336,7 +336,7 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
         })}
         {accounts.length === 0 && (
           <div className="col-span-full bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-14 flex flex-col items-center justify-center text-center gap-4">
-            <p className="text-slate-400 dark:text-slate-500 text-sm">
+            <p className="text-slate-600 dark:text-slate-500 text-sm">
               No accounts yet. Add a bank, card, cash, or wallet to get started.
             </p>
             <button
@@ -472,7 +472,7 @@ function AccountForm({
           })}
         </div>
         {lockType && (
-          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5">
+          <p className="text-xs text-slate-600 dark:text-slate-500 mt-1.5">
             Type can't be changed after an account is created — delete and re-add it instead.
           </p>
         )}
@@ -548,7 +548,7 @@ function AccountForm({
       <label className="block">
         <span className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-1 block">Balance as of</span>
         <input type="date" value={balanceAsOf} onChange={(e) => setBalanceAsOf(e.target.value)} className={inputClass} />
-        <span className="text-xs text-slate-400 dark:text-slate-500 mt-1.5 block">
+        <span className="text-xs text-slate-600 dark:text-slate-500 mt-1.5 block">
           Balance from this date forward — income, expenses and transfers dated on/after this adjust it live.
         </span>
       </label>

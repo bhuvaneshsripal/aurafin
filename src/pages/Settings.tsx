@@ -153,7 +153,7 @@ function AvatarEditor() {
 
       <div className="min-w-0">
         <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Profile photo</p>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+        <p className="text-xs text-slate-600 dark:text-slate-500 mt-0.5">
           {status === 'saving' ? 'Saving...' : 'JPG or PNG — drag and zoom to crop after choosing one.'}
         </p>
         <div className="flex items-center gap-3 mt-1.5">
@@ -176,7 +176,7 @@ function AvatarEditor() {
               type="button"
               onClick={handleRemove}
               disabled={status === 'saving'}
-              className="flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-green-600 dark:hover:text-green-400 disabled:opacity-50"
+              className="flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-green-600 dark:hover:text-green-400 disabled:opacity-50"
             >
               <X size={12} />
               Remove
@@ -256,7 +256,7 @@ function PersonalInfoCard() {
                 <button
                   onClick={cancelEdit}
                   disabled={status === 'saving'}
-                  className="text-xs font-medium text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50"
+                  className="text-xs font-medium text-slate-600 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -266,7 +266,7 @@ function PersonalInfoCard() {
           ) : (
             <div className="flex items-center gap-2 h-[38px]">
               <span className="text-sm text-slate-800 dark:text-slate-100 truncate">
-                {user?.displayName || <span className="text-slate-400 dark:text-slate-500">Not set</span>}
+                {user?.displayName || <span className="text-slate-600 dark:text-slate-500">Not set</span>}
               </span>
               <button
                 onClick={startEdit}
@@ -286,7 +286,7 @@ function PersonalInfoCard() {
             disabled
             className="w-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-500 rounded-lg px-3 py-2 text-sm cursor-not-allowed"
           />
-          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5">Email cannot be changed</p>
+          <p className="text-xs text-slate-600 dark:text-slate-500 mt-1.5">Email cannot be changed</p>
         </div>
       </div>
     </Card>
@@ -436,7 +436,7 @@ function SetPasswordCard() {
   return (
     <Card>
       <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Set Password</h2>
-      <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
+      <p className="text-xs text-slate-600 dark:text-slate-500 mb-4">
         {hasPasswordProvider
           ? 'Update the password you use to sign in with email and password.'
           : 'Set a password so you can also sign in with email and password, in addition to Google.'}
@@ -454,13 +454,13 @@ function SetPasswordCard() {
                     value={oldPassword}
                     onChange={(e) => setOldPassword(e.target.value)}
                     placeholder="Enter your current password"
-                    className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg pl-3 pr-10 py-2 text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg pl-3 pr-10 py-2 text-sm placeholder:text-slate-600 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                   <button
                     type="button"
                     onClick={() => setShowOldPassword((v) => !v)}
                     aria-label={showOldPassword ? 'Hide password' : 'Show password'}
-                    className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                    className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-600 hover:text-slate-600 dark:hover:text-slate-300"
                   >
                     {showOldPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
@@ -474,7 +474,7 @@ function SetPasswordCard() {
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Min 6 characters"
-                className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm placeholder:text-slate-600 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
             </div>
             <div>
@@ -484,7 +484,7 @@ function SetPasswordCard() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Re-enter new password"
-                className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm placeholder:text-slate-600 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
             </div>
 
@@ -512,9 +512,9 @@ function SetPasswordCard() {
                     value={securityAnswer}
                     onChange={(e) => setSecurityAnswer(e.target.value)}
                     placeholder="Your answer"
-                    className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm placeholder:text-slate-600 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
-                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5">
+                  <p className="text-xs text-slate-600 dark:text-slate-500 mt-1.5">
                     Used to recover your password later if you forget it.
                   </p>
                 </div>
@@ -533,7 +533,7 @@ function SetPasswordCard() {
             {hasPasswordProvider && hasSecurityQuestion && (
               <button
                 onClick={openForgot}
-                className="text-xs text-slate-400 dark:text-slate-500 font-medium hover:text-brand-600 dark:hover:text-brand-400"
+                className="text-xs text-slate-600 dark:text-slate-500 font-medium hover:text-brand-600 dark:hover:text-brand-400"
               >
                 Forgot your password?
               </button>
@@ -546,7 +546,7 @@ function SetPasswordCard() {
       {mode === 'forgot' && (
         <div className="max-w-sm">
           <div className="flex items-start gap-2 mb-4">
-            <HelpCircle size={16} className="text-slate-400 shrink-0 mt-0.5" />
+            <HelpCircle size={16} className="text-slate-600 shrink-0 mt-0.5" />
             <p className="text-sm text-slate-700 dark:text-slate-200">{forgotQuestion}</p>
           </div>
           <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1.5">Your Answer</label>
@@ -555,7 +555,7 @@ function SetPasswordCard() {
             onChange={(e) => setForgotAnswer(e.target.value)}
             placeholder="Answer"
             autoFocus
-            className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm placeholder:text-slate-600 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
           {forgotError && <p className="text-xs text-red-500 mt-2">{forgotError}</p>}
           <div className="flex gap-3 mt-4">
@@ -627,7 +627,7 @@ function AppLockCard() {
         <Lock size={20} className="text-slate-700 dark:text-slate-300 shrink-0 mt-0.5" />
         <div>
           <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">App Lock</h2>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+          <p className="text-xs text-slate-600 dark:text-slate-500 mt-1">
             Require a 4-digit PIN to open the app. Locks automatically after 1 minute in the background, or tap "Lock Now" to lock it instantly — handy on a laptop before stepping away.
           </p>
         </div>
@@ -736,7 +736,7 @@ function InstallAppCard() {
               <Check size={13} /> <span className="font-luxury">Aurafin</span> is installed as an app on this device
             </p>
           ) : (
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+            <p className="text-xs text-slate-600 dark:text-slate-500 mt-1">
               Add <span className="font-luxury">Aurafin</span> to your home screen for instant access. Opens like a
               native app with no browser tabs.
             </p>
@@ -786,7 +786,7 @@ function SharedAccessCard() {
               Coming Soon
             </span>
           </div>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+          <p className="text-xs text-slate-600 dark:text-slate-500 mt-1">
             Share your financial data with up to 5 trusted people — spouse, financial advisor, CA, or
             anyone you choose. Each person gets View Only or Full Access.
           </p>
@@ -798,7 +798,7 @@ function SharedAccessCard() {
           type="email"
           disabled
           placeholder="their.email@example.com"
-          className="flex-1 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm placeholder:text-slate-400"
+          className="flex-1 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm placeholder:text-slate-600"
         />
         <select
           disabled
@@ -813,7 +813,7 @@ function SharedAccessCard() {
           Send Invite
         </button>
       </div>
-      <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
+      <p className="text-xs text-slate-600 dark:text-slate-500 mt-2">
         This feature is on the way — check back soon.
       </p>
     </Card>
@@ -847,10 +847,10 @@ function SizeStepper({
   return (
     <div className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0 border-b last:border-b-0 border-slate-100 dark:border-slate-800">
       <div className="flex items-start gap-3 min-w-0">
-        <div className="text-slate-400 dark:text-slate-500 mt-0.5 shrink-0">{icon}</div>
+        <div className="text-slate-600 dark:text-slate-500 mt-0.5 shrink-0">{icon}</div>
         <div className="min-w-0">
           <h3 className="text-sm font-medium text-slate-800 dark:text-slate-100">{label}</h3>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{description}</p>
+          <p className="text-xs text-slate-600 dark:text-slate-500 mt-0.5">{description}</p>
         </div>
       </div>
       <div className="flex items-center gap-1 shrink-0">
@@ -900,7 +900,7 @@ function DisplaySizeCard() {
   return (
     <Card>
       <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Display Size</h2>
-      <p className="text-xs text-slate-400 dark:text-slate-500 mb-2">
+      <p className="text-xs text-slate-600 dark:text-slate-500 mb-2">
         Tap <strong>−</strong> or <strong>+</strong> to adjust. Tap the percentage to reset it.
       </p>
       <div>
@@ -955,7 +955,7 @@ function GoldRateCard() {
   return (
     <Card>
       <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Gold Rate Calibration</h2>
-      <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
+      <p className="text-xs text-slate-600 dark:text-slate-500 mb-4">
         The live gold rate is derived from a global spot price, which typically reads lower than
         Indian retail/bullion rates (import duty, GST, dealer margin). Compare the "Live Gold
         Price" card on your Dashboard against a source you trust — like Goodreturns or your local
@@ -1035,7 +1035,7 @@ function NotificationsCard() {
   return (
     <Card>
       <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Notifications</h2>
-      <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
+      <p className="text-xs text-slate-600 dark:text-slate-500 mb-4">
         Choose how you'd like to be reached. Changes take effect immediately.
       </p>
       <div className="space-y-2">
@@ -1048,7 +1048,7 @@ function NotificationsCard() {
             <div className="flex items-center gap-5">
               {row.channels.map(({ key, label, icon: Icon }) => (
                 <div key={key} className="flex items-center gap-2">
-                  <Icon size={14} className="text-slate-400 dark:text-slate-500" />
+                  <Icon size={14} className="text-slate-600 dark:text-slate-500" />
                   <span className="text-xs text-slate-500 dark:text-slate-400">{label}</span>
                   <Toggle
                     checked={prefs[key]}
@@ -1074,7 +1074,7 @@ function PreferencesTab() {
         <div className="flex items-center gap-2 mb-1">
           <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Base Currency</h2>
         </div>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
+        <p className="text-xs text-slate-600 dark:text-slate-500 mb-4">
           Your net worth and totals will be shown in this currency across the dashboard — with full
           multi-currency support for assets held in any currency.
         </p>
@@ -1242,7 +1242,7 @@ function ProfilesTab() {
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Family Profiles</h2>
           </div>
-          <Users size={16} className="text-slate-400" />
+          <Users size={16} className="text-slate-600" />
         </div>
         <p className="text-xs text-slate-600 dark:text-slate-300 mb-4">
           Manage your profiles. Each profile has its own assets, liabilities, transactions, and goals.{' '}
@@ -1277,7 +1277,7 @@ function ProfilesTab() {
                   />
                   <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{p.name}</span>
                   {isDefault && (
-                    <span className="text-[10px] font-semibold tracking-wide uppercase text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] font-semibold tracking-wide uppercase text-slate-600 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
                       Default
                     </span>
                   )}
@@ -1359,7 +1359,7 @@ function ProfilesTab() {
         ) : (
           <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3">
             <div className="flex items-center gap-2">
-              <Users size={16} className="text-slate-400" />
+              <Users size={16} className="text-slate-600" />
               <p className="text-xs text-slate-600 dark:text-slate-300">
                 You've reached the {maxProfiles}-profile limit for a single account.
               </p>
@@ -1545,7 +1545,7 @@ function DataTab() {
     <>
       <Card>
         <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Backup</h2>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
+        <p className="text-xs text-slate-600 dark:text-slate-500 mb-4">
           Download everything in your account as a single JSON file, and restore it back into any
           account later — useful before switching devices or just as a safety copy.
         </p>
@@ -1591,7 +1591,7 @@ function DataTab() {
 
       <Card>
         <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Data</h2>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
+        <p className="text-xs text-slate-600 dark:text-slate-500 mb-4">
           Your data is stored in your own Firebase project. You can export it any time from the Firebase
           console, or permanently remove everything you've entered in <span className="font-luxury">Aurafin</span> below.
         </p>

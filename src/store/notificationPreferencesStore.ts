@@ -43,19 +43,29 @@ interface NotificationPreferencesState {
   markWeeklyDigestSent: (dateKey: string) => void;
 }
 
+// Read synchronously at store-creation time (not inside init()'s useEffect)
+// so weeklyDigestLastSentFor is already correct the very first time
+// useWeeklyDigestScheduler's effect runs. Child effects run before parent
+// effects in React, so WeeklyDigestSync's check() used to fire before
+// App's init() effect had loaded this from localStorage — on every app
+// mount/reload during Saturday's send window, that stale `null` made the
+// scheduler think the digest hadn't been sent yet and send it again.
+function loadStoredLastSentFor(): string | null {
+  try {
+    return localStorage.getItem(LAST_SENT_KEY);
+  } catch {
+    // Ignore — falls back to null, which just means it hasn't been sent
+    // yet as far as this device knows.
+    return null;
+  }
+}
+
 export const useNotificationPreferencesStore = create<NotificationPreferencesState>((set, get) => ({
-  prefs: { ...DEFAULT_PREFS },
-  weeklyDigestLastSentFor: null,
+  prefs: loadStoredPrefs(),
+  weeklyDigestLastSentFor: loadStoredLastSentFor(),
 
   init: () => {
-    let weeklyDigestLastSentFor: string | null = null;
-    try {
-      weeklyDigestLastSentFor = localStorage.getItem(LAST_SENT_KEY);
-    } catch {
-      // Ignore — falls back to null, which just means it hasn't been sent
-      // yet as far as this device knows.
-    }
-    set({ prefs: loadStoredPrefs(), weeklyDigestLastSentFor });
+    set({ prefs: loadStoredPrefs(), weeklyDigestLastSentFor: loadStoredLastSentFor() });
   },
 
   toggle: (key) => {

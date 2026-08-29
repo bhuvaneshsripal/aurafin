@@ -34,7 +34,7 @@ export default function AssetLimitModal({ open, onClose }: { open: boolean; onCl
         <button
           type="button"
           onClick={onClose}
-          className="mt-2 w-full text-xs font-medium text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 py-2"
+          className="mt-2 w-full text-xs font-medium text-slate-600 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 py-2"
         >
           Maybe later
         </button>

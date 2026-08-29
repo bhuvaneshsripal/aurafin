@@ -56,7 +56,7 @@ export default function AddMenuFab({ onSelect }: { onSelect: (type: AddMenuType)
 
   const renderGroup = (title: string, items: MenuItem[]) => (
     <div>
-      <p className="px-1 pb-2 text-xs font-semibold tracking-wide text-slate-400">
+      <p className="px-1 pb-2 text-xs font-semibold tracking-wide text-slate-600">
         {title}
       </p>
       <div className="flex flex-col gap-2">

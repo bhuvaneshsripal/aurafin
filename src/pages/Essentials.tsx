@@ -188,7 +188,7 @@ function HealthCheck() {
           </div>
           <ChevronDown
             size={20}
-            className={`text-slate-400 shrink-0 transition-transform duration-200 ${snapshotOpen ? 'rotate-180' : ''}`}
+            className={`text-slate-600 shrink-0 transition-transform duration-200 ${snapshotOpen ? 'rotate-180' : ''}`}
           />
         </button>
 
@@ -233,8 +233,8 @@ function HealthCheck() {
             <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
               <div className="flex items-baseline gap-2">
                 <span className="text-4xl font-numeric text-[#8a3b2e] dark:text-[#e08a72]">{overall}</span>
-                <span className="text-slate-400 text-lg">/10</span>
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400 ml-2">
+                <span className="text-slate-600 text-lg">/10</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-600 ml-2">
                   Overall Health Score
                 </span>
               </div>
@@ -254,7 +254,7 @@ function HealthCheck() {
             {/* Emergency Fund */}
             <HealthCard title="Emergency Fund" status={efStatus} icon={Shield} iconTone="emergency">
               <StatRow label="LIQUID ASSETS" value={<Amount value={liquidAssets} />} />
-              <p className="text-xs text-slate-400 dark:text-slate-500 -mt-2">Cash &amp; Savings · FD &amp; RD · Liquid / Debt Funds</p>
+              <p className="text-xs text-slate-600 dark:text-slate-500 -mt-2">Cash &amp; Savings · FD &amp; RD · Liquid / Debt Funds</p>
               <StatRow label="RUNWAY" value={<><span className="font-numeric">{runwayMonths.toFixed(runwayMonths < 10 ? 1 : 0)}</span> months</>} />
               <ScaleBar value={runwayMonths} max={12} marks={['0', '3m', '6m', '12m+']} />
               <p className="text-sm text-slate-500 dark:text-slate-400">Build at least 3 months of expenses in liquid savings</p>
@@ -266,16 +266,16 @@ function HealthCheck() {
                 <span className="text-3xl font-numeric text-brand-600 dark:text-brand-300">{Math.round(savingsRate * 100)}%</span>
                 <span className="text-slate-500 dark:text-slate-400 text-sm ml-1.5">of income saved</span>
               </div>
-              <p className="text-xs text-slate-400 dark:text-slate-500">Based on your Financial Profile · actual savings may differ</p>
+              <p className="text-xs text-slate-600 dark:text-slate-500">Based on your Financial Profile · actual savings may differ</p>
               <div className="grid grid-cols-2 gap-4 pt-1">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Income</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Income</p>
                   <p className="font-semibold text-slate-800 dark:text-slate-100">
                     <Amount value={monthlyIncome} />
                   </p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Expense</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Expense</p>
                   <p className="font-semibold text-slate-800 dark:text-slate-100">
                     <Amount value={monthlyExpense} />
                   </p>
@@ -305,7 +305,7 @@ function HealthCheck() {
               <CoverInput label="YOUR COVER" value={termCover} onSave={(v) => saveField({ termCover: v })} />
               <StatRow label="IDEAL COVER" value={<Amount value={idealTerm} />} />
               <ScaleBar value={termCover} max={Math.max(idealTerm, 1)} marks={[]} />
-              <p className="text-xs text-slate-400 dark:text-slate-500">
+              <p className="text-xs text-slate-600 dark:text-slate-500">
                 Formula: 25 × Annual Expense − Net Worth = {formatCurrency(idealTerm)}
               </p>
               <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -332,13 +332,13 @@ function HealthCheck() {
               </div>
               <div className="grid grid-cols-2 gap-4 pt-1">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Total Assets</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Total Assets</p>
                   <p className="font-semibold text-slate-800 dark:text-slate-100">
                     <Amount value={totalAssets} />
                   </p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Total Liabilities</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Total Liabilities</p>
                   <p className="font-semibold text-slate-800 dark:text-slate-100">
                     <Amount value={totalLiabilities} />
                   </p>
@@ -383,7 +383,7 @@ function FiTimelineReference() {
           {rows.map(([rate, years]) => (
             <div key={rate} className="bg-slate-50 dark:bg-slate-800 rounded-lg py-1.5">
               <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">{rate}</p>
-              <p className="text-[11px] text-slate-400">{years}</p>
+              <p className="text-[11px] text-slate-600">{years}</p>
             </div>
           ))}
         </div>
@@ -435,7 +435,7 @@ function HealthCard({
           )}
           <div>
             <h3 className="font-semibold text-slate-800 dark:text-slate-100">{title}</h3>
-            {subtitle && <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{subtitle}</p>}
+            {subtitle && <p className="text-xs text-slate-600 dark:text-slate-500 mt-0.5">{subtitle}</p>}
           </div>
         </div>
         <span className={`flex items-center gap-1.5 text-xs font-semibold whitespace-nowrap px-2.5 py-1 rounded-full ${PILL_STYLES[status]}`}>
@@ -451,7 +451,7 @@ function HealthCard({
 function StatRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</span>
+      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">{label}</span>
       <span className="font-semibold text-slate-800 dark:text-slate-100">{value}</span>
     </div>
   );
@@ -465,7 +465,7 @@ function ScaleBar({ value, max, marks }: { value: number; max: number; marks: st
         <div className="h-full bg-brand-500 rounded-full" style={{ width: `${pct}%` }} />
       </div>
       {marks.length > 0 && (
-        <div className="flex justify-between text-[11px] text-slate-400 dark:text-slate-500 mt-1">
+        <div className="flex justify-between text-[11px] text-slate-600 dark:text-slate-500 mt-1">
           {marks.map((m) => (
             <span key={m}>{m}</span>
           ))}
@@ -487,7 +487,7 @@ function CoverInput({ label, value, onSave }: { label: string; value: number; on
 
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-600 mb-1">{label}</p>
       <div className="flex items-center gap-2">
         <input
           type="number"
@@ -501,7 +501,7 @@ function CoverInput({ label, value, onSave }: { label: string; value: number; on
           className={`h-9 w-9 shrink-0 flex items-center justify-center rounded-lg border ${
             savedTick
               ? 'border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-900/30 dark:text-brand-300'
-              : 'border-slate-200 dark:border-slate-700 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+              : 'border-slate-200 dark:border-slate-700 text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800'
           }`}
         >
           <Check size={16} />
@@ -517,7 +517,7 @@ function DependentsRow({ value, onSave }: { value: number; onSave: (v: number) =
 
   return (
     <div className="flex items-center justify-between">
-      <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">DEPENDENTS</span>
+      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">DEPENDENTS</span>
       {editing ? (
         <div className="flex items-center gap-2">
           <input
@@ -540,7 +540,7 @@ function DependentsRow({ value, onSave }: { value: number; onSave: (v: number) =
       ) : (
         <span className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
           {value} people
-          <button onClick={() => setEditing(true)} className="text-slate-400 hover:text-brand-600 dark:hover:text-brand-300">
+          <button onClick={() => setEditing(true)} className="text-slate-600 hover:text-brand-600 dark:hover:text-brand-300">
             <Pencil size={14} />
           </button>
         </span>
@@ -631,7 +631,7 @@ function GoalsTab() {
                       setEditing(g);
                       setModalOpen(true);
                     }}
-                    className="text-slate-400 dark:text-slate-500 hover:text-brand-600 dark:hover:text-brand-300"
+                    className="text-slate-600 dark:text-slate-500 hover:text-brand-600 dark:hover:text-brand-300"
                   >
                     <Pencil size={16} />
                   </button>
@@ -658,7 +658,7 @@ function GoalsTab() {
         })}
         {goals.length === 0 && (
           <div className="col-span-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-14 flex flex-col items-center justify-center text-center gap-4">
-            <p className="text-slate-400 dark:text-slate-500">
+            <p className="text-slate-600 dark:text-slate-500">
               No goals yet. Set a retirement corpus, emergency fund, or education target.
             </p>
             <button
@@ -751,7 +751,7 @@ function GoalForm({ initial, onSave }: { initial: Goal | null; onSave: (g: Goal)
           </select>
         </Field>
       </div>
-      <p className="text-xs text-slate-400 dark:text-slate-500 -mt-1">
+      <p className="text-xs text-slate-600 dark:text-slate-500 -mt-1">
         Progress is calculated automatically from your current Net Worth — no need to update it manually.
       </p>
       <button onClick={submit} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-base font-medium">

@@ -28,7 +28,7 @@ export default function StatCard({ label, value, sublabel, trend, icon }: StatCa
             {trend.positive ? '▲' : '▼'} {trend.value}
           </span>
         )}
-        {sublabel && <span className="text-[13px] text-slate-400">{sublabel}</span>}
+        {sublabel && <span className="text-[13px] text-slate-600">{sublabel}</span>}
       </div>
     </div>
   );

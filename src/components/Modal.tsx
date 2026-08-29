@@ -30,7 +30,7 @@ export default function Modal({ open, onClose, title, children, widthClassName =
           <h3 className="text-[18px] font-semibold text-slate-900 dark:text-white tracking-tight">{title}</h3>
           <button
             onClick={onClose}
-            className="keep-round tap-scale h-8 w-8 flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200 transition-colors"
+            className="keep-round tap-scale h-8 w-8 flex items-center justify-center text-slate-600 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200 transition-colors"
           >
             <X size={16} />
           </button>

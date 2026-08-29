@@ -185,7 +185,7 @@ export default function Calculators() {
 
       {GROUPS.map((group) => (
         <div key={group.title} className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-500">
             {group.title}
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -456,7 +456,7 @@ function PhasedCalculator() {
       inputs={
         <>
           <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Investment Phases</h2>
-          <p className="text-xs text-slate-400 dark:text-slate-500 -mt-2">
+          <p className="text-xs text-slate-600 dark:text-slate-500 -mt-2">
             One fund, monthly investment that changes over time. Example: ₹1,000/month from year 1 to 3, then
             ₹5,000/month from year 3 to 13, then ₹10,000/month from year 13 to 20 — everything compounds together.
           </p>
@@ -538,7 +538,7 @@ function PhasedCalculator() {
           </div>
           {breakdown.length > 0 && (
             <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
-              <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide">
+              <p className="text-xs font-medium text-slate-600 dark:text-slate-500 uppercase tracking-wide">
                 Breakdown by phase
               </p>
               {breakdown.map((b, i) => (
@@ -730,7 +730,7 @@ function EmiCalculator() {
               </div>
             </div>
           </div>
-          <p className="text-xs text-slate-400 dark:text-slate-500">Remaining loan balance by year, below.</p>
+          <p className="text-xs text-slate-600 dark:text-slate-500">Remaining loan balance by year, below.</p>
         </>
       }
       chartData={chartData}
@@ -800,7 +800,7 @@ function XirrCalculator() {
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
         <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Cash Flows</h2>
-        <p className="text-xs text-slate-400 dark:text-slate-500 -mt-2">
+        <p className="text-xs text-slate-600 dark:text-slate-500 -mt-2">
           Enter each investment as a negative amount on the date you invested.
         </p>
         {flows.map((f) => (
@@ -821,7 +821,7 @@ function XirrCalculator() {
             <button
               onClick={() => removeFlow(f.id)}
               disabled={flows.length === 1}
-              className="text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-30 shrink-0 text-sm px-2"
+              className="text-slate-600 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-30 shrink-0 text-sm px-2"
             >
               ✕
             </button>
@@ -857,7 +857,7 @@ function XirrCalculator() {
         <p className="text-2xl font-bold text-brand-600 dark:text-brand-300">
           {rate !== null ? `${(rate * 100).toFixed(2)}%` : '—'}
         </p>
-        <p className="text-xs text-slate-400 dark:text-slate-500">
+        <p className="text-xs text-slate-600 dark:text-slate-500">
           Based on the timing and size of each cash flow entered, plus the current value.
         </p>
       </div>
@@ -952,7 +952,7 @@ function SwpCalculator() {
             <>
               <p className="text-sm text-slate-500 dark:text-slate-400">Balance after 50 years</p>
               <p className="text-2xl font-bold text-brand-600 dark:text-brand-300">{formatCurrency(endingBalance)}</p>
-              <p className="text-xs text-slate-400 dark:text-slate-500">
+              <p className="text-xs text-slate-600 dark:text-slate-500">
                 Your corpus outlasts the 50-year projection window at this withdrawal rate.
               </p>
             </>
@@ -1090,7 +1090,7 @@ function RetirementCalculator() {
               <p className="text-xl font-bold text-slate-900 dark:text-white">{formatCurrency(requiredSip)}</p>
             </div>
           </div>
-          <p className="text-xs text-slate-400 dark:text-slate-500">
+          <p className="text-xs text-slate-600 dark:text-slate-500">
             Corpus balance through retirement, assuming expenses keep rising with inflation, below.
           </p>
         </>

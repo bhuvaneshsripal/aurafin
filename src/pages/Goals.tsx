@@ -97,7 +97,7 @@ export default function Goals() {
                       setEditing(g);
                       setModalOpen(true);
                     }}
-                    className="text-slate-400 hover:text-brand-600"
+                    className="text-slate-600 hover:text-brand-600"
                   >
                     <Pencil size={14} />
                   </button>
@@ -119,7 +119,7 @@ export default function Goals() {
           );
         })}
         {goals.length === 0 && (
-          <div className="col-span-full bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-400">
+          <div className="col-span-full bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-600">
             No goals yet. Set a retirement corpus, emergency fund, or education target.
           </div>
         )}
@@ -195,7 +195,7 @@ function GoalForm({ initial, onSave }: { initial: Goal | null; onSave: (g: Goal)
         />
         <span>
           <span className="block text-sm font-medium text-slate-700">Track automatically with Net Worth</span>
-          <span className="block text-xs text-slate-400 mt-0.5">
+          <span className="block text-xs text-slate-600 mt-0.5">
             Progress will use your live Net Worth (total assets − total liabilities) from the Dashboard
             instead of a number you enter manually.
           </span>

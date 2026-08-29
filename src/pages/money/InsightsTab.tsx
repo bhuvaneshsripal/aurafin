@@ -53,14 +53,14 @@ export default function InsightsTab() {
       <div className="flex items-center justify-center gap-4">
         <button
           onClick={() => setMonth((m) => shiftMonth(m, -1))}
-          className="tap-scale h-8 w-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+          className="tap-scale h-8 w-8 flex items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
         >
           <ChevronLeft size={18} />
         </button>
         <span className="font-semibold text-slate-900 dark:text-white text-lg">{monthLabel(month)}</span>
         <button
           onClick={() => setMonth((m) => shiftMonth(m, 1))}
-          className="tap-scale h-8 w-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+          className="tap-scale h-8 w-8 flex items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
         >
           <ChevronRight size={18} />
         </button>
@@ -90,7 +90,7 @@ export default function InsightsTab() {
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6">
         <h2 className="font-semibold text-slate-900 dark:text-white mb-4">Spending by category</h2>
         {byCategory.length === 0 ? (
-          <div className="text-center text-slate-400 dark:text-slate-500 text-sm py-10">
+          <div className="text-center text-slate-600 dark:text-slate-500 text-sm py-10">
             No expenses logged for this month yet.
           </div>
         ) : (

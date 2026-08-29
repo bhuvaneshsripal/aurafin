@@ -169,14 +169,14 @@ export default function BudgetTab() {
       <div className="flex items-center justify-center gap-4">
         <button
           onClick={() => setMonth((m) => shiftMonth(m, -1))}
-          className="tap-scale h-8 w-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+          className="tap-scale h-8 w-8 flex items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
         >
           <ChevronLeft size={18} />
         </button>
         <span className="font-semibold text-slate-900 dark:text-white text-lg">{monthLabel(month)}</span>
         <button
           onClick={() => setMonth((m) => shiftMonth(m, 1))}
-          className="tap-scale h-8 w-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+          className="tap-scale h-8 w-8 flex items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
         >
           <ChevronRight size={18} />
         </button>
@@ -202,7 +202,7 @@ export default function BudgetTab() {
         </div>
 
         {draft.length === 0 ? (
-          <div className="text-center text-slate-400 dark:text-slate-500 text-sm py-10">
+          <div className="text-center text-slate-600 dark:text-slate-500 text-sm py-10">
             No categories yet. Tap Add categories below to start.
           </div>
         ) : (
@@ -213,7 +213,7 @@ export default function BudgetTab() {
                   {item.category}
                 </span>
                 <div className="flex items-center gap-1 shrink-0">
-                  <span className="text-sm text-slate-400">₹</span>
+                  <span className="text-sm text-slate-600">₹</span>
                   <input
                     type="number"
                     value={item.amount || ''}

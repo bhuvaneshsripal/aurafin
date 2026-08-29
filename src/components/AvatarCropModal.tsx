@@ -157,7 +157,7 @@ export default function AvatarCropModal({ open, image, onCancel, onConfirm }: Av
         </div>
 
         <div className="flex items-center gap-3 w-full max-w-xs">
-          <ZoomOut size={16} className="text-slate-400 shrink-0" />
+          <ZoomOut size={16} className="text-slate-600 shrink-0" />
           <input
             type="range"
             min={MIN_ZOOM}
@@ -167,10 +167,10 @@ export default function AvatarCropModal({ open, image, onCancel, onConfirm }: Av
             onChange={(e) => handleZoomChange(Number(e.target.value))}
             className="w-full accent-brand-600"
           />
-          <ZoomIn size={16} className="text-slate-400 shrink-0" />
+          <ZoomIn size={16} className="text-slate-600 shrink-0" />
         </div>
 
-        <p className="text-xs text-slate-400 dark:text-slate-500 -mt-2">Drag to reposition, slide/pinch to zoom, or rotate.</p>
+        <p className="text-xs text-slate-600 dark:text-slate-500 -mt-2">Drag to reposition, slide/pinch to zoom, or rotate.</p>
 
         <div className="flex gap-3 w-full">
           <button

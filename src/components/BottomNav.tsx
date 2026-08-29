@@ -124,7 +124,7 @@ export default function BottomNav() {
                 </NavLink>
               ))}
             </div>
-            <div className="px-5 pb-6 pt-2 text-center text-xs text-slate-400 dark:text-slate-500">
+            <div className="px-5 pb-6 pt-2 text-center text-xs text-slate-600 dark:text-slate-500">
               Developed by Bhuvanesh S ·{' '}
               <a
                 href="https://www.linkedin.com/in/bhuvaneshs07"

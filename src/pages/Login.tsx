@@ -121,7 +121,7 @@ export default function Login() {
 
           <div className="flex items-center gap-3 my-4">
             <div className="h-px bg-slate-200 flex-1" />
-            <span className="text-sm text-slate-400">or use email</span>
+            <span className="text-sm text-slate-600">or use email</span>
             <div className="h-px bg-slate-200 flex-1" />
           </div>
 
@@ -146,7 +146,7 @@ export default function Login() {
                 onClick={() => setShowPassword((v) => !v)}
                 tabIndex={-1}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
-                className="absolute right-0 top-0 h-full px-3 flex items-center text-slate-400 hover:text-slate-600"
+                className="absolute right-0 top-0 h-full px-3 flex items-center text-slate-600 hover:text-slate-600"
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
@@ -159,7 +159,7 @@ export default function Login() {
             </button>
           </div>
 
-          <p className="text-sm text-slate-400 text-center mt-6">
+          <p className="text-sm text-slate-600 text-center mt-6">
             {mode === 'login' ? "No account yet? " : 'Already have an account? '}
             <button
               onClick={() => setMode(mode === 'login' ? 'register' : 'login')}

@@ -36,7 +36,7 @@ export default class ErrorBoundary extends Component<Props, State> {
           <p className="text-slate-700 dark:text-slate-200 font-medium">
             Something went wrong loading this page.
           </p>
-          <p className="text-sm text-slate-400 max-w-sm">{this.state.error.message}</p>
+          <p className="text-sm text-slate-600 max-w-sm">{this.state.error.message}</p>
           <button
             onClick={() => window.location.reload()}
             className="mt-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
