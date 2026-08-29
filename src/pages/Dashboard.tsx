@@ -20,8 +20,6 @@ import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import Amount from '../components/Amount';
 import LoadingDots from '../components/LoadingDots';
 import GoldPriceCard from '../components/GoldPriceCard';
-import { PortfolioPdfReport } from '../components/PortfolioPdfReport';
-import { PortfolioExportModal } from '../components/PortfolioExportModal';
 import { ASSET_CLASS_LABELS, formatCurrency, maskPreciseAmount } from '../utils/currency';
 import { resolveAssetValues } from '../utils/assetValues';
 
