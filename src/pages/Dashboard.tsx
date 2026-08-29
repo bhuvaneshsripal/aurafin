@@ -303,17 +303,8 @@ export default function Dashboard() {
         <GoalsSummary goals={goals} netWorth={netWorthReady ? netWorth : 0} />
       </Section>
 
-      {/* PDF Export Modal and Report */}
-      <PortfolioExportModal 
-        open={exportModalOpen} 
-        onClose={() => setExportModalOpen(false)} 
-      />
-
-      {/* Hidden report component - used only for PDF generation */}
-      <div style={{ display: 'none' }}>
-        <PortfolioPdfReport hideInPrint={false} />
       </div>
-    </div>
+    
   );
 }
 
