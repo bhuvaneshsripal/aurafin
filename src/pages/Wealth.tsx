@@ -81,7 +81,7 @@ import {
   type MfSearchResult,
 } from '../utils/mutualFunds';
 import { fetchLivePrices, fetchFxRate, searchStockSymbols, type StockSearchResult } from '../utils/marketPrices';
-import { useDayChangeResetWindow, useMarketSessionProgress } from '../utils/marketHours';
+import { useDayChangeResetWindow, useMarketSessionProgress, useIsMarketOpen } from '../utils/marketHours';
 import { useUrlTab } from '../hooks/useUrlTab';
 import { useModalBackClose } from '../hooks/useModalBackClose';
 
@@ -694,6 +694,7 @@ function AssetsTab({
   const previousCloses = useLivePricesStore((s) => s.previousCloses);
   const dayChangeResetActive = useDayChangeResetWindow();
   const marketSessionProgress = useMarketSessionProgress();
+  const marketOpen = useIsMarketOpen();
   const sipValues = useLivePricesStore((s) => s.sipValues);
   const pricesAttempted = useLivePricesStore((s) => s.pricesAttempted);
   const sipValuesAttempted = useLivePricesStore((s) => s.sipValuesAttempted);
@@ -759,6 +760,29 @@ function AssetsTab({
   const holdingsMenuRef = useOutsideClose(() => setHoldingsMenuOpenId(null));
 
   const [confirmDeleteAsset, setConfirmDeleteAsset] = useState<Asset | null>(null);
+
+  // Clicking "Wealth" in the sidebar/bottom nav while already on this page
+  // re-navigates to the same route — React Router doesn't unmount/remount
+  // AssetsTab for that, so any open overlay here (edit modal, asset detail
+  // view, delete confirm, etc.) would otherwise just stay open, making the
+  // nav click look like it did nothing. `location.key` changes on every
+  // navigation (even to the same URL), so it's a reliable signal that the
+  // person just "arrived" here again and any open overlay should close,
+  // landing them back on the plain holdings list like a fresh visit would.
+  const location = useLocation();
+  const isFirstLocationRef = useRef(true);
+  useEffect(() => {
+    if (isFirstLocationRef.current) {
+      isFirstLocationRef.current = false;
+      return;
+    }
+    setModalOpen(false);
+    setViewingAsset(null);
+    setConfirmDeleteAsset(null);
+    setHoldingsMenuOpenId(null);
+    setSortSheetOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key]);
 
   const handleDelete = async (id: string) => {
     if (!user) return;
@@ -1416,7 +1440,7 @@ function AssetsTab({
               wide multi-column table, so nothing gets cut off on small
               screens. The full table below is for sm+ screens where there's
               room for every column. */}
-          <div className="sm:hidden bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
+          <div className="sm:hidden bg-white dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800 -mx-4">
             {displayRows.map((r, idx) => {
               const a = r.asset;
               const invested = r.invested ?? r.value;
@@ -1439,7 +1463,7 @@ function AssetsTab({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') setViewingAsset(a);
                   }}
-                  className="grid grid-cols-[1fr_44px_1fr] items-center gap-1.5 px-3 py-2 active:bg-slate-50 dark:active:bg-slate-800/40 cursor-pointer select-none"
+                  className="grid grid-cols-[1fr_44px_1fr] items-center gap-1.5 px-4 py-3 active:bg-slate-50 dark:active:bg-slate-800/40 cursor-pointer select-none"
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate uppercase">{a.name}</p>
@@ -1450,7 +1474,7 @@ function AssetsTab({
                       the exact horizontal center of every row regardless of
                       how long the name or value text is. */}
                   <div className="flex items-center justify-center">
-                    {r.previousClose !== undefined && r.currentPrice !== undefined && (
+                    {marketOpen && r.previousClose !== undefined && r.currentPrice !== undefined && (
                       <Sparkline
                         seed={a.symbol ?? a.id}
                         previousClose={r.previousClose}
@@ -1640,7 +1664,7 @@ function AssetsTab({
                         </div>
                       </td>
                       <td className="px-4 py-4">
-                        {r.previousClose !== undefined && r.currentPrice !== undefined && (
+                        {marketOpen && r.previousClose !== undefined && r.currentPrice !== undefined && (
                           <Sparkline
                             seed={a.symbol ?? a.id}
                             previousClose={r.previousClose}

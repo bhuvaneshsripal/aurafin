@@ -70,6 +70,33 @@ export function useDayChangeResetWindow(): boolean {
   return active;
 }
 
+/** True during NSE's live trading window — Mon–Fri, 9:15 AM–3:30 PM IST.
+ *  Unlike getMarketSessionProgress (which only looks at time-of-day and is
+ *  meant for drawing how far a chart should trail across), this also knows
+ *  about weekends, so it's the right check for "is the market actually
+ *  open right now" — e.g. gating whether to show a live intraday
+ *  sparkline at all. */
+export function isMarketOpen(now: Date = new Date()): boolean {
+  const { hour, minute } = getIstTimeOfDay(now);
+  const { isoWeekday } = getIstDateInfo(now);
+  if (isoWeekday > 5) return false; // Saturday (6) or Sunday (7)
+  const minutesSinceMidnight = hour * 60 + minute;
+  const marketOpen = MARKET_OPEN_HOUR * 60 + MARKET_OPEN_MINUTE;
+  const marketClose = MARKET_CLOSE_HOUR * 60 + MARKET_CLOSE_MINUTE;
+  return minutesSinceMidnight >= marketOpen && minutesSinceMidnight < marketClose;
+}
+
+/** Reactive version of isMarketOpen — re-checks every 30s so the sparkline
+ *  appears right at 9:15 AM IST without needing another render to trigger
+ *  it. */
+export function useIsMarketOpen(): boolean {
+  const [open, setOpen] = useState(() => isMarketOpen());
+  useEffect(() => {
+    const id = setInterval(() => setOpen(isMarketOpen()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  return open;
+}
 /** How far through today's 9:15 AM–3:30 PM IST trading session we currently
  *  are, as a fraction from 0 (not open yet) to 1 (session over for the
  *  day). Used to draw "live" charts (like the 1D sparkline) so they only

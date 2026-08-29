@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronDown, ChevronUp, ChevronRight, Scale, ArrowLeftRight, TrendingUp, Target } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronRight, Scale, ArrowLeftRight, TrendingUp, Target, Download } from 'lucide-react';
 import {
   ResponsiveContainer,
   BarChart,
@@ -22,6 +22,8 @@ import LoadingDots from '../components/LoadingDots';
 import GoldPriceCard from '../components/GoldPriceCard';
 import { ASSET_CLASS_LABELS, formatCurrency, maskPreciseAmount } from '../utils/currency';
 import { resolveAssetValues } from '../utils/assetValues';
+import { PortfolioPdfReport } from '../components/PortfolioPdfReport';
+import { PortfolioExportModal } from '../components/PortfolioExportModal';
 
 const INVESTMENT_CLASSES = new Set([
   'stock',
@@ -39,6 +41,7 @@ const INVESTMENT_CLASSES = new Set([
 ]);
 
 export default function Dashboard() {
+  const [exportModalOpen, setExportModalOpen] = useState(false);
   const [cashflowOpen, setCashflowOpen] = useState(false);
   const allAssets = useAssetsStore((s) => s.assets);
   const allLiabilities = useLiabilitiesStore((s) => s.liabilities);
@@ -133,6 +136,21 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Dashboard</h1>
+          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">Welcome back! Here's your wealth overview.</p>
+        </div>
+        <button
+          onClick={() => setExportModalOpen(true)}
+          className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 active:bg-brand-800 rounded-lg transition-colors shadow-sm"
+          title="Export portfolio as PDF"
+        >
+          <Download size={16} />
+          Export Portfolio
+        </button>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
@@ -301,6 +319,16 @@ export default function Dashboard() {
       <Section title="Goals" icon={Target} iconColor="text-orange-500" summary={goalsDataKnown ? `${goals.length}` : <SummarySkeleton />} to="/essentials?tab=goals">
         <GoalsSummary goals={goals} netWorth={netWorthReady ? netWorth : 0} />
       </Section>
+
+      <PortfolioExportModal
+        isOpen={exportModalOpen}
+        onClose={() => setExportModalOpen(false)}
+      />
+
+      {/* Hidden report component - used only for PDF generation */}
+      <div style={{ display: 'none' }}>
+        <PortfolioPdfReport hideInPrint={false} />
+      </div>
     </div>
   );
 }
