@@ -128,7 +128,6 @@ export function computeDepositProgress(asset: Asset, asOf: Date = new Date()): D
   }
 
   const msPerDay = 24 * 60 * 60 * 1000;
-  const msPerYear = 365.25 * 24 * 60 * 60 * 1000;
   const effectiveAsOf = isMatured ? new Date(maturityTime!) : asOf;
 
   if (assetClass === 'recurring_deposit' && asset.monthlyInstallment && asset.monthlyInstallment > 0) {
