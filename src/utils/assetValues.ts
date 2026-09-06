@@ -88,8 +88,8 @@ export function resolveAssetValues(
 }
 
 export interface DepositProgress {
-  /** Today's accrued value — simple interest from each contribution's own
-   *  date up to today (or up to maturity, once matured). This is what
+  /** Today's accrued value — quarterly compound interest from each contribution's 
+   *  own date up to today (or up to maturity, once matured). This is what
    *  "Current Value" should show for a deposit, and it updates itself
    *  every time the page loads/re-renders since `asOf` defaults to now —
    *  no scheduled job needed, same self-refreshing pattern as SIP progress. */
@@ -104,10 +104,11 @@ export interface DepositProgress {
  * Computes a deposit-like asset's (FD, RD, PPF, bonds, etc.) accrued value
  * as of today, so "Current Value" reflects interest earned so far instead
  * of sitting frozen at whatever was typed in when the asset was added.
- * Uses the same simple-interest method as `computeMaturityInfo`, just
- * measured from the deposit date to `asOf` instead of to the full
- * maturity date — so today's figure and the maturity projection stay
- * consistent with each other, just at different points on the same line.
+ * Uses quarterly compound interest (standard for FD/RD in India), the same
+ * method as `computeMaturityInfo`, just measured from the deposit date to 
+ * `asOf` instead of to the full maturity date — so today's figure and the 
+ * maturity projection stay consistent with each other, just at different 
+ * points on the same curve.
  *
  * Once `maturityDate` has passed, the value is held flat at the maturity
  * amount rather than continuing to accrue forever, since a matured
@@ -126,6 +127,7 @@ export function computeDepositProgress(asset: Asset, asOf: Date = new Date()): D
     return { currentValue: undefined, invested: undefined, isMatured };
   }
 
+  const msPerDay = 24 * 60 * 60 * 1000;
   const msPerYear = 365.25 * 24 * 60 * 60 * 1000;
   const effectiveAsOf = isMatured ? new Date(maturityTime!) : asOf;
 
@@ -138,11 +140,14 @@ export function computeDepositProgress(asset: Asset, asOf: Date = new Date()): D
       candidate.getTime() <= effectiveAsOf.getTime() &&
       (maturityTime === undefined || candidate.getTime() <= maturityTime)
     ) {
-      const yearsElapsed = (effectiveAsOf.getTime() - candidate.getTime()) / msPerYear;
+      // Count only COMPLETE days
+      const completeDbsElapsed = Math.floor((effectiveAsOf.getTime() - candidate.getTime()) / msPerDay);
       invested += asset.monthlyInstallment;
+      // Use quarterly compound interest for complete days only
+      const yearsElapsed = completeDbsElapsed / 365.25;
       currentValue +=
         yearsElapsed > 0
-          ? asset.monthlyInstallment * (1 + (interestRate / 100) * yearsElapsed)
+          ? asset.monthlyInstallment * Math.pow(1 + interestRate / 400, yearsElapsed * 4)
           : asset.monthlyInstallment;
       candidate = shiftMonths(candidate.getFullYear(), candidate.getMonth(), start.getDate(), 1);
     }
@@ -158,16 +163,20 @@ export function computeDepositProgress(asset: Asset, asOf: Date = new Date()): D
     return { currentValue: undefined, invested: undefined, isMatured };
   }
 
-  const yearsElapsed = (effectiveAsOf.getTime() - new Date(startDate).getTime()) / msPerYear;
+  // Count only COMPLETE days
+  const completeDaysElapsed = Math.floor((effectiveAsOf.getTime() - new Date(startDate).getTime()) / msPerDay);
+  const yearsElapsed = completeDaysElapsed / 365.25;
+  // Use quarterly compound interest for complete days only
   const currentValue =
-    yearsElapsed > 0 ? principal * (1 + (interestRate / 100) * yearsElapsed) : principal;
+    yearsElapsed > 0 ? principal * Math.pow(1 + interestRate / 400, yearsElapsed * 4) : principal;
 
   return { currentValue, invested: principal, isMatured };
 }
 
 export interface MaturityInfo {
-  /** Simple-interest projected value at maturity, computed over the full
-   *  start-date-to-maturity-date term (not "today to maturity"). */
+  /** Quarterly compound interest projected value at maturity, computed over 
+   *  the full start-date-to-maturity-date term (not "today to maturity"). 
+   *  Uses standard FD/RD calculation with interest compounded quarterly. */
   maturityAmount: number | undefined;
   /** True once the maturity date has passed. */
   isMatured: boolean;
@@ -175,9 +184,11 @@ export interface MaturityInfo {
 
 /**
  * Computes the projected maturity amount for a deposit-like asset (FD, RD,
- * bond, etc.) using simple interest over the full term — from `startDate`
- * to `maturityDate` — rather than from today. Returns `undefined` for
- * `maturityAmount` when there isn't enough info (missing dates/rate/principal).
+ * bond, etc.) using quarterly compound interest over the full term — from 
+ * `startDate` to `maturityDate`. This matches standard FD/RD calculation 
+ * in India where interest is compounded quarterly (4 times per year).
+ * Returns `undefined` for `maturityAmount` when there isn't enough info 
+ * (missing dates/rate/principal).
  */
 export function computeMaturityInfo(asset: Asset): MaturityInfo {
   const { startDate, maturityDate, interestRate } = asset;
@@ -199,7 +210,10 @@ export function computeMaturityInfo(asset: Asset): MaturityInfo {
     return { maturityAmount: undefined, isMatured };
   }
 
-  const maturityAmount = principal * (1 + (interestRate / 100) * termYears);
+  // Use quarterly compound interest (standard for FD/RD in India)
+  // Formula: A = P(1 + r/400)^(4t)
+  // where r is annual rate and t is years
+  const maturityAmount = principal * Math.pow(1 + interestRate / 400, termYears * 4);
   return { maturityAmount, isMatured };
 }
 

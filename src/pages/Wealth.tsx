@@ -2335,6 +2335,30 @@ function HoldingDetailView({
               </span>
             </div>
           )}
+          {/* Daily interest breakdown for deposit-like assets */}
+          {DEPOSIT_LIKE_CLASSES.has(asset.assetClass) && asset.startDate && pnl !== undefined && pnl > 0 && (
+            <>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-600 dark:text-slate-300">Days elapsed</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-100">
+                  {Math.floor((Date.now() - new Date(asset.startDate).getTime()) / (24 * 60 * 60 * 1000))} days
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-600 dark:text-slate-300">Daily interest (avg)</span>
+                <span className="font-semibold text-emerald-600">
+                  {formatSignedCurrency(
+                    pnl / Math.max(1, Math.floor((Date.now() - new Date(asset.startDate).getTime()) / (24 * 60 * 60 * 1000))),
+                    asset.currency
+                  )}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-600 dark:text-slate-300">Total interest earned</span>
+                <span className="font-semibold text-emerald-600">{formatSignedCurrency(pnl, asset.currency)}</span>
+              </div>
+            </>
+          )}
           {dayChangeTotal !== undefined && dayChangePercent !== undefined && (
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-600 dark:text-slate-300">1D returns</span>
@@ -4225,7 +4249,7 @@ function AssetDetailsForm({
         </div>
       )}
       <div className="grid grid-cols-2 gap-3">
-        <Field label={isSip ? 'Current Value (auto)' : 'Current Value'}>
+        <Field label={isSip ? 'Current Value (auto)' : (DEPOSIT_LIKE_CLASSES.has(assetClass) ? 'Maturity Amount (auto)' : 'Current Value')}>
           {isSip ? (
             <div className="relative">
               <input
@@ -4246,6 +4270,19 @@ function AssetDetailsForm({
                   className="animate-spin text-slate-600 absolute right-3 top-1/2 -translate-y-1/2"
                 />
               )}
+            </div>
+          ) : DEPOSIT_LIKE_CLASSES.has(assetClass) ? (
+            <div className="relative">
+              <input
+                type="text"
+                readOnly
+                value={
+                  estimatedMaturityValue
+                    ? formatPreciseCurrency(estimatedMaturityValue, currency)
+                    : '—'
+                }
+                className={`${inputClass} bg-slate-50 text-slate-600 cursor-not-allowed`}
+              />
             </div>
           ) : (
             <input
@@ -4295,12 +4332,17 @@ function AssetDetailsForm({
               Couldn't fetch a live price for "{symbol.trim()}" — enter the current value manually.
             </p>
           )}
-          {!isSip && attemptedSubmit && valueMissing && <p className={errorTextClass}>Current Value is required.</p>}
+          {DEPOSIT_LIKE_CLASSES.has(assetClass) && (
+            <p className="text-xs text-slate-600 mt-1">Auto-calculated using quarterly compound interest formula</p>
+          )}
+          {!isSip && !DEPOSIT_LIKE_CLASSES.has(assetClass) && attemptedSubmit && valueMissing && <p className={errorTextClass}>Current Value is required.</p>}
         </Field>
         <Field
           label={
             SIP_CLASSES.has(assetClass)
               ? 'Initial Investment Amount'
+              : DEPOSIT_LIKE_CLASSES.has(assetClass)
+                ? 'Invested Amount'
               : isWeightTracked || isUnitTracked
                 ? 'Invested (auto, from purchases)'
                 : 'Invested (optional)'
@@ -4309,12 +4351,22 @@ function AssetDetailsForm({
           <input
             type="number"
             step="any"
-            value={investedValue}
+            value={DEPOSIT_LIKE_CLASSES.has(assetClass) ? value : investedValue}
             readOnly={isWeightTracked || isUnitTracked}
-            onChange={(e) => !isWeightTracked && !isUnitTracked && setInvestedValue(e.target.value)}
-            className={`${inputClass} ${isWeightTracked || isUnitTracked ? 'bg-slate-50 text-slate-600 cursor-not-allowed' : ''}`}
-            placeholder={SIP_CLASSES.has(assetClass) ? '0' : 'Auto: Qty × Avg'}
+            onChange={(e) => {
+              if (DEPOSIT_LIKE_CLASSES.has(assetClass)) {
+                valueTouchedRef.current = true;
+                setValue(e.target.value);
+              } else if (!isWeightTracked && !isUnitTracked) {
+                setInvestedValue(e.target.value);
+              }
+            }}
+            className={`${inputClass} ${(isWeightTracked || isUnitTracked) && !DEPOSIT_LIKE_CLASSES.has(assetClass) ? 'bg-slate-50 text-slate-600 cursor-not-allowed' : ''}`}
+            placeholder={SIP_CLASSES.has(assetClass) ? '0' : DEPOSIT_LIKE_CLASSES.has(assetClass) ? '0' : 'Auto: Qty × Avg'}
           />
+          {DEPOSIT_LIKE_CLASSES.has(assetClass) && (
+            <p className="text-xs text-slate-600 mt-1">Principal/Initial deposit amount</p>
+          )}
         </Field>
       </div>
       <Field label="Currency">
