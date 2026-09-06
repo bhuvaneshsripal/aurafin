@@ -249,6 +249,21 @@ button:disabled,
   }
 }
 
+@keyframes pill-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-pill-in {
+  animation: pill-in 180ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
 .animate-menu-in-3d {
   animation: menu-in-3d 260ms cubic-bezier(0.16, 1, 0.3, 1);
   transform-origin: bottom right;

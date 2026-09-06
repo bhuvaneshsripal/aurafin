@@ -38,16 +38,16 @@ let pendingCollapse: ReturnType<typeof setTimeout> | null = null;
 function ensurePopstateListener() {
   if (listenerAdded) return;
   listenerAdded = true;
-  window.addEventListener('popstate', (e) => {
-    // Only treat this as "the guard entry got popped" if it actually was —
-    // a real app navigation (tapping a tab/link, which calls history.push
-    // through the router) also fires popstate-adjacent updates in some
-    // browsers, and if entryPushed was left stale `true` from an earlier
-    // desync, that would wrongly swallow a guard that's still open, or —
-    // worse — silently drop the very next modal's pushState because the
-    // code thinks one already exists. The guard entry is tagged with
-    // __modalGuard when we push it, so we can tell the difference here.
-    if (!(e.state && (e.state as { __modalGuard?: boolean }).__modalGuard === true)) {
+  window.addEventListener('popstate', () => {
+    // Only treat this as "the guard entry got popped" if we actually have
+    // one active. Note we can't identify the guard by checking
+    // `event.state` here: pushState() attaches the state object to the
+    // entry being pushed (the guard), but popstate.state reflects the
+    // entry the browser just landed *on* — i.e. the one beneath the guard,
+    // whatever state (if any) that carries. So the guard's own tag is
+    // never present on the event that pops it; we just track "is a guard
+    // currently the active top history entry" ourselves instead.
+    if (!entryPushed || guardStack.length === 0) {
       return;
     }
     entryPushed = false;

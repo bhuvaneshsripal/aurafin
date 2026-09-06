@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus,
-  ArrowUpCircle,
-  ArrowDownCircle,
+  ArrowUpRight,
+  ArrowDownLeft,
   ArrowLeftRight,
-  Layers,
+  Coins,
   Landmark,
   Camera,
   ChevronDown,
@@ -70,27 +70,34 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
           )}
         </button>
 
-        {menuOpen && (
+        {menuOpen && isFab && (
           <div
-            className={
-              isFab
-                ? 'animate-menu-in-3d absolute bottom-full right-0 mb-3 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden z-30'
-                : 'animate-menu-in absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden z-30'
-            }
-            style={isFab ? { transformOrigin: 'bottom right' } : undefined}
+            className="absolute bottom-full right-0 mb-3 flex flex-col items-end gap-2 z-30"
+            style={{ transformOrigin: 'bottom right' }}
           >
+            <PillItem delay={5} icon={ArrowUpRight} color="text-orange-500" label="Expense" onClick={() => open('expense')} />
+            <PillItem delay={4} icon={ArrowDownLeft} color="text-emerald-700" label="Income" onClick={() => open('income')} />
+            <PillItem delay={3} icon={ArrowLeftRight} color="text-slate-700" label="Transfer" onClick={() => open('transfer')} />
+            <PillItem delay={2} icon={Coins} color="text-slate-700" label="Asset" onClick={() => open('asset')} />
+            <PillItem delay={1} icon={Landmark} color="text-red-500" label="Liability" onClick={() => open('liability')} />
+            <PillItem delay={0} icon={Camera} color="text-slate-500" label="Snapshot" onClick={() => open('snapshot')} />
+          </div>
+        )}
+
+        {menuOpen && !isFab && (
+          <div className="animate-menu-in absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden z-30">
             <p className="px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
               Cashflow
             </p>
-            <MenuItem icon={ArrowDownCircle} color="text-orange-500" label="Expense" onClick={() => open('expense')} />
-            <MenuItem icon={ArrowUpCircle} color="text-brand-600" label="Income" onClick={() => open('income')} />
+            <MenuItem icon={ArrowDownLeft} color="text-orange-500" label="Expense" onClick={() => open('expense')} />
+            <MenuItem icon={ArrowUpRight} color="text-emerald-700" label="Income" onClick={() => open('income')} />
             <MenuItem icon={ArrowLeftRight} color="text-sky-500" label="Transfer" onClick={() => open('transfer')} />
 
             <div className="border-t border-slate-100 dark:border-slate-700 mt-1" />
             <p className="px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
               Wealth
             </p>
-            <MenuItem icon={Layers} color="text-teal-600" label="Asset" onClick={() => open('asset')} />
+            <MenuItem icon={Coins} color="text-teal-600" label="Asset" onClick={() => open('asset')} />
             <MenuItem icon={Landmark} color="text-red-500" label="Liability" onClick={() => open('liability')} />
             <MenuItem icon={Camera} color="text-slate-500" label="Snapshot" onClick={() => open('snapshot')} />
           </div>
@@ -110,6 +117,34 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
         <SnapshotForm onDone={() => setActive(null)} />
       </Modal>
     </>
+  );
+}
+
+/** Individual floating pill button used by the mobile FAB's expanded menu —
+ *  each action gets its own rounded-full white pill (icon + label) stacked
+ *  above the FAB, rather than one dropdown card. */
+function PillItem({
+  icon: Icon,
+  color,
+  label,
+  onClick,
+  delay = 0,
+}: {
+  icon: typeof Plus;
+  color: string;
+  label: string;
+  onClick: () => void;
+  delay?: number;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{ animationDelay: `${delay * 30}ms` }}
+      className="animate-pill-in tap-scale flex items-center gap-2 rounded-full bg-white dark:bg-slate-800 pl-3 pr-4 py-2 shadow-lg text-sm font-semibold text-slate-900 dark:text-white whitespace-nowrap"
+    >
+      <Icon size={15} className={color} />
+      {label}
+    </button>
   );
 }
 

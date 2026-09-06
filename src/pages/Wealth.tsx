@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Plus,
@@ -32,6 +33,7 @@ import {
   Pause,
   Play,
   PlusCircle,
+  Banknote,
 } from 'lucide-react';
 import {
   PieChart,
@@ -53,7 +55,7 @@ import { exportToCsv } from '../utils/exportCsv';
 import Modal from '../components/Modal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import LoadingDots from '../components/LoadingDots';
-import type { Asset, AssetClass, Liability, LiabilityClass } from '../types';
+import type { Asset, AssetClass, Liability, LiabilityClass, Transaction } from '../types';
 import { CURRENCIES, formatPreciseCurrency, maskPreciseAmount, maskAmount } from '../utils/currency';
 import {
   ASSET_TAXONOMY,
@@ -92,6 +94,48 @@ import { useModalBackClose } from '../hooks/useModalBackClose';
 type Tab = 'assets' | 'liabilities' | 'networth' | 'allocation';
 type SortKey = 'manual' | 'name' | 'qty' | 'avgCost' | 'perUnit' | 'invested' | 'value' | 'pnl' | 'alloc' | 'dayChange';
 type EntryType = 'asset' | 'liability';
+
+/** Default manual-order tie-break for holdings that have never been
+ *  explicitly reordered (same `order` value, typically 0/unset) — puts
+ *  Stock, Gold, SIP, FD and RD in that fixed order ahead of everything
+ *  else. Once a holding is actually dragged or moved via the row menu, it
+ *  gets its own distinct `order` number, which wins the comparison before
+ *  this rank is ever consulted — so manual reordering still freely moves
+ *  any holding anywhere in the list, this only decides the untouched
+ *  starting order. */
+const DEFAULT_ASSET_CLASS_ORDER: Partial<Record<AssetClass, number>> = {
+  stock: 0,
+  gold: 1,
+  sip: 2,
+  fixed_deposit: 3,
+  recurring_deposit: 4,
+};
+const DEFAULT_ASSET_CLASS_ORDER_FALLBACK = 5;
+function defaultAssetClassRank(a: Asset): number {
+  return DEFAULT_ASSET_CLASS_ORDER[a.assetClass] ?? DEFAULT_ASSET_CLASS_ORDER_FALLBACK;
+}
+
+/** Persists the Assets tab's Category/Type/Currency filter selections to
+ *  localStorage so they survive a page refresh — a filter only changes when
+ *  the person actually changes it, never on reload. */
+function loadPersistedFilter(key: string): string[] {
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((v) => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePersistedFilter(key: string, value: string[]) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // localStorage unavailable (private mode, quota, etc.) — filter just
+    // won't survive a refresh, but the app keeps working.
+  }
+}
 
 /**
  * Renders a weight-tracked quantity (grams) safely. Rounds to 4 decimal
@@ -521,11 +565,19 @@ function AddWealthPage({
 function useOutsideClose(onClose: () => void) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    // Uses 'click' rather than 'mousedown'. On mobile, a tap synthesizes
+    // mousedown before click — if we close (and unmount) the menu on
+    // mousedown, the browser can lose the element it was about to fire the
+    // real 'click' on, so the tapped item's own action (Edit/Duplicate/
+    // Move/Delete) never runs and the menu just appears to close on its
+    // own. Listening on 'click' instead means the item's own onClick
+    // (attached further down the same bubble path) always gets to run
+    // first, and this handler only ever sees genuinely-outside taps.
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
   }, [onClose]);
   return ref;
 }
@@ -750,15 +802,56 @@ function AssetsTab({
   const [search, setSearch] = useState(() => searchParams.get('q') ?? '');
   const [sortKey, setSortKey] = useState<SortKey>('manual');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
-  const [selectedCurrencies, setSelectedCurrencies] = useState<string[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(() =>
+    loadPersistedFilter('aurafin.wealth.filter.categories')
+  );
+  const [selectedTypes, setSelectedTypes] = useState<string[]>(() =>
+    loadPersistedFilter('aurafin.wealth.filter.types')
+  );
+  const [selectedCurrencies, setSelectedCurrencies] = useState<string[]>(() =>
+    loadPersistedFilter('aurafin.wealth.filter.currencies')
+  );
+  useEffect(() => {
+    savePersistedFilter('aurafin.wealth.filter.categories', selectedCategories);
+  }, [selectedCategories]);
+  useEffect(() => {
+    savePersistedFilter('aurafin.wealth.filter.types', selectedTypes);
+  }, [selectedTypes]);
+  useEffect(() => {
+    savePersistedFilter('aurafin.wealth.filter.currencies', selectedCurrencies);
+  }, [selectedCurrencies]);
   const [viewingAsset, setViewingAsset] = useState<Asset | null>(null);
   // Viewing an asset swaps the whole tab into a full detail page (like a
   // pushed screen), so the phone/PWA Back button should close it and land
   // back on the list — not skip past it to whatever page was open before
   // Wealth. Same guard-history-entry trick already used for the modals below.
   useModalBackClose(!!viewingAsset, () => setViewingAsset(null));
+  // Remembers where the list was scrolled to right before opening a
+  // holding, so coming back (via the detail page's Back button or the
+  // phone/PWA back gesture) restores that exact spot instead of resetting
+  // to the top of a long list.
+  const listScrollPosRef = useRef(0);
+  const openHolding = (a: Asset) => {
+    listScrollPosRef.current = window.scrollY;
+    setViewingAsset(a);
+  };
+  // Opening a holding's detail page should always land at the top of that
+  // page, not wherever the list happened to be scrolled to (e.g. after
+  // scrolling down to tap a holding near the bottom of a long list).
+  // Going back restores the list's previous scroll position instead.
+  // useLayoutEffect (not useEffect) so this runs before the browser paints
+  // the new content. With useEffect, the list briefly paints at whatever
+  // scroll position it happens to re-render at (often the top) and only
+  // *then* jumps to the restored position on the next tick — a visible
+  // flash-then-jump that looks like the scroll position isn't being kept.
+  // Setting it pre-paint lands directly on the right spot with no flash.
+  useLayoutEffect(() => {
+    if (viewingAsset) {
+      window.scrollTo({ top: 0 });
+    } else {
+      window.scrollTo({ top: listScrollPosRef.current });
+    }
+  }, [viewingAsset]);
   const togglePrivacy = useUiStore((s) => s.togglePrivacy);
   const [holdingsMenuOpenId, setHoldingsMenuOpenId] = useState<string | null>(null);
   // Whether the currently-open row menu should render above its "..." button
@@ -767,6 +860,20 @@ function AssetsTab({
   // 5-item menu, so it used to get clipped by the bottom nav / FAB and
   // options like "Move down" / "Delete" were impossible to reach.
   const [holdingsMenuUpward, setHoldingsMenuUpward] = useState(false);
+  // Viewport-relative coordinates for the currently-open row menu, captured
+  // from the "..." button at the moment it's clicked. The menu itself is
+  // rendered through a portal straight onto <body> (see the render below)
+  // instead of as a child of the row, positioned with these fixed
+  // coordinates — a plain `absolute` child would get clipped by the
+  // desktop table's `overflow-x-auto` wrapper (needed for horizontal
+  // scrolling on narrow windows), which made the menu render cut off for
+  // holdings near the top or bottom of the table instead of showing all 5
+  // options.
+  const [holdingsMenuAnchor, setHoldingsMenuAnchor] = useState<{
+    top: number;
+    bottom: number;
+    right: number;
+  } | null>(null);
   const holdingsMenuRef = useOutsideClose(() => {
     setHoldingsMenuOpenId(null);
     // Reuse the same "swallow the very next row click" pattern already used
@@ -786,10 +893,19 @@ function AssetsTab({
   // below the trigger button to fit the menu — and flip it upward if not.
   const openHoldingsMenu = (id: string, triggerEl: HTMLElement) => {
     setHoldingsMenuOpenId((current) => {
-      if (current === id) return null;
+      if (current === id) {
+        setHoldingsMenuAnchor(null);
+        return null;
+      }
       const MENU_HEIGHT_ESTIMATE = 200; // ~5 rows incl. padding
       const rect = triggerEl.getBoundingClientRect();
-      setHoldingsMenuUpward(window.innerHeight - rect.bottom < MENU_HEIGHT_ESTIMATE);
+      const upward = window.innerHeight - rect.bottom < MENU_HEIGHT_ESTIMATE;
+      setHoldingsMenuUpward(upward);
+      setHoldingsMenuAnchor({
+        top: rect.top,
+        bottom: rect.bottom,
+        right: window.innerWidth - rect.right,
+      });
       return id;
     });
   };
@@ -849,6 +965,19 @@ function AssetsTab({
     }
   };
 
+  // Records a Sell / Dividend as a Money > Transactions entry so it shows up
+  // in the person's income history, not just as a silent balance bump on
+  // the receiving account.
+  const handleLogTransaction = async (t: Transaction) => {
+    if (!user) return;
+    try {
+      await upsertDoc(user, 'transactions', t.profileId ? t : { ...t, profileId: activeProfileId ?? undefined });
+    } catch (err) {
+      console.error('Failed to log transaction', err);
+      alert('The holding was updated, but logging the transaction failed. Please check your connection.');
+    }
+  };
+
   const handleDuplicate = async (a: Asset) => {
     console.log('[DEBUG] handleDuplicate called for', a.id, a.name, 'user:', user?.uid);
     if (!user) {
@@ -876,7 +1005,7 @@ function AssetsTab({
     if (!user) return;
     setSortKey('manual');
     const ordered = [...assets].sort(
-      (a, b) => (a.order ?? 0) - (b.order ?? 0) || a.updatedAt - b.updatedAt
+      (a, b) => (a.order ?? 0) - (b.order ?? 0) || defaultAssetClassRank(a) - defaultAssetClassRank(b) || a.updatedAt - b.updatedAt
     );
     const idx = ordered.findIndex((a) => a.id === id);
     const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
@@ -920,7 +1049,7 @@ function AssetsTab({
       dragRef.current.dragging = true;
       if (sortKey !== 'manual') setSortKey('manual');
       const orderedIds = [...assets]
-        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.updatedAt - b.updatedAt)
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || defaultAssetClassRank(a) - defaultAssetClassRank(b) || a.updatedAt - b.updatedAt)
         .map((x) => x.id);
       setManualDragIds(orderedIds);
       setDraggingId(id);
@@ -1101,7 +1230,7 @@ function AssetsTab({
       const matchesCurrency = selectedCurrencies.length === 0 || selectedCurrencies.includes(a.currency);
       return matchesSearch && matchesCategory && matchesType && matchesCurrency;
     })
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.updatedAt - b.updatedAt);
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || defaultAssetClassRank(a) - defaultAssetClassRank(b) || a.updatedAt - b.updatedAt);
 
   const totalValue = assets.reduce((s, a) => s + resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).value, 0);
 
@@ -1265,6 +1394,11 @@ function AssetsTab({
         setViewingAsset(null);
       },
       onQuickUpdate: handleQuickUpdate,
+      // Only meaningful for HoldingDetailView's Buy/Sell/Dividend action,
+      // but harmless to pass through to AssetDetailPage too since it just
+      // won't use them.
+      accounts: assets.filter((a) => a.assetClass === 'cash'),
+      onLogTransaction: handleLogTransaction,
     };
     return isHoldingStyle ? <HoldingDetailView {...detailProps} /> : <AssetDetailPage {...detailProps} />;
   }
@@ -1604,7 +1738,7 @@ function AssetsTab({
               screens. The full table below is for sm+ screens where there's
               room for every column. */}
           <div className="sm:hidden bg-white dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800 -mx-4">
-            {displayRows.map((r, idx) => {
+            {displayRows.map((r) => {
               const a = r.asset;
               const invested = r.invested ?? r.value;
               const qty = a.quantity ?? 0;
@@ -1624,10 +1758,10 @@ function AssetsTab({
                   tabIndex={0}
                   onClick={() => {
                     if (suppressRowClickRef.current) return;
-                    setViewingAsset(a);
+                    openHolding(a);
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') setViewingAsset(a);
+                    if (e.key === 'Enter' || e.key === ' ') openHolding(a);
                   }}
                   className="grid grid-cols-[1fr_44px_1fr] items-center gap-1.5 px-4 py-3 active:bg-slate-50 dark:active:bg-slate-800/40 cursor-pointer select-none"
                 >
@@ -1692,10 +1826,7 @@ function AssetsTab({
                         </>
                       )}
                     </div>
-                    <div
-                      className="relative shrink-0"
-                      ref={holdingsMenuOpenId === a.id ? holdingsMenuRef : undefined}
-                    >
+                    <div className="relative shrink-0">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1705,62 +1836,6 @@ function AssetsTab({
                       >
                         <MoreVertical size={13} />
                       </button>
-                      {holdingsMenuOpenId === a.id && (
-                        <div
-                          onClick={(e) => e.stopPropagation()}
-                          className={`absolute right-0 z-[60] w-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1 ${
-                            holdingsMenuUpward ? 'bottom-7' : 'top-7'
-                          }`}
-                        >
-                          <button
-                            onClick={() => {
-                              setHoldingsMenuOpenId(null);
-                              openEdit(a);
-                            }}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
-                          >
-                            <Pencil size={14} /> Edit
-                          </button>
-                          <button
-                            onClick={() => {
-                              setHoldingsMenuOpenId(null);
-                              handleDuplicate(a);
-                            }}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
-                          >
-                            <Copy size={14} /> Duplicate
-                          </button>
-                          <button
-                            onClick={() => {
-                              setHoldingsMenuOpenId(null);
-                              handleMove(a.id, 'up');
-                            }}
-                            disabled={idx === 0}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent"
-                          >
-                            <ChevronUp size={14} /> Move up
-                          </button>
-                          <button
-                            onClick={() => {
-                              setHoldingsMenuOpenId(null);
-                              handleMove(a.id, 'down');
-                            }}
-                            disabled={idx === displayRows.length - 1}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent"
-                          >
-                            <ChevronDown size={14} /> Move down
-                          </button>
-                          <button
-                            onClick={() => {
-                              setHoldingsMenuOpenId(null);
-                              setConfirmDeleteAsset(a);
-                            }}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
-                          >
-                            <Trash2 size={14} /> Delete
-                          </button>
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -1784,7 +1859,7 @@ function AssetsTab({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {displayRows.map((r, idx) => {
+                {displayRows.map((r) => {
                   const a = r.asset;
                   const invested = r.invested ?? r.value;
                   const qty = a.quantity ?? 0;
@@ -1810,7 +1885,7 @@ function AssetsTab({
                       }`}
                       onClick={() => {
                         if (suppressRowClickRef.current) return;
-                        setViewingAsset(a);
+                        openHolding(a);
                       }}
                       onPointerDown={(e) => handleRowPointerDown(e, a.id)}
                       onPointerMove={(e) => handleRowPointerMove(e, a.id)}
@@ -1896,10 +1971,7 @@ function AssetsTab({
                         )}
                       </td>
                       <td className="px-2 py-4 relative">
-                        <div
-                          className="opacity-0 group-hover:opacity-100 focus-within:opacity-100"
-                          ref={holdingsMenuOpenId === a.id ? holdingsMenuRef : undefined}
-                        >
+                        <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1909,62 +1981,6 @@ function AssetsTab({
                           >
                             <MoreVertical size={16} />
                           </button>
-                          {holdingsMenuOpenId === a.id && (
-                            <div
-                              onClick={(e) => e.stopPropagation()}
-                              className={`absolute right-2 z-[60] w-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1 ${
-                                holdingsMenuUpward ? 'bottom-11' : 'top-11'
-                              }`}
-                            >
-                              <button
-                                onClick={() => {
-                                  setHoldingsMenuOpenId(null);
-                                  openEdit(a);
-                                }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
-                              >
-                                <Pencil size={14} /> Edit
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setHoldingsMenuOpenId(null);
-                                  handleDuplicate(a);
-                                }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
-                              >
-                                <Copy size={14} /> Duplicate
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setHoldingsMenuOpenId(null);
-                                  handleMove(a.id, 'up');
-                                }}
-                                disabled={idx === 0}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent"
-                              >
-                                <ChevronUp size={14} /> Move up
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setHoldingsMenuOpenId(null);
-                                  handleMove(a.id, 'down');
-                                }}
-                                disabled={idx === displayRows.length - 1}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent"
-                              >
-                                <ChevronDown size={14} /> Move down
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setHoldingsMenuOpenId(null);
-                                  setConfirmDeleteAsset(a);
-                                }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
-                              >
-                                <Trash2 size={14} /> Delete
-                              </button>
-                            </div>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -1976,7 +1992,88 @@ function AssetsTab({
         </div>
       )}
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Edit Asset" widthClassName="max-w-xl">
+      {/* The open row menu (Edit/Duplicate/Move/Delete), portaled straight
+          onto <body> and positioned with fixed viewport coordinates
+          captured in openHoldingsMenu. A plain absolutely-positioned child
+          of the row would get clipped by the desktop table's
+          `overflow-x-auto` wrapper — necessary for horizontal scrolling on
+          narrow windows — which cut the menu off (only "Move down"/
+          "Delete" visible) for holdings near the top or bottom of the
+          table. Portaling escapes that clipping entirely. */}
+      {holdingsMenuOpenId && holdingsMenuAnchor && (() => {
+        const menuRowIdx = displayRows.findIndex((r) => r.asset.id === holdingsMenuOpenId);
+        if (menuRowIdx === -1) return null;
+        const menuAsset = displayRows[menuRowIdx].asset;
+        const closeMenu = () => {
+          setHoldingsMenuOpenId(null);
+          setHoldingsMenuAnchor(null);
+        };
+        return createPortal(
+          <div
+            ref={holdingsMenuRef}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'fixed',
+              right: holdingsMenuAnchor.right,
+              ...(holdingsMenuUpward
+                ? { bottom: window.innerHeight - holdingsMenuAnchor.top + 4 }
+                : { top: holdingsMenuAnchor.bottom + 4 }),
+            }}
+            className="z-[70] w-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1"
+          >
+            <button
+              onClick={() => {
+                closeMenu();
+                openEdit(menuAsset);
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+            >
+              <Pencil size={14} /> Edit
+            </button>
+            <button
+              onClick={() => {
+                closeMenu();
+                handleDuplicate(menuAsset);
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+            >
+              <Copy size={14} /> Duplicate
+            </button>
+            <button
+              onClick={() => {
+                closeMenu();
+                handleMove(menuAsset.id, 'up');
+              }}
+              disabled={menuRowIdx === 0}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              <ChevronUp size={14} /> Move up
+            </button>
+            <button
+              onClick={() => {
+                closeMenu();
+                handleMove(menuAsset.id, 'down');
+              }}
+              disabled={menuRowIdx === displayRows.length - 1}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              <ChevronDown size={14} /> Move down
+            </button>
+            <button
+              onClick={() => {
+                closeMenu();
+                setConfirmDeleteAsset(menuAsset);
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+            >
+              <Trash2 size={14} /> Delete
+            </button>
+          </div>,
+          document.body
+        );
+      })()}
+
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Edit Asset" contentPanel>
         {editing && <AssetDetailsForm initial={editing} onSave={handleSave} />}
       </Modal>
 
@@ -2178,23 +2275,6 @@ function computeHoldingXirr(lots: HoldingLot[], currentValue: number): number | 
     rate = next;
   }
   return Number.isFinite(rate) ? rate * 100 : null;
-}
-
-/** Deterministic single-letter tile shown next to the holding name on the
- *  detail page — colored by asset class, same palette used for its
- *  category badge elsewhere, so it reads as "this kind of holding"
- *  without depending on a fetched broker/exchange logo. */
-function HoldingTile({ asset }: { asset: Asset }) {
-  const letter = (asset.symbol || asset.name || '?').trim().charAt(0).toUpperCase();
-  const color = ASSET_CLASS_COLORS[asset.assetClass] ?? '#64748b';
-  return (
-    <div
-      className="h-11 w-11 shrink-0 rounded-xl flex items-center justify-center text-white font-bold text-base"
-      style={{ backgroundColor: color }}
-    >
-      {letter || '?'}
-    </div>
-  );
 }
 
 /** Pause/Resume + Buy More action bar shown on a Mutual Fund SIP's detail
@@ -2539,12 +2619,17 @@ function HoldingDetailView({
   onEdit,
   onDelete,
   onQuickUpdate,
+  accounts,
+  onLogTransaction,
 }: {
   asset: Asset;
   onBack: () => void;
   onEdit: (a: Asset) => void;
   onDelete: (id: string) => void;
   onQuickUpdate: (a: Asset) => void | Promise<void>;
+  /** Bank/cash/wallet accounts (assetClass 'cash') a Sell or Dividend can be credited into. */
+  accounts: Asset[];
+  onLogTransaction: (t: Transaction) => void | Promise<void>;
 }) {
   const livePrices = useLivePricesStore((s) => s.prices);
   const sipValues = useLivePricesStore((s) => s.sipValues);
@@ -2553,6 +2638,12 @@ function HoldingDetailView({
   const privacyMode = useUiStore((s) => s.privacyMode);
   const dayChangeResetActive = useDayChangeResetWindow();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  // "+" menu (Buy / Sell / Dividend) shown in the header, before the Edit
+  // button. `txMode` drives which form the modal below shows; the menu
+  // itself just picks it and closes.
+  const [txMenuOpen, setTxMenuOpen] = useState(false);
+  const [txMode, setTxMode] = useState<'buy' | 'sell' | 'dividend' | null>(null);
+  const txMenuRef = useOutsideClose(() => setTxMenuOpen(false));
   const BREAKDOWN_MODES: { key: 'avg' | 'current' | 'returns'; label: string }[] = [
     { key: 'avg', label: 'Avg price (Invested)' },
     { key: 'current', label: 'Current price (Current value)' },
@@ -2600,6 +2691,47 @@ function HoldingDetailView({
           <ArrowLeft size={18} />
         </button>
         <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex-1">Holding details</h2>
+        <div className="relative shrink-0" ref={txMenuOpen ? txMenuRef : undefined}>
+          <button
+            onClick={() => setTxMenuOpen((v) => !v)}
+            title="Buy / Sell / Dividend"
+            className="h-9 w-9 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300"
+          >
+            <Plus size={16} />
+          </button>
+          {txMenuOpen && (
+            <div className="absolute right-0 top-11 z-[60] w-44 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1">
+              <button
+                onClick={() => {
+                  setTxMenuOpen(false);
+                  setTxMode('buy');
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+              >
+                <TrendingUp size={14} className="text-emerald-600" /> Buy
+              </button>
+              <button
+                onClick={() => {
+                  setTxMenuOpen(false);
+                  setTxMode('sell');
+                }}
+                disabled={(asset.quantity ?? 0) <= 0}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent"
+              >
+                <TrendingDown size={14} className="text-red-500" /> Sell
+              </button>
+              <button
+                onClick={() => {
+                  setTxMenuOpen(false);
+                  setTxMode('dividend');
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+              >
+                <Banknote size={14} className="text-brand-600" /> Dividend
+              </button>
+            </div>
+          )}
+        </div>
         <button
           onClick={() => onEdit(asset)}
           title="Edit"
@@ -2615,6 +2747,15 @@ function HoldingDetailView({
           <Trash2 size={16} />
         </button>
       </div>
+
+      <BuySellDividendModal
+        mode={txMode}
+        asset={asset}
+        accounts={accounts}
+        onClose={() => setTxMode(null)}
+        onQuickUpdate={onQuickUpdate}
+        onLogTransaction={onLogTransaction}
+      />
 
       <Modal open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)} title="Delete this holding?">
         <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
@@ -2639,12 +2780,11 @@ function HoldingDetailView({
         </div>
       </Modal>
 
-      {/* Symbol row — icon tile + name + last price/day-change, styled
-          after a brokerage app's holding header. */}
+      {/* Symbol row — name + last price/day-change, styled after a
+          brokerage app's holding header. */}
       <div className="flex items-center gap-3 px-1">
-        <HoldingTile asset={asset} />
         <div className="min-w-0 flex-1">
-          <p className="font-semibold text-slate-900 dark:text-white truncate uppercase">
+          <p className="text-lg sm:text-xl font-semibold text-slate-900 dark:text-white truncate uppercase">
             {asset.symbol || asset.name}
           </p>
           <p className="text-sm mt-0.5">
@@ -2664,13 +2804,13 @@ function HoldingDetailView({
         <div className="flex items-start justify-between">
           <div>
             <p className="text-xs text-slate-600">Current</p>
-            <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">
+            <p className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mt-0.5">
               {maskPreciseAmount(value, asset.currency, privacyMode)}
             </p>
           </div>
           <div className="text-right">
             <p className="text-xs text-slate-600">Invested</p>
-            <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">
+            <p className="text-lg font-normal text-slate-900 dark:text-white -mt-0.5">
               {maskPreciseAmount(invested ?? value, asset.currency, privacyMode)}
             </p>
           </div>
@@ -2871,6 +3011,342 @@ function HoldingDetailView({
   );
 }
 
+/**
+ * Buy / Sell / Dividend action for a Holding-style asset (equities, funds,
+ * crypto with shareLots, or weight-tracked metals with purchaseLots).
+ *
+ * - Buy adds a new lot and recomputes quantity/avg cost/invested value from
+ *   all lots — same math the full Edit form uses when lots change.
+ * - Sell removes/reduces lots FIFO (oldest first) by the quantity sold,
+ *   recomputes the holding's totals the same way, and credits the sale
+ *   proceeds (qty × sell price) to whichever bank/cash/wallet account the
+ *   person picks — those accounts are just assets with assetClass 'cash',
+ *   so crediting them is a normal balance (`value`) update.
+ * - Dividend doesn't touch the holding's quantity or cost basis at all —
+ *   it just credits the chosen account with the dividend amount.
+ * Both Sell and Dividend also log a Money > Transactions "income" entry so
+ * there's a record of where the credited amount came from.
+ */
+function BuySellDividendModal({
+  mode,
+  asset,
+  accounts,
+  onClose,
+  onQuickUpdate,
+  onLogTransaction,
+}: {
+  mode: 'buy' | 'sell' | 'dividend' | null;
+  asset: Asset;
+  accounts: Asset[];
+  onClose: () => void;
+  onQuickUpdate: (a: Asset) => void | Promise<void>;
+  onLogTransaction: (t: Transaction) => void | Promise<void>;
+}) {
+  const open = mode !== null;
+  useModalBackClose(open, onClose);
+
+  const isWeightTracked = WEIGHT_TRACKED_CLASSES.has(asset.assetClass);
+  const unitLabel = isWeightTracked ? 'grams' : 'units';
+  const currentQty = asset.quantity ?? 0;
+
+  const [qty, setQty] = useState('');
+  const [price, setPrice] = useState('');
+  const [amount, setAmount] = useState('');
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [accountId, setAccountId] = useState(accounts[0]?.id ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  // Fresh form every time a new mode is picked from the + menu.
+  useEffect(() => {
+    if (open) {
+      setQty('');
+      setPrice('');
+      setAmount('');
+      setDate(new Date().toISOString().slice(0, 10));
+      setAccountId(accounts[0]?.id ?? '');
+      setError('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, mode]);
+
+  const close = () => {
+    if (saving) return;
+    onClose();
+  };
+
+  /** Recomputes quantity/avgCost/investedValue the same way the Edit form
+   *  does — weighted average cost = total paid ÷ total units/grams. */
+  const totalsFromLots = (lots: { qty: number; price: number }[]) => {
+    const totalQty = Math.round(lots.reduce((sum, l) => sum + l.qty, 0) * 10000) / 10000;
+    const totalInvested = lots.reduce((sum, l) => sum + l.qty * l.price, 0);
+    const avgCost = totalQty > 0 ? totalInvested / totalQty : 0;
+    return { totalQty, totalInvested, avgCost };
+  };
+
+  const submitBuy = async () => {
+    const qtyNum = Number(qty);
+    const priceNum = Number(price);
+    if (!qtyNum || qtyNum <= 0 || !priceNum || priceNum <= 0) {
+      setError('Enter a valid quantity and price.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      if (isWeightTracked) {
+        const newLot = { id: crypto.randomUUID(), date, grams: qtyNum, amount: qtyNum * priceNum };
+        const lots = [...(asset.purchaseLots ?? []), newLot];
+        const { totalQty, totalInvested } = totalsFromLots(lots.map((l) => ({ qty: l.grams, price: l.amount / l.grams })));
+        await onQuickUpdate({
+          ...asset,
+          purchaseLots: lots,
+          quantity: totalQty,
+          avgCost: totalQty > 0 ? totalInvested / totalQty : 0,
+          investedValue: totalInvested,
+          updatedAt: Date.now(),
+        });
+      } else {
+        const newLot = { id: crypto.randomUUID(), date, quantity: qtyNum, price: priceNum };
+        const lots = [...(asset.shareLots ?? []), newLot];
+        const { totalQty, totalInvested, avgCost } = totalsFromLots(lots.map((l) => ({ qty: l.quantity, price: l.price })));
+        await onQuickUpdate({
+          ...asset,
+          shareLots: lots,
+          quantity: totalQty,
+          avgCost,
+          investedValue: totalInvested,
+          updatedAt: Date.now(),
+        });
+      }
+      onClose();
+    } catch (err) {
+      console.error('Buy failed', err);
+      setError('Could not save this purchase. Please check your connection and try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const submitSell = async () => {
+    const qtyNum = Number(qty);
+    const priceNum = Number(price);
+    const account = accounts.find((a) => a.id === accountId);
+    if (!qtyNum || qtyNum <= 0 || !priceNum || priceNum <= 0) {
+      setError('Enter a valid quantity and price.');
+      return;
+    }
+    if (qtyNum > currentQty + 0.0001) {
+      setError(`You only hold ${currentQty} ${unitLabel}.`);
+      return;
+    }
+    if (!account) {
+      setError('Pick an account to credit the sale proceeds to.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      // Reduce FIFO: oldest lots first, by date (undated lots keep their
+      // existing array order, oldest-added first).
+      let remaining = qtyNum;
+      const proceeds = qtyNum * priceNum;
+
+      if (isWeightTracked) {
+        const ordered = [...(asset.purchaseLots ?? [])].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
+        const kept: typeof ordered = [];
+        for (const lot of ordered) {
+          if (remaining <= 0) {
+            kept.push(lot);
+            continue;
+          }
+          if (lot.grams <= remaining + 0.0001) {
+            remaining -= lot.grams;
+          } else {
+            const newGrams = lot.grams - remaining;
+            kept.push({ ...lot, grams: newGrams, amount: (lot.amount / lot.grams) * newGrams });
+            remaining = 0;
+          }
+        }
+        const { totalQty, totalInvested } = totalsFromLots(kept.map((l) => ({ qty: l.grams, price: l.amount / l.grams })));
+        await onQuickUpdate({
+          ...asset,
+          purchaseLots: kept,
+          quantity: totalQty,
+          avgCost: totalQty > 0 ? totalInvested / totalQty : 0,
+          investedValue: totalInvested,
+          updatedAt: Date.now(),
+        });
+      } else {
+        const ordered = [...(asset.shareLots ?? [])].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
+        const kept: typeof ordered = [];
+        for (const lot of ordered) {
+          if (remaining <= 0) {
+            kept.push(lot);
+            continue;
+          }
+          if (lot.quantity <= remaining + 0.0001) {
+            remaining -= lot.quantity;
+          } else {
+            kept.push({ ...lot, quantity: lot.quantity - remaining });
+            remaining = 0;
+          }
+        }
+        const { totalQty, totalInvested, avgCost } = totalsFromLots(kept.map((l) => ({ qty: l.quantity, price: l.price })));
+        await onQuickUpdate({
+          ...asset,
+          shareLots: kept,
+          quantity: totalQty,
+          avgCost,
+          investedValue: totalInvested,
+          updatedAt: Date.now(),
+        });
+      }
+
+      await onQuickUpdate({ ...account, value: (account.value ?? 0) + proceeds, updatedAt: Date.now() });
+      await onLogTransaction({
+        id: crypto.randomUUID(),
+        type: 'income',
+        category: 'Investments',
+        amount: proceeds,
+        currency: asset.currency,
+        date,
+        note: `Sold ${qtyNum} ${unitLabel} of ${asset.name}`,
+        profileId: asset.profileId,
+      });
+      onClose();
+    } catch (err) {
+      console.error('Sell failed', err);
+      setError('Could not complete this sale. Please check your connection and try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const submitDividend = async () => {
+    const amountNum = Number(amount);
+    const account = accounts.find((a) => a.id === accountId);
+    if (!amountNum || amountNum <= 0) {
+      setError('Enter a valid amount.');
+      return;
+    }
+    if (!account) {
+      setError('Pick an account to credit the dividend to.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      await onQuickUpdate({ ...account, value: (account.value ?? 0) + amountNum, updatedAt: Date.now() });
+      await onLogTransaction({
+        id: crypto.randomUUID(),
+        type: 'income',
+        category: 'Dividend',
+        amount: amountNum,
+        currency: asset.currency,
+        date,
+        note: `Dividend from ${asset.name}`,
+        profileId: asset.profileId,
+      });
+      onClose();
+    } catch (err) {
+      console.error('Dividend failed', err);
+      setError('Could not save this dividend. Please check your connection and try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputClass =
+    'mt-1 w-full border border-slate-200 dark:border-slate-700 bg-transparent rounded-lg px-3 py-2.5 text-sm';
+  const title = mode === 'buy' ? 'Buy' : mode === 'sell' ? 'Sell' : 'Dividend';
+
+  return (
+    <Modal open={open} onClose={close} title={title}>
+      <div className="space-y-4">
+        {mode === 'buy' && (
+          <>
+            <div>
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Quantity ({unitLabel})</label>
+              <input type="number" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="e.g. 10" className={inputClass} autoFocus />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Price per {isWeightTracked ? 'gram' : 'unit'}</label>
+              <input type="number" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="e.g. 150" className={inputClass} />
+            </div>
+          </>
+        )}
+
+        {mode === 'sell' && (
+          <>
+            <div>
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                Quantity to sell ({unitLabel}) — you hold {currentQty}
+              </label>
+              <input type="number" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="e.g. 5" className={inputClass} autoFocus />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Sell price per {isWeightTracked ? 'gram' : 'unit'}</label>
+              <input type="number" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="e.g. 160" className={inputClass} />
+            </div>
+          </>
+        )}
+
+        {mode === 'dividend' && (
+          <div>
+            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Dividend amount</label>
+            <input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 250" className={inputClass} autoFocus />
+          </div>
+        )}
+
+        {(mode === 'sell' || mode === 'dividend') && (
+          <div>
+            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Credit to account</label>
+            {accounts.length === 0 ? (
+              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                No bank/cash accounts yet — add one under Money → Accounts first.
+              </p>
+            ) : (
+              <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className={inputClass}>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
+
+        <div>
+          <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Date</label>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
+        </div>
+
+        {error && <p className="text-xs text-red-600">{error}</p>}
+
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={close}
+            className="flex-1 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={mode === 'buy' ? submitBuy : mode === 'sell' ? submitSell : submitDividend}
+            className="flex-1 bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : title}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function AssetDetailPage({
   asset,
   onBack,
@@ -2939,7 +3415,7 @@ function AssetDetailPage({
           <ArrowLeft size={18} />
         </button>
         <div className="flex-1 min-w-0">
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 uppercase truncate">{asset.name}</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 uppercase truncate">{asset.name}</h2>
           <p className="text-slate-600 text-sm">{category?.label ?? ASSET_CLASS_LABELS[asset.assetClass]}</p>
         </div>
         <button
@@ -2993,7 +3469,7 @@ function AssetDetailPage({
             </p>
           </div>
         </div>
-        <p className="text-3xl font-bold text-slate-900 mt-3">
+        <p className="text-4xl sm:text-5xl font-bold text-slate-900 mt-3">
           {valuePending ? (
             <span className="inline-block h-8 w-32 rounded-lg bg-slate-100 animate-pulse align-middle" />
           ) : (
