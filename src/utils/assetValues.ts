@@ -222,8 +222,62 @@ export interface SipProgress {
   totalInvested: number;
   /** Number of installments counted as elapsed so far. */
   installmentsElapsed: number;
-  /** ISO date (yyyy-mm-dd) of the next upcoming installment, if any. */
+  /** ISO date (yyyy-mm-dd) of the next upcoming installment, if any. Undefined while paused. */
   nextInstallmentDate: string | undefined;
+  /** True while the SIP is currently paused (asset.sipPausedAt is set). */
+  isPaused: boolean;
+}
+
+/** A [start, end] window (ms epoch, inclusive) during which a SIP was paused
+ *  and no installments should be counted. */
+interface PauseRange {
+  start: number;
+  end: number;
+}
+
+/** Builds every paused window for a SIP: closed cycles from
+ *  `sipPauseHistory`, plus the currently-open one (if any) from
+ *  `sipPausedAt` through `asOf`. */
+function buildSipPauseRanges(
+  sipPauseHistory: { pausedAt: string; resumedAt: string }[] | undefined,
+  sipPausedAt: string | undefined,
+  asOf: Date
+): PauseRange[] {
+  const ranges: PauseRange[] = (sipPauseHistory ?? [])
+    .filter((h) => h.pausedAt && h.resumedAt)
+    .map((h) => ({ start: new Date(h.pausedAt).getTime(), end: new Date(h.resumedAt).getTime() }));
+  if (sipPausedAt) {
+    ranges.push({ start: new Date(sipPausedAt).getTime(), end: asOf.getTime() });
+  }
+  return ranges;
+}
+
+function isWithinPauseRanges(isoDate: string, ranges: PauseRange[]): boolean {
+  const t = new Date(isoDate).getTime();
+  return ranges.some((r) => t >= r.start && t <= r.end);
+}
+
+/**
+ * The installment amount that was actually in effect on `isoDate`, given a
+ * history of amount changes. Falls back to `currentAmount` when the SIP's
+ * amount has never changed (no schedule), and to the earliest recorded
+ * amount for dates before the first recorded change.
+ */
+function effectiveSipAmount(
+  sipAmountSchedule: { amount: number; effectiveFrom: string }[] | undefined,
+  currentAmount: number,
+  isoDate: string
+): number {
+  if (!sipAmountSchedule || sipAmountSchedule.length === 0) return currentAmount;
+  const t = new Date(isoDate).getTime();
+  const sorted = [...sipAmountSchedule].sort(
+    (a, b) => new Date(a.effectiveFrom).getTime() - new Date(b.effectiveFrom).getTime()
+  );
+  let best = sorted[0];
+  for (const entry of sorted) {
+    if (new Date(entry.effectiveFrom).getTime() <= t) best = entry;
+  }
+  return best.amount;
 }
 
 /** Returns a date shifted by `months`, clamped to the last day of the
@@ -246,15 +300,32 @@ export function shiftMonths(year: number, month: number, day: number, months: nu
  */
 export function computeSipProgress(asset: Asset, asOf: Date = new Date()): SipProgress {
   const initial = asset.investedValue ?? 0;
-  const { startDate, sipAmount, sipFrequency = 'monthly', sipDay } = asset;
+  const {
+    startDate,
+    sipAmount,
+    sipFrequency = 'monthly',
+    sipDay,
+    sipPausedAt,
+    sipPauseHistory,
+    sipAmountSchedule,
+    sipTopUps,
+  } = asset;
+  const isPaused = !!sipPausedAt;
+  const topUpsTotal = (sipTopUps ?? []).reduce((sum, t) => sum + (t.amount || 0), 0);
 
   if (!startDate || !sipAmount || sipAmount <= 0) {
-    return { totalInvested: initial, installmentsElapsed: 0, nextInstallmentDate: undefined };
+    return {
+      totalInvested: initial + topUpsTotal,
+      installmentsElapsed: 0,
+      nextInstallmentDate: undefined,
+      isPaused,
+    };
   }
 
   const start = new Date(startDate);
   const day = sipDay && sipDay >= 1 && sipDay <= 31 ? sipDay : start.getDate();
   const step = sipFrequency === 'quarterly' ? 3 : 1;
+  const pauseRanges = buildSipPauseRanges(sipPauseHistory, sipPausedAt, asOf);
 
   let candidate = shiftMonths(start.getFullYear(), start.getMonth(), day, 0);
   if (candidate < start) {
@@ -262,14 +333,19 @@ export function computeSipProgress(asset: Asset, asOf: Date = new Date()): SipPr
   }
 
   let installmentsElapsed = 0;
+  let installmentsTotal = 0;
   while (candidate.getTime() <= asOf.getTime()) {
-    installmentsElapsed++;
+    const iso = candidate.toISOString().slice(0, 10);
+    if (!isWithinPauseRanges(iso, pauseRanges)) {
+      installmentsElapsed++;
+      installmentsTotal += effectiveSipAmount(sipAmountSchedule, sipAmount, iso);
+    }
     candidate = shiftMonths(candidate.getFullYear(), candidate.getMonth(), day, step);
   }
 
-  const nextInstallmentDate = candidate.toISOString().slice(0, 10);
-  const totalInvested = initial + installmentsElapsed * sipAmount;
-  return { totalInvested, installmentsElapsed, nextInstallmentDate };
+  const nextInstallmentDate = isPaused ? undefined : candidate.toISOString().slice(0, 10);
+  const totalInvested = initial + installmentsTotal + topUpsTotal;
+  return { totalInvested, installmentsElapsed, nextInstallmentDate, isPaused };
 }
 
 export interface SipInstallmentPoint {
@@ -287,10 +363,31 @@ export interface SipInstallmentPoint {
  * value can be derived automatically instead of typed in by hand.
  */
 export function listSipInstallments(
-  asset: Pick<Asset, 'startDate' | 'sipAmount' | 'sipFrequency' | 'sipDay' | 'investedValue'>,
+  asset: Pick<
+    Asset,
+    | 'startDate'
+    | 'sipAmount'
+    | 'sipFrequency'
+    | 'sipDay'
+    | 'investedValue'
+    | 'sipPausedAt'
+    | 'sipPauseHistory'
+    | 'sipAmountSchedule'
+    | 'sipTopUps'
+  >,
   asOf: Date = new Date()
 ): SipInstallmentPoint[] {
-  const { startDate, sipAmount, sipFrequency = 'monthly', sipDay, investedValue } = asset;
+  const {
+    startDate,
+    sipAmount,
+    sipFrequency = 'monthly',
+    sipDay,
+    investedValue,
+    sipPausedAt,
+    sipPauseHistory,
+    sipAmountSchedule,
+    sipTopUps,
+  } = asset;
   if (!startDate || !sipAmount || sipAmount <= 0) return [];
 
   const points: SipInstallmentPoint[] = [];
@@ -301,6 +398,7 @@ export function listSipInstallments(
   const start = new Date(startDate);
   const day = sipDay && sipDay >= 1 && sipDay <= 31 ? sipDay : start.getDate();
   const step = sipFrequency === 'quarterly' ? 3 : 1;
+  const pauseRanges = buildSipPauseRanges(sipPauseHistory, sipPausedAt, asOf);
 
   let candidate = shiftMonths(start.getFullYear(), start.getMonth(), day, 0);
   if (candidate < start) {
@@ -308,9 +406,17 @@ export function listSipInstallments(
   }
 
   while (candidate.getTime() <= asOf.getTime()) {
-    points.push({ date: candidate.toISOString().slice(0, 10), amount: sipAmount });
+    const iso = candidate.toISOString().slice(0, 10);
+    if (!isWithinPauseRanges(iso, pauseRanges)) {
+      points.push({ date: iso, amount: effectiveSipAmount(sipAmountSchedule, sipAmount, iso) });
+    }
     candidate = shiftMonths(candidate.getFullYear(), candidate.getMonth(), day, step);
   }
 
+  for (const t of sipTopUps ?? []) {
+    if (t.date && t.amount > 0) points.push({ date: t.date, amount: t.amount });
+  }
+
+  points.sort((a, b) => a.date.localeCompare(b.date));
   return points;
 }

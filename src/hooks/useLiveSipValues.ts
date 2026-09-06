@@ -32,7 +32,7 @@ export function useLiveSipValues() {
   const lookupKey = sipAssets
     .map(
       (a) =>
-        `${a.symbol}|${a.sipAmount ?? ''}|${a.sipFrequency ?? ''}|${a.sipDay ?? ''}|${a.startDate ?? ''}|${a.investedValue ?? ''}`
+        `${a.symbol}|${a.sipAmount ?? ''}|${a.sipFrequency ?? ''}|${a.sipDay ?? ''}|${a.startDate ?? ''}|${a.investedValue ?? ''}|${a.sipPausedAt ?? ''}|${(a.sipPauseHistory ?? []).length}|${JSON.stringify(a.sipAmountSchedule ?? [])}|${JSON.stringify(a.sipTopUps ?? [])}`
     )
     .sort()
     .join(',');

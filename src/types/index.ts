@@ -117,6 +117,37 @@ export interface Asset {
   sipFrequency?: 'monthly' | 'quarterly';
   /** Day of the month (1-31) the SIP debits — used for the SIP asset class. */
   sipDay?: number;
+  /**
+   * ISO date (yyyy-mm-dd) the SIP was paused on, if it's currently paused.
+   * Undefined means the SIP is active. While set, no new installments are
+   * counted (see computeSipProgress/listSipInstallments) and "next due"
+   * is hidden — mirrors how a broker/AMC "Pause SIP" action behaves.
+   */
+  sipPausedAt?: string;
+  /**
+   * Closed pause/resume cycles for this SIP, oldest first. Each entry's
+   * [pausedAt, resumedAt) window is skipped when counting installments,
+   * so past pauses don't retroactively get billed once resumed. The
+   * currently-open pause (if any) lives in `sipPausedAt` instead, until
+   * it's resumed and moved into this history.
+   */
+  sipPauseHistory?: { pausedAt: string; resumedAt: string }[];
+  /**
+   * One-off top-up investments into this SIP, on top of the regular
+   * installment schedule — e.g. "Buy More" with a lumpsum. Each is priced
+   * at the NAV in effect on its own date, same as a regular installment.
+   */
+  sipTopUps?: { id: string; date: string; amount: number }[];
+  /**
+   * History of installment-amount changes over time, oldest first. Each
+   * entry means "the installment became `amount` starting from
+   * `effectiveFrom`" — so past installments keep being valued at the
+   * amount that was actually in effect on their date instead of the
+   * current `sipAmount` being applied retroactively. `sipAmount` above
+   * always mirrors the latest (current) amount. Undefined/empty means the
+   * SIP amount has never changed since it started.
+   */
+  sipAmountSchedule?: { amount: number; effectiveFrom: string }[];
   /** Manual display order in the Wealth grid (lower = shown first). Set by the move up/down buttons. */
   order?: number;
   /**

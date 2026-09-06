@@ -29,6 +29,9 @@ import {
   ArrowDown,
   ArrowUp,
   Info,
+  Pause,
+  Play,
+  PlusCircle,
 } from 'lucide-react';
 import {
   PieChart,
@@ -829,6 +832,23 @@ function AssetsTab({
     }
   };
 
+  // Lightweight save used by the SIP Pause/Resume/Buy More quick actions —
+  // unlike handleSave (used by the full edit form), this never touches
+  // modalOpen/editing state since it's triggered straight from the detail
+  // screen, not the edit modal.
+  const handleQuickUpdate = async (asset: Asset) => {
+    if (!user) {
+      alert('You need to be signed in to update this SIP. Please reload the app and try again.');
+      return;
+    }
+    try {
+      await upsertDoc(user, 'assets', asset);
+    } catch (err) {
+      console.error('Failed to update SIP', err);
+      alert('Could not save this change. Please check your connection and try again.');
+    }
+  };
+
   const handleDuplicate = async (a: Asset) => {
     console.log('[DEBUG] handleDuplicate called for', a.id, a.name, 'user:', user?.uid);
     if (!user) {
@@ -1244,6 +1264,7 @@ function AssetsTab({
         await handleDelete(id);
         setViewingAsset(null);
       },
+      onQuickUpdate: handleQuickUpdate,
     };
     return isHoldingStyle ? <HoldingDetailView {...detailProps} /> : <AssetDetailPage {...detailProps} />;
   }
@@ -2176,6 +2197,336 @@ function HoldingTile({ asset }: { asset: Asset }) {
   );
 }
 
+/** Pause/Resume + Buy More action bar shown on a Mutual Fund SIP's detail
+ *  screen (assetClass 'sip' only). Pausing stops future installments from
+ *  being counted (see computeSipProgress/listSipInstallments) until
+ *  resumed; Buy More either logs a one-time top-up investment or steps the
+ *  regular installment amount up (or down) from a chosen date. Both
+ *  persist straight through `onUpdate` — no need to open the full edit
+ *  form for either action. */
+function SipQuickActions({
+  asset,
+  onUpdate,
+}: {
+  asset: Asset;
+  onUpdate: (a: Asset) => void | Promise<void>;
+}) {
+  const [buyMoreOpen, setBuyMoreOpen] = useState(false);
+  const [pauseModalOpen, setPauseModalOpen] = useState(false);
+  const isPaused = !!asset.sipPausedAt;
+
+  return (
+    <>
+      <div className="flex items-center justify-between gap-3 flex-wrap bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
+        <div className="flex items-center gap-2">
+          <span className={`h-2 w-2 rounded-full ${isPaused ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+            {isPaused ? `Paused since ${asset.sipPausedAt}` : 'SIP active'}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPauseModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+          >
+            {isPaused ? <Play size={14} /> : <Pause size={14} />}
+            {isPaused ? 'Resume SIP' : 'Pause SIP'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setBuyMoreOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-brand-600 hover:bg-brand-700 text-white"
+          >
+            <PlusCircle size={14} />
+            Buy More
+          </button>
+        </div>
+      </div>
+
+      <SipPauseModal open={pauseModalOpen} asset={asset} onClose={() => setPauseModalOpen(false)} onUpdate={onUpdate} />
+      <SipBuyMoreModal open={buyMoreOpen} asset={asset} onClose={() => setBuyMoreOpen(false)} onUpdate={onUpdate} />
+    </>
+  );
+}
+
+/** Pause/Resume for a Mutual Fund SIP, with a date the person can backdate —
+ *  e.g. "I skipped August, it's September now" isn't "pause as of today",
+ *  it's "paused from 1 Aug". Missed months already in the past just need
+ *  the pause date set correctly; nothing is counted for any month from
+ *  that date up to today (or up to the resume date, once resumed). */
+function SipPauseModal({
+  open,
+  asset,
+  onClose,
+  onUpdate,
+}: {
+  open: boolean;
+  asset: Asset;
+  onClose: () => void;
+  onUpdate: (a: Asset) => void | Promise<void>;
+}) {
+  const isPaused = !!asset.sipPausedAt;
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const [date, setDate] = useState(todayIso);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) setDate(todayIso);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, isPaused]);
+
+  const close = () => {
+    if (saving) return;
+    onClose();
+  };
+
+  const confirm = async () => {
+    if (!date) return;
+    setSaving(true);
+    try {
+      if (isPaused) {
+        // Resume: close the currently-open pause out into history, using
+        // whatever resume date was picked (can be backdated too).
+        const history = [...(asset.sipPauseHistory ?? [])];
+        if (asset.sipPausedAt) history.push({ pausedAt: asset.sipPausedAt, resumedAt: date });
+        await onUpdate({ ...asset, sipPausedAt: undefined, sipPauseHistory: history, updatedAt: Date.now() });
+      } else {
+        await onUpdate({ ...asset, sipPausedAt: date, updatedAt: Date.now() });
+      }
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={close} title={isPaused ? 'Resume SIP' : 'Pause SIP'}>
+      <div className="space-y-4">
+        <p className="text-sm text-slate-600 dark:text-slate-400">
+          {isPaused
+            ? "Pick the date you started investing again — installments before this date stay skipped, and regular installments resume counting from here."
+            : "Pick the date this SIP stopped getting debited — you can backdate this to a month you already missed, e.g. the 1st of last month. No installments are counted from this date onward until you resume."}
+        </p>
+        <div>
+          <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+            {isPaused ? 'Resumed from' : 'Paused from'}
+          </label>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            max={todayIso}
+            min={isPaused ? asset.sipPausedAt : asset.startDate}
+            className="mt-1 w-full border border-slate-200 dark:border-slate-700 bg-transparent rounded-lg px-3 py-2.5 text-sm"
+            autoFocus
+          />
+        </div>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={close}
+            className="flex-1 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={saving || !date}
+            onClick={confirm}
+            className="flex-1 bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : isPaused ? 'Resume' : 'Pause'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/** "Buy More" flow for a Mutual Fund SIP — lets the person either record a
+ *  one-time top-up investment (priced, like a regular installment, at the
+ *  NAV in effect on the date they pick) or step the regular installment
+ *  amount up/down from a chosen date onward, without opening the full
+ *  edit form for either. */
+function SipBuyMoreModal({
+  open,
+  asset,
+  onClose,
+  onUpdate,
+}: {
+  open: boolean;
+  asset: Asset;
+  onClose: () => void;
+  onUpdate: (a: Asset) => void | Promise<void>;
+}) {
+  const [mode, setMode] = useState<'choose' | 'topup' | 'increase'>('choose');
+  const [amount, setAmount] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setMode('choose');
+      setAmount('');
+      setDate(new Date().toISOString().slice(0, 10));
+    }
+  }, [open]);
+
+  const close = () => {
+    if (saving) return;
+    onClose();
+  };
+
+  const submitTopUp = async () => {
+    const amt = Number(amount);
+    if (!amt || amt <= 0) return;
+    setSaving(true);
+    try {
+      const topUps = [...(asset.sipTopUps ?? []), { id: crypto.randomUUID(), date, amount: amt }];
+      await onUpdate({ ...asset, sipTopUps: topUps, updatedAt: Date.now() });
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const submitIncrease = async () => {
+    const newAmount = Number(amount);
+    if (!newAmount || newAmount <= 0 || !asset.sipAmount) return;
+    setSaving(true);
+    try {
+      const schedule = [...(asset.sipAmountSchedule ?? [])];
+      if (schedule.length === 0) {
+        schedule.push({ amount: asset.sipAmount, effectiveFrom: asset.startDate ?? date });
+      }
+      schedule.push({ amount: newAmount, effectiveFrom: date });
+      await onUpdate({ ...asset, sipAmount: newAmount, sipAmountSchedule: schedule, updatedAt: Date.now() });
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={close} title="Buy more">
+      {mode === 'choose' && (
+        <div className="space-y-3">
+          <button
+            type="button"
+            onClick={() => setMode('topup')}
+            className="w-full text-left p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50/50 dark:hover:bg-brand-900/20"
+          >
+            <p className="font-semibold text-slate-900 dark:text-white">One-time top-up</p>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
+              Invest an extra lumpsum now, on top of your regular installment.
+            </p>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('increase')}
+            className="w-full text-left p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50/50 dark:hover:bg-brand-900/20"
+          >
+            <p className="font-semibold text-slate-900 dark:text-white">Increase installment</p>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
+              Step up (or down) the regular {asset.sipFrequency === 'quarterly' ? 'quarterly' : 'monthly'} amount
+              from a chosen date onward.
+            </p>
+          </button>
+        </div>
+      )}
+
+      {mode === 'topup' && (
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Top-up amount</label>
+            <input
+              type="number"
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="e.g. 10000"
+              className="mt-1 w-full border border-slate-200 dark:border-slate-700 bg-transparent rounded-lg px-3 py-2.5 text-sm"
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Date</label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="mt-1 w-full border border-slate-200 dark:border-slate-700 bg-transparent rounded-lg px-3 py-2.5 text-sm"
+            />
+          </div>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setMode('choose')}
+              className="flex-1 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              disabled={saving || !amount || Number(amount) <= 0}
+              onClick={submitTopUp}
+              className="flex-1 bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-50"
+            >
+              {saving ? 'Saving…' : 'Invest'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {mode === 'increase' && (
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+              New {asset.sipFrequency === 'quarterly' ? 'quarterly' : 'monthly'} amount
+            </label>
+            <input
+              type="number"
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder={asset.sipAmount ? `Currently ${asset.sipAmount}` : 'e.g. 5000'}
+              className="mt-1 w-full border border-slate-200 dark:border-slate-700 bg-transparent rounded-lg px-3 py-2.5 text-sm"
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Effective from</label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="mt-1 w-full border border-slate-200 dark:border-slate-700 bg-transparent rounded-lg px-3 py-2.5 text-sm"
+            />
+          </div>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setMode('choose')}
+              className="flex-1 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              disabled={saving || !amount || Number(amount) <= 0}
+              onClick={submitIncrease}
+              className="flex-1 bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-50"
+            >
+              {saving ? 'Saving…' : 'Update'}
+            </button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 /** Broker-app-style "Holding details" screen — mirrors the layout of a
  *  Kite/Groww holding page (Current/Invested, Unrealised/1D returns, Mkt
  *  price/Avg price/Qty, XIRR, per-lot breakdown, order history, and a
@@ -2187,11 +2538,13 @@ function HoldingDetailView({
   onBack,
   onEdit,
   onDelete,
+  onQuickUpdate,
 }: {
   asset: Asset;
   onBack: () => void;
   onEdit: (a: Asset) => void;
   onDelete: (id: string) => void;
+  onQuickUpdate: (a: Asset) => void | Promise<void>;
 }) {
   const livePrices = useLivePricesStore((s) => s.prices);
   const sipValues = useLivePricesStore((s) => s.sipValues);
@@ -2410,6 +2763,8 @@ function HoldingDetailView({
         )}
       </div>
 
+      {asset.assetClass === 'sip' && <SipQuickActions asset={asset} onUpdate={onQuickUpdate} />}
+
       {orderedLots.length > 0 && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
           <div className="flex items-center justify-between mb-1">
@@ -2521,11 +2876,13 @@ function AssetDetailPage({
   onBack,
   onEdit,
   onDelete,
+  onQuickUpdate,
 }: {
   asset: Asset;
   onBack: () => void;
   onEdit: (a: Asset) => void;
   onDelete: (id: string) => void;
+  onQuickUpdate: (a: Asset) => void | Promise<void>;
 }) {
   const livePrices = useLivePricesStore((s) => s.prices);
   const sipValues = useLivePricesStore((s) => s.sipValues);
@@ -2562,6 +2919,7 @@ function AssetDetailPage({
   const category = ASSET_CLASS_TO_CATEGORY[asset.assetClass];
   const positive = (pnl ?? 0) >= 0;
   const recurringSip = asset.recurringInvestment ? computeSipProgress(asset) : undefined;
+  const mfSipProgress = asset.assetClass === 'sip' ? computeSipProgress(asset) : undefined;
 
   const notesLine = [
     extra.isin ? `ISIN: ${extra.isin}` : null,
@@ -2684,6 +3042,37 @@ function AssetDetailPage({
           {asset.maturityDate && <DetailField label="MATURITY DATE" value={asset.maturityDate} />}
         </div>
       </div>
+
+      {asset.assetClass === 'sip' && mfSipProgress && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-5">
+          <p className="text-xs font-semibold tracking-wide text-slate-600 mb-4">SIP DETAILS</p>
+          <div className="grid grid-cols-2 gap-y-4 gap-x-4">
+            {asset.sipAmount !== undefined && (
+              <DetailField
+                label="INSTALLMENT"
+                value={`${formatPreciseCurrency(asset.sipAmount, asset.currency)} / ${asset.sipFrequency === 'quarterly' ? 'quarter' : 'month'}`}
+              />
+            )}
+            {asset.startDate && <DetailField label="STARTED" value={asset.startDate} />}
+            <DetailField label="INSTALLMENTS SO FAR" value={`${mfSipProgress.installmentsElapsed}`} />
+            <DetailField label="STATUS" value={mfSipProgress.isPaused ? 'Paused' : 'Active'} />
+            {mfSipProgress.nextInstallmentDate && (
+              <DetailField label="NEXT DUE" value={mfSipProgress.nextInstallmentDate} />
+            )}
+            {(asset.sipTopUps?.length ?? 0) > 0 && (
+              <DetailField
+                label="TOP-UPS SO FAR"
+                value={formatPreciseCurrency(
+                  asset.sipTopUps!.reduce((s, t) => s + t.amount, 0),
+                  asset.currency
+                )}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {asset.assetClass === 'sip' && <SipQuickActions asset={asset} onUpdate={onQuickUpdate} />}
 
       {asset.recurringInvestment && recurringSip && (
         <div className="bg-white rounded-2xl border border-slate-200 p-5">
