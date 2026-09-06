@@ -1,6 +1,7 @@
 import type { Asset } from '../types';
 import { resolveLivePrice, resolveSipLiveValue, type SipLiveEntry } from '../store/livePricesStore';
 import { goldPricePerGram22k } from './goldPrice';
+import { DEPOSIT_LIKE_CLASSES } from './taxonomy';
 
 export interface ResolvedAssetValues {
   invested: number | undefined;
@@ -48,6 +49,14 @@ export function resolveAssetValues(
 
   const isLive = liveSip !== undefined || livePrice !== undefined || liveGoldPrice !== undefined;
 
+  // Deposit-like assets (FD, RD, PPF, bonds, etc.) don't have a live market
+  // price — but they do accrue interest daily, so their "Current Value"
+  // shouldn't sit frozen at the number typed in when the asset was added.
+  // Falls back to the stored asset.value/investedValue when there isn't
+  // enough info (missing rate/start date) so older entries keep working.
+  const isDepositLike = DEPOSIT_LIKE_CLASSES.has(asset.assetClass);
+  const depositProgress = isDepositLike ? computeDepositProgress(asset) : undefined;
+
   const currentPrice =
     liveSip?.latestNav ??
     livePrice ??
@@ -57,7 +66,8 @@ export function resolveAssetValues(
   const invested =
     asset.assetClass === 'sip' && asset.sipAmount && asset.sipAmount > 0 && asset.startDate
       ? computeSipProgress(asset).totalInvested
-      : (asset.investedValue ??
+      : (depositProgress?.invested ??
+        asset.investedValue ??
         (asset.quantity && asset.avgCost && asset.quantity > 0 && asset.avgCost > 0
           ? asset.quantity * asset.avgCost
           : undefined));
@@ -68,13 +78,91 @@ export function resolveAssetValues(
       ? asset.quantity * liveGoldPrice
       : livePrice !== undefined && asset.quantity && asset.quantity > 0
         ? asset.quantity * livePrice
-        : asset.value;
+        : (depositProgress?.currentValue ?? asset.value);
 
   const pnl = invested !== undefined ? value - invested : asset.pnl;
   const pnlPercent =
     pnl !== undefined && invested && invested > 0 ? (pnl / invested) * 100 : asset.pnlPercent;
 
   return { invested, currentPrice, value, pnl, pnlPercent, isLive };
+}
+
+export interface DepositProgress {
+  /** Today's accrued value — simple interest from each contribution's own
+   *  date up to today (or up to maturity, once matured). This is what
+   *  "Current Value" should show for a deposit, and it updates itself
+   *  every time the page loads/re-renders since `asOf` defaults to now —
+   *  no scheduled job needed, same self-refreshing pattern as SIP progress. */
+  currentValue: number | undefined;
+  /** Total principal contributed so far (lump sum for FD/PPF/bonds, or the
+   *  running sum of installments made so far for a Recurring Deposit). */
+  invested: number | undefined;
+  isMatured: boolean;
+}
+
+/**
+ * Computes a deposit-like asset's (FD, RD, PPF, bonds, etc.) accrued value
+ * as of today, so "Current Value" reflects interest earned so far instead
+ * of sitting frozen at whatever was typed in when the asset was added.
+ * Uses the same simple-interest method as `computeMaturityInfo`, just
+ * measured from the deposit date to `asOf` instead of to the full
+ * maturity date — so today's figure and the maturity projection stay
+ * consistent with each other, just at different points on the same line.
+ *
+ * Once `maturityDate` has passed, the value is held flat at the maturity
+ * amount rather than continuing to accrue forever, since a matured
+ * deposit left un-withdrawn typically stops earning the original rate.
+ *
+ * Recurring Deposits are handled installment-by-installment: each monthly
+ * installment starts earning interest from its own deposit date, so an
+ * RD's current value is the sum of every installment's own accrued value.
+ */
+export function computeDepositProgress(asset: Asset, asOf: Date = new Date()): DepositProgress {
+  const { startDate, maturityDate, interestRate, assetClass } = asset;
+  const maturityTime = maturityDate ? new Date(maturityDate).getTime() : undefined;
+  const isMatured = maturityTime !== undefined && maturityTime <= asOf.getTime();
+
+  if (!startDate || !interestRate || interestRate <= 0) {
+    return { currentValue: undefined, invested: undefined, isMatured };
+  }
+
+  const msPerYear = 365.25 * 24 * 60 * 60 * 1000;
+  const effectiveAsOf = isMatured ? new Date(maturityTime!) : asOf;
+
+  if (assetClass === 'recurring_deposit' && asset.monthlyInstallment && asset.monthlyInstallment > 0) {
+    const start = new Date(startDate);
+    let currentValue = 0;
+    let invested = 0;
+    let candidate = new Date(start);
+    while (
+      candidate.getTime() <= effectiveAsOf.getTime() &&
+      (maturityTime === undefined || candidate.getTime() <= maturityTime)
+    ) {
+      const yearsElapsed = (effectiveAsOf.getTime() - candidate.getTime()) / msPerYear;
+      invested += asset.monthlyInstallment;
+      currentValue +=
+        yearsElapsed > 0
+          ? asset.monthlyInstallment * (1 + (interestRate / 100) * yearsElapsed)
+          : asset.monthlyInstallment;
+      candidate = shiftMonths(candidate.getFullYear(), candidate.getMonth(), start.getDate(), 1);
+    }
+    return {
+      currentValue: invested > 0 ? currentValue : undefined,
+      invested: invested > 0 ? invested : undefined,
+      isMatured,
+    };
+  }
+
+  const principal = asset.investedValue ?? asset.value;
+  if (!principal || principal <= 0) {
+    return { currentValue: undefined, invested: undefined, isMatured };
+  }
+
+  const yearsElapsed = (effectiveAsOf.getTime() - new Date(startDate).getTime()) / msPerYear;
+  const currentValue =
+    yearsElapsed > 0 ? principal * (1 + (interestRate / 100) * yearsElapsed) : principal;
+
+  return { currentValue, invested: principal, isMatured };
 }
 
 export interface MaturityInfo {

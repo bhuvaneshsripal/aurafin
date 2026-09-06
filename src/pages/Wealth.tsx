@@ -758,7 +758,38 @@ function AssetsTab({
   useModalBackClose(!!viewingAsset, () => setViewingAsset(null));
   const togglePrivacy = useUiStore((s) => s.togglePrivacy);
   const [holdingsMenuOpenId, setHoldingsMenuOpenId] = useState<string | null>(null);
-  const holdingsMenuRef = useOutsideClose(() => setHoldingsMenuOpenId(null));
+  // Whether the currently-open row menu should render above its "..." button
+  // instead of below. Rows near the bottom of the screen (e.g. the last
+  // holding in the list) don't have enough space below them for the full
+  // 5-item menu, so it used to get clipped by the bottom nav / FAB and
+  // options like "Move down" / "Delete" were impossible to reach.
+  const [holdingsMenuUpward, setHoldingsMenuUpward] = useState(false);
+  const holdingsMenuRef = useOutsideClose(() => {
+    setHoldingsMenuOpenId(null);
+    // Reuse the same "swallow the very next row click" pattern already used
+    // after a drag-reorder: closing the menu shouldn't also let that same
+    // tap fall through and open whatever row happens to be underneath it.
+    // Unlike stopping propagation at the document level, this only affects
+    // the row's own "open this asset" click — it doesn't block a tap on a
+    // *different* row's "..." button, so switching straight from one row's
+    // menu to another still works in a single click.
+    suppressRowClickRef.current = true;
+    setTimeout(() => {
+      suppressRowClickRef.current = false;
+    }, 0);
+  });
+
+  // Decide, at the moment the menu is opened, whether there's enough room
+  // below the trigger button to fit the menu — and flip it upward if not.
+  const openHoldingsMenu = (id: string, triggerEl: HTMLElement) => {
+    setHoldingsMenuOpenId((current) => {
+      if (current === id) return null;
+      const MENU_HEIGHT_ESTIMATE = 200; // ~5 rows incl. padding
+      const rect = triggerEl.getBoundingClientRect();
+      setHoldingsMenuUpward(window.innerHeight - rect.bottom < MENU_HEIGHT_ESTIMATE);
+      return id;
+    });
+  };
 
   const [confirmDeleteAsset, setConfirmDeleteAsset] = useState<Asset | null>(null);
 
@@ -786,18 +817,36 @@ function AssetsTab({
   }, [location.key]);
 
   const handleDelete = async (id: string) => {
-    if (!user) return;
-    await removeDoc(user, 'assets', id);
+    if (!user) {
+      alert('You need to be signed in to delete an asset. Please reload the app and try again.');
+      return;
+    }
+    try {
+      await removeDoc(user, 'assets', id);
+    } catch (err) {
+      console.error('Failed to delete asset', err);
+      alert('Could not delete this asset. Please check your connection and try again.');
+    }
   };
 
   const handleDuplicate = async (a: Asset) => {
-    if (!user) return;
-    await upsertDoc(user, 'assets', {
-      ...a,
-      id: crypto.randomUUID(),
-      name: `${a.name} (Copy)`,
-      updatedAt: Date.now(),
-    });
+    console.log('[DEBUG] handleDuplicate called for', a.id, a.name, 'user:', user?.uid);
+    if (!user) {
+      alert('You need to be signed in to duplicate an asset. Please reload the app and try again.');
+      return;
+    }
+    try {
+      await upsertDoc(user, 'assets', {
+        ...a,
+        id: crypto.randomUUID(),
+        name: `${a.name} (Copy)`,
+        updatedAt: Date.now(),
+      });
+      console.log('[DEBUG] handleDuplicate finished writing to Firestore');
+    } catch (err) {
+      console.error('Failed to duplicate asset', err);
+      alert('Could not duplicate this asset. Please check your connection and try again.');
+    }
   };
 
   /** Manual reorder from the Holdings table — swaps this asset's position
@@ -1157,7 +1206,18 @@ function AssetsTab({
         .filter((r): r is (typeof sortedRows)[number] => !!r))
     : sortedRows;
 
+  // TEMP DEBUG — remove once we've confirmed where the chain breaks. Logs
+  // every time modalOpen actually changes, and prints a stack trace when it
+  // flips back to false so we can see exactly what caused it.
+  useEffect(() => {
+    console.log('[DEBUG] modalOpen changed to', modalOpen);
+    if (modalOpen === false) {
+      console.trace('[DEBUG] modalOpen became false — trace');
+    }
+  }, [modalOpen]);
+
   const openEdit = (a: Asset) => {
+    console.log('[DEBUG] openEdit called for', a.id, a.name);
     setEditing(a);
     setModalOpen(true);
   };
@@ -1541,7 +1601,10 @@ function AssetsTab({
                   key={a.id}
                   role="button"
                   tabIndex={0}
-                  onClick={() => setViewingAsset(a)}
+                  onClick={() => {
+                    if (suppressRowClickRef.current) return;
+                    setViewingAsset(a);
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') setViewingAsset(a);
                   }}
@@ -1615,7 +1678,7 @@ function AssetsTab({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setHoldingsMenuOpenId((id) => (id === a.id ? null : a.id));
+                          openHoldingsMenu(a.id, e.currentTarget);
                         }}
                         className="h-6 w-6 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600"
                       >
@@ -1624,7 +1687,9 @@ function AssetsTab({
                       {holdingsMenuOpenId === a.id && (
                         <div
                           onClick={(e) => e.stopPropagation()}
-                          className="absolute right-0 top-7 z-20 w-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1"
+                          className={`absolute right-0 z-[60] w-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1 ${
+                            holdingsMenuUpward ? 'bottom-7' : 'top-7'
+                          }`}
                         >
                           <button
                             onClick={() => {
@@ -1817,7 +1882,7 @@ function AssetsTab({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              setHoldingsMenuOpenId((id) => (id === a.id ? null : a.id));
+                              openHoldingsMenu(a.id, e.currentTarget);
                             }}
                             className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600"
                           >
@@ -1826,7 +1891,9 @@ function AssetsTab({
                           {holdingsMenuOpenId === a.id && (
                             <div
                               onClick={(e) => e.stopPropagation()}
-                              className="absolute right-2 top-11 z-20 w-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1"
+                              className={`absolute right-2 z-[60] w-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1 ${
+                                holdingsMenuUpward ? 'bottom-11' : 'top-11'
+                              }`}
                             >
                               <button
                                 onClick={() => {
@@ -4103,7 +4170,7 @@ function AssetDetailsForm({
                 placeholder="e.g. HDFC Bank"
               />
             </Field>
-            <Field label="Interest Rate (% p.a.)">
+            <Field label="Interest Rate (%)">
               <input
                 type="number"
                 step="any"
@@ -4643,7 +4710,13 @@ function AllocationChart({
 function Field({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-sm font-medium text-slate-500 mb-1 block">{label}</span>
+      {/* min-h + items-end reserves space for a 2-line label and bottom-aligns
+         the text, so when a field sits next to a shorter label in a grid row
+         (e.g. "Interest Rate (%)" beside "Bank / Institution"), both inputs
+         still start at the same y position instead of one sitting lower. */}
+      <span className="text-sm font-medium text-slate-500 mb-1 flex items-end min-h-[2.25rem] leading-snug">
+        {label}
+      </span>
       {children}
     </label>
   );
