@@ -9,7 +9,7 @@ import Modal from '../../components/Modal';
 import ConfirmDeleteModal from '../../components/ConfirmDeleteModal';
 import Amount from '../../components/Amount';
 import LoadingDots from '../../components/LoadingDots';
-import { CURRENCIES } from '../../utils/currency';
+import CurrencySelect from '../../components/CurrencySelect';
 import { COMMON_BANKS } from '../../utils/banks';
 import {
   ACCOUNT_TYPES,
@@ -91,7 +91,14 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
       isDefault: l.isDefaultAccount,
     }));
 
-  const accounts = [...assetAccounts, ...liabilityAccounts];
+  // Default account shows first — everyone glances at "my main account" most
+  // often, so it shouldn't be buried wherever it happens to fall in creation
+  // order. Array.prototype.sort is stable, so non-default rows keep their
+  // existing relative order (assets before liabilities, each in the order
+  // they were created) — only the default one moves to the front.
+  const accounts = [...assetAccounts, ...liabilityAccounts].sort(
+    (a, b) => Number(b.isDefault) - Number(a.isDefault)
+  );
   // With only one account there's nothing to distinguish it from, so treat
   // it as the default visually without needing anyone to have set the flag.
   const soloDefault = accounts.length === 1 ? accounts[0].id : null;
@@ -535,13 +542,7 @@ function AccountForm({
         </label>
         <label className="block">
           <span className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-1 block">Currency</span>
-          <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={inputClass}>
-            {CURRENCIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+          <CurrencySelect value={currency} onChange={setCurrency} className={inputClass} />
         </label>
       </div>
 

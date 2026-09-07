@@ -17,7 +17,7 @@ import { useGoldSettingsStore } from '../store/goldSettingsStore';
 import { useNotificationPreferencesStore, type NotificationChannelKey } from '../store/notificationPreferencesStore';
 import PinBoxInput from '../components/PinBoxInput';
 import { auth } from '../firebase/config';
-import { CURRENCIES } from '../utils/currency';
+import CurrencySelect from '../components/CurrencySelect';
 import { loadImageFromFile } from '../utils/imageResize';
 import AvatarCropModal from '../components/AvatarCropModal';
 import {
@@ -41,6 +41,7 @@ import type { HouseholdProfile } from '../types';
 import Modal from '../components/Modal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useUrlTab } from '../hooks/useUrlTab';
+import CustomSelect from '../components/CustomSelect';
 
 type Tab = 'account' | 'preferences' | 'profiles' | 'data';
 
@@ -494,17 +495,12 @@ function SetPasswordCard() {
                   <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1.5">
                     Security Question
                   </label>
-                  <select
+                  <CustomSelect
                     value={securityQuestion}
-                    onChange={(e) => setSecurityQuestion(e.target.value)}
+                    onChange={setSecurityQuestion}
                     className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  >
-                    {SECURITY_QUESTIONS.map((q) => (
-                      <option key={q} value={q}>
-                        {q}
-                      </option>
-                    ))}
-                  </select>
+                    options={SECURITY_QUESTIONS.map((q) => ({ value: q, label: q }))}
+                  />
                 </div>
                 <div>
                   <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1.5">Answer</label>
@@ -1078,17 +1074,11 @@ function PreferencesTab() {
           Your net worth and totals will be shown in this currency across the dashboard — with full
           multi-currency support for assets held in any currency.
         </p>
-        <select
+        <CurrencySelect
           value={baseCurrency}
-          onChange={(e) => setBaseCurrency(e.target.value)}
+          onChange={setBaseCurrency}
           className="w-full sm:w-64 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-        >
-          {CURRENCIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+        />
       </Card>
       <GoldRateCard />
       <DisplaySizeCard />

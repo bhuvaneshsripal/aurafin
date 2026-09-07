@@ -9,6 +9,7 @@ import {
   Landmark,
   Camera,
 } from 'lucide-react';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 export type AddMenuType =
   | 'expense'
@@ -41,6 +42,7 @@ type MenuItem = {
  */
 export default function AddMenuFab({ onSelect }: { onSelect: (type: AddMenuType) => void }) {
   const [open, setOpen] = useState(false);
+  useBodyScrollLock(open);
 
   const cashflowItems: MenuItem[] = [
     { key: 'expense', label: 'Expense', icon: ArrowDownCircle, iconClass: 'text-orange-500' },

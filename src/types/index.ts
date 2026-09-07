@@ -187,6 +187,37 @@ export interface Asset {
   /** Which household profile (see HouseholdProfile) this asset belongs to.
    *  Undefined means it isn't assigned to any specific member yet. */
   profileId?: string;
+  /** Free-form keywords for filtering/grouping (e.g. "long-term", "swing-trade"). */
+  tags?: string[];
+  /** Region this holding's exposure sits in — display/filter metadata only. */
+  geography?:
+    | 'INDIA'
+    | 'USA'
+    | 'CANADA'
+    | 'EUROPE'
+    | 'UK'
+    | 'SINGAPORE'
+    | 'JAPAN'
+    | 'CHINA'
+    | 'TAIWAN'
+    | 'KOREA'
+    | 'BRAZIL'
+    | 'GLOBAL'
+    | 'OTHER';
+  /** Free-form finer categorisation within the asset class (e.g. "Large Cap", "SGB"). */
+  subClass?: string;
+  /** When true, this holding is skipped when computing Allocation % (see
+   *  AllocationTab) — it still counts toward net worth everywhere else. */
+  excludeFromAllocation?: boolean;
+  /** Marks this holding as money earmarked for emergencies. Saved and
+   *  shown on the asset, but NOT YET wired into the Essentials
+   *  emergency-fund runway calculation, which currently sums a fixed set
+   *  of "liquid" asset classes instead (see computeLiquidAssets in
+   *  utils/financialHealth.ts) — switching that to read this flag instead
+   *  is a real behavior change (opt-in per-asset vs. automatic by class)
+   *  that needs its own decision, not a silent side effect of adding this
+   *  field. */
+  emergencyFund?: boolean;
 }
 
 export interface Liability {

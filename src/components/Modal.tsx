@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 interface ModalProps {
   open: boolean;
@@ -22,6 +23,11 @@ interface ModalProps {
    *  forms (e.g. editing an asset) that want the room of a full page
    *  without hiding navigation. Ignored when `fullScreen` is set. */
   contentPanel?: boolean;
+  /** Skips PanelBody's own title/X header — for a form that renders its
+   *  own page-style header (title/subtitle/back-link) as its first child
+   *  instead, so the panel isn't left with two headers stacked. Only
+   *  meaningful together with `fullScreen` or `contentPanel`. */
+  hideHeader?: boolean;
 }
 
 /** Shared by the fullScreen and contentPanel variants: header + scrollable
@@ -59,10 +65,12 @@ function PanelBody({
 function ContentPanel({
   title,
   onClose,
+  hideHeader,
   children,
 }: {
   title: ReactNode;
   onClose: () => void;
+  hideHeader?: boolean;
   children: ReactNode;
 }) {
   const [top, setTop] = useState(0);
@@ -77,14 +85,28 @@ function ContentPanel({
   }, []);
 
   return (
-    <div
-      className="animate-backdrop-in fixed left-0 right-0 md:left-60 bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-50 bg-white dark:bg-slate-900 flex flex-col"
-      style={{ top }}
-    >
-      <PanelBody title={title} onClose={onClose}>
-        {children}
-      </PanelBody>
-    </div>
+    <>
+      {/* Backdrop: covers the full working area (same bounds the panel used
+         to fill edge-to-edge) with a blur + dim, so the inset margin around
+         the panel below reveals a softened version of the page instead of
+         sharp content (e.g. asset rows) peeking through. */}
+      <div
+        className="fixed left-0 right-0 md:left-60 bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-40 bg-white/60 dark:bg-slate-900/60 backdrop-blur-md pointer-events-none"
+        style={{ top }}
+      />
+      <div
+        className="animate-backdrop-in fixed left-0 right-0 md:left-60 bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-50 bg-white dark:bg-slate-900 flex flex-col m-3 sm:m-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-lg overflow-hidden"
+        style={{ top }}
+      >
+        {hideHeader ? (
+          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5">{children}</div>
+        ) : (
+          <PanelBody title={title} onClose={onClose}>
+            {children}
+          </PanelBody>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -96,6 +118,7 @@ export default function Modal({
   widthClassName = 'max-w-md',
   fullScreen = false,
   contentPanel = false,
+  hideHeader = false,
 }: ModalProps) {
   // Escape closes whichever variant is open, same as the phone/PWA back
   // button already does via useModalBackClose at the call site.
@@ -107,6 +130,13 @@ export default function Modal({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
+
+  // Lock the page behind from scrolling while any modal variant is open —
+  // without this, touch/wheel scrolling over the backdrop (or the gap around
+  // a contentPanel/fullScreen panel) scrolls the page underneath, which is
+  // especially jarring for contentPanel since its blurred backdrop visibly
+  // shifts as the assets list behind it scrolls.
+  useBodyScrollLock(open);
 
   if (!open) return null;
 
@@ -128,7 +158,12 @@ export default function Modal({
 
   if (contentPanel) {
     // Same "escape .app-scale" reasoning as fullScreen above.
-    return createPortal(<ContentPanel title={title} onClose={onClose}>{children}</ContentPanel>, document.body);
+    return createPortal(
+      <ContentPanel title={title} onClose={onClose} hideHeader={hideHeader}>
+        {children}
+      </ContentPanel>,
+      document.body
+    );
   }
 
   return (

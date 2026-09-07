@@ -347,7 +347,7 @@ export const PortfolioPdfReport = ({ hideInPrint = false }: PortfolioPdfReportPr
 
                   return (
                     <tr key={asset.id} className="border-b border-slate-200">
-                      <td className="py-2 px-3">{asset.name}</td>
+                      <td className="py-2 px-3 uppercase">{asset.name}</td>
                       <td className="py-2 px-3">{ASSET_CLASS_LABELS[asset.assetClass] || asset.assetClass}</td>
                       <td className="text-right py-2 px-3">{asset.quantity?.toFixed(2) || '-'}</td>
                       <td className="text-right py-2 px-3 font-semibold">{formatCurrency(assetValue.value, 'INR')}</td>

@@ -28,7 +28,8 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import Amount from '../components/Amount';
 import LoadingDots from '../components/LoadingDots';
 import type { Goal } from '../types';
-import { CURRENCIES, formatCurrency } from '../utils/currency';
+import { formatCurrency } from '../utils/currency';
+import CurrencySelect from '../components/CurrencySelect';
 import { useUrlTab } from '../hooks/useUrlTab';
 
 type Tab = 'health' | 'goals';
@@ -742,13 +743,7 @@ function GoalForm({ initial, onSave }: { initial: Goal | null; onSave: (g: Goal)
           <input type="number" value={targetAmount} onChange={(e) => setTargetAmount(e.target.value)} className={inputClass} placeholder="0" />
         </Field>
         <Field label="Currency">
-          <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={inputClass}>
-            {CURRENCIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+          <CurrencySelect value={currency} onChange={setCurrency} className={inputClass} />
         </Field>
       </div>
       <p className="text-xs text-slate-600 dark:text-slate-500 -mt-1">

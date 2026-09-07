@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import QuickAddMenu from './QuickAddMenu';
 import { useUiStore } from '../store/uiStore';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 const primaryLinks = [
   { to: '/', label: 'Overview', icon: LayoutDashboard },
@@ -40,6 +41,7 @@ export default function BottomNav() {
   const location = useLocation();
   const isMoreActive = moreLinks.some((l) => l.to === location.pathname);
   const hideFab = useUiStore((s) => s.hideFab);
+  useBodyScrollLock(moreOpen);
 
   return (
     <>

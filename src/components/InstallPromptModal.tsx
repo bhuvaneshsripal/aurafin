@@ -1,9 +1,11 @@
 import { Smartphone, Zap, Lock, MoreVertical, Download, X } from 'lucide-react';
 import { useInstallPromptStore } from '../store/installPromptStore';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 export default function InstallPromptModal() {
   const showManualPrompt = useInstallPromptStore((s) => s.showManualPrompt);
   const setShowManualPrompt = useInstallPromptStore((s) => s.setShowManualPrompt);
+  useBodyScrollLock(showManualPrompt);
 
   if (!showManualPrompt) return null;
 

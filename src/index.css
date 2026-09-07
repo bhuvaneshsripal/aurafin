@@ -218,6 +218,33 @@ button:disabled,
   cursor: not-allowed;
 }
 
+/* Native date inputs default to a chunky, oddly-inset calendar icon in
+   Chrome/Safari that clashes with our rounded field styling — trim it down
+   to a small icon that sits cleanly inside the field instead. */
+input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+input[type="date"]::-webkit-calendar-picker-indicator {
+  padding: 0;
+  margin: 0;
+  width: 16px;
+  height: 16px;
+  opacity: 0.55;
+  cursor: pointer;
+  background-size: 16px 16px;
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 0.85;
+}
+.dark input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.6;
+}
+.dark input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 0.9;
+}
+
 /* GPU-composited (transform/opacity only) animations — avoids layout/paint jank */
 @keyframes menu-in {
   from {

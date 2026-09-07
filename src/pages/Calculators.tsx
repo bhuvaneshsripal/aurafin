@@ -23,6 +23,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { formatCurrency } from '../utils/currency';
+import CustomSelect from '../components/CustomSelect';
 
 type CalcKey = 'xirr' | 'sip' | 'lumpsum' | 'phased' | 'cagr' | 'emi' | 'swp' | 'retirement' | 'fd';
 
@@ -593,12 +594,17 @@ function FdCalculator() {
             <input type="number" value={years} onChange={(e) => setYears(e.target.value)} className={inputClass} />
           </Field>
           <Field label="Compounding Frequency (times/year)">
-            <select value={compounding} onChange={(e) => setCompounding(e.target.value)} className={inputClass}>
-              <option value="1">Annually</option>
-              <option value="2">Half-Yearly</option>
-              <option value="4">Quarterly</option>
-              <option value="12">Monthly</option>
-            </select>
+            <CustomSelect
+              value={compounding}
+              onChange={setCompounding}
+              className={inputClass}
+              options={[
+                { value: '1', label: 'Annually' },
+                { value: '2', label: 'Half-Yearly' },
+                { value: '4', label: 'Quarterly' },
+                { value: '12', label: 'Monthly' },
+              ]}
+            />
           </Field>
         </>
       }

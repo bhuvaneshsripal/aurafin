@@ -11,7 +11,7 @@ import ConfirmDeleteModal from '../../components/ConfirmDeleteModal';
 import Amount from '../../components/Amount';
 import LoadingDots from '../../components/LoadingDots';
 import type { Transaction, TransactionType } from '../../types';
-import { CURRENCIES } from '../../utils/currency';
+import CurrencySelect from '../../components/CurrencySelect';
 
 export default function TransactionsTab() {
   const allTransactions = useTransactionsStore((s) => s.transactions);
@@ -314,13 +314,7 @@ function TransactionForm({
           <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} placeholder="0" />
         </Field>
         <Field label="Currency">
-          <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={inputClass}>
-            {CURRENCIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+          <CurrencySelect value={currency} onChange={setCurrency} className={inputClass} />
         </Field>
       </div>
       <Field label="Date">

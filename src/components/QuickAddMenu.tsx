@@ -14,9 +14,11 @@ import { useAuthStore } from '../store/authStore';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { upsertDoc } from '../hooks/useFirestoreSync';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import Modal from './Modal';
 import type { Asset, Snapshot, Transaction, TransactionType } from '../types';
-import { CURRENCIES } from '../utils/currency';
+import CurrencySelect from './CurrencySelect';
+import CustomSelect from './CustomSelect';
 
 type QuickAction = 'expense' | 'income' | 'transfer' | 'asset' | 'liability' | 'snapshot' | null;
 
@@ -33,6 +35,11 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
     document.addEventListener('mousedown', onClickOutside);
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, []);
+
+  // Locks background scroll while the pill/dropdown menu is open — its
+  // backdrop (fab variant) or the page behind it (desktop variant) would
+  // otherwise keep scrolling underneath the open menu.
+  useBodyScrollLock(menuOpen);
 
   const open = (action: QuickAction) => {
     // Asset and Liability get the full Wealth page add flow (category ->
@@ -54,12 +61,20 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
   return (
     <>
       <div className={isFab ? 'relative' : 'relative'} ref={ref}>
+        {menuOpen && isFab && (
+          <div
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-[1px] z-20"
+            onClick={() => setMenuOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+
         <button
           onClick={() => setMenuOpen((o) => !o)}
           aria-label="Quick add"
           className={
             isFab
-              ? `fab-button${menuOpen ? ' fab-open' : ''} tap-scale flex items-center justify-center text-white h-14 w-14`
+              ? `fab-button${menuOpen ? ' fab-open' : ''} tap-scale relative z-30 flex items-center justify-center text-white h-14 w-14`
               : 'tap-scale flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2.5 rounded-lg text-base font-medium'
           }
         >
@@ -218,13 +233,7 @@ function TransactionForm({ type, onDone }: { type: TransactionType; onDone: () =
           <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} placeholder="0" />
         </Field>
         <Field label="Currency">
-          <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={inputClass}>
-            {CURRENCIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+          <CurrencySelect value={currency} onChange={setCurrency} className={inputClass} />
         </Field>
       </div>
       <Field label="Date">
@@ -269,22 +278,20 @@ function TransferForm({ onDone }: { onDone: () => void }) {
   return (
     <div className="space-y-4">
       <Field label="From">
-        <select value={fromId} onChange={(e) => setFromId(e.target.value)} className={inputClass}>
-          {assets.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name.toUpperCase()}
-            </option>
-          ))}
-        </select>
+        <CustomSelect
+          value={fromId}
+          onChange={setFromId}
+          className={inputClass}
+          options={assets.map((a) => ({ value: a.id, label: a.name.toUpperCase() }))}
+        />
       </Field>
       <Field label="To">
-        <select value={toId} onChange={(e) => setToId(e.target.value)} className={inputClass}>
-          {assets.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name.toUpperCase()}
-            </option>
-          ))}
-        </select>
+        <CustomSelect
+          value={toId}
+          onChange={setToId}
+          className={inputClass}
+          options={assets.map((a) => ({ value: a.id, label: a.name.toUpperCase() }))}
+        />
       </Field>
       <Field label="Amount">
         <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} placeholder="0" />

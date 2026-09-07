@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import { Plus, Trash2, Pencil, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, Pencil } from 'lucide-react';
 import { useAssetsStore } from '../store/assetsStore';
 import { useAuthStore } from '../store/authStore';
 import { upsertDoc, removeDoc } from '../hooks/useFirestoreSync';
 import Modal from '../components/Modal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import type { Asset, AssetClass } from '../types';
-import { ASSET_CLASS_LABELS, CURRENCIES, formatCurrency } from '../utils/currency';
+import { ASSET_CLASS_LABELS, formatCurrency } from '../utils/currency';
+import CurrencySelect from '../components/CurrencySelect';
+import CustomSelect from '../components/CustomSelect';
 
 const ASSET_CLASSES = Object.keys(ASSET_CLASS_LABELS) as AssetClass[];
 
@@ -146,13 +148,12 @@ function AssetForm({ initial, onSave }: { initial: Asset | null; onSave: (a: Ass
         <input value={name} onChange={(e) => setName(e.target.value.toUpperCase())} className={`${inputClass} uppercase`} placeholder="e.g. HDFC Flexicap SIP" />
       </Field>
       <Field label="Asset Class">
-        <SelectField value={assetClass} onChange={(e) => setAssetClass(e.target.value as AssetClass)}>
-          {ASSET_CLASSES.map((c) => (
-            <option key={c} value={c}>
-              {ASSET_CLASS_LABELS[c]}
-            </option>
-          ))}
-        </SelectField>
+        <CustomSelect
+          value={assetClass}
+          onChange={(v) => setAssetClass(v as AssetClass)}
+          className={inputClass}
+          options={ASSET_CLASSES.map((c) => ({ value: c, label: ASSET_CLASS_LABELS[c] }))}
+        />
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Value">
@@ -165,13 +166,7 @@ function AssetForm({ initial, onSave }: { initial: Asset | null; onSave: (a: Ass
           />
         </Field>
         <Field label="Currency">
-          <SelectField value={currency} onChange={(e) => setCurrency(e.target.value)}>
-            {CURRENCIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </SelectField>
+          <CurrencySelect value={currency} onChange={setCurrency} className={`${inputClass} appearance-none`} />
         </Field>
       </div>
       <button onClick={submit} className="w-full h-10 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium">
@@ -195,29 +190,3 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 // one consistent set of boxes instead of mismatched sizes.
 const inputClass =
   'w-full h-10 border border-slate-200 dark:border-slate-600 rounded-lg px-3 text-sm text-slate-800 dark:text-white bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent';
-
-function SelectField({
-  value,
-  onChange,
-  children,
-}: {
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="relative">
-      <select
-        value={value}
-        onChange={onChange}
-        className={`${inputClass} appearance-none pr-9 cursor-pointer`}
-      >
-        {children}
-      </select>
-      <ChevronDown
-        size={16}
-        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-      />
-    </div>
-  );
-}

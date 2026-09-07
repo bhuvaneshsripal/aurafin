@@ -10,6 +10,7 @@ import { useUiStore } from '../store/uiStore';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import { resolveAssetValues } from '../utils/assetValues';
 import { ASSET_CLASS_LABELS, maskPreciseAmount } from '../utils/currency';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 const MAX_PER_GROUP = 5;
 const MAX_RECENT_SEARCHES = 5;
@@ -93,6 +94,8 @@ export default function GlobalSearch() {
       document.removeEventListener('mousedown', onClickOutside);
     };
   }, [open]);
+
+  useBodyScrollLock(open);
 
   const q = query.trim().toLowerCase();
 
@@ -264,7 +267,7 @@ export default function GlobalSearch() {
                         return (
                           <ResultRow
                             key={a.id}
-                            title={a.name}
+                            title={a.name.toUpperCase()}
                             subtitle={ASSET_CLASS_LABELS[a.assetClass] ?? a.assetClass}
                             trailing={maskPreciseAmount(value, a.currency, privacyMode)}
                             onClick={() => goTo(`/wealth?tab=assets&q=${encodeURIComponent(a.name)}`)}

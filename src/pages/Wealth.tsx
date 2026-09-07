@@ -55,8 +55,12 @@ import { exportToCsv } from '../utils/exportCsv';
 import Modal from '../components/Modal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import LoadingDots from '../components/LoadingDots';
+import CurrencySelect from '../components/CurrencySelect';
+import CustomSelect from '../components/CustomSelect';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
+import { ACCOUNT_TYPES, resolveAccountIcon, type AccountType } from '../utils/accountVisuals';
 import type { Asset, AssetClass, Liability, LiabilityClass, Transaction } from '../types';
-import { CURRENCIES, formatPreciseCurrency, maskPreciseAmount, maskAmount } from '../utils/currency';
+import { formatPreciseCurrency, maskPreciseAmount, maskAmount } from '../utils/currency';
 import {
   ASSET_TAXONOMY,
   LIABILITY_TAXONOMY,
@@ -111,6 +115,40 @@ const DEFAULT_ASSET_CLASS_ORDER: Partial<Record<AssetClass, number>> = {
   recurring_deposit: 4,
 };
 const DEFAULT_ASSET_CLASS_ORDER_FALLBACK = 5;
+
+/** Common Indian/US brokers for the "Held in account" dropdown on Stock/ETF
+ *  holdings — stored in the same `institution` field the Bank/Institution
+ *  field already uses for deposits, so no schema change was needed. */
+const COMMON_BROKERS = [
+  'Zerodha',
+  'Groww',
+  'Upstox',
+  'ICICI Direct',
+  'HDFC Securities',
+  'Kotak Securities',
+  'Angel One',
+  '5paisa',
+  'Charles Schwab',
+  'Fidelity',
+  'Robinhood',
+  'Interactive Brokers',
+];
+
+const GEOGRAPHY_OPTIONS: { value: Asset['geography']; label: string }[] = [
+  { value: 'INDIA', label: 'India' },
+  { value: 'USA', label: 'USA' },
+  { value: 'CANADA', label: 'Canada' },
+  { value: 'EUROPE', label: 'Europe' },
+  { value: 'UK', label: 'UK' },
+  { value: 'SINGAPORE', label: 'Singapore' },
+  { value: 'JAPAN', label: 'Japan' },
+  { value: 'CHINA', label: 'China' },
+  { value: 'TAIWAN', label: 'Taiwan' },
+  { value: 'KOREA', label: 'Korea' },
+  { value: 'BRAZIL', label: 'Brazil' },
+  { value: 'GLOBAL', label: 'Global' },
+  { value: 'OTHER', label: 'Other' },
+];
 function defaultAssetClassRank(a: Asset): number {
   return DEFAULT_ASSET_CLASS_ORDER[a.assetClass] ?? DEFAULT_ASSET_CLASS_ORDER_FALLBACK;
 }
@@ -1171,6 +1209,7 @@ function AssetsTab({
     { key: 'name', label: 'Stock name' },
   ];
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
+  useBodyScrollLock(sortSheetOpen);
   const [draftSortKey, setDraftSortKey] = useState<SortKey>(sortKey === 'manual' ? 'value' : sortKey);
   const [draftSortDir, setDraftSortDir] = useState<'asc' | 'desc'>(sortDir);
   const openSortSheet = () => {
@@ -1397,7 +1436,13 @@ function AssetsTab({
       // Only meaningful for HoldingDetailView's Buy/Sell/Dividend action,
       // but harmless to pass through to AssetDetailPage too since it just
       // won't use them.
-      accounts: assets.filter((a) => a.assetClass === 'cash'),
+      // Cash/bank accounts are household-wide (same accounts everyone in
+      // the household can pay into/out of), not scoped to whichever family
+      // member profile happens to be active — mirrors the Accounts tab on
+      // the Money page, which also lists every cash account regardless of
+      // the active profile. Using the profile-filtered `assets` here would
+      // hide perfectly good accounts whenever a specific profile is active.
+      accounts: allAssets.filter((a) => a.assetClass === 'cash'),
       onLogTransaction: handleLogTransaction,
     };
     return isHoldingStyle ? <HoldingDetailView {...detailProps} /> : <AssetDetailPage {...detailProps} />;
@@ -1766,7 +1811,7 @@ function AssetsTab({
                   className="grid grid-cols-[1fr_44px_1fr] items-center gap-1.5 px-4 py-3 active:bg-slate-50 dark:active:bg-slate-800/40 cursor-pointer select-none"
                 >
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{a.name}</p>
+                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate uppercase">{a.name}</p>
                     <p className="text-[11px] text-slate-600 mt-0.5 truncate">{subtitle}</p>
                   </div>
                   {/* Fixed-width center column — with the name and value+menu
@@ -1901,7 +1946,7 @@ function AssetsTab({
                             }`}
                           />
                           <div className="min-w-0">
-                            <p className="font-semibold text-slate-800 dark:text-slate-100 truncate">{a.name}</p>
+                            <p className="font-semibold text-slate-800 dark:text-slate-100 truncate uppercase">{a.name}</p>
                             <p className="text-xs text-slate-600 mt-0.5">{subtitle}</p>
                           </div>
                         </div>
@@ -2073,8 +2118,8 @@ function AssetsTab({
         );
       })()}
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Edit Asset" contentPanel>
-        {editing && <AssetDetailsForm initial={editing} onSave={handleSave} />}
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Edit Asset" contentPanel hideHeader>
+        {editing && <AssetDetailsForm initial={editing} onSave={handleSave} onClose={() => setModalOpen(false)} />}
       </Modal>
 
       <Modal
@@ -2695,7 +2740,7 @@ function HoldingDetailView({
           <button
             onClick={() => setTxMenuOpen((v) => !v)}
             title="Buy / Sell / Dividend"
-            className="h-9 w-9 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300"
+            className="h-9 w-9 flex items-center justify-center rounded-lg bg-brand-600 hover:bg-brand-700 text-white shadow-sm"
           >
             <Plus size={16} />
           </button>
@@ -3053,9 +3098,21 @@ function BuySellDividendModal({
   const [price, setPrice] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [accountId, setAccountId] = useState(accounts[0]?.id ?? '');
+  // '' = "No cash account (position only)" — crediting proceeds/dividends to
+  // a bank account is opt-in, since some people track buys/sells purely at
+  // the holding level and don't want every sale to nudge a cash balance.
+  const [accountId, setAccountId] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // Inline "+ New account" mini-form, opened from the "Credited to" dropdown
+  // so someone can add a bank/cash/wallet account without leaving this modal.
+  const [newAccountOpen, setNewAccountOpen] = useState(false);
+  const [newAccountName, setNewAccountName] = useState('');
+  const [newAccountType, setNewAccountType] = useState<Exclude<AccountType, 'credit_card'>>('bank');
+  const [newAccountBalance, setNewAccountBalance] = useState('');
+  const [newAccountError, setNewAccountError] = useState('');
+  const [creatingAccount, setCreatingAccount] = useState(false);
 
   // Fresh form every time a new mode is picked from the + menu.
   useEffect(() => {
@@ -3064,11 +3121,47 @@ function BuySellDividendModal({
       setPrice('');
       setAmount('');
       setDate(new Date().toISOString().slice(0, 10));
-      setAccountId(accounts[0]?.id ?? '');
+      setAccountId('');
       setError('');
+      setNewAccountOpen(false);
+      setNewAccountName('');
+      setNewAccountType('bank');
+      setNewAccountBalance('');
+      setNewAccountError('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mode]);
+
+  const handleCreateAccount = async () => {
+    if (!newAccountName.trim()) {
+      setNewAccountError('Give the account a name.');
+      return;
+    }
+    setCreatingAccount(true);
+    setNewAccountError('');
+    try {
+      const newAccount: Asset = {
+        id: crypto.randomUUID(),
+        name: newAccountName.trim(),
+        assetClass: 'cash',
+        value: Number(newAccountBalance) || 0,
+        currency: asset.currency,
+        accountType: newAccountType,
+        updatedAt: Date.now(),
+        // Cash accounts are household-wide (not tied to one family member's
+        // profile) — same as accounts created from Money → Accounts — so
+        // they keep showing up here no matter which profile is active.
+      };
+      await onQuickUpdate(newAccount);
+      setAccountId(newAccount.id);
+      setNewAccountOpen(false);
+    } catch (err) {
+      console.error('Failed to create account', err);
+      setNewAccountError('Could not create this account. Please check your connection and try again.');
+    } finally {
+      setCreatingAccount(false);
+    }
+  };
 
   const close = () => {
     if (saving) return;
@@ -3140,8 +3233,8 @@ function BuySellDividendModal({
       setError(`You only hold ${currentQty} ${unitLabel}.`);
       return;
     }
-    if (!account) {
-      setError('Pick an account to credit the sale proceeds to.');
+    if (accountId && !account) {
+      setError('Pick an account to credit the sale proceeds to, or set it back to position only.');
       return;
     }
     setSaving(true);
@@ -3203,7 +3296,9 @@ function BuySellDividendModal({
         });
       }
 
-      await onQuickUpdate({ ...account, value: (account.value ?? 0) + proceeds, updatedAt: Date.now() });
+      if (account) {
+        await onQuickUpdate({ ...account, value: (account.value ?? 0) + proceeds, updatedAt: Date.now() });
+      }
       await onLogTransaction({
         id: crypto.randomUUID(),
         type: 'income',
@@ -3230,14 +3325,16 @@ function BuySellDividendModal({
       setError('Enter a valid amount.');
       return;
     }
-    if (!account) {
-      setError('Pick an account to credit the dividend to.');
+    if (accountId && !account) {
+      setError('Pick an account to credit the dividend to, or set it back to position only.');
       return;
     }
     setSaving(true);
     setError('');
     try {
-      await onQuickUpdate({ ...account, value: (account.value ?? 0) + amountNum, updatedAt: Date.now() });
+      if (account) {
+        await onQuickUpdate({ ...account, value: (account.value ?? 0) + amountNum, updatedAt: Date.now() });
+      }
       await onLogTransaction({
         id: crypto.randomUUID(),
         type: 'income',
@@ -3301,19 +3398,104 @@ function BuySellDividendModal({
 
         {(mode === 'sell' || mode === 'dividend') && (
           <div>
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Credit to account</label>
-            {accounts.length === 0 ? (
-              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                No bank/cash accounts yet — add one under Money → Accounts first.
-              </p>
+            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Credited to (optional)</label>
+            {newAccountOpen ? (
+              <div className="mt-1 border border-slate-200 dark:border-slate-700 rounded-lg p-3 space-y-2.5 bg-slate-50 dark:bg-slate-800/40">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">New account</p>
+                  <button
+                    type="button"
+                    onClick={() => setNewAccountOpen(false)}
+                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    value={newAccountName}
+                    onChange={(e) => setNewAccountName(e.target.value)}
+                    placeholder="e.g. HDFC Savings"
+                    className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg px-2.5 py-2 text-sm"
+                    autoFocus
+                  />
+                  <CustomSelect
+                    value={newAccountType}
+                    onChange={(v) => setNewAccountType(v as Exclude<AccountType, 'credit_card'>)}
+                    className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg px-2.5 py-2 text-sm"
+                    options={ACCOUNT_TYPES.filter((t) => t.key !== 'credit_card').map((t) => ({ value: t.key, label: t.label }))}
+                  />
+                </div>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={newAccountBalance}
+                  onChange={(e) => setNewAccountBalance(e.target.value)}
+                  placeholder="Opening balance (optional)"
+                  className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg px-2.5 py-2 text-sm"
+                />
+                {newAccountError && <p className="text-xs text-red-600">{newAccountError}</p>}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewAccountOpen(false)}
+                    className="flex-1 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 py-2 rounded-lg text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={creatingAccount}
+                    onClick={handleCreateAccount}
+                    className="flex-1 bg-brand-600 text-white py-2 rounded-lg text-xs font-medium hover:bg-brand-700 disabled:opacity-60"
+                  >
+                    {creatingAccount ? 'Adding…' : 'Add account'}
+                  </button>
+                </div>
+              </div>
             ) : (
-              <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className={inputClass}>
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
+              <CustomSelect
+                value={accountId}
+                onChange={(v) => (v === '__new__' ? setNewAccountOpen(true) : setAccountId(v))}
+                className={inputClass}
+                options={[
+                  { value: '', label: 'No cash account (position only)' },
+                  ...accounts.map((a) => {
+                    const type = (a.accountType ?? 'cash') as AccountType;
+                    const Icon = resolveAccountIcon(a.icon, type);
+                    const colour = a.colour || '#334155';
+                    const groupLabel = ACCOUNT_TYPES.find((t) => t.key === type)?.label ?? 'Account';
+                    return {
+                      value: a.id,
+                      group: groupLabel.toUpperCase(),
+                      label: (
+                        <span className="flex items-center gap-2 min-w-0">
+                          <span
+                            className="h-5 w-5 rounded-md flex items-center justify-center shrink-0"
+                            style={{ backgroundColor: `${colour}1a`, color: colour }}
+                          >
+                            <Icon size={12} />
+                          </span>
+                          <span className="truncate">
+                            {a.name}
+                            {a.institution && <span className="text-slate-400"> · {a.institution}</span>}
+                          </span>
+                        </span>
+                      ),
+                    };
+                  }),
+                  {
+                    value: '__new__',
+                    label: (
+                      <span className="flex items-center gap-2 text-brand-600 dark:text-brand-400 font-medium">
+                        <Plus size={14} />
+                        New account
+                      </span>
+                    ),
+                  },
+                ]}
+              />
             )}
           </div>
         )}
@@ -3602,12 +3784,19 @@ function AssetDetailsForm({
   initial,
   initialType,
   onBack,
+  onClose,
   onSave,
 }: {
   category?: CategoryDef<AssetClass>;
   initial: Asset | null;
   initialType?: AssetClass;
   onBack?: () => void;
+  /** Present only when this form is rendered inside the Edit Asset panel
+   *  (see Wealth.tsx) — renders a page-style header ("Edit Asset" + type
+   *  subtitle + "Back to Assets" link, matching the Add Asset flow's own
+   *  header) and a Cancel button next to Save, instead of the wizard's
+   *  "Back to asset type" link. */
+  onClose?: () => void;
   onSave: (a: Asset) => void;
 }) {
   // Some older saved assets carry an assetClass value from before the
@@ -3626,6 +3815,10 @@ function AssetDetailsForm({
 
   const [name, setName] = useState(initial?.name ?? '');
   const [assetClass, setAssetClass] = useState<AssetClass>(startClass);
+  // Collapsed by default when editing an existing asset — shows a
+  // colored preview chip with a "Change" link instead of a raw <select>;
+  // clicking Change (or, for a new asset, always) reveals the real select.
+  const [assetTypeEditing, setAssetTypeEditing] = useState(!initial);
   const [value, setValue] = useState(initial?.value?.toString() ?? '');
   const [currency, setCurrency] = useState(initial?.currency ?? 'INR');
   const [symbol, setSymbol] = useState(initial?.symbol ?? '');
@@ -3633,6 +3826,26 @@ function AssetDetailsForm({
   const [avgCost, setAvgCost] = useState(initial?.avgCost?.toString() ?? '');
   const [investedValue, setInvestedValue] = useState(initial?.investedValue?.toString() ?? '');
   const [institution, setInstitution] = useState(initial?.institution ?? '');
+  // "Hide details" / "Show details" — collapses the less-common fields
+  // below (Geography, Sub-class, Tags, Notes, and the two flags) out of
+  // the way by default, matching how most edits only touch the fields
+  // above. Starts open for a brand-new asset (nothing to hide yet) and
+  // collapsed when editing one, unless it already has something in there.
+  const [showMoreDetails, setShowMoreDetails] = useState(
+    !initial || Boolean(initial?.geography || initial?.subClass || initial?.tags?.length || initial?.notes)
+  );
+  const [geography, setGeography] = useState(initial?.geography ?? '');
+  const [subClass, setSubClass] = useState(initial?.subClass ?? '');
+  const [tags, setTags] = useState<string[]>(initial?.tags ?? []);
+  const [tagDraft, setTagDraft] = useState('');
+  const [notes, setNotes] = useState(initial?.notes ?? '');
+  const [excludeFromAllocation, setExcludeFromAllocation] = useState(initial?.excludeFromAllocation ?? false);
+  const [emergencyFund, setEmergencyFund] = useState(initial?.emergencyFund ?? false);
+  const addTag = (raw: string) => {
+    const t = raw.trim().replace(/\s+/g, '-').toLowerCase();
+    if (t && !tags.includes(t)) setTags((prev) => [...prev, t]);
+    setTagDraft('');
+  };
   const [interestRate, setInterestRate] = useState(initial?.interestRate?.toString() ?? '');
   const [startDate, setStartDate] = useState(initial?.startDate ?? '');
   const [maturityDate, setMaturityDate] = useState(initial?.maturityDate ?? '');
@@ -3759,6 +3972,46 @@ function AssetDetailsForm({
   // (avg. cost, invested value, live-price comparisons) assumes it's in.
   const [lotPriceRaw, setLotPriceRaw] = useState<Record<string, string>>({});
   const [lotPriceCurrency, setLotPriceCurrency] = useState<Record<string, string>>({});
+  // Once there are 2+ purchase entries, each is collapsible to a single
+  // summary line (see "Purchase N" row below) so a long purchase history
+  // doesn't turn the form into an endless scroll. Which entries are
+  // collapsed is remembered per-asset in localStorage, so expanding one to
+  // check or edit it and then refreshing the page doesn't silently put it
+  // back the way it was — the seed value (before any toggle has ever been
+  // saved) collapses every already-saved purchase and leaves a freshly
+  // added one expanded, since that's the one the person is actively filling
+  // in.
+  const collapseStorageKey = initial?.id ? `assetLotCollapse:${initial.id}` : null;
+  const [collapsedLotIds, setCollapsedLotIds] = useState<Set<string>>(() => {
+    if (collapseStorageKey) {
+      try {
+        const saved = localStorage.getItem(collapseStorageKey);
+        if (saved) return new Set(JSON.parse(saved));
+      } catch {
+        // Corrupt/unavailable storage — fall through to the default seed.
+      }
+    }
+    return new Set([
+      ...(initial?.shareLots?.map((l) => l.id) ?? []),
+      ...(initial?.purchaseLots?.map((l) => l.id) ?? []),
+    ]);
+  });
+  const toggleLotCollapsed = (id: string) => {
+    setCollapsedLotIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      if (collapseStorageKey) {
+        try {
+          localStorage.setItem(collapseStorageKey, JSON.stringify([...next]));
+        } catch {
+          // Storage full/unavailable — the toggle still works for this
+          // session, it just won't survive a refresh.
+        }
+      }
+      return next;
+    });
+  };
   const [fxRate, setFxRate] = useState<number | null>(null);
   const [fxLoading, setFxLoading] = useState(false);
   const [fxFailed, setFxFailed] = useState(false);
@@ -3796,6 +4049,25 @@ function AssetDetailsForm({
     setLotInputMode((m) => ({ ...m, [id]: mode }));
     if (mode === 'amount' && !lotAmountCurrency[id]) {
       setLotAmountCurrency((m) => ({ ...m, [id]: otherCurrency }));
+    }
+  };
+
+  // Shared by both the simple (single-purchase) and detailed (multi-lot)
+  // Price/Unit currency selects — converts the currently displayed number
+  // into the newly chosen currency rather than copying the digits over
+  // unconverted, which would silently corrupt the saved cost basis (e.g. a
+  // $1.05 price becoming "₹1.05"). Clears the box if we can't convert
+  // safely yet, so a stale, wrong number is never trusted over a blank one.
+  const handleLotPriceCurrencyChange = (lotId: string, nextCurrency: string, lotPrice: string) => {
+    const prevCurrency = lotPriceCurrency[lotId] ?? currency;
+    setLotPriceCurrency((m) => ({ ...m, [lotId]: nextCurrency }));
+    if (nextCurrency === prevCurrency) return;
+    const curRaw = lotPriceRaw[lotId] !== undefined ? Number(lotPriceRaw[lotId]) : Number(lotPrice);
+    if (curRaw && fxRate !== null) {
+      const converted = prevCurrency === currency ? curRaw / fxRate : curRaw * fxRate;
+      setLotPriceRaw((m) => ({ ...m, [lotId]: converted > 0 ? converted.toFixed(6) : '' }));
+    } else {
+      setLotPriceRaw((m) => ({ ...m, [lotId]: '' }));
     }
   };
 
@@ -4254,6 +4526,12 @@ function AssetDetailsForm({
           ? ((Number(value) - invested) / invested) * 100
           : undefined,
       institution: institution.trim() || undefined,
+      geography: (geography || undefined) as Asset['geography'],
+      subClass: subClass.trim() || undefined,
+      tags: tags.length ? tags : undefined,
+      notes: notes.trim() || undefined,
+      excludeFromAllocation: excludeFromAllocation || undefined,
+      emergencyFund: emergencyFund || undefined,
       interestRate: interestRate ? Number(interestRate) : undefined,
       startDate: startDate || undefined,
       maturityDate: maturityDate || undefined,
@@ -4304,17 +4582,14 @@ function AssetDetailsForm({
     });
   };
 
-  return (
-    <div className="space-y-4">
-      {onBack && (
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-brand-600 -mt-1"
-        >
-          <ArrowLeft size={16} /> Back to asset type
-        </button>
-      )}
-      <Field label="Name">
+  // Name + Currency, shown together as a pair — positioned right after the
+  // Asset Type box for classes with no purchases/shares section above it,
+  // or right after that section (see isUnitTracked branch below) for
+  // Stock/ETF-like classes, matching where it naturally falls once shares
+  // and price are already on the screen.
+  const nameCurrencyField = (
+    <div className="grid grid-cols-[1fr_128px] gap-3">
+      <Field label={<>Name <span className="text-red-500">*</span></>}>
         <input
           value={name}
           onChange={(e) => setName(e.target.value.toUpperCase())}
@@ -4323,46 +4598,105 @@ function AssetDetailsForm({
         />
         {attemptedSubmit && nameMissing && <p className={errorTextClass}>Name is required.</p>}
       </Field>
+      <Field label="Currency">
+        <CurrencySelect
+          value={currency}
+          onChange={(c) => {
+            currencyTouchedRef.current = true;
+            setCurrency(c);
+          }}
+          className={inputClass}
+        />
+      </Field>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      {onClose ? (
+        <div className="flex items-start justify-between gap-3 -mx-4 sm:-mx-6 -mt-5 mb-1 px-4 sm:px-6 py-4 bg-[#F2E4CC] dark:bg-[#3A3020] border-b border-[#E3CBA0] dark:border-[#5A4A2E]">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Edit Asset</h2>
+            <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">
+              {ASSET_CLASS_LABELS[assetClass] ?? assetClass}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-brand-600 shrink-0"
+          >
+            <ArrowLeft size={16} /> Back to Assets
+          </button>
+        </div>
+      ) : (
+        onBack && (
+          <button
+            onClick={onBack}
+            className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-brand-600 -mt-1"
+          >
+            <ArrowLeft size={16} /> Back to asset type
+          </button>
+        )
+      )}
       {initial ? (
         <Field label="Asset Type">
-          <select
-            value={assetClass}
-            onChange={(e) => setAssetClass(e.target.value as AssetClass)}
-            className={`${inputClass} bg-white text-slate-700`}
-          >
-            {ASSET_TAXONOMY.map((cat) => (
-              <optgroup key={cat.key} label={cat.label}>
-                {cat.types.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-          {ASSET_CLASS_TO_CATEGORY[assetClass]?.key !== effectiveCategory?.key && (
-            <p className="text-xs text-amber-600 mt-1.5">
-              This will move the asset from {effectiveCategory?.label} to{' '}
-              {ASSET_CLASS_TO_CATEGORY[assetClass]?.label}.
-            </p>
+          {assetTypeEditing ? (
+            <>
+              <CustomSelect
+                defaultOpen
+                value={assetClass}
+                onChange={(v) => {
+                  setAssetClass(v as AssetClass);
+                }}
+                onOpenChange={(open) => {
+                  if (!open) setAssetTypeEditing(false);
+                }}
+                className={`${inputClass} bg-white text-slate-700`}
+                options={ASSET_TAXONOMY.flatMap((cat) =>
+                  cat.types.map((t) => ({ value: t.value, label: t.label, group: cat.label }))
+                )}
+              />
+              {ASSET_CLASS_TO_CATEGORY[assetClass]?.key !== effectiveCategory?.key && (
+                <p className="text-xs text-amber-600 mt-1.5">
+                  This will move the asset from {effectiveCategory?.label} to{' '}
+                  {ASSET_CLASS_TO_CATEGORY[assetClass]?.label}.
+                </p>
+              )}
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setAssetTypeEditing(true)}
+              className="w-full flex items-center justify-between gap-3 rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 px-3.5 py-3 text-left"
+            >
+              <span className="flex items-center gap-3 min-w-0">
+                <span className="h-9 w-9 shrink-0 rounded-lg bg-white dark:bg-slate-800 flex items-center justify-center text-emerald-600">
+                  {(() => {
+                    const CatIcon = ASSET_CLASS_TO_CATEGORY[assetClass]?.icon ?? TrendingUp;
+                    return <CatIcon size={16} />;
+                  })()}
+                </span>
+                <span className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">
+                  {ASSET_CLASS_LABELS[assetClass] ?? assetClass}
+                </span>
+              </span>
+              <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400 shrink-0">Change</span>
+            </button>
           )}
         </Field>
       ) : effectiveCategory && effectiveCategory.types.length > 1 ? (
         <Field label={`${effectiveCategory.label} Type`}>
-          <select
+          <CustomSelect
             value={assetClass}
-            onChange={(e) => setAssetClass(e.target.value as AssetClass)}
+            onChange={(v) => setAssetClass(v as AssetClass)}
             className={`${inputClass} bg-white text-slate-700`}
-          >
-            {!effectiveCategory.types.some((t) => t.value === assetClass) && (
-              <option value={assetClass}>{ASSET_CLASS_LABELS[assetClass] ?? assetClass}</option>
-            )}
-            {effectiveCategory.types.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </select>
+            options={[
+              ...(!effectiveCategory.types.some((t) => t.value === assetClass)
+                ? [{ value: assetClass, label: ASSET_CLASS_LABELS[assetClass] ?? assetClass }]
+                : []),
+              ...effectiveCategory.types.map((t) => ({ value: t.value, label: t.label })),
+            ]}
+          />
         </Field>
       ) : (
         <Field label="Asset Type">
@@ -4371,6 +4705,7 @@ function AssetDetailsForm({
           </p>
         </Field>
       )}
+      {!isUnitTracked && nameCurrencyField}
       {isGold && (
         <Field label="Gold Purity">
           <div className="grid grid-cols-2 gap-3">
@@ -4435,13 +4770,43 @@ function AssetDetailsForm({
               const gramsFilled = Number(lot.grams) > 0;
               const amountFilled = Number(lot.amount) > 0;
               const lotIncomplete = gramsFilled !== amountFilled;
+              // Every purchase gets the collapse arrow now, even a lone one —
+              // collapsing it hides the input fields but keeps the summary
+              // line, which is useful as soon as it's filled in, not just
+              // once there's a second entry to compare it against.
+              const collapsible = true;
+              const collapsed = collapsible && collapsedLotIds.has(lot.id);
               return (
                 <div
                   key={lot.id}
                   className="rounded-lg border border-slate-200 bg-white dark:bg-slate-800/60 dark:border-slate-700 p-3 space-y-2"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-slate-600">Purchase {i + 1}</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => collapsible && toggleLotCollapsed(lot.id)}
+                      disabled={!collapsible}
+                      className={`flex items-center gap-1.5 min-w-0 text-left ${collapsible ? 'cursor-pointer' : ''}`}
+                    >
+                      {collapsible && (
+                        <ChevronDown
+                          size={15}
+                          className={`shrink-0 text-slate-400 transition-transform ${collapsed ? '-rotate-90' : ''}`}
+                        />
+                      )}
+                      <span className="text-xs font-medium text-slate-600 shrink-0">Purchase {i + 1}</span>
+                      {collapsed && (
+                        <span className="text-xs text-slate-400 truncate">
+                          {[
+                            lot.date || null,
+                            gramsFilled ? `${lot.grams} g` : null,
+                            amountFilled ? formatPreciseCurrency(Number(lot.amount), currency) : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ') || 'Not filled in yet'}
+                        </span>
+                      )}
+                    </button>
                     <button
                       type="button"
                       onClick={() => {
@@ -4454,43 +4819,47 @@ function AssetDetailsForm({
                       <Trash2 size={15} />
                     </button>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    <Field label="Date">
-                      <input
-                        type="date"
-                        value={lot.date ?? ''}
-                        onChange={(e) => updatePurchaseLot(lot.id, { date: e.target.value })}
-                        className={inputClass}
-                      />
-                    </Field>
-                    <Field label="Grams">
-                      <input
-                        type="number"
-                        step="any"
-                        value={lot.grams}
-                        onChange={(e) => updatePurchaseLot(lot.id, { grams: e.target.value })}
-                        className={inputClass}
-                        placeholder="e.g. 10"
-                      />
-                    </Field>
-                    <Field label="Amount Paid">
-                      <input
-                        type="number"
-                        step="any"
-                        value={lot.amount}
-                        onChange={(e) => updatePurchaseLot(lot.id, { amount: e.target.value })}
-                        className={inputClass}
-                        placeholder="e.g. 65000"
-                      />
-                    </Field>
-                  </div>
-                  {lotIncomplete && (
-                    <p className="text-xs text-amber-600 dark:text-amber-400 flex items-start gap-1">
-                      <AlertTriangle size={12} className="shrink-0 mt-0.5" />
-                      {gramsFilled
-                        ? "Add an Amount Paid for this purchase — it won't count toward the total until both are filled in."
-                        : "Add the Grams for this purchase — it won't count toward the total until both are filled in."}
-                    </p>
+                  {!collapsed && (
+                    <>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        <Field label="Date">
+                          <input
+                            type="date"
+                            value={lot.date ?? ''}
+                            onChange={(e) => updatePurchaseLot(lot.id, { date: e.target.value })}
+                            className={inputClass}
+                          />
+                        </Field>
+                        <Field label="Grams">
+                          <input
+                            type="number"
+                            step="any"
+                            value={lot.grams}
+                            onChange={(e) => updatePurchaseLot(lot.id, { grams: e.target.value })}
+                            className={inputClass}
+                            placeholder="e.g. 10"
+                          />
+                        </Field>
+                        <Field label="Amount Paid">
+                          <input
+                            type="number"
+                            step="any"
+                            value={lot.amount}
+                            onChange={(e) => updatePurchaseLot(lot.id, { amount: e.target.value })}
+                            className={inputClass}
+                            placeholder="e.g. 65000"
+                          />
+                        </Field>
+                      </div>
+                      {lotIncomplete && (
+                        <p className="text-xs text-amber-600 dark:text-amber-400 flex items-start gap-1">
+                          <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                          {gramsFilled
+                            ? "Add an Amount Paid for this purchase — it won't count toward the total until both are filled in."
+                            : "Add the Grams for this purchase — it won't count toward the total until both are filled in."}
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               );
@@ -4513,14 +4882,15 @@ function AssetDetailsForm({
         <>
           {isMarketSelectable && (
             <Field label="Market">
-              <select
+              <CustomSelect
                 value={market}
-                onChange={(e) => setMarket(e.target.value as 'IN' | 'US')}
+                onChange={(v) => setMarket(v as 'IN' | 'US')}
                 className={`${inputClass} bg-white text-slate-700`}
-              >
-                <option value="IN">🇮🇳 India (NSE / BSE)</option>
-                <option value="US">🇺🇸 United States (NASDAQ / NYSE)</option>
-              </select>
+                options={[
+                  { value: 'IN', label: '🇮🇳 India (NSE / BSE)' },
+                  { value: 'US', label: '🇺🇸 United States (NASDAQ / NYSE)' },
+                ]}
+              />
               <p className="text-xs text-slate-600 mt-1">
                 {market === 'US'
                   ? 'Live price is fetched from the US market — Currency defaults to USD below.'
@@ -4528,8 +4898,16 @@ function AssetDetailsForm({
               </p>
             </Field>
           )}
-          <Field label={<>Symbol (for live price) <span className="text-red-500">*</span></>}>
+          <Field
+            label={
+              <>
+                Link to Live Price{' '}
+                <span className="text-[10px] font-bold tracking-wide text-amber-600 align-middle">BETA</span>
+              </>
+            }
+          >
             <div className="relative">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 value={symbol}
                 onChange={(e) => {
@@ -4538,12 +4916,8 @@ function AssetDetailsForm({
                 }}
                 onFocus={() => symbolSuggestions.length > 0 && setSymbolSearchOpen(true)}
                 onBlur={() => setTimeout(() => setSymbolSearchOpen(false), 150)}
-                className={`${inputClass} uppercase ${symbolSearchLoading ? 'pr-9' : ''}`}
-                placeholder={
-                  isMarketSelectable && market === 'US'
-                    ? "Example: GOOGL"
-                    : 'Example: ITC'
-                }
+                className={`${inputClass} uppercase pl-9 ${symbolSearchLoading ? 'pr-9' : ''}`}
+                placeholder="Search stock ticker..."
                 autoComplete="off"
               />
               {symbolSearchLoading && (
@@ -4593,9 +4967,10 @@ function AssetDetailsForm({
                   </div>
                 )}
             </div>
-            {isMarketSelectable && market === 'US' && (
-              <p className="text-xs text-slate-600 mt-1">Not sure of the ticker? Just type the company name.</p>
-            )}
+            <p className="text-xs text-slate-600 mt-1">
+              Search ticker to auto-fill name and link live price ·{' '}
+              <span className="text-amber-600 font-medium">Beta</span>
+            </p>
           </Field>
           {isRecurringEligible && (
             <div className="space-y-4 border border-slate-100 bg-slate-50/60 rounded-xl p-4">
@@ -4622,14 +4997,15 @@ function AssetDetailsForm({
                       />
                     </Field>
                     <Field label="Frequency">
-                      <select
+                      <CustomSelect
                         value={sipFrequency}
-                        onChange={(e) => setSipFrequency(e.target.value as 'monthly' | 'quarterly')}
+                        onChange={(v) => setSipFrequency(v as 'monthly' | 'quarterly')}
                         className={inputClass}
-                      >
-                        <option value="monthly">Monthly</option>
-                        <option value="quarterly">Quarterly</option>
-                      </select>
+                        options={[
+                          { value: 'monthly', label: 'Monthly' },
+                          { value: 'quarterly', label: 'Quarterly' },
+                        ]}
+                      />
                     </Field>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -4671,6 +5047,86 @@ function AssetDetailsForm({
               )}
             </div>
           )}
+          {shareLots.length === 1 && (lotInputMode[shareLots[0].id] ?? 'qty') === 'qty' ? (
+            // The common case — one purchase, no other-currency entry — gets
+            // the plain "No. of Shares / Avg. Purchase Price" layout instead
+            // of the boxed, numbered "Purchase 1" editor below. Adding a
+            // second purchase (or switching to "paid in {otherCurrency}")
+            // falls through to that full multi-lot editor automatically,
+            // so nothing about multi-lot/FX support is actually lost.
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="No. of Shares">
+                  <input
+                    type="number"
+                    step="any"
+                    value={shareLots[0].quantity}
+                    onChange={(e) => updateShareLot(shareLots[0].id, { quantity: e.target.value })}
+                    className={inputClass}
+                    placeholder="e.g. 10"
+                  />
+                </Field>
+                <Field label="Avg. Purchase Price">
+                  {isMarketSelectable ? (
+                    <div className="flex gap-1">
+                      <input
+                        type="number"
+                        step="any"
+                        value={lotPriceRaw[shareLots[0].id] ?? shareLots[0].price}
+                        onChange={(e) =>
+                          setLotPriceRaw((m) => ({ ...m, [shareLots[0].id]: e.target.value }))
+                        }
+                        className={`${fieldBaseClass} flex-1 min-w-0 px-3`}
+                        placeholder="e.g. 200"
+                      />
+                      <CustomSelect
+                        value={lotPriceCurrency[shareLots[0].id] ?? currency}
+                        onChange={(v) =>
+                          handleLotPriceCurrencyChange(shareLots[0].id, v, shareLots[0].price)
+                        }
+                        className={`${fieldBaseClass} w-16 shrink-0 px-1.5`}
+                        menuWidth={100}
+                        options={[
+                          { value: currency, label: currency },
+                          { value: otherCurrency, label: otherCurrency },
+                        ]}
+                      />
+                    </div>
+                  ) : (
+                    <input
+                      type="number"
+                      step="any"
+                      value={shareLots[0].price}
+                      onChange={(e) => updateShareLot(shareLots[0].id, { price: e.target.value })}
+                      className={inputClass}
+                      placeholder="e.g. 200"
+                    />
+                  )}
+                </Field>
+              </div>
+              <p className="text-xs text-slate-600">
+                Saving sets today's position. Buys and sells you record are applied on top.
+              </p>
+              <div className="flex items-center gap-4 flex-wrap">
+                <button
+                  type="button"
+                  onClick={addShareLot}
+                  className="flex items-center gap-1.5 text-sm text-brand-600 hover:text-brand-700 font-medium"
+                >
+                  <Plus size={16} /> Add another purchase
+                </button>
+                {isMarketSelectable && (
+                  <button
+                    type="button"
+                    onClick={() => setLotMode(shareLots[0].id, 'amount')}
+                    className="text-sm text-brand-600 hover:text-brand-700 underline"
+                  >
+                    Paid in {otherCurrency}? Enter the amount instead
+                  </button>
+                )}
+              </div>
+            </>
+          ) : (
           <div className="space-y-3 border border-slate-100 bg-slate-50/60 rounded-xl p-4">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <p className="text-sm font-medium text-slate-700">Purchases</p>
@@ -4699,13 +5155,43 @@ function AssetDetailsForm({
                 const qtyOrAmountFilled = Number(qtyOrAmountRaw) > 0;
                 const priceFilled = Number(priceRaw) > 0;
                 const lotIncomplete = qtyOrAmountFilled !== priceFilled;
+                // Every purchase gets the collapse arrow now, even a lone
+                // one — see the matching comment on the weight-tracked
+                // (gold-style) purchases block above.
+                const collapsible = true;
+                const collapsed = collapsible && collapsedLotIds.has(lot.id);
                 return (
                   <div
                     key={lot.id}
                     className="rounded-lg border border-slate-200 bg-white dark:bg-slate-800/60 dark:border-slate-700 p-3 space-y-2"
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-slate-600">Purchase {i + 1}</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => collapsible && toggleLotCollapsed(lot.id)}
+                        disabled={!collapsible}
+                        className={`flex items-center gap-1.5 min-w-0 text-left ${collapsible ? 'cursor-pointer' : ''}`}
+                      >
+                        {collapsible && (
+                          <ChevronDown
+                            size={15}
+                            className={`shrink-0 text-slate-400 transition-transform ${collapsed ? '-rotate-90' : ''}`}
+                          />
+                        )}
+                        <span className="text-xs font-medium text-slate-600 shrink-0">Purchase {i + 1}</span>
+                        {collapsed && (
+                          <span className="text-xs text-slate-400 truncate">
+                            {[
+                              lot.date || null,
+                              qtyOrAmountFilled && mode === 'qty' ? `${lot.quantity} shares` : null,
+                              qtyOrAmountFilled && mode === 'amount' ? `${lotAmount[lot.id]} ${amtCurrency}` : null,
+                              priceFilled ? `@ ${formatPreciseCurrency(Number(priceRaw), priceCurrency)}` : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ') || 'Not filled in yet'}
+                          </span>
+                        )}
+                      </button>
                       <button
                         type="button"
                         onClick={() => {
@@ -4718,13 +5204,15 @@ function AssetDetailsForm({
                         <Trash2 size={15} />
                       </button>
                     </div>
+                    {!collapsed && (
+                    <>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       <Field label="Date">
                         <input
                           type="date"
                           value={lot.date ?? ''}
                           onChange={(e) => updateShareLot(lot.id, { date: e.target.value })}
-                          className={inputClass}
+                          className={`${inputClass} pr-2`}
                         />
                       </Field>
                       {mode === 'qty' ? (
@@ -4749,20 +5237,22 @@ function AssetDetailsForm({
                               className={`${fieldBaseClass} flex-1 min-w-0 px-3`}
                               placeholder="e.g. 100"
                             />
-                            <select
+                            <CustomSelect
                               value={amtCurrency}
-                              onChange={(e) =>
-                                setLotAmountCurrency((m) => ({ ...m, [lot.id]: e.target.value }))
+                              onChange={(v) =>
+                                setLotAmountCurrency((m) => ({ ...m, [lot.id]: v }))
                               }
                               className={`${fieldBaseClass} w-16 shrink-0 px-1.5`}
-                            >
-                              <option value={currency}>{currency}</option>
-                              <option value={otherCurrency}>{otherCurrency}</option>
-                            </select>
+                              menuWidth={100}
+                              options={[
+                                { value: currency, label: currency },
+                                { value: otherCurrency, label: otherCurrency },
+                              ]}
+                            />
                           </div>
                         </Field>
                       )}
-                      <Field label="Price / Unit">
+                      <Field label="Price / Unit" className="col-span-2 sm:col-span-1">
                         {isMarketSelectable ? (
                           <div className="flex gap-1">
                             <input
@@ -4773,42 +5263,16 @@ function AssetDetailsForm({
                               className={`${fieldBaseClass} flex-1 min-w-0 px-3`}
                               placeholder="e.g. 200"
                             />
-                            <select
+                            <CustomSelect
                               value={lotPriceCurrency[lot.id] ?? currency}
-                              onChange={(e) => {
-                                const nextCurrency = e.target.value;
-                                const prevCurrency = lotPriceCurrency[lot.id] ?? currency;
-                                setLotPriceCurrency((m) => ({ ...m, [lot.id]: nextCurrency }));
-                                if (nextCurrency === prevCurrency) return;
-                                // Re-seed the raw box by CONVERTING the currently
-                                // displayed number into the newly chosen currency —
-                                // never copy the digits over unconverted. Copying
-                                // verbatim (e.g. a $1.05 price becoming "₹1.05")
-                                // silently corrupts the saved cost basis, which is
-                                // exactly how a stray $1.05 avg. cost sneaks in.
-                                // If we can't convert safely yet (rate not loaded),
-                                // clear the box instead of showing a wrong number —
-                                // the person re-types rather than trusting bad data.
-                                const curRaw =
-                                  lotPriceRaw[lot.id] !== undefined
-                                    ? Number(lotPriceRaw[lot.id])
-                                    : Number(lot.price);
-                                if (curRaw && fxRate !== null) {
-                                  const converted =
-                                    prevCurrency === currency ? curRaw / fxRate : curRaw * fxRate;
-                                  setLotPriceRaw((m) => ({
-                                    ...m,
-                                    [lot.id]: converted > 0 ? converted.toFixed(6) : '',
-                                  }));
-                                } else {
-                                  setLotPriceRaw((m) => ({ ...m, [lot.id]: '' }));
-                                }
-                              }}
-                              className={`${fieldBaseClass} w-16 shrink-0 px-1.5`}
-                            >
-                              <option value={currency}>{currency}</option>
-                              <option value={otherCurrency}>{otherCurrency}</option>
-                            </select>
+                              onChange={(v) => handleLotPriceCurrencyChange(lot.id, v, lot.price)}
+                              className={`${fieldBaseClass} w-20 shrink-0 px-1.5`}
+                              menuWidth={100}
+                              options={[
+                                { value: currency, label: currency },
+                                { value: otherCurrency, label: otherCurrency },
+                              ]}
+                            />
                           </div>
                         ) : (
                           <input
@@ -4896,6 +5360,8 @@ function AssetDetailsForm({
                         ) : null}
                       </div>
                     )}
+                    </>
+                    )}
                   </div>
                 );
               })}
@@ -4912,7 +5378,26 @@ function AssetDetailsForm({
               quantity and average cost update automatically, and returns recalculate off the new average.
             </p>
           </div>
+          )}
         </>
+      )}
+      {isUnitTracked && nameCurrencyField}
+      {isUnitTracked && (
+        <Field label="Held in account">
+          <CustomSelect
+            value={institution}
+            onChange={setInstitution}
+            className={`${inputClass} bg-white text-slate-700`}
+            placeholder="None"
+            options={[
+              { value: '', label: 'None' },
+              ...COMMON_BROKERS.map((b) => ({ value: b, label: b })),
+              ...(institution && !COMMON_BROKERS.includes(institution)
+                ? [{ value: institution, label: institution }]
+                : []),
+            ]}
+          />
+        </Field>
       )}
       {SIP_CLASSES.has(assetClass) && (
         <div className="space-y-4 border border-slate-100 bg-slate-50/60 rounded-xl p-4">
@@ -5004,14 +5489,15 @@ function AssetDetailsForm({
               />
             </Field>
             <Field label="Frequency">
-              <select
+              <CustomSelect
                 value={sipFrequency}
-                onChange={(e) => setSipFrequency(e.target.value as 'monthly' | 'quarterly')}
+                onChange={(v) => setSipFrequency(v as 'monthly' | 'quarterly')}
                 className={inputClass}
-              >
-                <option value="monthly">Monthly</option>
-                <option value="quarterly">Quarterly</option>
-              </select>
+                options={[
+                  { value: 'monthly', label: 'Monthly' },
+                  { value: 'quarterly', label: 'Quarterly' },
+                ]}
+              />
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -5234,30 +5720,142 @@ function AssetDetailsForm({
           )}
         </Field>
       </div>
-      <Field label="Currency">
-        <select
-          value={currency}
-          onChange={(e) => {
-            currencyTouchedRef.current = true;
-            setCurrency(e.target.value);
-          }}
-          className={inputClass}
-        >
-          {CURRENCIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-      </Field>
+      <button
+        type="button"
+        onClick={() => setShowMoreDetails((v) => !v)}
+        className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700"
+      >
+        {showMoreDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        {showMoreDetails ? 'Hide details' : 'Show details'}
+      </button>
+      {showMoreDetails && (
+        <div className="space-y-4 border-t border-slate-100 dark:border-slate-800 pt-4">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Geography">
+              <CustomSelect
+                value={geography}
+                onChange={setGeography}
+                className={`${inputClass} bg-white text-slate-700`}
+                placeholder="—"
+                options={GEOGRAPHY_OPTIONS.map((g) => ({ value: g.value as string, label: g.label }))}
+              />
+            </Field>
+            <Field label="Sub-class">
+              <input
+                value={subClass}
+                onChange={(e) => setSubClass(e.target.value)}
+                className={inputClass}
+                placeholder="e.g. Large Cap, SGB..."
+              />
+            </Field>
+          </div>
+          <Field label="Tags">
+            <div className="min-h-[38px] flex flex-wrap gap-1.5 items-center px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus-within:ring-2 focus-within:ring-brand-500">
+              {tags.map((t) => (
+                <span
+                  key={t}
+                  className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-medium px-2 py-1 rounded-md"
+                >
+                  {t}
+                  <button
+                    type="button"
+                    onClick={() => setTags((prev) => prev.filter((x) => x !== t))}
+                    className="text-slate-400 hover:text-slate-600"
+                  >
+                    <X size={11} />
+                  </button>
+                </span>
+              ))}
+              <input
+                value={tagDraft}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v.endsWith(',')) addTag(v.slice(0, -1));
+                  else setTagDraft(v);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addTag(tagDraft);
+                  } else if (e.key === 'Backspace' && !tagDraft && tags.length) {
+                    setTags((prev) => prev.slice(0, -1));
+                  }
+                }}
+                onBlur={() => tagDraft && addTag(tagDraft)}
+                className="flex-1 min-w-[90px] bg-transparent text-sm outline-none placeholder:text-slate-400"
+                placeholder="e.g. long-term, swing-trade, tech…"
+              />
+            </div>
+            <p className="text-xs text-slate-400 mt-1">Press Enter or comma to add · spaces become hyphens</p>
+          </Field>
+          <Field label="Notes">
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+              className={`${inputClass} resize-none`}
+              placeholder="Optional notes..."
+            />
+          </Field>
+          <label className="flex items-start gap-3 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={excludeFromAllocation}
+              onChange={(e) => setExcludeFromAllocation(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+            />
+            <div>
+              <div className="flex items-center gap-1.5 text-sm font-medium text-slate-800 dark:text-slate-100">
+                <EyeOff size={14} className="text-slate-500" /> Exclude from allocation
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Still counts toward net worth, but ignored in allocation % and recommendations
+              </p>
+            </div>
+          </label>
+          <label className="flex items-start gap-3 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={emergencyFund}
+              onChange={(e) => setEmergencyFund(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+            />
+            <div>
+              <div className="flex items-center gap-1.5 text-sm font-medium text-slate-800 dark:text-slate-100">
+                <AlertTriangle size={14} className="text-slate-500" /> Part of emergency fund
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Tag the holdings you actually earmark for emergencies.
+              </p>
+            </div>
+          </label>
+        </div>
+      )}
       {attemptedSubmit && hasErrors && (
         <p className="text-sm text-red-600 text-center">
           Please fill in the highlighted field{nameMissing && valueMissing ? 's' : ''} before saving.
         </p>
       )}
-      <button onClick={submit} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-base font-medium">
-        Save Asset
-      </button>
+      {onClose ? (
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 py-2.5 rounded-lg text-base font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={submit}
+            className="flex-1 bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-base font-medium"
+          >
+            Save
+          </button>
+        </div>
+      ) : (
+        <button onClick={submit} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-base font-medium">
+          Save Asset
+        </button>
+      )}
     </div>
   );
 }
@@ -5456,17 +6054,12 @@ function LiabilityDetailsForm({
       </Field>
       {effectiveCategory && effectiveCategory.types.length > 1 ? (
         <Field label={`${effectiveCategory.label} Type`}>
-          <select
+          <CustomSelect
             value={liabilityClass}
-            onChange={(e) => setLiabilityClass(e.target.value as LiabilityClass)}
+            onChange={(v) => setLiabilityClass(v as LiabilityClass)}
             className={inputClass}
-          >
-            {effectiveCategory.types.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </select>
+            options={effectiveCategory.types.map((t) => ({ value: t.value, label: t.label }))}
+          />
         </Field>
       ) : (
         <Field label="Liability Type">
@@ -5480,13 +6073,7 @@ function LiabilityDetailsForm({
           <input type="number" value={outstanding} onChange={(e) => setOutstanding(e.target.value)} className={inputClass} placeholder="0" />
         </Field>
         <Field label="Currency">
-          <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={inputClass}>
-            {CURRENCIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+          <CurrencySelect value={currency} onChange={setCurrency} className={inputClass} />
         </Field>
       </div>
       <Field label="Monthly EMI (optional)">
@@ -5554,6 +6141,7 @@ function AllocationTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) 
   const assets = useAssetsStore((s) => s.assets);
   const byClass: Record<string, number> = {};
   assets.forEach((a) => {
+    if (a.excludeFromAllocation) return;
     byClass[a.assetClass] = (byClass[a.assetClass] ?? 0) + a.value;
   });
   const data = Object.entries(byClass).map(([key, value]) => ({
@@ -5624,9 +6212,17 @@ function AllocationChart({
   );
 }
 
-function Field({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+  className,
+}: {
+  label: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <label className="block">
+    <label className={`block ${className ?? ''}`}>
       {/* min-h + items-end reserves space for a 2-line label and bottom-aligns
          the text, so when a field sits next to a shorter label in a grid row
          (e.g. "Interest Rate (%)" beside "Bank / Institution"), both inputs

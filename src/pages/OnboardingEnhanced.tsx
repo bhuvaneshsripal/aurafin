@@ -19,6 +19,8 @@ import { upsertDoc } from '../hooks/useFirestoreSync';
 import { ASSET_TAXONOMY } from '../utils/taxonomy';
 import Modal from '../components/Modal';
 import PinBoxInput from '../components/PinBoxInput';
+import CustomSelect from '../components/CustomSelect';
+import CurrencySelect from '../components/CurrencySelect';
 import {
   saveOnboardingCache,
   getOnboardingCache,
@@ -616,18 +618,19 @@ const AddAssetModal = memo((props: AddAssetModalProps) => (
 
       <div>
         <label className="block text-xs text-slate-500 dark:text-slate-400 mb-2">Asset Type</label>
-        <select
+        <CustomSelect
           value={props.assetType}
-          onChange={(e) => props.setAssetType(e.target.value as AssetClass)}
+          onChange={(v) => props.setAssetType(v as AssetClass)}
           className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500"
-        >
-          <option value="stock">Stock</option>
-          <option value="fixed_deposit">Fixed Deposit</option>
-          <option value="gold">Gold</option>
-          <option value="cash">Cash</option>
-          <option value="crypto_coin">Cryptocurrency</option>
-          <option value="residential_property">Property</option>
-        </select>
+          options={[
+            { value: 'stock', label: 'Stock' },
+            { value: 'fixed_deposit', label: 'Fixed Deposit' },
+            { value: 'gold', label: 'Gold' },
+            { value: 'cash', label: 'Cash' },
+            { value: 'crypto_coin', label: 'Cryptocurrency' },
+            { value: 'residential_property', label: 'Property' },
+          ]}
+        />
       </div>
 
       <div>
@@ -644,15 +647,11 @@ const AddAssetModal = memo((props: AddAssetModalProps) => (
 
       <div>
         <label className="block text-xs text-slate-500 dark:text-slate-400 mb-2">Currency</label>
-        <select
+        <CurrencySelect
           value={props.assetCurrency}
-          onChange={(e) => props.setAssetCurrency(e.target.value)}
+          onChange={props.setAssetCurrency}
           className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500"
-        >
-          <option value="INR">INR (₹)</option>
-          <option value="USD">USD ($)</option>
-          <option value="EUR">EUR (€)</option>
-        </select>
+        />
       </div>
 
       <div className="flex gap-2 pt-2">

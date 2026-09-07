@@ -6,7 +6,8 @@ import { upsertDoc, removeDoc } from '../hooks/useFirestoreSync';
 import Modal from '../components/Modal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import type { Liability } from '../types';
-import { CURRENCIES, formatCurrency } from '../utils/currency';
+import { formatCurrency } from '../utils/currency';
+import CurrencySelect from '../components/CurrencySelect';
 
 export default function Liabilities() {
   const liabilities = useLiabilitiesStore((s) => s.liabilities);
@@ -162,13 +163,7 @@ function LiabilityForm({
           />
         </Field>
         <Field label="Currency">
-          <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={inputClass}>
-            {CURRENCIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+          <CurrencySelect value={currency} onChange={setCurrency} className={inputClass} />
         </Field>
       </div>
       <Field label="Monthly EMI (optional)">

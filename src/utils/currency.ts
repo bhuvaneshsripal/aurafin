@@ -1,4 +1,40 @@
-export const CURRENCIES = ['INR', 'USD', 'EUR', 'GBP', 'SGD', 'AED', 'AUD', 'CAD', 'JPY'] as const;
+export const CURRENCIES = [
+  'INR',
+  'USD',
+  'EUR',
+  'GBP',
+  'SGD',
+  'AED',
+  'KWD',
+  'SAR',
+  'QAR',
+  'CAD',
+  'AUD',
+  'JPY',
+  'CHF',
+  'HKD',
+  'CNY',
+] as const;
+
+/** Display symbols for the currency picker (CurrencySelect) — purely
+ *  cosmetic, doesn't affect formatCurrency/Intl formatting below. */
+export const CURRENCY_SYMBOLS: Record<string, string> = {
+  INR: '₹',
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  SGD: 'S$',
+  AED: 'د.إ',
+  KWD: 'د.ك',
+  SAR: 'ر.س',
+  QAR: 'ر.ق',
+  CAD: 'C$',
+  AUD: 'A$',
+  JPY: '¥',
+  CHF: 'CHF',
+  HKD: 'HK$',
+  CNY: '¥',
+};
 
 export interface FormatCurrencyOptions {
   /** Decimal places to show. Defaults to 0 for whole amounts, use 2 for invested/price. */

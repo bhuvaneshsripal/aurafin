@@ -14,6 +14,14 @@ import { formatCurrency, formatPreciseCurrency } from '../utils/currency';
 import { ASSET_TAXONOMY } from '../utils/taxonomy';
 import { exportToCsv, exportToXlsx, IMPORT_TEMPLATE_ROWS } from '../utils/exportCsv';
 import type { AssetClass } from '../types';
+import CustomSelect from '../components/CustomSelect';
+
+// Flattened once for the row-level Asset Class picker below — each option
+// carries its category name as `group` so CustomSelect renders the same
+// section headers a native <optgroup> would have.
+const ASSET_CLASS_OPTIONS = ASSET_TAXONOMY.flatMap((cat) =>
+  cat.types.map((t) => ({ value: t.value, label: t.label, group: cat.label }))
+);
 
 interface Broker {
   key: string;
@@ -452,21 +460,12 @@ export default function Import() {
                   <tr key={i} className={r.valid ? '' : 'bg-red-50/40 dark:bg-red-900/30'}>
                     <td className="px-4 py-3 text-slate-800 dark:text-slate-100">{r.name || '—'}</td>
                     <td className="px-4 py-3">
-                      <select
+                      <CustomSelect
                         value={r.assetClass}
-                        onChange={(e) => updateRowClass(i, e.target.value as AssetClass)}
-                        className="border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
-                      >
-                        {ASSET_TAXONOMY.map((cat) => (
-                          <optgroup key={cat.key} label={cat.label}>
-                            {cat.types.map((t) => (
-                              <option key={t.value} value={t.value}>
-                                {t.label}
-                              </option>
-                            ))}
-                          </optgroup>
-                        ))}
-                      </select>
+                        onChange={(v) => updateRowClass(i, v as AssetClass)}
+                        className="border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1 text-xs w-40"
+                        options={ASSET_CLASS_OPTIONS}
+                      />
                     </td>
                     <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
                       {r.investedValue ? formatPreciseCurrency(r.investedValue, r.currency) : '—'}
