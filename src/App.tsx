@@ -39,6 +39,7 @@ import type { Asset, Liability, Goal, Transaction, Snapshot, BudgetItem, Financi
 
 const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'));
 const Wealth = lazyWithRetry(() => import('./pages/Wealth'));
+const InvestmentPnL = lazyWithRetry(() => import('./pages/InvestmentPnL'));
 const Essentials = lazyWithRetry(() => import('./pages/Essentials'));
 const Transactions = lazyWithRetry(() => import('./pages/Transactions'));
 const Import = lazyWithRetry(() => import('./pages/Import'));
@@ -92,6 +93,7 @@ function AppShell() {
                 <Routes>
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/wealth" element={<Wealth />} />
+                  <Route path="/wealth/performance" element={<InvestmentPnL />} />
                   <Route path="/essentials" element={<Essentials />} />
                   <Route path="/transactions" element={<Transactions />} />
                   <Route path="/import" element={<Import />} />

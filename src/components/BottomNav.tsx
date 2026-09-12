@@ -11,6 +11,7 @@ import {
   Settings,
   Smartphone,
   X,
+  LineChart,
 } from 'lucide-react';
 import QuickAddMenu from './QuickAddMenu';
 import { useUiStore } from '../store/uiStore';
@@ -29,6 +30,7 @@ interface MoreLink {
 }
 
 const moreLinks: MoreLink[] = [
+  { to: '/wealth/performance', label: 'Performance', icon: LineChart },
   { to: '/essentials', label: 'Essentials', icon: Target },
   { to: '/import', label: 'Import', icon: FileUp },
   { to: '/calculators', label: 'Calculators', icon: Calculator },

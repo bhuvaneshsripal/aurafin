@@ -172,6 +172,31 @@ export interface Asset {
    * `avgCost` are then derived by summing lots and weighting by quantity.
    */
   shareLots?: { id: string; date?: string; quantity: number; price: number }[];
+  /**
+   * Realized sale records for this holding — one entry per Sell action,
+   * appended (never mutated/removed) so a holding's full lifetime history
+   * survives even after it's completely sold out. `costBasis` is the
+   * moving weighted-average cost per unit *at the moment of this sale*
+   * (computed by walking shareLots/purchaseLots + saleLots in date order),
+   * locked in here so this sale's realized P&L stays fixed forever even if
+   * later buys/sells change the holding's current average cost. Selling
+   * NEVER removes or shrinks shareLots/purchaseLots — those stay the
+   * permanent, untouched buy history; remaining quantity is always derived
+   * as (total bought) − (total sold via saleLots). See
+   * `src/utils/investmentPnl.ts` for the full accounting logic. Grams for
+   * weight-tracked commodities (Gold/Silver/Platinum) are stored in the
+   * same `quantity` field as unit-tracked equities/funds/crypto, since a
+   * sale record needs the same shape either way. */
+  saleLots?: {
+    id: string;
+    date?: string;
+    quantity: number;
+    price: number;
+    costBasis: number;
+    fees?: number;
+    /** Bank/cash account the sale proceeds were credited to, if any — mirrors BuySellDividendModal's "Credited to" picker. */
+    accountId?: string;
+  }[];
   /** Sub-type shown on the Accounts tab (bank/cash/wallet/broker/other) — display only. */
   accountType?: 'bank' | 'cash' | 'wallet' | 'broker' | 'other';
   /** Last 4 digits of the account/card number, for display. */

@@ -45,6 +45,7 @@ import {
 import { useAssetsStore } from '../store/assetsStore';
 import { useLivePricesStore, resolvePreviousClose } from '../store/livePricesStore';
 import { goldPricePerGram22k } from '../utils/goldPrice';
+import { computeHoldingPnl, isFullySold } from '../utils/investmentPnl';
 import { useSyncStatusStore } from '../store/syncStatusStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useAuthStore } from '../store/authStore';
@@ -1259,6 +1260,11 @@ function AssetsTab({
 
   const filtered = assets
     .filter((a) => {
+      // Once a holding has been completely sold out it moves to
+      // Investments → Profit & Loss → Sold Investments instead of
+      // lingering here as a "0 shares" ghost card — it isn't deleted,
+      // just no longer an active position. See utils/investmentPnl.ts.
+      if (isFullySold(a)) return false;
       const q = search.trim().toLowerCase();
       const matchesSearch =
         !q || a.name.toLowerCase().includes(q) || (a.symbol ?? '').toLowerCase().includes(q);
@@ -3168,15 +3174,6 @@ function BuySellDividendModal({
     onClose();
   };
 
-  /** Recomputes quantity/avgCost/investedValue the same way the Edit form
-   *  does — weighted average cost = total paid ÷ total units/grams. */
-  const totalsFromLots = (lots: { qty: number; price: number }[]) => {
-    const totalQty = Math.round(lots.reduce((sum, l) => sum + l.qty, 0) * 10000) / 10000;
-    const totalInvested = lots.reduce((sum, l) => sum + l.qty * l.price, 0);
-    const avgCost = totalQty > 0 ? totalInvested / totalQty : 0;
-    return { totalQty, totalInvested, avgCost };
-  };
-
   const submitBuy = async () => {
     const qtyNum = Number(qty);
     const priceNum = Number(price);
@@ -3187,28 +3184,41 @@ function BuySellDividendModal({
     setSaving(true);
     setError('');
     try {
+      // Quantity/avg cost/invested value always reflect what's REMAINING
+      // after every buy AND sell ever recorded (moving weighted-average —
+      // see utils/investmentPnl.ts), not just the sum of buy lots, so a
+      // purchase made after a previous partial sell doesn't silently
+      // resurrect quantity that was already sold.
       if (isWeightTracked) {
         const newLot = { id: crypto.randomUUID(), date, grams: qtyNum, amount: qtyNum * priceNum };
         const lots = [...(asset.purchaseLots ?? []), newLot];
-        const { totalQty, totalInvested } = totalsFromLots(lots.map((l) => ({ qty: l.grams, price: l.amount / l.grams })));
+        const { remainingQty, avgBuyCost, investedValue } = computeHoldingPnl(
+          { ...asset, purchaseLots: lots },
+          undefined,
+          false
+        );
         await onQuickUpdate({
           ...asset,
           purchaseLots: lots,
-          quantity: totalQty,
-          avgCost: totalQty > 0 ? totalInvested / totalQty : 0,
-          investedValue: totalInvested,
+          quantity: remainingQty,
+          avgCost: avgBuyCost,
+          investedValue,
           updatedAt: Date.now(),
         });
       } else {
         const newLot = { id: crypto.randomUUID(), date, quantity: qtyNum, price: priceNum };
         const lots = [...(asset.shareLots ?? []), newLot];
-        const { totalQty, totalInvested, avgCost } = totalsFromLots(lots.map((l) => ({ qty: l.quantity, price: l.price })));
+        const { remainingQty, avgBuyCost, investedValue } = computeHoldingPnl(
+          { ...asset, shareLots: lots },
+          undefined,
+          false
+        );
         await onQuickUpdate({
           ...asset,
           shareLots: lots,
-          quantity: totalQty,
-          avgCost,
-          investedValue: totalInvested,
+          quantity: remainingQty,
+          avgCost: avgBuyCost,
+          investedValue,
           updatedAt: Date.now(),
         });
       }
@@ -3240,61 +3250,47 @@ function BuySellDividendModal({
     setSaving(true);
     setError('');
     try {
-      // Reduce FIFO: oldest lots first, by date (undated lots keep their
-      // existing array order, oldest-added first).
-      let remaining = qtyNum;
+      // Record the sale as a permanent, append-only entry instead of
+      // reducing/removing buy lots — a holding's full purchase history
+      // must survive selling, even once it's sold down to zero (it then
+      // moves to Investments → Profit & Loss → Sold Investments instead
+      // of disappearing). Realized P&L for this sale is locked in against
+      // the moving weighted-average cost basis *as of right now* (see
+      // src/utils/investmentPnl.ts), which stays fixed forever afterward
+      // even if later buys change the holding's current average.
       const proceeds = qtyNum * priceNum;
-
-      if (isWeightTracked) {
-        const ordered = [...(asset.purchaseLots ?? [])].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
-        const kept: typeof ordered = [];
-        for (const lot of ordered) {
-          if (remaining <= 0) {
-            kept.push(lot);
-            continue;
-          }
-          if (lot.grams <= remaining + 0.0001) {
-            remaining -= lot.grams;
-          } else {
-            const newGrams = lot.grams - remaining;
-            kept.push({ ...lot, grams: newGrams, amount: (lot.amount / lot.grams) * newGrams });
-            remaining = 0;
-          }
-        }
-        const { totalQty, totalInvested } = totalsFromLots(kept.map((l) => ({ qty: l.grams, price: l.amount / l.grams })));
-        await onQuickUpdate({
-          ...asset,
-          purchaseLots: kept,
-          quantity: totalQty,
-          avgCost: totalQty > 0 ? totalInvested / totalQty : 0,
-          investedValue: totalInvested,
-          updatedAt: Date.now(),
-        });
-      } else {
-        const ordered = [...(asset.shareLots ?? [])].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
-        const kept: typeof ordered = [];
-        for (const lot of ordered) {
-          if (remaining <= 0) {
-            kept.push(lot);
-            continue;
-          }
-          if (lot.quantity <= remaining + 0.0001) {
-            remaining -= lot.quantity;
-          } else {
-            kept.push({ ...lot, quantity: lot.quantity - remaining });
-            remaining = 0;
-          }
-        }
-        const { totalQty, totalInvested, avgCost } = totalsFromLots(kept.map((l) => ({ qty: l.quantity, price: l.price })));
-        await onQuickUpdate({
-          ...asset,
-          shareLots: kept,
-          quantity: totalQty,
-          avgCost,
-          investedValue: totalInvested,
-          updatedAt: Date.now(),
-        });
-      }
+      const { avgBuyCost } = computeHoldingPnl(asset, undefined, false);
+      const saleLots = [
+        ...(asset.saleLots ?? []),
+        {
+          id: crypto.randomUUID(),
+          date,
+          quantity: qtyNum,
+          price: priceNum,
+          costBasis: avgBuyCost,
+          accountId: account?.id,
+        },
+      ];
+      // Recompute the holding's live-facing summary fields (quantity/avg
+      // cost/invested value) from the *permanent* lot history + the sale
+      // ledger above — same moving-average math used everywhere else in
+      // the app (Dashboard net worth, the Wealth grid, CSV export, etc.
+      // all read these three fields directly) — while shareLots/
+      // purchaseLots themselves are left completely untouched, so the
+      // original buy history never shrinks even once every share is sold.
+      const { remainingQty, avgBuyCost: remainingAvgCost, investedValue } = computeHoldingPnl(
+        { ...asset, saleLots },
+        undefined,
+        false
+      );
+      await onQuickUpdate({
+        ...asset,
+        saleLots,
+        quantity: remainingQty,
+        avgCost: remainingAvgCost,
+        investedValue,
+        updatedAt: Date.now(),
+      });
 
       if (account) {
         await onQuickUpdate({ ...account, value: (account.value ?? 0) + proceeds, updatedAt: Date.now() });
@@ -3943,6 +3939,40 @@ function AssetDetailsForm({
   // the person ends up holding at once they've bought at more than one price.
   const weightedAvgCost = totalShareQty > 0 ? totalShareInvested / totalShareQty : 0;
 
+  // The rows above are always the FULL lifetime buy history (this form
+  // edits shareLots directly and never sees/touches saleLots), so the
+  // quantity/avg-cost/invested-value actually SAVED to the asset must
+  // account for anything already sold via the Sell action — otherwise
+  // just opening and saving this form after a sale would silently undo
+  // it by resurrecting the sold quantity. See utils/investmentPnl.ts.
+  const netHoldingFromForm = computeHoldingPnl(
+    {
+      ...(initial ?? ({} as Partial<Asset>)),
+      id: initial?.id ?? 'draft',
+      name: initial?.name ?? '',
+      assetClass,
+      currency: initial?.currency ?? 'INR',
+      value: 0,
+      updatedAt: Date.now(),
+      shareLots: isUnitTracked
+        ? shareLots
+            .filter((l) => Number(l.quantity) > 0 && Number(l.price) > 0)
+            .map((l) => ({ id: l.id, date: l.date, quantity: Number(l.quantity) || 0, price: Number(l.price) || 0 }))
+        : undefined,
+      purchaseLots: isWeightTracked
+        ? purchaseLots
+            .filter((l) => Number(l.grams) > 0 && Number(l.amount) > 0)
+            .map((l) => ({ id: l.id, date: l.date, grams: Number(l.grams) || 0, amount: Number(l.amount) || 0 }))
+        : undefined,
+      saleLots: initial?.saleLots,
+    } as Asset,
+    undefined,
+    false
+  );
+  const netShareQty = isUnitTracked ? netHoldingFromForm.remainingQty : totalShareQty;
+  const netShareAvgCost = isUnitTracked ? netHoldingFromForm.avgBuyCost : weightedAvgCost;
+  const netShareInvested = isUnitTracked ? netHoldingFromForm.investedValue : totalShareInvested;
+
   const addShareLot = () =>
     setShareLots((rows) => [...rows, { id: crypto.randomUUID(), quantity: '', price: '' }]);
   const removeShareLot = (id: string) =>
@@ -4116,11 +4146,11 @@ function AssetDetailsForm({
   // invested are for weight-tracked assets above.
   useEffect(() => {
     if (!isUnitTracked) return;
-    setQuantity(totalShareQty > 0 ? String(totalShareQty) : '');
-    setAvgCost(weightedAvgCost > 0 ? String(Number(weightedAvgCost.toFixed(4))) : '');
-    setInvestedValue(totalShareInvested > 0 ? String(totalShareInvested) : '');
+    setQuantity(netShareQty > 0 ? String(netShareQty) : '');
+    setAvgCost(netShareAvgCost > 0 ? String(Number(netShareAvgCost.toFixed(4))) : '');
+    setInvestedValue(netShareInvested > 0 ? String(netShareInvested) : '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isUnitTracked, totalShareQty, totalShareInvested]);
+  }, [isUnitTracked, netShareQty, netShareInvested]);
   // Round to 4 decimal places (0.1 mg precision — plenty for jewellery/coins)
   // to avoid floating-point addition artifacts like 0.454099999999999995.
   const totalGrams = Math.round(
@@ -4143,11 +4173,11 @@ function AssetDetailsForm({
   const valueTouchedRef = useRef(!!initial?.value);
   useEffect(() => {
     if (!isWeightTracked) return;
-    setQuantity(totalGrams > 0 ? String(totalGrams) : '');
-    setInvestedValue(totalPurchaseAmount > 0 ? String(totalPurchaseAmount) : '');
+    setQuantity(netShareQty > 0 ? String(netShareQty) : '');
+    setInvestedValue(netShareInvested > 0 ? String(netShareInvested) : '');
     if (!valueTouchedRef.current) setValue(totalPurchaseAmount > 0 ? String(totalPurchaseAmount) : '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isWeightTracked, totalGrams, totalPurchaseAmount]);
+  }, [isWeightTracked, netShareQty, netShareInvested, totalPurchaseAmount]);
 
   // --- Gold purity live pricing (24K / 22K) -------------------------------
   // Gold-only: lets the person pick 24K or 22K and have Current Value
@@ -4178,9 +4208,9 @@ function AssetDetailsForm({
   useEffect(() => {
     if (!isGold || !goldPurity || goldPurityPricePerGram === null) return;
     if (valueTouchedRef.current) return;
-    if (totalGrams > 0) setValue((goldPurityPricePerGram * totalGrams).toFixed(2));
+    if (netShareQty > 0) setValue((goldPurityPricePerGram * netShareQty).toFixed(2));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isGold, goldPurity, goldPurityPricePerGram, totalGrams]);
+  }, [isGold, goldPurity, goldPurityPricePerGram, netShareQty]);
 
   // Whether the person tried to save at least once — required-field errors
   // only show up after this, so the form doesn't look "broken" on first view.

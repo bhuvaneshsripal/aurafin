@@ -9,6 +9,7 @@ import {
   Calculator,
   Smartphone,
   Lock,
+  LineChart,
 } from 'lucide-react';
 import { useAppLockStore } from '../store/appLockStore';
 import ProfileSwitcher from './ProfileSwitcher';
@@ -16,7 +17,8 @@ import AppLogo from './AppLogo';
 
 const mainLinks = [
   { to: '/', label: 'Overview', icon: LayoutDashboard },
-  { to: '/wealth', label: 'Wealth', icon: Wallet },
+  { to: '/wealth', label: 'Wealth', icon: Wallet, end: true },
+  { to: '/wealth/performance', label: 'Performance', icon: LineChart },
   { to: '/transactions', label: 'Money', icon: Receipt },
   { to: '/essentials', label: 'Essentials', icon: Target },
 ];
@@ -35,15 +37,17 @@ function NavItem({
   to,
   label,
   icon: Icon,
+  end,
 }: {
   to: string;
   label: string;
   icon: typeof LayoutDashboard;
+  end?: boolean;
 }) {
   return (
     <NavLink
       to={to}
-      end={to === '/'}
+      end={end ?? to === '/'}
       className={({ isActive }) =>
         `flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-150 ${
           isActive
