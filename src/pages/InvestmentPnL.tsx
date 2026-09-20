@@ -19,6 +19,7 @@ import {
   Table as TableIcon,
   Loader,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -46,6 +47,7 @@ import { formatCurrency, maskAmount, maskPreciseAmount, CURRENCY_SYMBOLS } from 
 import { exportToCsv } from '../utils/exportCsv';
 import { exportDomToPdf } from '../utils/exportPdf';
 import Modal from '../components/Modal';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import type { Asset } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -387,90 +389,19 @@ function PortfolioPerformanceChart({
 // Holdings / Sold tables
 // ---------------------------------------------------------------------------
 
-function HoldingRow({
+function SoldRow({
   h,
   currency,
   privacy,
   onOpen,
+  onDelete,
 }: {
   h: HoldingPnl;
   currency: string;
   privacy: boolean;
   onOpen: () => void;
+  onDelete: () => void;
 }) {
-  return (
-    <tr
-      onClick={onOpen}
-      className="cursor-pointer border-b border-slate-100 dark:border-slate-800 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
-    >
-      <td className="py-3 pr-3">
-        <div className="flex items-center gap-2.5">
-          <AssetBadge asset={h.asset} size={32} />
-          <div className="min-w-0">
-            <p className="text-[13.5px] font-semibold text-slate-900 dark:text-white truncate">{h.asset.name}</p>
-            <p className="text-[11.5px] text-slate-500 dark:text-slate-500">{ASSET_CLASS_LABELS[h.asset.assetClass]}</p>
-          </div>
-        </div>
-      </td>
-      <td className="py-3 pr-3 text-right font-numeric text-[13px] text-slate-700 dark:text-slate-300">
-        {h.kind === 'generic' ? '—' : `${h.remainingQty.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${h.unitLabel}`}
-      </td>
-      <td className="py-3 pr-3 text-right font-numeric text-[13px] text-slate-700 dark:text-slate-300">
-        {h.kind === 'generic' ? '—' : fmt(h.avgBuyCost, currency, privacy, true)}
-      </td>
-      <td className="py-3 pr-3 text-right font-numeric text-[13px] text-slate-700 dark:text-slate-300">
-        {h.kind === 'lot' && h.currentPrice !== undefined ? fmt(h.currentPrice, currency, privacy, true) : '—'}
-      </td>
-      <td className="py-3 pr-3 text-right font-numeric text-[13px] text-slate-700 dark:text-slate-300">{fmt(h.investedValue, currency, privacy)}</td>
-      <td className="py-3 pr-3 text-right font-numeric text-[13px] text-slate-900 dark:text-white font-semibold">{fmt(h.currentValue, currency, privacy)}</td>
-      <td className={`py-3 pr-3 text-right font-numeric text-[13px] font-semibold ${signClass(h.unrealizedPnl)}`}>
-        {moneyLabel(h.unrealizedPnl, currency, privacy)}
-      </td>
-      <td className={`py-3 pr-3 text-right font-numeric text-[13px] font-semibold ${signClass(h.unrealizedPnlPercent)}`}>
-        {pctLabel(h.unrealizedPnlPercent)}
-      </td>
-      <td className="py-3 pl-1">
-        <span
-          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-            h.status === 'partial'
-              ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
-              : 'bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300'
-          }`}
-        >
-          {h.status === 'partial' ? 'Partially Sold' : 'Holding'}
-        </span>
-      </td>
-    </tr>
-  );
-}
-
-function HoldingMobileCard({ h, currency, privacy, onOpen }: { h: HoldingPnl; currency: string; privacy: boolean; onOpen: () => void }) {
-  return (
-    <button
-      onClick={onOpen}
-      className="w-full text-left bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 flex items-center gap-3"
-    >
-      <AssetBadge asset={h.asset} size={38} />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-[14px] font-semibold text-slate-900 dark:text-white truncate">{h.asset.name}</p>
-          <p className={`font-numeric text-[13px] font-semibold shrink-0 ${signClass(h.unrealizedPnl)}`}>{pctLabel(h.unrealizedPnlPercent)}</p>
-        </div>
-        <div className="flex items-center justify-between gap-2 mt-0.5">
-          <p className="text-[12px] text-slate-500 dark:text-slate-500">
-            {h.kind === 'generic'
-              ? `${ASSET_CLASS_LABELS[h.asset.assetClass]} · ${fmt(h.currentValue, currency, privacy)}`
-              : `${h.remainingQty.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${h.unitLabel} · ${fmt(h.currentValue, currency, privacy)}`}
-          </p>
-          <p className={`font-numeric text-[12px] font-medium shrink-0 ${signClass(h.unrealizedPnl)}`}>{moneyLabel(h.unrealizedPnl, currency, privacy)}</p>
-        </div>
-      </div>
-      <ChevronRight size={16} className="text-slate-300 shrink-0" />
-    </button>
-  );
-}
-
-function SoldRow({ h, currency, privacy, onOpen }: { h: HoldingPnl; currency: string; privacy: boolean; onOpen: () => void }) {
   return (
     <tr
       onClick={onOpen}
@@ -493,7 +424,20 @@ function SoldRow({ h, currency, privacy, onOpen }: { h: HoldingPnl; currency: st
       <td className={`py-3 pr-3 text-right font-numeric text-[13px] font-semibold ${signClass(h.realizedPnl)}`}>{moneyLabel(h.realizedPnl, currency, privacy)}</td>
       <td className={`py-3 pr-3 text-right font-numeric text-[13px] font-semibold ${signClass(h.realizedPnlPercent)}`}>{pctLabel(h.realizedPnlPercent)}</td>
       <td className="py-3 pr-3 text-right text-[12.5px] text-slate-500 dark:text-slate-400">{formatShortDate(h.buyLots[0]?.date)}</td>
-      <td className="py-3 pl-1 text-[12.5px] text-slate-500 dark:text-slate-400">{formatShortDate(h.sales[h.sales.length - 1]?.date)}</td>
+      <td className="py-3 pl-3 text-[12.5px] text-slate-500 dark:text-slate-400">{formatShortDate(h.sales[h.sales.length - 1]?.date)}</td>
+      <td className="py-3 pl-1 text-right">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          title="Delete this sold investment"
+          className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+        >
+          <Trash2 size={15} />
+        </button>
+      </td>
     </tr>
   );
 }
@@ -854,6 +798,7 @@ function EmptyState() {
 
 export default function InvestmentPnL() {
   const allAssets = useAssetsStore((s) => s.assets);
+  const removeAsset = useAssetsStore((s) => s.remove);
   const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
   const assets = activeProfileId ? allAssets.filter((a) => a.profileId === activeProfileId) : allAssets;
   const livePrices = useLivePricesStore((s) => s.prices);
@@ -870,6 +815,12 @@ export default function InvestmentPnL() {
   const [selectedHolding, setSelectedHolding] = useState<HoldingPnl | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [soldExpanded, setSoldExpanded] = useState(false);
+  const [pendingDeleteSold, setPendingDeleteSold] = useState<HoldingPnl | null>(null);
+
+  const confirmDeleteSold = () => {
+    if (pendingDeleteSold) removeAsset(pendingDeleteSold.asset.id);
+    setPendingDeleteSold(null);
+  };
 
   // Every currency present among investment-holding assets — the book has
   // to be scoped to one currency at a time (see investmentPnl.ts docs), so
@@ -1106,51 +1057,18 @@ export default function InvestmentPnL() {
             </div>
 
             {/* Current Holdings */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-soft">
-              <div className="flex items-center justify-between mb-3">
+            <Link
+              to="/wealth"
+              className="block bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-soft hover:border-brand-300 dark:hover:border-brand-700 transition-colors"
+            >
+              <div className="flex items-center justify-between">
                 <h3 className="text-[15px] font-semibold text-slate-900 dark:text-white">Current Holdings</h3>
-                <span className="text-[12px] text-slate-400">{filteredActive.length} holding{filteredActive.length === 1 ? '' : 's'}</span>
+                <span className="flex items-center gap-1.5 text-[12px] text-slate-400">
+                  {filteredActive.length} holding{filteredActive.length === 1 ? '' : 's'}
+                  <ChevronRight size={14} />
+                </span>
               </div>
-              {filteredActive.length === 0 ? (
-                <p className="text-[13px] text-slate-400 py-6 text-center">No active holdings match these filters.</p>
-              ) : (
-                <>
-                  <div className="hidden md:block overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="text-left text-[11.5px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800">
-                          <th className="py-2 pr-3 font-semibold">Asset</th>
-                          <th className="py-2 pr-3 text-right font-semibold">Qty</th>
-                          <th className="py-2 pr-3 text-right font-semibold">Avg Buy</th>
-                          <th className="py-2 pr-3 text-right font-semibold">Current Price</th>
-                          <th className="py-2 pr-3 text-right font-semibold">Invested</th>
-                          <th className="py-2 pr-3 text-right font-semibold">Current Value</th>
-                          <th className="py-2 pr-3 text-right font-semibold">P&amp;L</th>
-                          <th className="py-2 pr-3 text-right font-semibold">Return</th>
-                          <th className="py-2 pl-1 font-semibold">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredActive.map((h) => (
-                          <HoldingRow key={h.asset.id} h={h} currency={activeCurrency} privacy={privacyMode} onOpen={() => setSelectedHolding(h)} />
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="md:hidden space-y-2.5">
-                    {filteredActive.map((h) => (
-                      <HoldingMobileCard key={h.asset.id} h={h} currency={activeCurrency} privacy={privacyMode} onOpen={() => setSelectedHolding(h)} />
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Best / Worst performers */}
-            <div className="grid md:grid-cols-2 gap-4">
-              <PerformersCard title="Best Performers" icon={<Trophy size={16} className="text-brand-600" />} items={bestPerformers} currency={activeCurrency} privacy={privacyMode} />
-              <PerformersCard title="Worst Performers" icon={<ThumbsDown size={16} className="text-red-500" />} items={worstPerformers} currency={activeCurrency} privacy={privacyMode} />
-            </div>
+            </Link>
 
             {/* Sold Investments */}
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-soft">
@@ -1176,12 +1094,20 @@ export default function InvestmentPnL() {
                           <th className="py-2 pr-3 text-right font-semibold">Realized P&amp;L</th>
                           <th className="py-2 pr-3 text-right font-semibold">Return</th>
                           <th className="py-2 pr-3 font-semibold">Buy Date</th>
-                          <th className="py-2 pl-1 font-semibold">Sell Date</th>
+                          <th className="py-2 pr-3 font-semibold">Sell Date</th>
+                          <th className="py-2 pl-1"></th>
                         </tr>
                       </thead>
                       <tbody>
                         {filteredSold.map((h) => (
-                          <SoldRow key={h.asset.id} h={h} currency={activeCurrency} privacy={privacyMode} onOpen={() => setSelectedHolding(h)} />
+                          <SoldRow
+                            key={h.asset.id}
+                            h={h}
+                            currency={activeCurrency}
+                            privacy={privacyMode}
+                            onOpen={() => setSelectedHolding(h)}
+                            onDelete={() => setPendingDeleteSold(h)}
+                          />
                         ))}
                       </tbody>
                     </table>
@@ -1192,6 +1118,12 @@ export default function InvestmentPnL() {
                   Show all {filteredSold.length} sold investments →
                 </button>
               )}
+            </div>
+
+            {/* Best / Worst performers */}
+            <div className="grid md:grid-cols-2 gap-4">
+              <PerformersCard title="Best Performers" icon={<Trophy size={16} className="text-brand-600" />} items={bestPerformers} currency={activeCurrency} privacy={privacyMode} />
+              <PerformersCard title="Worst Performers" icon={<ThumbsDown size={16} className="text-red-500" />} items={worstPerformers} currency={activeCurrency} privacy={privacyMode} />
             </div>
 
             {/* Investment Activity */}
@@ -1216,6 +1148,18 @@ export default function InvestmentPnL() {
 
       <AssetDetailModal h={selectedHolding} currency={activeCurrency} privacy={privacyMode} onClose={() => setSelectedHolding(null)} />
       <ExportReportModal open={exportOpen} onClose={() => setExportOpen(false)} reportRef={reportRef} portfolio={portfolio} currency={activeCurrency} activity={activityAll} />
+      <ConfirmDeleteModal
+        open={!!pendingDeleteSold}
+        onClose={() => setPendingDeleteSold(null)}
+        onConfirm={confirmDeleteSold}
+        title="Delete this sold investment?"
+        description={
+          <>
+            This will permanently delete <strong className="uppercase">{pendingDeleteSold?.asset.name}</strong> and its entire buy/sell history. This can't be undone.
+          </>
+        }
+        confirmLabel="Delete"
+      />
     </div>
   );
 }

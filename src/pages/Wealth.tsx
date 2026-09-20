@@ -3824,12 +3824,11 @@ function AssetDetailsForm({
   const [institution, setInstitution] = useState(initial?.institution ?? '');
   // "Hide details" / "Show details" — collapses the less-common fields
   // below (Geography, Sub-class, Tags, Notes, and the two flags) out of
-  // the way by default, matching how most edits only touch the fields
-  // above. Starts open for a brand-new asset (nothing to hide yet) and
-  // collapsed when editing one, unless it already has something in there.
-  const [showMoreDetails, setShowMoreDetails] = useState(
-    !initial || Boolean(initial?.geography || initial?.subClass || initial?.tags?.length || initial?.notes)
-  );
+  // the way by default. Always starts collapsed on a fresh mount (a new
+  // page load / refresh), even for an asset that already has some of
+  // these filled in — expanding it is a per-visit action, not a
+  // remembered preference.
+  const [showMoreDetails, setShowMoreDetails] = useState(false);
   const [geography, setGeography] = useState(initial?.geography ?? '');
   const [subClass, setSubClass] = useState(initial?.subClass ?? '');
   const [tags, setTags] = useState<string[]>(initial?.tags ?? []);
@@ -4619,7 +4618,7 @@ function AssetDetailsForm({
   // and price are already on the screen.
   const nameCurrencyField = (
     <div className="grid grid-cols-[1fr_128px] gap-3">
-      <Field label={<>Name <span className="text-red-500">*</span></>}>
+      <Field label={isUnitTracked ? 'Name' : <>Name <span className="text-red-500">*</span></>}>
         <input
           value={name}
           onChange={(e) => setName(e.target.value.toUpperCase())}
@@ -4668,73 +4667,89 @@ function AssetDetailsForm({
           </button>
         )
       )}
-      {initial ? (
-        <Field label="Asset Type">
-          {assetTypeEditing ? (
-            <>
-              <CustomSelect
-                defaultOpen
-                value={assetClass}
-                onChange={(v) => {
-                  setAssetClass(v as AssetClass);
-                }}
-                onOpenChange={(open) => {
-                  if (!open) setAssetTypeEditing(false);
-                }}
-                className={`${inputClass} bg-white text-slate-700`}
-                options={ASSET_TAXONOMY.flatMap((cat) =>
-                  cat.types.map((t) => ({ value: t.value, label: t.label, group: cat.label }))
+      {isUnitTracked && nameCurrencyField}
+      <div className={isMarketSelectable ? 'grid grid-cols-2 gap-3 items-start' : ''}>
+        {initial ? (
+          <Field label="Asset Type">
+            {assetTypeEditing ? (
+              <>
+                <CustomSelect
+                  defaultOpen
+                  value={assetClass}
+                  onChange={(v) => {
+                    setAssetClass(v as AssetClass);
+                  }}
+                  onOpenChange={(open) => {
+                    if (!open) setAssetTypeEditing(false);
+                  }}
+                  className={`${inputClass} bg-white text-slate-700`}
+                  options={ASSET_TAXONOMY.flatMap((cat) =>
+                    cat.types.map((t) => ({ value: t.value, label: t.label, group: cat.label }))
+                  )}
+                />
+                {ASSET_CLASS_TO_CATEGORY[assetClass]?.key !== effectiveCategory?.key && (
+                  <p className="text-xs text-amber-600 mt-1.5">
+                    This will move the asset from {effectiveCategory?.label} to{' '}
+                    {ASSET_CLASS_TO_CATEGORY[assetClass]?.label}.
+                  </p>
                 )}
-              />
-              {ASSET_CLASS_TO_CATEGORY[assetClass]?.key !== effectiveCategory?.key && (
-                <p className="text-xs text-amber-600 mt-1.5">
-                  This will move the asset from {effectiveCategory?.label} to{' '}
-                  {ASSET_CLASS_TO_CATEGORY[assetClass]?.label}.
-                </p>
-              )}
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setAssetTypeEditing(true)}
-              className="w-full flex items-center justify-between gap-3 rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 px-3.5 py-3 text-left"
-            >
-              <span className="flex items-center gap-3 min-w-0">
-                <span className="h-9 w-9 shrink-0 rounded-lg bg-white dark:bg-slate-800 flex items-center justify-center text-emerald-600">
-                  {(() => {
-                    const CatIcon = ASSET_CLASS_TO_CATEGORY[assetClass]?.icon ?? TrendingUp;
-                    return <CatIcon size={16} />;
-                  })()}
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAssetTypeEditing(true)}
+                className="w-full flex items-center justify-between gap-3 rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 px-3.5 py-3 text-left"
+              >
+                <span className="flex items-center gap-3 min-w-0">
+                  <span className="h-9 w-9 shrink-0 rounded-lg bg-white dark:bg-slate-800 flex items-center justify-center text-emerald-600">
+                    {(() => {
+                      const CatIcon = ASSET_CLASS_TO_CATEGORY[assetClass]?.icon ?? TrendingUp;
+                      return <CatIcon size={16} />;
+                    })()}
+                  </span>
+                  <span className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">
+                    {ASSET_CLASS_LABELS[assetClass] ?? assetClass}
+                  </span>
                 </span>
-                <span className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">
-                  {ASSET_CLASS_LABELS[assetClass] ?? assetClass}
-                </span>
-              </span>
-              <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400 shrink-0">Change</span>
-            </button>
-          )}
-        </Field>
-      ) : effectiveCategory && effectiveCategory.types.length > 1 ? (
-        <Field label={`${effectiveCategory.label} Type`}>
-          <CustomSelect
-            value={assetClass}
-            onChange={(v) => setAssetClass(v as AssetClass)}
-            className={`${inputClass} bg-white text-slate-700`}
-            options={[
-              ...(!effectiveCategory.types.some((t) => t.value === assetClass)
-                ? [{ value: assetClass, label: ASSET_CLASS_LABELS[assetClass] ?? assetClass }]
-                : []),
-              ...effectiveCategory.types.map((t) => ({ value: t.value, label: t.label })),
-            ]}
-          />
-        </Field>
-      ) : (
-        <Field label="Asset Type">
-          <p className="text-sm font-medium text-slate-700 border border-slate-200 rounded-lg px-3 py-2.5 bg-slate-50">
-            {ASSET_CLASS_LABELS[assetClass] ?? assetClass ?? 'Unknown'}
-          </p>
-        </Field>
-      )}
+                <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400 shrink-0">Change</span>
+              </button>
+            )}
+          </Field>
+        ) : effectiveCategory && effectiveCategory.types.length > 1 ? (
+          <Field label={`${effectiveCategory.label} Type`}>
+            <CustomSelect
+              value={assetClass}
+              onChange={(v) => setAssetClass(v as AssetClass)}
+              className={`${inputClass} bg-white text-slate-700`}
+              options={[
+                ...(!effectiveCategory.types.some((t) => t.value === assetClass)
+                  ? [{ value: assetClass, label: ASSET_CLASS_LABELS[assetClass] ?? assetClass }]
+                  : []),
+                ...effectiveCategory.types.map((t) => ({ value: t.value, label: t.label })),
+              ]}
+            />
+          </Field>
+        ) : (
+          <Field label="Asset Type">
+            <p className="text-sm font-medium text-slate-700 border border-slate-200 rounded-lg px-3 py-2.5 bg-slate-50">
+              {ASSET_CLASS_LABELS[assetClass] ?? assetClass ?? 'Unknown'}
+            </p>
+          </Field>
+        )}
+        {isMarketSelectable && (
+          <Field label="Market">
+            <CustomSelect
+              value={market}
+              onChange={(v) => setMarket(v as 'IN' | 'US')}
+              className={`${inputClass} bg-white text-slate-700`}
+              options={[
+                { value: 'IN', label: '🇮🇳 India (NSE / BSE)' },
+                { value: 'US', label: '🇺🇸 United States (NASDAQ / NYSE)' },
+              ]}
+            />
+          </Field>
+        )}
+      </div>
       {!isUnitTracked && nameCurrencyField}
       {isGold && (
         <Field label="Gold Purity">
@@ -4910,32 +4925,7 @@ function AssetDetailsForm({
       )}
       {isUnitTracked && (
         <>
-          {isMarketSelectable && (
-            <Field label="Market">
-              <CustomSelect
-                value={market}
-                onChange={(v) => setMarket(v as 'IN' | 'US')}
-                className={`${inputClass} bg-white text-slate-700`}
-                options={[
-                  { value: 'IN', label: '🇮🇳 India (NSE / BSE)' },
-                  { value: 'US', label: '🇺🇸 United States (NASDAQ / NYSE)' },
-                ]}
-              />
-              <p className="text-xs text-slate-600 mt-1">
-                {market === 'US'
-                  ? 'Live price is fetched from the US market — Currency defaults to USD below.'
-                  : 'Live price is fetched from NSE, falling back to BSE/Yahoo.'}
-              </p>
-            </Field>
-          )}
-          <Field
-            label={
-              <>
-                Link to Live Price{' '}
-                <span className="text-[10px] font-bold tracking-wide text-amber-600 align-middle">BETA</span>
-              </>
-            }
-          >
+          <Field label={<>Ticker <span className="text-red-500">*</span></>}>
             <div className="relative">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -4997,86 +4987,7 @@ function AssetDetailsForm({
                   </div>
                 )}
             </div>
-            <p className="text-xs text-slate-600 mt-1">
-              Search ticker to auto-fill name and link live price ·{' '}
-              <span className="text-amber-600 font-medium">Beta</span>
-            </p>
           </Field>
-          {isRecurringEligible && (
-            <div className="space-y-4 border border-slate-100 bg-slate-50/60 rounded-xl p-4">
-              <label className="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={recurringInvestment}
-                  onChange={(e) => setRecurringInvestment(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                />
-                Set up as a recurring investment (SIP)
-              </label>
-              {recurringInvestment && (
-                <>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="SIP Amount (per installment)">
-                      <input
-                        type="number"
-                        step="any"
-                        value={sipAmount}
-                        onChange={(e) => setSipAmount(e.target.value)}
-                        className={inputClass}
-                        placeholder="e.g. 10000"
-                      />
-                    </Field>
-                    <Field label="Frequency">
-                      <CustomSelect
-                        value={sipFrequency}
-                        onChange={(v) => setSipFrequency(v as 'monthly' | 'quarterly')}
-                        className={inputClass}
-                        options={[
-                          { value: 'monthly', label: 'Monthly' },
-                          { value: 'quarterly', label: 'Quarterly' },
-                        ]}
-                      />
-                    </Field>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="Start Date">
-                      <input
-                        type="date"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                        className={inputClass}
-                      />
-                    </Field>
-                    <Field label="SIP Date (day of month)">
-                      <input
-                        type="number"
-                        min={1}
-                        max={31}
-                        step={1}
-                        value={sipDay}
-                        onChange={(e) => setSipDay(e.target.value)}
-                        className={inputClass}
-                        placeholder="e.g. 5"
-                      />
-                    </Field>
-                  </div>
-                  {stockSipProgress && (
-                    <p className="text-xs text-slate-500">
-                      {stockSipProgress.installmentsElapsed > 0
-                        ? `${stockSipProgress.installmentsElapsed} installment${stockSipProgress.installmentsElapsed === 1 ? '' : 's'} due since start`
-                        : 'No installments due yet'}
-                      {stockSipProgress.nextInstallmentDate && ` · Next due ${stockSipProgress.nextInstallmentDate}`}
-                    </p>
-                  )}
-                  <p className="text-xs text-slate-600">
-                    This just tracks your plan and reminds you when the next installment is due — log
-                    each actual purchase under "Purchases" below once you invest, so quantity and
-                    average cost stay accurate.
-                  </p>
-                </>
-              )}
-            </div>
-          )}
           {shareLots.length === 1 && (lotInputMode[shareLots[0].id] ?? 'qty') === 'qty' ? (
             // The common case — one purchase, no other-currency entry — gets
             // the plain "No. of Shares / Avg. Purchase Price" layout instead
@@ -5085,8 +4996,16 @@ function AssetDetailsForm({
             // falls through to that full multi-lot editor automatically,
             // so nothing about multi-lot/FX support is actually lost.
             <>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="No. of Shares">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <Field label="Date">
+                  <input
+                    type="date"
+                    value={shareLots[0].date ?? ''}
+                    onChange={(e) => updateShareLot(shareLots[0].id, { date: e.target.value })}
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="Quantity">
                   <input
                     type="number"
                     step="any"
@@ -5096,7 +5015,7 @@ function AssetDetailsForm({
                     placeholder="e.g. 10"
                   />
                 </Field>
-                <Field label="Avg. Purchase Price">
+                <Field label="Price / Unit" className="col-span-2 sm:col-span-1">
                   {isMarketSelectable ? (
                     <div className="flex gap-1">
                       <input
@@ -5134,9 +5053,6 @@ function AssetDetailsForm({
                   )}
                 </Field>
               </div>
-              <p className="text-xs text-slate-600">
-                Saving sets today's position. Buys and sells you record are applied on top.
-              </p>
               <div className="flex items-center gap-4 flex-wrap">
                 <button
                   type="button"
@@ -5411,7 +5327,81 @@ function AssetDetailsForm({
           )}
         </>
       )}
-      {isUnitTracked && nameCurrencyField}
+      {isRecurringEligible && (
+        <div className="space-y-4 border border-slate-100 bg-slate-50/60 rounded-xl p-4">
+          <label className="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={recurringInvestment}
+              onChange={(e) => setRecurringInvestment(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+            />
+            Set up as a recurring investment (SIP)
+          </label>
+          {recurringInvestment && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="SIP Amount (per installment)">
+                  <input
+                    type="number"
+                    step="any"
+                    value={sipAmount}
+                    onChange={(e) => setSipAmount(e.target.value)}
+                    className={inputClass}
+                    placeholder="e.g. 10000"
+                  />
+                </Field>
+                <Field label="Frequency">
+                  <CustomSelect
+                    value={sipFrequency}
+                    onChange={(v) => setSipFrequency(v as 'monthly' | 'quarterly')}
+                    className={inputClass}
+                    options={[
+                      { value: 'monthly', label: 'Monthly' },
+                      { value: 'quarterly', label: 'Quarterly' },
+                    ]}
+                  />
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Start Date">
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="SIP Date (day of month)">
+                  <input
+                    type="number"
+                    min={1}
+                    max={31}
+                    step={1}
+                    value={sipDay}
+                    onChange={(e) => setSipDay(e.target.value)}
+                    className={inputClass}
+                    placeholder="e.g. 5"
+                  />
+                </Field>
+              </div>
+              {stockSipProgress && (
+                <p className="text-xs text-slate-500">
+                  {stockSipProgress.installmentsElapsed > 0
+                    ? `${stockSipProgress.installmentsElapsed} installment${stockSipProgress.installmentsElapsed === 1 ? '' : 's'} due since start`
+                    : 'No installments due yet'}
+                  {stockSipProgress.nextInstallmentDate && ` · Next due ${stockSipProgress.nextInstallmentDate}`}
+                </p>
+              )}
+              <p className="text-xs text-slate-600">
+                This just tracks your plan and reminds you when the next installment is due — log
+                each actual purchase under "Purchases" below once you invest, so quantity and
+                average cost stay accurate.
+              </p>
+            </>
+          )}
+        </div>
+      )}
       {isUnitTracked && (
         <Field label="Held in account">
           <CustomSelect
