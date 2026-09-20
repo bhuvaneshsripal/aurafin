@@ -72,9 +72,9 @@ function buildColorOverrideCss(): string {
     .join('\n        ');
   return `
       * {
-        --color-brand-600: #2c6e49 !important;
-        --color-brand-700: #24573c !important;
-        --color-brand-900: #163a2c !important;
+        --color-brand-600: #247a4d !important;
+        --color-brand-700: #1d6440 !important;
+        --color-brand-900: #113c26 !important;
         ${decls}
       }
     `;

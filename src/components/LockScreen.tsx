@@ -157,14 +157,10 @@ export default function LockScreen() {
 
   return (
     <div
-      className={`font-luxury fixed inset-0 z-[100] flex flex-col bg-sandal-100 dark:bg-sandal-900 px-6 pt-12 pb-8 overflow-y-auto overflow-x-hidden ${
+      className={`font-luxury fixed inset-0 z-[100] flex flex-col bg-page px-6 pt-12 pb-8 overflow-y-auto overflow-x-hidden ${
         unlocking ? 'animate-lock-unlock pointer-events-none' : 'animate-lock-in'
       }`}
     >
-      {/* Soft blurred sandal-toned orbs — purely decorative, they give the
-          glassmorphism keypad below something translucent to sit on top of. */}
-      <div className="pointer-events-none absolute -top-16 -left-16 h-64 w-64 rounded-full bg-sandal-300/40 dark:bg-sandal-600/20 blur-3xl" />
-      <div className="pointer-events-none absolute bottom-0 -right-20 h-72 w-72 rounded-full bg-sandal-400/30 dark:bg-sandal-500/15 blur-3xl" />
       {mode === 'pin' ? (
         <>
           <div className="w-full max-w-[300px] mx-auto text-center flex flex-col items-center">
@@ -173,10 +169,10 @@ export default function LockScreen() {
               alt="Aurafin"
               className="h-14 w-14 rounded-full object-cover mb-4"
             />
-            <h1 className="font-luxury text-xl font-bold text-slate-900 dark:text-white mb-1">
+            <h1 className="text-xl font-semibold text-ink mb-1">
               Aurafin is Locked
             </h1>
-            <p className="font-luxury text-sm text-slate-500 dark:text-slate-400 mb-6">Enter your 4-digit PIN</p>
+            <p className="font-luxury text-sm text-muted mb-6">Enter your 4-digit PIN</p>
 
             {/* PIN dots — pop up in size the instant a digit is entered, and
                 shrink back down on backspace/clear, so the count is felt as
@@ -185,7 +181,7 @@ export default function LockScreen() {
               {[0, 1, 2, 3].map((i) => (
                 <span
                   key={i}
-                  className={`keep-round border-2 transition-all duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${
+                  className={`keep-round border-2 transition-all duration-200 ease-out ${
                     i < pin.length
                       ? shake
                         ? 'h-4 w-4 bg-red-500 border-red-500'
@@ -206,13 +202,13 @@ export default function LockScreen() {
 
           <div className="w-full max-w-[300px] mx-auto flex flex-col items-center">
             {/* Keypad */}
-            <div className="grid grid-cols-3 gap-4 w-full max-w-[300px]">
+            <div className="grid grid-cols-3 gap-3 w-full max-w-[260px]">
               {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => (
                 <button
                   key={d}
                   type="button"
                   onClick={() => pressDigit(d)}
-                  className="font-sans aspect-square rounded-2xl bg-white shadow-[0_8px_22px_-4px_rgba(0,0,0,0.45)] text-2xl font-bold text-slate-800 active:scale-[0.85] active:shadow-[0_2px_6px_-2px_rgba(0,0,0,0.3)] transition-transform duration-75 ease-out will-change-transform"
+                  className="h-14 rounded-xl border border-line bg-surface shadow-xs text-xl font-semibold text-ink hover:bg-surface-hover active:scale-95 transition-all duration-100"
                 >
                   {d}
                 </button>
@@ -221,16 +217,16 @@ export default function LockScreen() {
               <button
                 type="button"
                 onClick={() => pressDigit('0')}
-                className="font-sans aspect-square rounded-2xl bg-white shadow-[0_8px_22px_-4px_rgba(0,0,0,0.45)] text-2xl font-bold text-slate-800 active:scale-[0.85] active:shadow-[0_2px_6px_-2px_rgba(0,0,0,0.3)] transition-transform duration-75 ease-out will-change-transform"
+                className="h-14 rounded-xl border border-line bg-surface shadow-xs text-xl font-semibold text-ink hover:bg-surface-hover active:scale-95 transition-all duration-100"
               >
                 0
               </button>
               <button
                 type="button"
                 onClick={pressBackspace}
-                className="aspect-square rounded-2xl bg-white shadow-[0_8px_22px_-4px_rgba(0,0,0,0.45)] flex items-center justify-center text-slate-700 active:scale-[0.85] active:shadow-[0_2px_6px_-2px_rgba(0,0,0,0.3)] transition-transform duration-75 ease-out will-change-transform"
+                className="h-14 rounded-xl border border-line bg-surface shadow-xs flex items-center justify-center text-ink-2 hover:bg-surface-hover active:scale-95 transition-all duration-100"
               >
-                <Delete size={24} />
+                <Delete size={20} />
               </button>
             </div>
 
@@ -259,8 +255,8 @@ export default function LockScreen() {
 
           {mode === 'otp-sent' && (
             <>
-              <h1 className="text-xl font-semibold text-slate-900 dark:text-white mb-1">Check your email</h1>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+              <h1 className="text-xl font-semibold text-ink mb-1">Check your email</h1>
+              <p className="text-sm text-muted mb-6">
                 We sent a 6-digit code to {user?.email}
               </p>
               <input
@@ -270,7 +266,7 @@ export default function LockScreen() {
                 value={otpCode}
                 onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
                 placeholder="000000"
-                className="w-full text-center text-2xl tracking-[0.4em] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-2xl px-3 py-3 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full text-center text-2xl tracking-[0.4em] border border-line bg-surface text-ink rounded-2xl px-3 py-3 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
               {otpError && <p className="text-sm text-red-500 mt-2">{otpError}</p>}
               <button
@@ -282,7 +278,7 @@ export default function LockScreen() {
               </button>
               <button
                 onClick={() => setMode('pin')}
-                className="text-sm text-slate-500 dark:text-slate-400 font-medium mt-4"
+                className="text-sm text-muted font-medium mt-4"
               >
                 Back
               </button>
@@ -292,22 +288,22 @@ export default function LockScreen() {
           {mode === 'reset' && (
             <>
               <ShieldCheck size={20} className="text-brand-600 mx-auto mb-2" />
-              <h1 className="text-xl font-semibold text-slate-900 dark:text-white mb-1">Set a new PIN</h1>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">Choose a new 4-digit PIN</p>
+              <h1 className="text-xl font-semibold text-ink mb-1">Set a new PIN</h1>
+              <p className="text-sm text-muted mb-6">Choose a new 4-digit PIN</p>
               <div className="space-y-4 w-full">
                 <div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">New PIN</p>
+                  <p className="text-xs text-muted mb-2">New PIN</p>
                   <PinBoxInput value={newPin} onChange={setNewPin} autoFocus />
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Confirm PIN</p>
+                  <p className="text-xs text-muted mb-2">Confirm PIN</p>
                   <PinBoxInput value={confirmPin} onChange={setConfirmPin} />
                 </div>
               </div>
               {otpError && <p className="text-sm text-red-500 mt-2">{otpError}</p>}
               <button
                 onClick={resetPin}
-                className="w-full mt-4 bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-full text-sm font-medium"
+                className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full mt-4 bg-brand-600 hover:bg-brand-700 text-white"
               >
                 Save New PIN
               </button>

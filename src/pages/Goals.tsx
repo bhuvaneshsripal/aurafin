@@ -12,6 +12,7 @@ import type { Goal } from '../types';
 import { formatCurrency } from '../utils/currency';
 import CurrencySelect from '../components/CurrencySelect';
 import { resolveAssetValues } from '../utils/assetValues';
+import { inputClasses } from '../components/ui';
 
 export default function Goals() {
   const goals = useGoalsStore((s) => s.goals);
@@ -62,7 +63,7 @@ export default function Goals() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Goals</h1>
+          <h1 className="text-2xl font-semibold text-ink">Goals</h1>
           <p className="text-slate-500 text-sm mt-1">{goals.length} active goals</p>
         </div>
         <button
@@ -70,7 +71,7 @@ export default function Goals() {
             setEditing(null);
             setModalOpen(true);
           }}
-          className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+          className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors bg-brand-600 hover:bg-brand-700 text-white"
         >
           <Plus size={16} /> Add Goal
         </button>
@@ -82,12 +83,12 @@ export default function Goals() {
           const pct =
             g.targetAmount > 0 ? Math.min(100, Math.max(0, Math.round((currentAmount / g.targetAmount) * 100))) : 0;
           return (
-            <div key={g.id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+            <div key={g.id} className="bg-surface rounded-2xl border border-line p-5 shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  <h3 className="font-semibold text-slate-800 truncate uppercase">{g.name}</h3>
+                  <h3 className="font-semibold text-ink truncate">{g.name}</h3>
                   {g.linkedToNetWorth && (
-                    <span className="flex items-center gap-1 shrink-0 text-[10px] font-medium uppercase tracking-wide bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded-full">
+                    <span className="flex items-center gap-1 shrink-0 text-xs font-medium bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded-full">
                       <Scale size={10} /> Net Worth
                     </span>
                   )}
@@ -120,7 +121,7 @@ export default function Goals() {
           );
         })}
         {goals.length === 0 && (
-          <div className="col-span-full bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-600">
+          <div className="col-span-full bg-surface rounded-2xl border border-line p-10 text-center text-slate-600">
             No goals yet. Set a retirement corpus, emergency fund, or education target.
           </div>
         )}
@@ -136,7 +137,7 @@ export default function Goals() {
         onConfirm={confirmDelete}
         busy={deleting}
         title="Delete this goal?"
-        description={<>This will permanently delete <strong className="uppercase">{pendingDelete?.name}</strong>. This can't be undone.</>}
+        description={<>This will permanently delete <strong>{pendingDelete?.name}</strong>. This can't be undone.</>}
       />
     </div>
   );
@@ -164,7 +165,7 @@ function GoalForm({ initial, onSave }: { initial: Goal | null; onSave: (g: Goal)
   return (
     <div className="space-y-4">
       <Field label="Goal Name">
-        <input value={name} onChange={(e) => setName(e.target.value.toUpperCase())} className={`${inputClass} uppercase`} placeholder="e.g. Retirement Corpus" />
+        <input value={name} onChange={(e) => setName(e.target.value.toUpperCase())} className={`${inputClass}`} placeholder="e.g. Retirement Corpus" />
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Target Amount">
@@ -181,7 +182,7 @@ function GoalForm({ initial, onSave }: { initial: Goal | null; onSave: (g: Goal)
         </Field>
       </div>
 
-      <label className="flex items-start gap-3 border border-slate-200 rounded-lg px-3 py-3 cursor-pointer">
+      <label className="flex items-start gap-3 border border-line rounded-lg px-3 py-3 cursor-pointer">
         <input
           type="checkbox"
           checked={linkedToNetWorth}
@@ -189,7 +190,7 @@ function GoalForm({ initial, onSave }: { initial: Goal | null; onSave: (g: Goal)
           className="mt-0.5 h-4 w-4 accent-brand-600"
         />
         <span>
-          <span className="block text-sm font-medium text-slate-700">Track automatically with Net Worth</span>
+          <span className="block text-sm font-medium text-ink-2">Track automatically with Net Worth</span>
           <span className="block text-xs text-slate-600 mt-0.5">
             Progress will use your live Net Worth (total assets − total liabilities) from the Dashboard
             instead of a number you enter manually.
@@ -208,7 +209,7 @@ function GoalForm({ initial, onSave }: { initial: Goal | null; onSave: (g: Goal)
         />
       </Field>
 
-      <button onClick={submit} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2 rounded-lg text-sm font-medium">
+      <button onClick={submit} className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white">
         Save Goal
       </button>
     </div>
@@ -224,5 +225,4 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-const inputClass =
-  'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500';
+const inputClass = inputClasses;

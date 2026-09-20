@@ -43,7 +43,7 @@ function saveRecentSearches(list: string[]) {
  * Topbar; picking a result jumps straight to the right tab (and, for
  * holdings, pre-fills the Assets table's own search box via ?q=).
  */
-export default function GlobalSearch() {
+export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 'bar' }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [recentSearches, setRecentSearches] = useState<string[]>(() => loadRecentSearches());
@@ -162,24 +162,36 @@ export default function GlobalSearch() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        title="Search Aurafin"
-        aria-label="Search Aurafin"
-        className="tap-scale h-10 w-10 flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
-      >
-        <Search size={20} />
-      </button>
+      {variant === 'bar' ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label="Search Aurafin"
+          className="group flex items-center gap-2 h-9 w-full max-w-sm px-3 rounded-lg border border-line bg-surface-muted text-sm text-faint hover:bg-surface hover:border-slate-300 transition-colors"
+        >
+          <Search size={16} className="text-muted shrink-0" />
+          <span className="flex-1 text-left truncate">Search holdings, goals, transactions</span>
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          title="Search Aurafin"
+          aria-label="Search Aurafin"
+          className="tap-scale h-9 w-9 flex items-center justify-center rounded-lg text-muted hover:bg-surface-hover hover:text-ink shrink-0 transition-colors"
+        >
+          <Search size={18} />
+        </button>
+      )}
 
       {open && (
-        <div className="animate-backdrop-in fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-[2px] px-4 pt-[10vh] sm:pt-24 flex justify-center">
+        <div className="animate-backdrop-in fixed inset-0 z-[100] bg-slate-900/40 px-4 pt-[10vh] sm:pt-24 flex justify-center">
           <div
             ref={containerRef}
-            className="animate-menu-in w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden h-fit max-h-[70vh] flex flex-col"
+            className="animate-menu-in w-full max-w-lg bg-surface rounded-2xl shadow-xl border border-line overflow-hidden h-fit max-h-[70vh] flex flex-col"
             style={{ transformOrigin: 'top center' }}
           >
-            <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+            <div className="flex items-center gap-3 px-4 py-4 border-b border-line-soft shrink-0">
               <Search size={20} className="text-brand-500 shrink-0" />
               <input
                 ref={inputRef}
@@ -189,7 +201,7 @@ export default function GlobalSearch() {
                   if (e.key === 'Enter' && query.trim()) addRecentSearch(query);
                 }}
                 placeholder="Search Aurafin..."
-                className="flex-1 min-w-0 bg-transparent text-lg text-slate-800 dark:text-slate-100 placeholder:text-slate-600 dark:placeholder:text-slate-500 placeholder:font-medium focus:outline-none"
+                className="flex-1 min-w-0 bg-transparent text-base text-ink placeholder:text-slate-400 focus:outline-none focus:ring-0 focus:shadow-none"
               />
               {query && (
                 <button
@@ -201,7 +213,7 @@ export default function GlobalSearch() {
               )}
               <button
                 onClick={() => setOpen(false)}
-                className="hidden sm:flex tap-scale h-7 items-center justify-center rounded-md border border-slate-200 dark:border-slate-700 px-2 text-[11px] font-medium text-slate-600 shrink-0"
+                className="hidden sm:flex tap-scale h-7 items-center justify-center rounded-md border border-line px-2 text-[11px] font-medium text-slate-600 shrink-0"
               >
                 Esc
               </button>
@@ -212,7 +224,7 @@ export default function GlobalSearch() {
                 recentSearches.length > 0 ? (
                   <div className="py-2">
                     <div className="px-4 pb-1 flex items-center justify-between">
-                      <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-slate-600 uppercase">
+                      <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
                         <Clock size={12} className="text-slate-600" />
                         Recent searches
                       </p>
@@ -230,12 +242,12 @@ export default function GlobalSearch() {
                       {recentSearches.map((term) => (
                         <div
                           key={term}
-                          className="group w-full flex items-center gap-3 px-2.5 py-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800"
+                          className="group w-full flex items-center gap-3 px-2.5 py-2.5 rounded-lg hover:bg-surface-hover"
                         >
                           <Clock size={15} className="text-slate-300 dark:text-slate-600 shrink-0" />
                           <button
                             onClick={() => setQuery(term)}
-                            className="flex-1 min-w-0 text-left text-sm font-medium text-slate-700 dark:text-slate-200 truncate"
+                            className="flex-1 min-w-0 text-left text-sm font-medium text-ink-2 truncate"
                           >
                             {term}
                           </button>
@@ -267,7 +279,7 @@ export default function GlobalSearch() {
                         return (
                           <ResultRow
                             key={a.id}
-                            title={a.name.toUpperCase()}
+                            title={a.name}
                             subtitle={ASSET_CLASS_LABELS[a.assetClass] ?? a.assetClass}
                             trailing={maskPreciseAmount(value, a.currency, privacyMode)}
                             onClick={() => goTo(`/wealth?tab=assets&q=${encodeURIComponent(a.name)}`)}
@@ -342,7 +354,7 @@ function ResultGroup({
 }) {
   return (
     <div className="px-2 py-1.5">
-      <p className="px-2.5 pb-1 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-slate-600 uppercase">
+      <p className="px-2.5 pb-1 flex items-center gap-1.5 text-xs font-medium text-slate-500">
         <Icon size={12} className={iconColor} />
         {label}
       </p>
@@ -355,7 +367,7 @@ function ResultRow({
   title,
   subtitle,
   trailing,
-  trailingColor = 'text-slate-500 dark:text-slate-400',
+  trailingColor = 'text-muted',
   onClick,
 }: {
   title: string;
@@ -367,10 +379,10 @@ function ResultRow({
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-center justify-between gap-3 px-2.5 py-2 rounded-lg text-left hover:bg-slate-50 dark:hover:bg-slate-800"
+      className="w-full flex items-center justify-between gap-3 px-2.5 py-2 rounded-lg text-left hover:bg-surface-hover"
     >
       <span className="min-w-0">
-        <span className="block text-sm font-medium text-slate-800 dark:text-slate-100 truncate uppercase">
+        <span className="block text-sm font-medium text-ink truncate">
           {title}
         </span>
         <span className="block text-xs text-slate-600 truncate normal-case">{subtitle}</span>

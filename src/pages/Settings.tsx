@@ -42,6 +42,7 @@ import Modal from '../components/Modal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useUrlTab } from '../hooks/useUrlTab';
 import CustomSelect from '../components/CustomSelect';
+import { PageHeader } from '../components/ui';
 
 type Tab = 'account' | 'preferences' | 'profiles' | 'data';
 
@@ -54,7 +55,7 @@ const TABS: { key: Tab; label: string }[] = [
 
 function Card({ children }: { children: ReactNode }) {
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+    <div className="bg-surface rounded-2xl border border-line p-6 shadow-sm">
       {children}
     </div>
   );
@@ -125,7 +126,7 @@ function AvatarEditor() {
             src={displayUrl}
             alt=""
             referrerPolicy="no-referrer"
-            className="h-16 w-16 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+            className="h-16 w-16 rounded-full object-cover border border-line"
           />
         ) : (
           <div className="h-16 w-16 rounded-full bg-brand-600 text-white flex items-center justify-center text-xl font-semibold">
@@ -153,8 +154,8 @@ function AvatarEditor() {
       </div>
 
       <div className="min-w-0">
-        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Profile photo</p>
-        <p className="text-xs text-slate-600 dark:text-slate-500 mt-0.5">
+        <p className="text-sm font-medium text-ink-2">Profile photo</p>
+        <p className="text-xs text-muted mt-0.5">
           {status === 'saving' ? 'Saving...' : 'JPG or PNG — drag and zoom to crop after choosing one.'}
         </p>
         <div className="flex items-center gap-3 mt-1.5">
@@ -177,7 +178,7 @@ function AvatarEditor() {
               type="button"
               onClick={handleRemove}
               disabled={status === 'saving'}
-              className="flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-green-600 dark:hover:text-green-400 disabled:opacity-50"
+              className="flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-emerald-600 dark:hover:text-emerald-400 disabled:opacity-50"
             >
               <X size={12} />
               Remove
@@ -229,11 +230,11 @@ function PersonalInfoCard() {
 
   return (
     <Card>
-      <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-4">Personal info</h2>
+      <h2 className="text-sm font-semibold text-ink mb-4">Personal info</h2>
       <AvatarEditor />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1.5">Display Name</label>
+          <label className="block text-xs text-muted mb-1.5">Display Name</label>
           {editingName ? (
             <>
               <input
@@ -244,7 +245,7 @@ function PersonalInfoCard() {
                   if (e.key === 'Enter') save();
                   if (e.key === 'Escape') cancelEdit();
                 }}
-                className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
               <div className="flex items-center gap-3 mt-1.5">
                 <button
@@ -266,8 +267,8 @@ function PersonalInfoCard() {
             </>
           ) : (
             <div className="flex items-center gap-2 h-[38px]">
-              <span className="text-sm text-slate-800 dark:text-slate-100 truncate">
-                {user?.displayName || <span className="text-slate-600 dark:text-slate-500">Not set</span>}
+              <span className="text-sm text-ink truncate">
+                {user?.displayName || <span className="text-muted">Not set</span>}
               </span>
               <button
                 onClick={startEdit}
@@ -281,13 +282,13 @@ function PersonalInfoCard() {
           )}
         </div>
         <div>
-          <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1.5">Email</label>
+          <label className="block text-xs text-muted mb-1.5">Email</label>
           <input
             value={user?.email ?? ''}
             disabled
-            className="w-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-500 rounded-lg px-3 py-2 text-sm cursor-not-allowed"
+            className="w-full border border-line bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-500 rounded-lg px-3 py-2 text-sm cursor-not-allowed"
           />
-          <p className="text-xs text-slate-600 dark:text-slate-500 mt-1.5">Email cannot be changed</p>
+          <p className="text-xs text-muted mt-1.5">Email cannot be changed</p>
         </div>
       </div>
     </Card>
@@ -436,8 +437,8 @@ function SetPasswordCard() {
 
   return (
     <Card>
-      <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Set Password</h2>
-      <p className="text-xs text-slate-600 dark:text-slate-500 mb-4">
+      <h2 className="text-sm font-semibold text-ink mb-1">Set Password</h2>
+      <p className="text-xs text-muted mb-4">
         {hasPasswordProvider
           ? 'Update the password you use to sign in with email and password.'
           : 'Set a password so you can also sign in with email and password, in addition to Google.'}
@@ -448,14 +449,14 @@ function SetPasswordCard() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {hasPasswordProvider && (
               <div className="sm:col-span-2">
-                <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1.5">Current Password</label>
+                <label className="block text-xs text-muted mb-1.5">Current Password</label>
                 <div className="relative">
                   <input
                     type={showOldPassword ? 'text' : 'password'}
                     value={oldPassword}
                     onChange={(e) => setOldPassword(e.target.value)}
                     placeholder="Enter your current password"
-                    className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg pl-3 pr-10 py-2 text-sm placeholder:text-slate-600 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full border border-line bg-white dark:bg-slate-800 text-ink rounded-lg pl-3 pr-10 py-2 text-sm placeholder:text-slate-600 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                   <button
                     type="button"
@@ -469,48 +470,48 @@ function SetPasswordCard() {
               </div>
             )}
             <div>
-              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1.5">New Password</label>
+              <label className="block text-xs text-muted mb-1.5">New Password</label>
               <input
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Min 6 characters"
-                className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm placeholder:text-slate-600 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm placeholder:text-slate-600 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1.5">Confirm New Password</label>
+              <label className="block text-xs text-muted mb-1.5">Confirm New Password</label>
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Re-enter new password"
-                className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm placeholder:text-slate-600 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm placeholder:text-slate-600 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
             </div>
 
             {!hasPasswordProvider && (
               <>
                 <div>
-                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1.5">
+                  <label className="block text-xs text-muted mb-1.5">
                     Security Question
                   </label>
                   <CustomSelect
                     value={securityQuestion}
                     onChange={setSecurityQuestion}
-                    className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                     options={SECURITY_QUESTIONS.map((q) => ({ value: q, label: q }))}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1.5">Answer</label>
+                  <label className="block text-xs text-muted mb-1.5">Answer</label>
                   <input
                     value={securityAnswer}
                     onChange={(e) => setSecurityAnswer(e.target.value)}
                     placeholder="Your answer"
-                    className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm placeholder:text-slate-600 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm placeholder:text-slate-600 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
-                  <p className="text-xs text-slate-600 dark:text-slate-500 mt-1.5">
+                  <p className="text-xs text-muted mt-1.5">
                     Used to recover your password later if you forget it.
                   </p>
                 </div>
@@ -529,7 +530,7 @@ function SetPasswordCard() {
             {hasPasswordProvider && hasSecurityQuestion && (
               <button
                 onClick={openForgot}
-                className="text-xs text-slate-600 dark:text-slate-500 font-medium hover:text-brand-600 dark:hover:text-brand-400"
+                className="text-xs text-muted font-medium hover:text-brand-600 dark:hover:text-brand-400"
               >
                 Forgot your password?
               </button>
@@ -543,21 +544,21 @@ function SetPasswordCard() {
         <div className="max-w-sm">
           <div className="flex items-start gap-2 mb-4">
             <HelpCircle size={16} className="text-slate-600 shrink-0 mt-0.5" />
-            <p className="text-sm text-slate-700 dark:text-slate-200">{forgotQuestion}</p>
+            <p className="text-sm text-ink-2">{forgotQuestion}</p>
           </div>
-          <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1.5">Your Answer</label>
+          <label className="block text-xs text-muted mb-1.5">Your Answer</label>
           <input
             value={forgotAnswer}
             onChange={(e) => setForgotAnswer(e.target.value)}
             placeholder="Answer"
             autoFocus
-            className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm placeholder:text-slate-600 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm placeholder:text-slate-600 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
           {forgotError && <p className="text-xs text-red-500 mt-2">{forgotError}</p>}
           <div className="flex gap-3 mt-4">
             <button
               onClick={() => setMode('form')}
-              className="border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+              className="border border-line text-ink-2 px-4 py-2 rounded-lg text-sm font-medium hover:bg-surface-hover"
             >
               Back
             </button>
@@ -583,7 +584,7 @@ function SetPasswordCard() {
           </p>
           <button
             onClick={() => setMode('form')}
-            className="mt-4 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="mt-4 border border-line text-ink-2 px-4 py-2 rounded-lg text-sm font-medium hover:bg-surface-hover"
           >
             Back
           </button>
@@ -622,8 +623,8 @@ function AppLockCard() {
       <div className="flex gap-3">
         <Lock size={20} className="text-slate-700 dark:text-slate-300 shrink-0 mt-0.5" />
         <div>
-          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">App Lock</h2>
-          <p className="text-xs text-slate-600 dark:text-slate-500 mt-1">
+          <h2 className="text-sm font-semibold text-ink">App Lock</h2>
+          <p className="text-xs text-muted mt-1">
             Require a 4-digit PIN to open the app. Locks automatically after 1 minute in the background, or tap "Lock Now" to lock it instantly — handy on a laptop before stepping away.
           </p>
         </div>
@@ -641,20 +642,20 @@ function AppLockCard() {
           <>
             <button
               onClick={lockNow}
-              className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-full text-sm font-medium"
+              className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors bg-brand-600 hover:bg-brand-700 text-white"
             >
               <Lock size={16} />
               Lock Now
             </button>
             <button
               onClick={() => setConfirmDisable(true)}
-              className="bg-cream-100 dark:bg-slate-800 border border-cream-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-full text-sm font-medium hover:bg-cream-200 dark:hover:bg-slate-700"
+              className="bg-cream-100 dark:bg-slate-800 border border-cream-300 dark:border-slate-700 text-ink-2 px-4 py-2 rounded-full text-sm font-medium hover:bg-cream-200 dark:hover:bg-slate-700"
             >
               Disable Lock
             </button>
             <button
               onClick={() => setOpen(true)}
-              className="bg-cream-100 dark:bg-slate-800 border border-cream-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-full text-sm font-medium hover:bg-cream-200 dark:hover:bg-slate-700"
+              className="bg-cream-100 dark:bg-slate-800 border border-cream-300 dark:border-slate-700 text-ink-2 px-4 py-2 rounded-full text-sm font-medium hover:bg-cream-200 dark:hover:bg-slate-700"
             >
               Change PIN
             </button>
@@ -662,7 +663,7 @@ function AppLockCard() {
         ) : (
           <button
             onClick={() => setOpen(true)}
-            className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-full text-sm font-medium"
+            className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors bg-brand-600 hover:bg-brand-700 text-white"
           >
             <Lock size={16} />
             Set Up PIN
@@ -673,17 +674,17 @@ function AppLockCard() {
       <Modal open={open} onClose={() => setOpen(false)} title="Set Up App Lock">
         <div className="space-y-4">
           <div>
-            <label className="block text-xs text-slate-500 dark:text-slate-400 mb-2 text-center">4-digit PIN</label>
+            <label className="block text-xs text-muted mb-2 text-center">4-digit PIN</label>
             <PinBoxInput value={pin} onChange={setPinInput} autoFocus />
           </div>
           <div>
-            <label className="block text-xs text-slate-500 dark:text-slate-400 mb-2 text-center">Confirm PIN</label>
+            <label className="block text-xs text-muted mb-2 text-center">Confirm PIN</label>
             <PinBoxInput value={confirmPin} onChange={setConfirmPin} />
           </div>
           {pinError && <p className="text-xs text-red-500">{pinError}</p>}
           <button
             onClick={savePin}
-            className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2 rounded-full text-sm font-medium"
+            className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white"
           >
             Save PIN
           </button>
@@ -698,7 +699,7 @@ function AppLockCard() {
           <div className="flex gap-3">
             <button
               onClick={() => setConfirmDisable(false)}
-              className="flex-1 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+              className="flex-1 border border-line text-ink-2 py-2 rounded-lg text-sm font-medium hover:bg-surface-hover"
             >
               Cancel
             </button>
@@ -726,13 +727,13 @@ function InstallAppCard() {
       <div className="flex gap-3">
         <Smartphone size={20} className="text-slate-700 dark:text-slate-300 shrink-0 mt-0.5" />
         <div>
-          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Install App</h2>
+          <h2 className="text-sm font-semibold text-ink">Install App</h2>
           {installed ? (
             <p className="text-xs text-brand-600 mt-1 flex items-center gap-1">
               <Check size={13} /> <span className="font-luxury">Aurafin</span> is installed as an app on this device
             </p>
           ) : (
-            <p className="text-xs text-slate-600 dark:text-slate-500 mt-1">
+            <p className="text-xs text-muted mt-1">
               Add <span className="font-luxury">Aurafin</span> to your home screen for instant access. Opens like a
               native app with no browser tabs.
             </p>
@@ -744,23 +745,23 @@ function InstallAppCard() {
         <>
           <div className="mt-4 space-y-2.5">
             <div className="flex items-center gap-2.5 text-sm text-slate-600 dark:text-slate-300">
-              <span className="flex items-center justify-center h-5 w-5 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-medium text-slate-500 dark:text-slate-400 shrink-0">
+              <span className="flex items-center justify-center h-5 w-5 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-medium text-muted shrink-0">
                 1
               </span>
               Open the browser menu
             </div>
             <div className="flex items-center gap-2.5 text-sm text-slate-600 dark:text-slate-300">
-              <span className="flex items-center justify-center h-5 w-5 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-medium text-slate-500 dark:text-slate-400 shrink-0">
+              <span className="flex items-center justify-center h-5 w-5 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-medium text-muted shrink-0">
                 2
               </span>
-              Choose <span className="font-medium text-slate-800 dark:text-slate-100">Install app</span> or{' '}
-              <span className="font-medium text-slate-800 dark:text-slate-100">Add to Home Screen</span>
+              Choose <span className="font-medium text-ink">Install app</span> or{' '}
+              <span className="font-medium text-ink">Add to Home Screen</span>
             </div>
           </div>
 
           <button
             onClick={triggerInstallPrompt}
-            className="mt-4 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="mt-4 border border-line text-ink-2 px-4 py-2 rounded-lg text-sm font-medium hover:bg-surface-hover"
           >
             Show Install Prompt
           </button>
@@ -777,12 +778,12 @@ function SharedAccessCard() {
         <Users size={20} className="text-slate-700 dark:text-slate-300 shrink-0 mt-0.5" />
         <div className="flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Shared Access</h2>
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-brand-600 bg-brand-50 dark:bg-brand-500/10 dark:text-brand-400 px-2 py-0.5 rounded-full">
+            <h2 className="text-sm font-semibold text-ink">Shared Access</h2>
+            <span className="text-xs font-medium text-brand-600 bg-brand-50 dark:bg-brand-500/10 dark:text-brand-400 px-2 py-0.5 rounded-full">
               Coming Soon
             </span>
           </div>
-          <p className="text-xs text-slate-600 dark:text-slate-500 mt-1">
+          <p className="text-xs text-muted mt-1">
             Share your financial data with up to 5 trusted people — spouse, financial advisor, CA, or
             anyone you choose. Each person gets View Only or Full Access.
           </p>
@@ -794,11 +795,11 @@ function SharedAccessCard() {
           type="email"
           disabled
           placeholder="their.email@example.com"
-          className="flex-1 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm placeholder:text-slate-600"
+          className="flex-1 border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm placeholder:text-slate-600"
         />
         <select
           disabled
-          className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm"
+          className="border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm"
         >
           <option>View Only</option>
         </select>
@@ -809,7 +810,7 @@ function SharedAccessCard() {
           Send Invite
         </button>
       </div>
-      <p className="text-xs text-slate-600 dark:text-slate-500 mt-2">
+      <p className="text-xs text-muted mt-2">
         This feature is on the way — check back soon.
       </p>
     </Card>
@@ -841,12 +842,12 @@ function SizeStepper({
   const atMin = value <= min;
   const atMax = value >= max;
   return (
-    <div className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0 border-b last:border-b-0 border-slate-100 dark:border-slate-800">
+    <div className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0 border-b last:border-b-0 border-line-soft">
       <div className="flex items-start gap-3 min-w-0">
-        <div className="text-slate-600 dark:text-slate-500 mt-0.5 shrink-0">{icon}</div>
+        <div className="text-muted mt-0.5 shrink-0">{icon}</div>
         <div className="min-w-0">
-          <h3 className="text-sm font-medium text-slate-800 dark:text-slate-100">{label}</h3>
-          <p className="text-xs text-slate-600 dark:text-slate-500 mt-0.5">{description}</p>
+          <h3 className="text-sm font-medium text-ink">{label}</h3>
+          <p className="text-xs text-muted mt-0.5">{description}</p>
         </div>
       </div>
       <div className="flex items-center gap-1 shrink-0">
@@ -855,7 +856,7 @@ function SizeStepper({
           onClick={onDecrease}
           disabled={atMin}
           aria-label={`Decrease ${label.toLowerCase()}`}
-          className="h-8 w-8 flex items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:hover:bg-transparent"
+          className="h-8 w-8 flex items-center justify-center rounded-full border border-line text-slate-600 dark:text-slate-300 hover:bg-surface-hover disabled:opacity-40 disabled:hover:bg-transparent"
         >
           <Minus size={14} />
         </button>
@@ -872,7 +873,7 @@ function SizeStepper({
           onClick={onIncrease}
           disabled={atMax}
           aria-label={`Increase ${label.toLowerCase()}`}
-          className="h-8 w-8 flex items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:hover:bg-transparent"
+          className="h-8 w-8 flex items-center justify-center rounded-full border border-line text-slate-600 dark:text-slate-300 hover:bg-surface-hover disabled:opacity-40 disabled:hover:bg-transparent"
         >
           <Plus size={14} />
         </button>
@@ -895,8 +896,8 @@ function DisplaySizeCard() {
 
   return (
     <Card>
-      <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Display Size</h2>
-      <p className="text-xs text-slate-600 dark:text-slate-500 mb-2">
+      <h2 className="text-sm font-semibold text-ink mb-1">Display Size</h2>
+      <p className="text-xs text-muted mb-2">
         Tap <strong>−</strong> or <strong>+</strong> to adjust. Tap the percentage to reset it.
       </p>
       <div>
@@ -950,8 +951,8 @@ function GoldRateCard() {
 
   return (
     <Card>
-      <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Gold Rate Calibration</h2>
-      <p className="text-xs text-slate-600 dark:text-slate-500 mb-4">
+      <h2 className="text-sm font-semibold text-ink mb-1">Gold Rate Calibration</h2>
+      <p className="text-xs text-muted mb-4">
         The live gold rate is derived from a global spot price, which typically reads lower than
         Indian retail/bullion rates (import duty, GST, dealer margin). Compare the "Live Gold
         Price" card on your Dashboard against a source you trust — like Goodreturns or your local
@@ -967,9 +968,9 @@ function GoldRateCard() {
           onKeyDown={(e) => {
             if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
           }}
-          className="w-24 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          className="w-24 border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
         />
-        <span className="text-sm text-slate-500 dark:text-slate-400">% added on top of the raw spot-derived rate</span>
+        <span className="text-sm text-muted">% added on top of the raw spot-derived rate</span>
       </div>
     </Card>
   );
@@ -1000,7 +1001,7 @@ function Toggle({
       }`}
     >
       <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+        className={`inline-block h-4 w-4 transform rounded-full bg-surface shadow transition-transform ${
           checked ? 'translate-x-6' : 'translate-x-1'
         }`}
       />
@@ -1030,22 +1031,22 @@ function NotificationsCard() {
 
   return (
     <Card>
-      <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Notifications</h2>
-      <p className="text-xs text-slate-600 dark:text-slate-500 mb-4">
+      <h2 className="text-sm font-semibold text-ink mb-1">Notifications</h2>
+      <p className="text-xs text-muted mb-4">
         Choose how you'd like to be reached. Changes take effect immediately.
       </p>
       <div className="space-y-2">
         {NOTIFICATION_ROWS.map((row) => (
           <div
             key={row.title}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 px-4 py-3"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-slate-50 dark:bg-slate-800/40 px-4 py-3"
           >
-            <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{row.title}</span>
+            <span className="text-sm font-medium text-ink">{row.title}</span>
             <div className="flex items-center gap-5">
               {row.channels.map(({ key, label, icon: Icon }) => (
                 <div key={key} className="flex items-center gap-2">
-                  <Icon size={14} className="text-slate-600 dark:text-slate-500" />
-                  <span className="text-xs text-slate-500 dark:text-slate-400">{label}</span>
+                  <Icon size={14} className="text-muted" />
+                  <span className="text-xs text-muted">{label}</span>
                   <Toggle
                     checked={prefs[key]}
                     onChange={() => toggle(key)}
@@ -1068,16 +1069,16 @@ function PreferencesTab() {
     <>
       <Card>
         <div className="flex items-center gap-2 mb-1">
-          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Base Currency</h2>
+          <h2 className="text-sm font-semibold text-ink">Base Currency</h2>
         </div>
-        <p className="text-xs text-slate-600 dark:text-slate-500 mb-4">
+        <p className="text-xs text-muted mb-4">
           Your net worth and totals will be shown in this currency across the dashboard — with full
           multi-currency support for assets held in any currency.
         </p>
         <CurrencySelect
           value={baseCurrency}
           onChange={setBaseCurrency}
-          className="w-full sm:w-64 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          className="w-full sm:w-64 border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
         />
       </Card>
       <GoldRateCard />
@@ -1230,7 +1231,7 @@ function ProfilesTab() {
       <Card>
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Family Profiles</h2>
+            <h2 className="text-sm font-semibold text-ink">Family Profiles</h2>
           </div>
           <Users size={16} className="text-slate-600" />
         </div>
@@ -1258,16 +1259,16 @@ function ProfilesTab() {
             return (
               <div
                 key={p.id}
-                className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800"
+                className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-line"
               >
                 <div className="flex items-center gap-3">
                   <span
                     className="w-2.5 h-2.5 rounded-full shrink-0"
                     style={{ backgroundColor: p.colour }}
                   />
-                  <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{p.name}</span>
+                  <span className="text-sm font-medium text-ink">{p.name}</span>
                   {isDefault && (
-                    <span className="text-[10px] font-semibold tracking-wide uppercase text-slate-600 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                    <span className="text-xs font-medium text-muted bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
                       Default
                     </span>
                   )}
@@ -1297,17 +1298,17 @@ function ProfilesTab() {
                       <button
                         onClick={() => setMoveMenuFor(moveMenuFor === p.id ? null : p.id)}
                         disabled={movingId === p.id}
-                        className="text-xs font-semibold text-slate-700 dark:text-slate-200 hover:text-brand-600 dark:hover:text-brand-300 disabled:opacity-50"
+                        className="text-xs font-semibold text-ink-2 hover:text-brand-600 dark:hover:text-brand-300 disabled:opacity-50"
                       >
                         {movingId === p.id ? 'Moving…' : 'Move data to…'}
                       </button>
                       {moveMenuFor === p.id && (
-                        <div className="absolute right-0 top-full mt-1 z-10 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1 min-w-[140px]">
+                        <div className="absolute right-0 top-full mt-1 z-10 bg-white dark:bg-slate-800 border border-line rounded-lg shadow-lg py-1 min-w-[140px]">
                           {otherProfiles.map((target) => (
                             <button
                               key={target.id}
                               onClick={() => handleMoveData(p.id, target.id)}
-                              className="w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+                              className="w-full text-left px-3 py-2 text-xs text-ink-2 hover:bg-slate-50 dark:hover:bg-slate-700"
                             >
                               {target.name}
                             </button>
@@ -1319,7 +1320,7 @@ function ProfilesTab() {
                   {!isDefault && (
                     <button
                       onClick={() => handleSetDefault(p.id)}
-                      className="text-xs font-semibold text-slate-700 dark:text-slate-200 hover:text-brand-600 dark:hover:text-brand-300"
+                      className="text-xs font-semibold text-ink-2 hover:text-brand-600 dark:hover:text-brand-300"
                     >
                       Set default
                     </button>
@@ -1347,7 +1348,7 @@ function ProfilesTab() {
             <Plus size={16} /> Add Profile
           </button>
         ) : (
-          <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3">
+          <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 border border-line rounded-xl px-4 py-3">
             <div className="flex items-center gap-2">
               <Users size={16} className="text-slate-600" />
               <p className="text-xs text-slate-600 dark:text-slate-300">
@@ -1361,16 +1362,16 @@ function ProfilesTab() {
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add Profile">
         <div className="space-y-4">
           <label className="block">
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">Name</span>
+            <span className="text-xs font-medium text-muted mb-1.5 block">Name</span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Dad, Mom, Priya"
-              className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              className="w-full border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
           </label>
           <div>
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">Colour</span>
+            <span className="text-xs font-medium text-muted mb-1.5 block">Colour</span>
             <div className="flex flex-wrap gap-2">
               {PROFILE_COLOURS.map((c) => (
                 <button
@@ -1396,16 +1397,16 @@ function ProfilesTab() {
       <Modal open={!!editingProfile} onClose={() => setEditingProfile(null)} title="Edit Profile">
         <div className="space-y-4">
           <label className="block">
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">Name</span>
+            <span className="text-xs font-medium text-muted mb-1.5 block">Name</span>
             <input
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
               placeholder="e.g. Dad, Mom, Priya"
-              className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              className="w-full border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
           </label>
           <div>
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">Colour</span>
+            <span className="text-xs font-medium text-muted mb-1.5 block">Colour</span>
             <div className="flex flex-wrap gap-2">
               {PROFILE_COLOURS.map((c) => (
                 <button
@@ -1534,33 +1535,33 @@ function DataTab() {
   return (
     <>
       <Card>
-        <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Backup</h2>
-        <p className="text-xs text-slate-600 dark:text-slate-500 mb-4">
+        <h2 className="text-sm font-semibold text-ink mb-1">Backup</h2>
+        <p className="text-xs text-muted mb-4">
           Download everything in your account as a single JSON file, and restore it back into any
           account later — useful before switching devices or just as a safety copy.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex-1 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
-            <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Download backup</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+          <div className="flex-1 border border-line rounded-xl p-4">
+            <h3 className="text-sm font-semibold text-ink">Download backup</h3>
+            <p className="text-xs text-muted mt-1">
               Saves all assets, liabilities, goals, transactions, snapshots, budgets, and profiles.
             </p>
             <button
               onClick={handleDownloadBackup}
-              className="mt-3 flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+              className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors mt-3 bg-brand-600 hover:bg-brand-700 text-white"
             >
               <Download size={16} />
               Download JSON Backup
             </button>
           </div>
 
-          <div className="flex-1 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
-            <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Restore from backup</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+          <div className="flex-1 border border-line rounded-xl p-4">
+            <h3 className="text-sm font-semibold text-ink">Restore from backup</h3>
+            <p className="text-xs text-muted mt-1">
               Adds the items from a backup file into this account. Existing data is kept.
             </p>
-            <label className="mt-3 inline-flex items-center gap-2 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer">
+            <label className="mt-3 inline-flex items-center gap-2 border border-line text-ink-2 hover:bg-surface-hover px-4 py-2 rounded-lg text-sm font-medium cursor-pointer">
               <Upload size={16} />
               Choose Backup File
               <input
@@ -1580,8 +1581,8 @@ function DataTab() {
       </Card>
 
       <Card>
-        <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Data</h2>
-        <p className="text-xs text-slate-600 dark:text-slate-500 mb-4">
+        <h2 className="text-sm font-semibold text-ink mb-1">Data</h2>
+        <p className="text-xs text-muted mb-4">
           Your data is stored in your own Firebase project. You can export it any time from the Firebase
           console, or permanently remove everything you've entered in <span className="font-luxury">Aurafin</span> below.
         </p>
@@ -1590,7 +1591,7 @@ function DataTab() {
           <AlertTriangle size={20} className="text-red-500 shrink-0 mt-0.5" />
           <div className="flex-1">
             <h3 className="text-sm font-semibold text-red-600 dark:text-red-400">Delete all data</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            <p className="text-xs text-muted mt-1">
               Permanently removes every asset, liability, goal, transaction, and snapshot in your
               account. Your login itself is not deleted — you'll stay signed in with an empty account.
               This cannot be undone.
@@ -1609,7 +1610,7 @@ function DataTab() {
       <Modal open={!!pendingRestore} onClose={closeRestoreModal} title="Restore this backup?">
         {pendingRestore && (
           <>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            <p className="text-sm text-muted mb-4">
               This backup was made on <strong>{new Date(pendingRestore.exportedAt).toLocaleString()}</strong> and
               contains <strong>{countBackupItems(pendingRestore)}</strong> item{countBackupItems(pendingRestore) === 1 ? '' : 's'}.
               They'll be added into <strong>{user?.email}</strong> — anything already in your account stays as is,
@@ -1620,7 +1621,7 @@ function DataTab() {
               <div className="flex gap-3">
                 <button
                   onClick={closeRestoreModal}
-                  className="flex-1 bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-sm font-medium"
+                  className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors flex-1 bg-brand-600 hover:bg-brand-700 text-white"
                 >
                   Done
                 </button>
@@ -1629,7 +1630,7 @@ function DataTab() {
               <div className="flex gap-3">
                 <button
                   onClick={closeRestoreModal}
-                  className="flex-1 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+                  className="flex-1 border border-line text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-surface-hover"
                 >
                   Cancel
                 </button>
@@ -1647,19 +1648,19 @@ function DataTab() {
       </Modal>
 
       <Modal open={confirmOpen} onClose={closeModal} title="Delete all data?">
-        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+        <p className="text-sm text-muted mb-4">
           This will permanently delete <strong>all</strong> assets, liabilities, goals, transactions,
           and snapshots for <strong>{user?.email}</strong>. This action cannot be undone.
         </p>
         <label className="block mb-4">
-          <span className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">
+          <span className="text-xs font-medium text-muted mb-1.5 block">
             Type <strong>DELETE</strong> to confirm
           </span>
           <input
             value={confirmText}
             onChange={(e) => setConfirmText(e.target.value)}
             placeholder="DELETE"
-            className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
           />
         </label>
         {status === 'error' && (
@@ -1668,7 +1669,7 @@ function DataTab() {
         <div className="flex gap-3">
           <button
             onClick={closeModal}
-            className="flex-1 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="flex-1 border border-line text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-surface-hover"
           >
             Cancel
           </button>
@@ -1694,28 +1695,25 @@ export default function Settings() {
   );
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Settings</h1>
-        <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Account, preferences & privacy</p>
-      </div>
+    <div className="space-y-5">
+      <PageHeader title="Settings" description="Account, preferences & privacy" />
 
       <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-6 items-start">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-2">
+        <nav className="bg-surface rounded-2xl border border-line p-1.5 flex md:flex-col gap-0.5 overflow-x-auto no-scrollbar md:overflow-visible">
           {TABS.map((t) => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+              className={`shrink-0 md:w-full text-left px-3 h-9 rounded-lg text-sm font-medium transition-colors ${
                 tab === t.key
-                  ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300'
-                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  ? 'bg-primary-soft text-primary-ink'
+                  : 'text-slate-600 hover:bg-surface-hover hover:text-ink'
               }`}
             >
               {t.label}
             </button>
           ))}
-        </div>
+        </nav>
 
         <div className="space-y-6 min-w-0">
           {tab === 'account' && (

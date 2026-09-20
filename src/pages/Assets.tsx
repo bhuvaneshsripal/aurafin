@@ -9,6 +9,7 @@ import type { Asset, AssetClass } from '../types';
 import { ASSET_CLASS_LABELS, formatCurrency } from '../utils/currency';
 import CurrencySelect from '../components/CurrencySelect';
 import CustomSelect from '../components/CustomSelect';
+import { inputClasses } from '../components/ui';
 
 const ASSET_CLASSES = Object.keys(ASSET_CLASS_LABELS) as AssetClass[];
 
@@ -56,20 +57,20 @@ export default function Assets() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Assets</h1>
+          <h1 className="text-2xl font-semibold text-ink">Assets</h1>
           <p className="text-slate-500 text-sm mt-1">
             {assets.length} tracked · {formatCurrency(assets.reduce((s, a) => s + a.value, 0))} total
           </p>
         </div>
         <button
           onClick={openNew}
-          className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+          className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors bg-brand-600 hover:bg-brand-700 text-white"
         >
           <Plus size={16} /> Add Asset
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <div className="bg-surface rounded-2xl border border-line overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-500 text-left">
             <tr>
@@ -82,9 +83,9 @@ export default function Assets() {
           <tbody className="divide-y divide-slate-100">
             {assets.map((a) => (
               <tr key={a.id}>
-                <td className="px-4 py-3 font-medium text-slate-800 uppercase">{a.name}</td>
+                <td className="px-4 py-3 font-medium text-ink">{a.name}</td>
                 <td className="px-4 py-3 text-slate-500">{ASSET_CLASS_LABELS[a.assetClass]}</td>
-                <td className="px-4 py-3 text-slate-800">{formatCurrency(a.value, a.currency)}</td>
+                <td className="px-4 py-3 text-ink">{formatCurrency(a.value, a.currency)}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2 justify-end">
                     <button onClick={() => openEdit(a)} className="text-slate-600 hover:text-brand-600">
@@ -118,7 +119,7 @@ export default function Assets() {
         onConfirm={confirmDelete}
         busy={deleting}
         title="Delete this asset?"
-        description={<>This will permanently delete <strong className="uppercase">{pendingDelete?.name}</strong>. This can't be undone.</>}
+        description={<>This will permanently delete <strong>{pendingDelete?.name}</strong>. This can't be undone.</>}
       />
     </div>
   );
@@ -145,7 +146,7 @@ function AssetForm({ initial, onSave }: { initial: Asset | null; onSave: (a: Ass
   return (
     <div className="space-y-4">
       <Field label="Name">
-        <input value={name} onChange={(e) => setName(e.target.value.toUpperCase())} className={`${inputClass} uppercase`} placeholder="e.g. HDFC Flexicap SIP" />
+        <input value={name} onChange={(e) => setName(e.target.value.toUpperCase())} className={`${inputClass}`} placeholder="e.g. HDFC Flexicap SIP" />
       </Field>
       <Field label="Asset Class">
         <CustomSelect
@@ -169,7 +170,7 @@ function AssetForm({ initial, onSave }: { initial: Asset | null; onSave: (a: Ass
           <CurrencySelect value={currency} onChange={setCurrency} className={`${inputClass} appearance-none`} />
         </Field>
       </div>
-      <button onClick={submit} className="w-full h-10 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium">
+      <button onClick={submit} className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white">
         Save Asset
       </button>
     </div>
@@ -188,5 +189,4 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 // Shared box styling for every field in the form — a fixed height, border,
 // radius and padding — so text inputs and dropdowns line up and look like
 // one consistent set of boxes instead of mismatched sizes.
-const inputClass =
-  'w-full h-10 border border-slate-200 dark:border-slate-600 rounded-lg px-3 text-sm text-slate-800 dark:text-white bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent';
+const inputClass = inputClasses;

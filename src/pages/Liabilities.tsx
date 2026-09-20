@@ -8,6 +8,7 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import type { Liability } from '../types';
 import { formatCurrency } from '../utils/currency';
 import CurrencySelect from '../components/CurrencySelect';
+import { inputClasses } from '../components/ui';
 
 export default function Liabilities() {
   const liabilities = useLiabilitiesStore((s) => s.liabilities);
@@ -43,7 +44,7 @@ export default function Liabilities() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Liabilities</h1>
+          <h1 className="text-2xl font-semibold text-ink">Liabilities</h1>
           <p className="text-slate-500 text-sm mt-1">
             {liabilities.length} active ·{' '}
             {formatCurrency(liabilities.reduce((s, l) => s + l.outstanding, 0))} outstanding
@@ -54,13 +55,13 @@ export default function Liabilities() {
             setEditing(null);
             setModalOpen(true);
           }}
-          className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+          className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors bg-brand-600 hover:bg-brand-700 text-white"
         >
           <Plus size={16} /> Add Liability
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <div className="bg-surface rounded-2xl border border-line overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-500 text-left">
             <tr>
@@ -73,8 +74,8 @@ export default function Liabilities() {
           <tbody className="divide-y divide-slate-100">
             {liabilities.map((l) => (
               <tr key={l.id}>
-                <td className="px-4 py-3 font-medium text-slate-800 uppercase">{l.name}</td>
-                <td className="px-4 py-3 text-slate-800">{formatCurrency(l.outstanding, l.currency)}</td>
+                <td className="px-4 py-3 font-medium text-ink">{l.name}</td>
+                <td className="px-4 py-3 text-ink">{formatCurrency(l.outstanding, l.currency)}</td>
                 <td className="px-4 py-3 text-slate-500">
                   {l.emi ? formatCurrency(l.emi, l.currency) : '—'}
                 </td>
@@ -117,7 +118,7 @@ export default function Liabilities() {
         onConfirm={confirmDelete}
         busy={deleting}
         title="Delete this liability?"
-        description={<>This will permanently delete <strong className="uppercase">{pendingDelete?.name}</strong>. This can't be undone.</>}
+        description={<>This will permanently delete <strong>{pendingDelete?.name}</strong>. This can't be undone.</>}
       />
     </div>
   );
@@ -150,7 +151,7 @@ function LiabilityForm({
   return (
     <div className="space-y-4">
       <Field label="Name">
-        <input value={name} onChange={(e) => setName(e.target.value.toUpperCase())} className={`${inputClass} uppercase`} placeholder="e.g. Home Loan" />
+        <input value={name} onChange={(e) => setName(e.target.value.toUpperCase())} className={`${inputClass}`} placeholder="e.g. Home Loan" />
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Outstanding">
@@ -169,7 +170,7 @@ function LiabilityForm({
       <Field label="Monthly EMI (optional)">
         <input type="number" value={emi} onChange={(e) => setEmi(e.target.value)} className={inputClass} placeholder="0" />
       </Field>
-      <button onClick={submit} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2 rounded-lg text-sm font-medium">
+      <button onClick={submit} className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white">
         Save Liability
       </button>
     </div>
@@ -185,5 +186,4 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-const inputClass =
-  'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500';
+const inputClass = inputClasses;

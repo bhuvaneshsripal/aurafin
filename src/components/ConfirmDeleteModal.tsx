@@ -37,12 +37,12 @@ export default function ConfirmDeleteModal({
 
   return (
     <Modal open={open} onClose={onClose} title={title}>
-      <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">{description}</p>
+      <p className="text-sm text-muted mb-6">{description}</p>
       <div className="flex gap-3">
         <button
           type="button"
           onClick={onClose}
-          className="flex-1 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+          className="flex-1 border border-line text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-surface-hover"
         >
           Cancel
         </button>

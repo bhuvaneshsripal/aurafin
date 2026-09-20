@@ -173,7 +173,7 @@ export default function BudgetTab() {
         >
           <ChevronLeft size={18} />
         </button>
-        <span className="font-semibold text-slate-900 dark:text-white text-lg">{monthLabel(month)}</span>
+        <span className="font-semibold text-ink text-lg">{monthLabel(month)}</span>
         <button
           onClick={() => setMonth((m) => shiftMonth(m, 1))}
           className="tap-scale h-8 w-8 flex items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -182,19 +182,19 @@ export default function BudgetTab() {
         </button>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6">
+      <div className="bg-surface rounded-2xl border border-line p-4 sm:p-6">
         <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-          <h2 className="font-semibold text-slate-900 dark:text-white">Monthly plan</h2>
+          <h2 className="font-semibold text-ink">Monthly plan</h2>
           <div className="flex items-center gap-2">
             <button
               onClick={handleAutoSuggest}
-              className="flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 px-3 py-1.5 rounded-lg text-sm font-medium"
+              className="flex items-center gap-1.5 border border-line hover:bg-surface-hover text-ink-2 px-3 py-1.5 rounded-lg text-sm font-medium"
             >
               <Wand2 size={15} /> Auto-suggest
             </button>
             <button
               onClick={handleCopyLastMonth}
-              className="flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 px-3 py-1.5 rounded-lg text-sm font-medium"
+              className="flex items-center gap-1.5 border border-line hover:bg-surface-hover text-ink-2 px-3 py-1.5 rounded-lg text-sm font-medium"
             >
               <Copy size={15} /> Copy from last month
             </button>
@@ -202,14 +202,14 @@ export default function BudgetTab() {
         </div>
 
         {draft.length === 0 ? (
-          <div className="text-center text-slate-600 dark:text-slate-500 text-sm py-10">
+          <div className="text-center text-muted text-sm py-10">
             No categories yet. Tap Add categories below to start.
           </div>
         ) : (
-          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+          <div className="divide-y divide-line-soft">
             {draft.map((item) => (
               <div key={item.id} className="flex items-center gap-3 py-2.5">
-                <span className="flex-1 text-sm font-medium text-slate-700 dark:text-slate-200 truncate uppercase">
+                <span className="flex-1 text-sm font-medium text-ink-2 truncate">
                   {item.category}
                 </span>
                 <div className="flex items-center gap-1 shrink-0">
@@ -219,7 +219,7 @@ export default function BudgetTab() {
                     value={item.amount || ''}
                     onChange={(e) => updateAmount(item.id, Number(e.target.value))}
                     placeholder="0"
-                    className="w-24 sm:w-32 text-right border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-24 sm:w-32 text-right border border-line dark:bg-slate-800 dark:text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
                 <button
@@ -250,7 +250,7 @@ export default function BudgetTab() {
                 <button
                   key={c}
                   onClick={() => addCategory(c)}
-                  className="flex items-center gap-1 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 px-3 py-1.5 rounded-full text-sm font-medium"
+                  className="flex items-center gap-1 border border-line hover:bg-surface-hover text-slate-600 dark:text-slate-300 px-3 py-1.5 rounded-full text-sm font-medium"
                 >
                   <Plus size={13} /> {c}
                 </button>
@@ -266,7 +266,7 @@ export default function BudgetTab() {
                     }
                   }}
                   placeholder="Custom category"
-                  className="border border-dashed border-slate-300 dark:border-slate-600 rounded-full px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 dark:bg-slate-800 dark:text-white w-40 uppercase"
+                  className="border border-dashed border-slate-300 dark:border-slate-600 rounded-full px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 dark:bg-slate-800 dark:text-white w-40"
                 />
                 <button
                   onClick={() => {
@@ -274,7 +274,7 @@ export default function BudgetTab() {
                     addCategory(newCategory.trim());
                     setNewCategory('');
                   }}
-                  className="flex items-center gap-1 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 px-3 py-1.5 rounded-full text-sm font-medium"
+                  className="flex items-center gap-1 border border-line hover:bg-surface-hover text-slate-600 dark:text-slate-300 px-3 py-1.5 rounded-full text-sm font-medium"
                 >
                   <Plus size={13} /> New category
                 </button>
@@ -283,9 +283,9 @@ export default function BudgetTab() {
           )}
         </div>
 
-        <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
-          <span className="font-semibold text-slate-900 dark:text-white">Total</span>
-          <span className="font-semibold text-slate-900 dark:text-white">{formatCurrency(total)}</span>
+        <div className="flex items-center justify-between pt-4 mt-4 border-t border-line-soft">
+          <span className="font-semibold text-ink">Total</span>
+          <span className="font-semibold text-ink">{formatCurrency(total)}</span>
         </div>
       </div>
 

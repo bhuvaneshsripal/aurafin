@@ -1,6 +1,6 @@
-import { useState, useEffect, useLayoutEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Plus,
   Trash2,
@@ -15,13 +15,11 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  ArrowUpDown,
   X,
   Loader2,
   CheckCircle2,
   Link2Off,
   AlertTriangle,
-  Eye,
   EyeOff,
   MoreVertical,
   BarChart2,
@@ -34,6 +32,8 @@ import {
   Play,
   PlusCircle,
   Banknote,
+  ArrowUpRight,
+  Wallet,
 } from 'lucide-react';
 import {
   PieChart,
@@ -45,7 +45,7 @@ import {
 import { useAssetsStore } from '../store/assetsStore';
 import { useLivePricesStore, resolvePreviousClose } from '../store/livePricesStore';
 import { goldPricePerGram22k } from '../utils/goldPrice';
-import { computeHoldingPnl, isFullySold } from '../utils/investmentPnl';
+import { computeHoldingPnl, computePortfolioPnl, isFullySold } from '../utils/investmentPnl';
 import { useSyncStatusStore } from '../store/syncStatusStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useAuthStore } from '../store/authStore';
@@ -54,14 +54,39 @@ import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import { upsertDoc, removeDoc } from '../hooks/useFirestoreSync';
 import { exportToCsv } from '../utils/exportCsv';
 import Modal from '../components/Modal';
+import {
+  Button,
+  Card,
+  EmptyState,
+  IconButton,
+  Input,
+  PageHeader,
+  StatCard,
+  Table,
+  TableContainer,
+  TBody,
+  Td,
+  Th,
+  THead,
+  Tabs,
+  SegmentedControl,
+  inputClasses,
+  fieldBase,
+  chart,
+} from '../components/ui';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
-import LoadingDots from '../components/LoadingDots';
 import CurrencySelect from '../components/CurrencySelect';
 import CustomSelect from '../components/CustomSelect';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { ACCOUNT_TYPES, resolveAccountIcon, type AccountType } from '../utils/accountVisuals';
 import type { Asset, AssetClass, Liability, LiabilityClass, Transaction } from '../types';
-import { formatPreciseCurrency, maskPreciseAmount, maskAmount } from '../utils/currency';
+import {
+  formatPreciseCurrency,
+  formatPercentMagnitude,
+  formatSignedCurrency,
+  maskPreciseAmount,
+  maskAmount,
+} from '../utils/currency';
 import {
   ASSET_TAXONOMY,
   LIABILITY_TAXONOMY,
@@ -102,20 +127,21 @@ type EntryType = 'asset' | 'liability';
 
 /** Default manual-order tie-break for holdings that have never been
  *  explicitly reordered (same `order` value, typically 0/unset) — puts
- *  Stock, Gold, SIP, FD and RD in that fixed order ahead of everything
- *  else. Once a holding is actually dragged or moved via the row menu, it
- *  gets its own distinct `order` number, which wins the comparison before
- *  this rank is ever consulted — so manual reordering still freely moves
- *  any holding anywhere in the list, this only decides the untouched
- *  starting order. */
+ *  Stock, Gold, SIP, FD, RD and Cash in that fixed order — this rank is
+ *  consulted first, so holdings always group by asset class in this order
+ *  regardless of any stored drag `order`. Within a class, the stored
+ *  `order` (set by dragging or the row menu) decides relative position, so
+ *  manual reordering still freely moves a holding anywhere within its own
+ *  class, it just can no longer jump into a different class's block. */
 const DEFAULT_ASSET_CLASS_ORDER: Partial<Record<AssetClass, number>> = {
   stock: 0,
   gold: 1,
   sip: 2,
   fixed_deposit: 3,
   recurring_deposit: 4,
+  cash: 5,
 };
-const DEFAULT_ASSET_CLASS_ORDER_FALLBACK = 5;
+const DEFAULT_ASSET_CLASS_ORDER_FALLBACK = 6;
 
 /** Common Indian/US brokers for the "Held in account" dropdown on Stock/ETF
  *  holdings — stored in the same `institution` field the Bank/Institution
@@ -185,22 +211,6 @@ function savePersistedFilter(key: string, value: string[]) {
  */
 function formatGrams(qty: number): string {
   return (Math.round(qty * 10000) / 10000).toString();
-}
-
-/** "+₹1.80" / "-₹118.41" — signed amount, sign shown once up front rather
- *  than relying on the currency formatter's own minus placement (which
- *  varies by locale/currency and doesn't add a "+" for gains). Used by the
- *  Holdings widget, which — like a brokerage app — always shows the sign
- *  explicitly and leaves color to carry it too. */
-function formatSignedCurrency(amount: number, currency: string = 'INR'): string {
-  const sign = amount > 0 ? '+' : amount < 0 ? '-' : '';
-  return `${sign}${formatPreciseCurrency(Math.abs(amount), currency)}`;
-}
-
-/** "0.64%" — always unsigned; the Holdings widget shows direction via
- *  color and the paired signed amount, not a second minus sign here. */
-function formatPercentMagnitude(percent: number): string {
-  return `${Math.abs(percent).toFixed(2)}%`;
 }
 
 /** Tiny deterministic PRNG (mulberry32) seeded from a string, so a given
@@ -493,49 +503,32 @@ function AddWealthPage({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900">Add {noun}</h2>
-          <p className="text-slate-500 text-sm mt-0.5">
-            Step {step === 'details' ? 2 : 1} of 2:{' '}
-            {step === 'category'
-              ? `Select ${entryType} type`
-              : step === 'type'
-                ? category?.label ?? `Select ${entryType} type`
-                : (category?.types.find((t) => t.value === pickedType)?.label ?? 'Enter details')}
-          </p>
-        </div>
-        <button
-          onClick={onClose}
-          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-brand-600 shrink-0"
-        >
-          <ArrowLeft size={16} /> Back to {nounPlural}
-        </button>
-      </div>
+      <PageHeader
+        title={`Add ${noun.toLowerCase()}`}
+        description={`Step ${step === 'details' ? 2 : 1} of 2: ${
+          step === 'category'
+            ? `Select ${entryType} type`
+            : step === 'type'
+              ? category?.label ?? `Select ${entryType} type`
+              : (category?.types.find((t) => t.value === pickedType)?.label ?? 'Enter details')
+        }`}
+        onBack={onClose}
+        backLabel={`Back to ${nounPlural.toLowerCase()}`}
+      />
 
-      <div className="flex bg-slate-100 rounded-xl p-1 gap-1 max-w-sm">
-        <button
-          onClick={() => switchEntryType('asset')}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-colors ${
-            entryType === 'asset' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          <TrendingUp size={15} /> Asset
-        </button>
-        <button
-          onClick={() => switchEntryType('liability')}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-colors ${
-            entryType === 'liability' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          <TrendingDown size={15} /> Liability
-        </button>
-      </div>
+      <SegmentedControl<'asset' | 'liability'>
+        value={entryType}
+        onChange={switchEntryType}
+        items={[
+          { key: 'asset', label: <span className="inline-flex items-center gap-1.5"><TrendingUp size={14} /> Asset</span> },
+          { key: 'liability', label: <span className="inline-flex items-center gap-1.5"><TrendingDown size={14} /> Liability</span> },
+        ]}
+      />
 
-      <div className="bg-white rounded-2xl border border-slate-200 p-6">
+      <div className="bg-surface rounded-2xl border border-line p-6">
         {step === 'category' ? (
           <div className="space-y-4">
-            <h3 className="font-semibold text-slate-900">Select {noun} Type</h3>
+            <h3 className="font-semibold text-ink">Select {noun} Type</h3>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {taxonomy.map((cat) => {
                 const Icon = cat.icon;
@@ -543,10 +536,10 @@ function AddWealthPage({
                   <button
                     key={cat.key}
                     onClick={() => selectCategory(cat)}
-                    className="flex flex-col items-center justify-center gap-2 border border-slate-200 rounded-xl p-4 hover:border-brand-400 hover:bg-brand-50 transition-colors text-center"
+                    className="flex flex-col items-center justify-center gap-2 border border-line rounded-xl p-4 hover:border-brand-400 hover:bg-brand-50 transition-colors text-center"
                   >
                     <Icon size={22} className="text-slate-600" />
-                    <span className="font-medium text-slate-800 text-sm">{cat.label}</span>
+                    <span className="font-medium text-ink text-sm">{cat.label}</span>
                     {cat.types.length > 1 && (
                       <span className="text-xs text-slate-600">{cat.types.length} types</span>
                     )}
@@ -563,7 +556,7 @@ function AddWealthPage({
             >
               <ArrowLeft size={14} /> All categories
             </button>
-            <h3 className="font-semibold text-slate-900">{category.label}</h3>
+            <h3 className="font-semibold text-ink">{category.label}</h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {(category.groups
                 ? category.groups.map((g) => ({ value: g.defaultValue, label: g.label }))
@@ -572,7 +565,7 @@ function AddWealthPage({
                 <button
                   key={t.value}
                   onClick={() => selectType(t.value)}
-                  className="border border-slate-200 rounded-xl px-4 py-3.5 text-sm font-medium text-slate-800 text-center hover:border-brand-400 hover:bg-brand-50 transition-colors"
+                  className="border border-line rounded-xl px-4 py-3.5 text-sm font-medium text-ink text-center hover:border-brand-400 hover:bg-brand-50 transition-colors"
                 >
                   {t.label}
                 </button>
@@ -623,28 +616,17 @@ function useOutsideClose(onClose: () => void) {
 
 function TabNav({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   return (
-    <div className="flex gap-2 border-b border-slate-200 dark:border-slate-800 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
-      {(
-        [
-          ['assets', 'Assets'],
-          ['liabilities', 'Liabilities'],
-          ['networth', 'Net Worth'],
-          ['allocation', 'Allocation'],
-        ] as [Tab, string][]
-      ).map(([key, label]) => (
-        <button
-          key={key}
-          onClick={() => setTab(key)}
-          className={`shrink-0 whitespace-nowrap px-3.5 sm:px-4 py-2.5 text-sm sm:text-base font-medium border-b-2 -mb-px transition-colors ${
-            tab === key
-              ? 'border-brand-600 text-brand-700 dark:text-brand-300'
-              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-          }`}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
+    <Tabs<Tab>
+      value={tab}
+      onChange={setTab}
+      items={[
+        { key: 'assets', label: 'Assets' },
+        { key: 'liabilities', label: 'Liabilities' },
+        { key: 'networth', label: 'Net worth' },
+        { key: 'allocation', label: 'Allocation' },
+      ]}
+      className="-mx-4 px-4 sm:mx-0 sm:px-0"
+    />
   );
 }
 
@@ -671,22 +653,22 @@ function FilterDropdown({
 
   return (
     <div className="relative w-full min-w-0 sm:flex-1 sm:min-w-[150px]" ref={ref}>
-      <span className="text-xs font-medium text-slate-500 mb-0.5 sm:mb-1 block">{label}</span>
+      <span className="text-xs font-medium text-muted mb-1 block">{label}</span>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full min-h-[32px] sm:min-h-[34px] flex items-center justify-between gap-1.5 border border-slate-200 rounded-lg px-2 sm:px-2.5 py-0.5 sm:py-1 bg-white text-left"
+        className="w-full min-h-9 flex items-center justify-between gap-1.5 border border-line rounded-lg px-3 py-1 bg-surface text-left hover:border-slate-300 transition-colors"
       >
         <div className="flex items-center gap-1 flex-wrap flex-1 min-w-0">
           {selected.length === 0 ? (
-            <span className="text-slate-600 text-xs truncate">{placeholder}</span>
+            <span className="text-faint text-sm truncate">{placeholder}</span>
           ) : (
             selected.map((v) => {
               const opt = options.find((o) => o.value === v);
               return (
                 <span
                   key={v}
-                  className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 text-[10px] sm:text-[11px] font-medium pl-1.5 pr-0.5 py-0.5 rounded-md max-w-full truncate"
+                  className="inline-flex items-center gap-1 bg-primary-soft text-primary-ink text-xs font-medium pl-2 pr-1 py-0.5 rounded-md max-w-full truncate"
                 >
                   {opt?.label ?? v}
                   <span
@@ -695,7 +677,7 @@ function FilterDropdown({
                       e.stopPropagation();
                       toggleOption(v);
                     }}
-                    className="hover:bg-slate-200 rounded-sm p-0.5 shrink-0"
+                    className="hover:bg-brand-100 dark:hover:bg-brand-800/40 rounded-sm p-0.5 shrink-0"
                   >
                     <X size={11} />
                   </span>
@@ -721,20 +703,20 @@ function FilterDropdown({
         </div>
       </button>
       {open && (
-        <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+        <div className="animate-menu-in absolute z-20 mt-1 w-full bg-surface border border-line rounded-xl shadow-lg max-h-56 overflow-y-auto py-1">
           {options.length === 0 ? (
             <p className="px-3 py-2 text-sm text-slate-600">No options yet</p>
           ) : (
             options.map((opt) => (
               <label
                 key={opt.value}
-                className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 cursor-pointer"
+                className="flex items-center gap-2.5 px-3 py-2 text-sm text-ink-2 hover:bg-surface-hover cursor-pointer"
               >
                 <input
                   type="checkbox"
                   checked={selected.includes(opt.value)}
                   onChange={() => toggleOption(opt.value)}
-                  className="h-4 w-4 rounded border-slate-300"
+                  className="h-4 w-4 rounded border-slate-300 accent-brand-600"
                 />
                 {opt.label}
               </label>
@@ -757,19 +739,13 @@ function SummaryCard({
   tone: 'brand' | 'red' | 'slate';
   loading?: boolean;
 }) {
-  const toneClass =
-    tone === 'brand' ? 'text-brand-700' : tone === 'red' ? 'text-red-500' : 'text-slate-900';
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-      <p className="text-sm text-slate-500 font-medium mb-1">{label}</p>
-      {loading ? (
-        <div className="h-8 flex items-center">
-          <LoadingDots />
-        </div>
-      ) : (
-        <p className={`text-2xl font-bold ${toneClass} animate-value-in`}>{value}</p>
-      )}
-    </div>
+    <StatCard
+      label={label}
+      value={value}
+      loading={loading}
+      tone={tone === 'red' ? 'negative' : tone === 'brand' ? 'positive' : 'default'}
+    />
   );
 }
 
@@ -891,7 +867,6 @@ function AssetsTab({
       window.scrollTo({ top: listScrollPosRef.current });
     }
   }, [viewingAsset]);
-  const togglePrivacy = useUiStore((s) => s.togglePrivacy);
   const [holdingsMenuOpenId, setHoldingsMenuOpenId] = useState<string | null>(null);
   // Whether the currently-open row menu should render above its "..." button
   // instead of below. Rows near the bottom of the screen (e.g. the last
@@ -1044,7 +1019,7 @@ function AssetsTab({
     if (!user) return;
     setSortKey('manual');
     const ordered = [...assets].sort(
-      (a, b) => (a.order ?? 0) - (b.order ?? 0) || defaultAssetClassRank(a) - defaultAssetClassRank(b) || a.updatedAt - b.updatedAt
+      (a, b) => defaultAssetClassRank(a) - defaultAssetClassRank(b) || (a.order ?? 0) - (b.order ?? 0) || a.updatedAt - b.updatedAt
     );
     const idx = ordered.findIndex((a) => a.id === id);
     const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
@@ -1088,7 +1063,7 @@ function AssetsTab({
       dragRef.current.dragging = true;
       if (sortKey !== 'manual') setSortKey('manual');
       const orderedIds = [...assets]
-        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || defaultAssetClassRank(a) - defaultAssetClassRank(b) || a.updatedAt - b.updatedAt)
+        .sort((a, b) => defaultAssetClassRank(a) - defaultAssetClassRank(b) || (a.order ?? 0) - (b.order ?? 0) || a.updatedAt - b.updatedAt)
         .map((x) => x.id);
       setManualDragIds(orderedIds);
       setDraggingId(id);
@@ -1275,7 +1250,7 @@ function AssetsTab({
       const matchesCurrency = selectedCurrencies.length === 0 || selectedCurrencies.includes(a.currency);
       return matchesSearch && matchesCategory && matchesType && matchesCurrency;
     })
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || defaultAssetClassRank(a) - defaultAssetClassRank(b) || a.updatedAt - b.updatedAt);
+    .sort((a, b) => defaultAssetClassRank(a) - defaultAssetClassRank(b) || (a.order ?? 0) - (b.order ?? 0) || a.updatedAt - b.updatedAt);
 
   const totalValue = assets.reduce((s, a) => s + resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).value, 0);
 
@@ -1326,6 +1301,14 @@ function AssetsTab({
     0
   );
   const total1dPercent = prev1dTotalValue > 0 ? (total1dAbs / prev1dTotalValue) * 100 : 0;
+
+  // Realized P&L + number of fully-sold positions — the same aggregate the
+  // Performance page shows, so the two screens can never disagree.
+  const realizedSummary = useMemo(() => {
+    const pnl = computePortfolioPnl(assets, 'INR', livePrices, sipValues, liveGoldPricePerGram);
+    return { realized: pnl.realizedPnl, sold: pnl.sold.length };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allAssets, activeProfileId, livePrices, sipValues, liveGoldPricePerGram]);
 
   const categoryOptions = ASSET_TAXONOMY.filter((cat) =>
     assets.some((a) => (ASSET_CLASS_TO_CATEGORY[a.assetClass] ?? cat).key === cat.key)
@@ -1458,76 +1441,73 @@ function AssetsTab({
     label,
     sortKeyName,
     align = 'left',
+    className,
   }: {
     label: string;
     sortKeyName: SortKey;
     align?: 'left' | 'right';
+    className?: string;
   }) {
     const active = sortKey === sortKeyName;
     return (
-      <th
-        onClick={() => toggleSort(sortKeyName)}
-        className={`px-4 py-3 font-medium cursor-pointer select-none hover:text-slate-700 whitespace-nowrap ${
-          align === 'right' ? 'text-right' : 'text-left'
-        }`}
+      <Th
+        sortable
+        align={align}
+        active={active}
+        dir={sortDir}
+        onSort={() => toggleSort(sortKeyName)}
+        className={className}
       >
-        <span
-          className={`inline-flex items-center gap-1 ${align === 'right' ? 'flex-row-reverse' : ''}`}
-        >
-          {label}
-          {active ? (
-            sortDir === 'desc' ? (
-              <ChevronDown size={14} />
-            ) : (
-              <ChevronUp size={14} />
-            )
-          ) : (
-            <ArrowUpDown size={12} className="text-slate-300" />
-          )}
-        </span>
-      </th>
+        {label}
+      </Th>
     );
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Assets</h2>
-          </div>
-          <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">{assets.length} assets · unlimited</p>
-          <p className="text-xs text-slate-600 dark:text-slate-500 flex items-center gap-1.5 mt-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
+      <PageHeader
+        title="Assets"
+        description={`${assets.length} ${assets.length === 1 ? 'asset' : 'assets'} · unlimited`}
+        meta={
+          <p className="flex items-center gap-1.5 text-xs text-muted">
+            <span className="h-1.5 w-1.5 rounded-full bg-brand-500 animate-pulse" />
             Live prices update every 60 seconds
           </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative flex-1 min-w-[140px] sm:flex-none">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search..."
-              className="pl-9 pr-3 py-2 border-2 border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg text-sm w-full sm:w-48 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-            />
-          </div>
-          <button
-            onClick={handleExport}
-            disabled={assets.length === 0}
-            title="Export CSV"
-            className="h-9 w-9 flex items-center justify-center border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 text-slate-500 dark:text-slate-400 rounded-lg shrink-0"
-          >
-            <Download size={16} />
-          </button>
-          <button
-            onClick={onAdd}
-            className="w-full sm:w-auto justify-center flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-base font-medium"
-          >
-            <Plus size={18} /> Add Asset
-          </button>
-        </div>
-      </div>
+        }
+        actions={
+          <>
+            <div className="relative flex-1 min-w-[140px] sm:flex-none sm:w-56">
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search assets"
+                aria-label="Search assets"
+                leftIcon={<Search size={16} />}
+              />
+            </div>
+            <Button
+              variant="secondary"
+              className="hidden md:inline-flex"
+              leftIcon={<BarChart2 size={15} />}
+              onClick={() => setTab('allocation')}
+            >
+              Analyse
+            </Button>
+            <IconButton
+              label="Export CSV"
+              variant="secondary"
+              onClick={handleExport}
+              disabled={assets.length === 0}
+              className="disabled:opacity-40"
+            >
+              <Download size={16} />
+            </IconButton>
+            <Button onClick={onAdd} leftIcon={<Plus size={16} />} className="flex-1 sm:flex-none">
+              Add asset
+            </Button>
+          </>
+        }
+      />
 
       <TabNav tab={tab} setTab={setTab} />
 
@@ -1557,173 +1537,77 @@ function AssetsTab({
       </div>
 
       {filtered.length === 0 ? (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 px-4 py-14 flex flex-col items-center justify-center text-center gap-4">
-          <p className="text-slate-600">
-            {assets.length === 0 ? 'No assets yet. Add your first one to get started.' : 'No assets match your search.'}
-          </p>
-          {assets.length === 0 && (
-            <button
-              onClick={onAdd}
-              className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-lg text-base font-medium"
-            >
-              <Plus size={18} /> Add Asset
-            </button>
-          )}
-        </div>
+        <Card padding="none">
+          <EmptyState
+            icon={<Wallet size={18} />}
+            title={assets.length === 0 ? 'No assets yet' : 'No assets match your filters'}
+            description={
+              assets.length === 0
+                ? 'Add your first holding to start tracking your portfolio.'
+                : 'Try a different search term or clear a filter.'
+            }
+            action={
+              assets.length === 0 ? (
+                <Button onClick={onAdd} leftIcon={<Plus size={16} />}>
+                  Add asset
+                </Button>
+              ) : undefined
+            }
+          />
+        </Card>
       ) : (
         <div className="space-y-3">
-          {/* Summary card — styled after the Groww Holdings card: label +
-              chevron, big total, a row of circular icon buttons, then a
-              stacked 1D returns / Total returns / Invested breakdown. */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-1">
-                  <span className="text-[11px] font-semibold tracking-wide text-slate-600 uppercase">
-                    Holdings ({rows.length})
+          {/* Portfolio KPIs. Realized P&L and the sold count come from the same
+              computePortfolioPnl the Performance page uses, so both agree. */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+            <StatCard
+              dense
+              label="Current value"
+              loading={!totalsReady}
+              value={maskAmount(totalCurrentValue, 'INR', privacyMode, { fractionDigits: 0 })}
+              sublabel={`${rows.length} ${rows.length === 1 ? 'holding' : 'holdings'}`}
+              className="col-span-2 lg:col-span-1"
+            />
+            <StatCard
+              dense
+              label="Total invested"
+              loading={!totalsReady}
+              value={maskAmount(totalInvested, 'INR', privacyMode, { fractionDigits: 0 })}
+              sublabel="Cost basis"
+            />
+            <StatCard
+              dense
+              label="Overall P&L"
+              loading={!totalsReady}
+              tone={totalPnl >= 0 ? 'positive' : 'negative'}
+              value={privacyMode ? '••••••' : formatSignedCurrency(totalPnl, 'INR', 0)}
+              delta={!privacyMode ? { value: formatPercentMagnitude(totalPnlPercent), positive: totalPnl >= 0 } : undefined}
+              sublabel="Unrealised"
+            />
+            <StatCard
+              dense
+              label="1D returns"
+              loading={!totalsReady}
+              tone={!has1dData ? 'default' : total1dAbs >= 0 ? 'positive' : 'negative'}
+              value={!has1dData ? '—' : privacyMode ? '••••••' : formatSignedCurrency(total1dAbs, 'INR', 0)}
+              delta={has1dData && !privacyMode ? { value: formatPercentMagnitude(total1dPercent), positive: total1dAbs >= 0 } : undefined}
+              sublabel="vs. prev. close"
+            />
+            <Link to="/wealth/performance" className="group block min-w-0">
+              <StatCard
+                label="Realized P&L"
+                dense
+                loading={!totalsReady}
+                tone={realizedSummary.realized > 0 ? 'positive' : realizedSummary.realized < 0 ? 'negative' : 'default'}
+                value={privacyMode ? '••••••' : formatSignedCurrency(realizedSummary.realized, 'INR', 0)}
+                sublabel={
+                  <span className="inline-flex items-center gap-1 group-hover:text-primary-ink transition-colors">
+                    {realizedSummary.sold} sold · View performance <ArrowUpRight size={12} />
                   </span>
-                  <ChevronDown size={13} className="text-slate-600" />
-                </div>
-                <div className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mt-1">
-                  {!totalsReady ? (
-                    <span className="inline-block h-8 w-28 rounded bg-slate-100 dark:bg-slate-800 animate-pulse align-middle" />
-                  ) : (
-                    maskAmount(totalCurrentValue, 'INR', privacyMode, { fractionDigits: 0 })
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {/* Mobile: three plain icon circles (Eye, Chart, Kebab) —
-                    matches the phone Groww layout. */}
-                <button
-                  onClick={togglePrivacy}
-                  title={privacyMode ? 'Show amounts' : 'Hide amounts'}
-                  className="sm:hidden h-9 w-9 flex items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
-                >
-                  {privacyMode ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-                <button
-                  onClick={() => setTab('allocation')}
-                  title="Analyse"
-                  className="sm:hidden h-9 w-9 flex items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
-                >
-                  <BarChart2 size={16} />
-                </button>
-                <button
-                  onClick={handleExport}
-                  title="Export holdings"
-                  className="sm:hidden h-9 w-9 flex items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
-                >
-                  <MoreVertical size={16} />
-                </button>
-
-                {/* Desktop: labeled "Analyse" pill, then Eye and Kebab
-                    circles — matches the Groww web layout. */}
-                <button
-                  onClick={() => setTab('allocation')}
-                  className="hidden sm:flex items-center gap-1.5 text-sm font-medium border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
-                >
-                  <BarChart2 size={15} /> Analyse
-                </button>
-                <button
-                  onClick={togglePrivacy}
-                  title={privacyMode ? 'Show amounts' : 'Hide amounts'}
-                  className="hidden sm:flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
-                >
-                  {privacyMode ? <EyeOff size={15} /> : <Eye size={15} />}
-                </button>
-                <button
-                  onClick={handleExport}
-                  title="Export holdings"
-                  className="hidden sm:flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
-                >
-                  <MoreVertical size={16} />
-                </button>
-              </div>
-            </div>
-
-            <div className="border-t border-dashed border-slate-200 dark:border-slate-700 my-4" />
-
-            {/* Mobile: stacked 1D returns / Total returns / Invested rows. */}
-            <div className="space-y-2.5 sm:hidden">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-500 dark:text-slate-400">1D returns</span>
-                {!totalsReady ? (
-                  <span className="inline-block h-4 w-24 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
-                ) : has1dData ? (
-                  <span className={`text-sm font-semibold ${total1dAbs >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                    {privacyMode
-                      ? '••••••'
-                      : `${formatSignedCurrency(total1dAbs)} (${formatPercentMagnitude(total1dPercent)})`}
-                  </span>
-                ) : (
-                  <span className="text-sm font-semibold text-slate-300">—</span>
-                )}
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-500 dark:text-slate-400">Total returns</span>
-                <span className={`text-sm font-semibold ${totalPnl >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                  {!totalsReady ? (
-                    <span className="inline-block h-4 w-24 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
-                  ) : privacyMode ? (
-                    '••••••'
-                  ) : (
-                    `${formatSignedCurrency(totalPnl)} (${formatPercentMagnitude(totalPnlPercent)})`
-                  )}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-500 dark:text-slate-400">Invested</span>
-                <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                  {!totalsReady ? (
-                    <span className="inline-block h-4 w-20 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
-                  ) : (
-                    maskAmount(totalInvested, 'INR', privacyMode, { fractionDigits: 0 })
-                  )}
-                </span>
-              </div>
-            </div>
-
-            {/* Desktop: Invested value / 1D returns / Total returns laid out
-                left-to-right in three columns, matching the Groww web card. */}
-            <div className="hidden sm:grid sm:grid-cols-3 sm:gap-3">
-              <div className="text-left">
-                <div className="text-xs text-slate-600 mb-1">Invested value</div>
-                <div className="font-semibold text-slate-800 dark:text-slate-100">
-                  {!totalsReady ? (
-                    <span className="inline-block h-5 w-20 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
-                  ) : (
-                    maskAmount(totalInvested, 'INR', privacyMode, { fractionDigits: 0 })
-                  )}
-                </div>
-              </div>
-              <div className="text-center">
-                <div className="text-xs text-slate-600 mb-1">1D returns</div>
-                {!totalsReady ? (
-                  <span className="inline-block h-5 w-24 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
-                ) : has1dData ? (
-                  <div className={`font-semibold ${total1dAbs >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                    {privacyMode
-                      ? '••••••'
-                      : `${formatSignedCurrency(total1dAbs)} (${formatPercentMagnitude(total1dPercent)})`}
-                  </div>
-                ) : (
-                  <div className="font-semibold text-slate-300">—</div>
-                )}
-              </div>
-              <div className="text-right">
-                <div className="text-xs text-slate-600 mb-1">Total returns</div>
-                <div className={`font-semibold ${totalPnl >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                  {!totalsReady ? (
-                    <span className="inline-block h-5 w-24 rounded bg-slate-100 dark:bg-slate-800 animate-pulse ml-auto" />
-                  ) : privacyMode ? (
-                    '••••••'
-                  ) : (
-                    `${formatSignedCurrency(totalPnl)} (${formatPercentMagnitude(totalPnlPercent)})`
-                  )}
-                </div>
-              </div>
-            </div>
+                }
+                className="h-full group-hover:border-slate-300 transition-colors"
+              />
+            </Link>
           </div>
 
           {/* Compact display toggle — cycles which figure is shown per row
@@ -1735,8 +1619,8 @@ function AssetsTab({
               onClick={openSortSheet}
               className="inline-flex items-center gap-1 w-fit"
             >
-              <span className="text-sm font-semibold text-slate-900 dark:text-white">Sort</span>
-              <ListFilter size={15} strokeWidth={2.25} className="text-slate-900 dark:text-white" />
+              <span className="text-sm font-semibold text-ink">Sort</span>
+              <ListFilter size={15} strokeWidth={2.25} className="text-ink" />
             </button>
             <div
               role="button"
@@ -1750,7 +1634,7 @@ function AssetsTab({
               }}
               className="inline-flex items-center gap-1 w-fit cursor-pointer select-none"
             >
-              <div className="flex items-center text-slate-900 dark:text-white">
+              <div className="flex items-center text-ink">
                 <button
                   type="button"
                   onClick={(e) => {
@@ -1776,7 +1660,7 @@ function AssetsTab({
               </div>
               <span
                 key={compactSortLabel}
-                className="text-sm font-semibold text-slate-900 dark:text-white animate-value-in whitespace-nowrap"
+                className="text-sm font-semibold text-ink animate-value-in whitespace-nowrap"
               >
                 {compactSortLabel}
               </span>
@@ -1788,7 +1672,7 @@ function AssetsTab({
               wide multi-column table, so nothing gets cut off on small
               screens. The full table below is for sm+ screens where there's
               room for every column. */}
-          <div className="sm:hidden bg-white dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800 -mx-4">
+          <div className="sm:hidden bg-surface divide-y divide-line-soft -mx-4">
             {displayRows.map((r) => {
               const a = r.asset;
               const invested = r.invested ?? r.value;
@@ -1817,7 +1701,7 @@ function AssetsTab({
                   className="grid grid-cols-[1fr_44px_1fr] items-center gap-1.5 px-4 py-3 active:bg-slate-50 dark:active:bg-slate-800/40 cursor-pointer select-none"
                 >
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate uppercase">{a.name}</p>
+                    <p className="text-sm font-semibold text-ink truncate">{a.name}</p>
                     <p className="text-[11px] text-slate-600 mt-0.5 truncate">{subtitle}</p>
                   </div>
                   {/* Fixed-width center column — with the name and value+menu
@@ -1851,7 +1735,7 @@ function AssetsTab({
                         </>
                       ) : displayMetric === 'marketPrice' ? (
                         <>
-                          <div className="text-sm font-semibold text-slate-800 dark:text-slate-100 animate-value-in">
+                          <div className="text-sm font-semibold text-ink animate-value-in">
                             {r.currentPrice !== undefined ? maskPreciseAmount(r.currentPrice, a.currency, privacyMode) : '—'}
                           </div>
                           <div className={`text-[11px] mt-0.5 ${(r.dayChangePerUnit ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
@@ -1894,152 +1778,201 @@ function AssetsTab({
             })}
           </div>
 
-          {/* Per-holding table (sm and up) — headers are clickable and sort
-              the rows below (click again to flip direction), same
-              mechanism as SortHeader. */}
-          <div className="hidden sm:block bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
-            <table className="w-full text-sm min-w-[760px]">
-              <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400">
-                <tr>
-                  <SortHeader label="Company" sortKeyName="name" />
-                  <th className="px-4 py-3" aria-hidden="true" />
-                  <SortHeader label="Market price (1D%)" sortKeyName="perUnit" align="right" />
-                  <SortHeader label="Returns (%)" sortKeyName="pnl" align="right" />
-                  <SortHeader label="Current (Invested)" sortKeyName="value" align="right" />
-                  <th className="px-2 py-3 w-10" aria-hidden="true" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {displayRows.map((r) => {
-                  const a = r.asset;
-                  const invested = r.invested ?? r.value;
-                  const qty = a.quantity ?? 0;
-                  const subtitle =
-                    a.assetClass === 'stock' && qty > 0
-                      ? `${qty} share${qty === 1 ? '' : 's'} • Avg ${maskPreciseAmount(a.avgCost ?? 0, a.currency, privacyMode)}`
-                      : WEIGHT_TRACKED_CLASSES.has(a.assetClass) && qty > 0
-                        ? `${formatGrams(qty)}g • Avg ${maskPreciseAmount(a.avgCost ?? 0, a.currency, privacyMode)}/g`
-                        : qty > 0 && a.avgCost
-                          ? `${qty} unit${qty === 1 ? '' : 's'} • Avg ${maskPreciseAmount(a.avgCost, a.currency, privacyMode)}`
-                          : ASSET_CLASS_LABELS[a.assetClass];
-                  const isBeingDragged = draggingId === a.id;
-                  return (
-                    <tr
-                      key={a.id}
-                      ref={(el) => {
-                        rowRefs.current[a.id] = el;
-                      }}
-                      className={`group hover:bg-slate-50/70 dark:hover:bg-slate-800/40 cursor-pointer select-none ${
-                        isBeingDragged
-                          ? 'relative z-10 opacity-70 shadow-lg ring-2 ring-brand-400 bg-white dark:bg-slate-800 touch-none cursor-grabbing'
-                          : ''
-                      }`}
-                      onClick={() => {
-                        if (suppressRowClickRef.current) return;
-                        openHolding(a);
-                      }}
-                      onPointerDown={(e) => handleRowPointerDown(e, a.id)}
-                      onPointerMove={(e) => handleRowPointerMove(e, a.id)}
-                      onPointerUp={finishDrag}
-                      onPointerCancel={handleRowPointerCancel}
-                    >
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-2">
-                          <GripVertical
-                            size={14}
-                            className={`shrink-0 text-slate-300 dark:text-slate-600 cursor-grab ${
-                              isBeingDragged ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                            }`}
-                          />
-                          <div className="min-w-0">
-                            <p className="font-semibold text-slate-800 dark:text-slate-100 truncate uppercase">{a.name}</p>
-                            <p className="text-xs text-slate-600 mt-0.5">{subtitle}</p>
+          {/* Per-holding table (sm and up). Column headers are clickable and
+              sort the rows (click again to flip direction). Rows still
+              support press-and-drag manual ordering + click-through. */}
+          <Card padding="none" className="hidden sm:block overflow-hidden">
+            <TableContainer>
+              <Table className="min-w-[1020px]">
+                <THead>
+                  <tr>
+                    <SortHeader label="Name" sortKeyName="name" className="sticky left-0 z-[1] bg-surface-muted" />
+                    <SortHeader label="Qty" sortKeyName="qty" align="right" />
+                    <SortHeader label="Avg. cost" sortKeyName="avgCost" align="right" />
+                    <SortHeader label="Per unit" sortKeyName="perUnit" align="right" />
+                    <SortHeader label="Invested" sortKeyName="invested" align="right" />
+                    <SortHeader label="Current value" sortKeyName="value" align="right" />
+                    <SortHeader label="P&L" sortKeyName="pnl" align="right" />
+                    <SortHeader label="Allocation" sortKeyName="alloc" align="right" />
+                    <th className="w-10 px-2" aria-hidden="true" />
+                  </tr>
+                </THead>
+                <TBody>
+                  {displayRows.map((r) => {
+                    const a = r.asset;
+                    const invested = r.invested ?? r.value;
+                    const qty = a.quantity ?? 0;
+                    const qtyLabel =
+                      qty > 0
+                        ? WEIGHT_TRACKED_CLASSES.has(a.assetClass)
+                          ? `${formatGrams(qty)} g`
+                          : qty.toLocaleString('en-IN', { maximumFractionDigits: 4 })
+                        : '—';
+                    const isBeingDragged = draggingId === a.id;
+                    const pending = isAssetLivePriced(a) && !totalsReady;
+                    const tone = (n: number | undefined) => ((n ?? 0) >= 0 ? 'text-positive' : 'text-negative');
+                    const skeleton = <span className="inline-block h-4 w-16 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />;
+                    return (
+                      <tr
+                        key={a.id}
+                        ref={(el) => {
+                          rowRefs.current[a.id] = el;
+                        }}
+                        className={`group border-b border-line-soft last:border-b-0 transition-colors duration-150 hover:bg-surface-hover/70 cursor-pointer select-none ${
+                          isBeingDragged
+                            ? 'relative z-10 opacity-70 shadow-lg ring-2 ring-brand-400 bg-surface touch-none cursor-grabbing'
+                            : ''
+                        }`}
+                        onClick={() => {
+                          if (suppressRowClickRef.current) return;
+                          openHolding(a);
+                        }}
+                        onPointerDown={(e) => handleRowPointerDown(e, a.id)}
+                        onPointerMove={(e) => handleRowPointerMove(e, a.id)}
+                        onPointerUp={finishDrag}
+                        onPointerCancel={handleRowPointerCancel}
+                      >
+                        <Td className="pr-2 sticky left-0 z-[1] bg-surface group-hover:bg-surface-hover transition-colors duration-150">
+                          <div className="relative flex items-center gap-2 min-w-0">
+                            <GripVertical
+                              size={14}
+                              className={`absolute -left-[17px] top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-600 cursor-grab ${
+                                isBeingDragged ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                              }`}
+                            />
+                            <div className="min-w-0">
+                              <p className="font-medium text-ink truncate max-w-[16rem]">{a.name}</p>
+                              <p className="text-xs text-muted mt-0.5 truncate max-w-[16rem]">
+                                {ASSET_CLASS_LABELS[a.assetClass]}
+                                {a.symbol ? ` · ${a.symbol}` : ''}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        {marketOpen && r.previousClose !== undefined && r.currentPrice !== undefined && (
-                          <Sparkline
-                            seed={a.symbol ?? a.id}
-                            previousClose={r.previousClose}
-                            currentPrice={dayChangeResetActive ? r.previousClose : r.currentPrice}
-                            progress={dayChangeResetActive ? 0 : marketSessionProgress}
-                          />
-                        )}
-                      </td>
-                      <td className="px-4 py-4 text-right whitespace-nowrap">
-                        {isAssetLivePriced(a) && !totalsReady ? (
-                          <span className="inline-block h-4 w-16 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
-                        ) : (
-                          <>
-                            <div className="font-semibold text-slate-800 dark:text-slate-100">
-                              {r.currentPrice !== undefined
-                                ? maskPreciseAmount(r.currentPrice, a.currency, privacyMode)
-                                : '—'}
-                            </div>
-                            {r.dayChangePerUnit !== undefined && r.dayChangePercent !== undefined ? (
-                              <div className={`text-xs mt-0.5 ${r.dayChangePerUnit >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                                {privacyMode
-                                  ? '••••'
-                                  : `${formatSignedCurrency(r.dayChangePerUnit, a.currency)} (${formatPercentMagnitude(r.dayChangePercent)})`}
+                        </Td>
+                        <Td numeric className="font-normal text-ink-2">
+                          {qtyLabel}
+                        </Td>
+                        <Td numeric className="font-normal text-ink-2">
+                          {a.avgCost ? maskPreciseAmount(a.avgCost, a.currency, privacyMode) : '—'}
+                        </Td>
+                        <Td numeric>
+                          {pending ? (
+                            skeleton
+                          ) : (
+                            <div className="flex items-center justify-end gap-3">
+                              {marketOpen && r.previousClose !== undefined && r.currentPrice !== undefined && (
+                                <span className="hidden xl:block">
+                                  <Sparkline
+                                    seed={a.symbol ?? a.id}
+                                    previousClose={r.previousClose}
+                                    currentPrice={dayChangeResetActive ? r.previousClose : r.currentPrice}
+                                    progress={dayChangeResetActive ? 0 : marketSessionProgress}
+                                  />
+                                </span>
+                              )}
+                              <div>
+                                <div className="font-normal text-ink">
+                                  {r.currentPrice !== undefined
+                                    ? maskPreciseAmount(r.currentPrice, a.currency, privacyMode)
+                                    : '—'}
+                                </div>
+                                {r.dayChangePerUnit !== undefined && r.dayChangePercent !== undefined ? (
+                                  <div className={`text-xs mt-0.5 font-normal ${tone(r.dayChangePerUnit)}`}>
+                                    {privacyMode
+                                      ? '••••'
+                                      : `${formatSignedCurrency(r.dayChangePerUnit, a.currency)} (${formatPercentMagnitude(r.dayChangePercent)})`}
+                                  </div>
+                                ) : null}
                               </div>
-                            ) : (
-                              <div className="text-xs mt-0.5 text-slate-300">—</div>
-                            )}
-                          </>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 text-right whitespace-nowrap">
-                        {isAssetLivePriced(a) && !totalsReady ? (
-                          <span className="inline-block h-4 w-16 rounded bg-slate-100 dark:bg-slate-800 animate-pulse ml-auto" />
-                        ) : (
-                          <>
-                            <div className={`font-semibold ${(r.pnl ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                              {r.pnl !== undefined
-                                ? privacyMode
-                                  ? '••••••'
-                                  : formatSignedCurrency(r.pnl, a.currency)
-                                : '—'}
                             </div>
-                            <div className={`text-xs mt-0.5 ${(r.pnl ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                              {r.pnlPercent !== undefined && !privacyMode ? formatPercentMagnitude(r.pnlPercent) : ''}
-                            </div>
-                          </>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 text-right whitespace-nowrap">
-                        {isAssetLivePriced(a) && !totalsReady ? (
-                          <span className="inline-block h-4 w-16 rounded bg-slate-100 dark:bg-slate-800 animate-pulse ml-auto" />
-                        ) : (
-                          <>
-                            <div className="font-semibold text-slate-800 dark:text-slate-100">
+                          )}
+                        </Td>
+                        <Td numeric className="font-normal text-ink-2">
+                          {maskPreciseAmount(invested, a.currency, privacyMode)}
+                        </Td>
+                        <Td numeric>
+                          {pending ? (
+                            skeleton
+                          ) : (
+                            <span className="font-semibold text-[15px] text-ink">
                               {maskPreciseAmount(r.value, a.currency, privacyMode)}
+                            </span>
+                          )}
+                        </Td>
+                        <Td numeric>
+                          {pending ? (
+                            skeleton
+                          ) : r.pnl !== undefined ? (
+                            <div className={tone(r.pnl)}>
+                              <div className="font-semibold">
+                                {privacyMode ? '••••••' : formatSignedCurrency(r.pnl, a.currency)}
+                              </div>
+                              <div className="text-xs mt-0.5 font-medium">
+                                {r.pnlPercent !== undefined && !privacyMode
+                                  ? `${r.pnl >= 0 ? '+' : '−'}${formatPercentMagnitude(r.pnlPercent)}`
+                                  : ''}
+                              </div>
                             </div>
-                            <div className="text-xs mt-0.5 text-slate-600">
-                              {maskPreciseAmount(invested, a.currency, privacyMode)}
+                          ) : (
+                            <span className="text-faint">—</span>
+                          )}
+                        </Td>
+                        <Td numeric>
+                          {pending ? (
+                            skeleton
+                          ) : (
+                            <div className="flex flex-col items-end gap-1.5">
+                              <span className="font-normal text-ink-2">{r.alloc.toFixed(1)}%</span>
+                              <span className="block h-1 w-16 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                                <span
+                                  className="block h-full rounded-full bg-brand-500"
+                                  style={{ width: `${Math.min(100, Math.max(0, r.alloc))}%` }}
+                                />
+                              </span>
                             </div>
-                          </>
-                        )}
-                      </td>
-                      <td className="px-2 py-4 relative">
-                        <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openHoldingsMenu(a.id, e.currentTarget);
-                            }}
-                            className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600"
-                          >
-                            <MoreVertical size={16} />
-                          </button>
-                        </div>
-                      </td>
+                          )}
+                        </Td>
+                        <td className="px-2 py-3 relative">
+                          <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                            <IconButton
+                              label="Row actions"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openHoldingsMenu(a.id, e.currentTarget);
+                              }}
+                            >
+                              <MoreVertical size={16} />
+                            </IconButton>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </TBody>
+                {totalsReady && (
+                  <tfoot>
+                    <tr className="border-t border-line bg-surface-muted">
+                      <Td className="font-semibold sticky left-0 z-[1] bg-surface-muted">Total</Td>
+                      <Td />
+                      <Td />
+                      <Td />
+                      <Td numeric className="font-semibold">
+                        {maskAmount(totalInvested, 'INR', privacyMode, { fractionDigits: 0 })}
+                      </Td>
+                      <Td numeric className="font-semibold">
+                        {maskAmount(totalCurrentValue, 'INR', privacyMode, { fractionDigits: 0 })}
+                      </Td>
+                      <Td numeric className={`font-semibold ${totalPnl >= 0 ? 'text-positive' : 'text-negative'}`}>
+                        {privacyMode ? '••••••' : formatSignedCurrency(totalPnl, 'INR', 0)}
+                      </Td>
+                      <Td />
+                      <Td />
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  </tfoot>
+                )}
+              </Table>
+            </TableContainer>
+          </Card>
         </div>
       )}
 
@@ -2070,14 +2003,14 @@ function AssetsTab({
                 ? { bottom: window.innerHeight - holdingsMenuAnchor.top + 4 }
                 : { top: holdingsMenuAnchor.bottom + 4 }),
             }}
-            className="z-[70] w-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1"
+            className="z-[70] w-40 bg-white dark:bg-slate-800 border border-line rounded-lg shadow-lg py-1"
           >
             <button
               onClick={() => {
                 closeMenu();
                 openEdit(menuAsset);
               }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-2 hover:bg-slate-50 dark:hover:bg-slate-700"
             >
               <Pencil size={14} /> Edit
             </button>
@@ -2086,7 +2019,7 @@ function AssetsTab({
                 closeMenu();
                 handleDuplicate(menuAsset);
               }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-2 hover:bg-slate-50 dark:hover:bg-slate-700"
             >
               <Copy size={14} /> Duplicate
             </button>
@@ -2096,7 +2029,7 @@ function AssetsTab({
                 handleMove(menuAsset.id, 'up');
               }}
               disabled={menuRowIdx === 0}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent"
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-2 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent"
             >
               <ChevronUp size={14} /> Move up
             </button>
@@ -2106,7 +2039,7 @@ function AssetsTab({
                 handleMove(menuAsset.id, 'down');
               }}
               disabled={menuRowIdx === displayRows.length - 1}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent"
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-2 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent"
             >
               <ChevronDown size={14} /> Move down
             </button>
@@ -2134,12 +2067,12 @@ function AssetsTab({
         title="Delete this asset?"
       >
         <p className="text-sm text-slate-500 mb-6">
-          This will permanently delete <strong className="uppercase">{confirmDeleteAsset?.name}</strong>. This can't be undone.
+          This will permanently delete <strong>{confirmDeleteAsset?.name}</strong>. This can't be undone.
         </p>
         <div className="flex gap-3">
           <button
             onClick={() => setConfirmDeleteAsset(null)}
-            className="flex-1 border border-slate-200 text-slate-600 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50"
+            className="flex-1 border border-line text-slate-600 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50"
           >
             Cancel
           </button>
@@ -2162,10 +2095,10 @@ function AssetsTab({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="animate-sheet-in w-full sm:max-w-sm bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl sm:mb-6 sm:shadow-2xl pb-[env(safe-area-inset-bottom)] max-h-[85vh] sm:max-h-[75vh] overflow-y-auto"
+            className="animate-sheet-in w-full sm:max-w-sm bg-surface rounded-t-2xl sm:rounded-2xl sm:mb-6 sm:shadow-2xl pb-[env(safe-area-inset-bottom)] max-h-[85vh] sm:max-h-[75vh] overflow-y-auto"
           >
             <div className="px-5 pt-5 pb-1">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Sort by</h3>
+              <h3 className="text-lg font-bold text-ink">Sort by</h3>
             </div>
             <div className="px-5 pb-2">
               {SORT_BY_OPTIONS.map((opt, idx) => {
@@ -2174,7 +2107,7 @@ function AssetsTab({
                 return (
                   <div
                     key={opt.key}
-                    className={idx > 0 ? 'border-t border-slate-100 dark:border-slate-800 pt-3 mt-3' : 'pt-1'}
+                    className={idx > 0 ? 'border-t border-line-soft pt-3 mt-3' : 'pt-1'}
                   >
                     <button
                       type="button"
@@ -2190,7 +2123,7 @@ function AssetsTab({
                       >
                         {selected && <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />}
                       </span>
-                      <span className="text-[15px] text-slate-800 dark:text-slate-100">{opt.label}</span>
+                      <span className="text-[15px] text-ink">{opt.label}</span>
                     </button>
                     {selected && (
                       <div className="flex items-center gap-2.5 pl-8 pt-3">
@@ -2348,10 +2281,10 @@ function SipQuickActions({
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3 flex-wrap bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap bg-surface rounded-2xl border border-line p-4">
         <div className="flex items-center gap-2">
           <span className={`h-2 w-2 rounded-full ${isPaused ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+          <span className="text-sm font-medium text-ink-2">
             {isPaused ? `Paused since ${asset.sipPausedAt}` : 'SIP active'}
           </span>
         </div>
@@ -2359,7 +2292,7 @@ function SipQuickActions({
           <button
             type="button"
             onClick={() => setPauseModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border border-line text-ink-2 hover:bg-surface-hover"
           >
             {isPaused ? <Play size={14} /> : <Pause size={14} />}
             {isPaused ? 'Resume SIP' : 'Pause SIP'}
@@ -2367,7 +2300,7 @@ function SipQuickActions({
           <button
             type="button"
             onClick={() => setBuyMoreOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-brand-600 hover:bg-brand-700 text-white"
+            className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors bg-brand-600 hover:bg-brand-700 text-white"
           >
             <PlusCircle size={14} />
             Buy More
@@ -2434,13 +2367,13 @@ function SipPauseModal({
   return (
     <Modal open={open} onClose={close} title={isPaused ? 'Resume SIP' : 'Pause SIP'}>
       <div className="space-y-4">
-        <p className="text-sm text-slate-600 dark:text-slate-400">
+        <p className="text-sm text-muted">
           {isPaused
             ? "Pick the date you started investing again — installments before this date stay skipped, and regular installments resume counting from here."
             : "Pick the date this SIP stopped getting debited — you can backdate this to a month you already missed, e.g. the 1st of last month. No installments are counted from this date onward until you resume."}
         </p>
         <div>
-          <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+          <label className="text-xs font-medium text-muted">
             {isPaused ? 'Resumed from' : 'Paused from'}
           </label>
           <input
@@ -2449,7 +2382,7 @@ function SipPauseModal({
             onChange={(e) => setDate(e.target.value)}
             max={todayIso}
             min={isPaused ? asset.sipPausedAt : asset.startDate}
-            className="mt-1 w-full border border-slate-200 dark:border-slate-700 bg-transparent rounded-lg px-3 py-2.5 text-sm"
+            className="mt-1 w-full border border-line bg-transparent rounded-lg px-3 py-2.5 text-sm"
             autoFocus
           />
         </div>
@@ -2457,7 +2390,7 @@ function SipPauseModal({
           <button
             type="button"
             onClick={close}
-            className="flex-1 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="flex-1 border border-line text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-surface-hover"
           >
             Cancel
           </button>
@@ -2465,7 +2398,7 @@ function SipPauseModal({
             type="button"
             disabled={saving || !date}
             onClick={confirm}
-            className="flex-1 bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors flex-1 bg-brand-600 hover:bg-brand-700 text-white disabled:opacity-50"
           >
             {saving ? 'Saving…' : isPaused ? 'Resume' : 'Pause'}
           </button>
@@ -2546,20 +2479,20 @@ function SipBuyMoreModal({
           <button
             type="button"
             onClick={() => setMode('topup')}
-            className="w-full text-left p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50/50 dark:hover:bg-brand-900/20"
+            className="w-full text-left p-4 rounded-xl border border-line hover:border-brand-400 hover:bg-brand-50/50 dark:hover:bg-brand-900/20"
           >
-            <p className="font-semibold text-slate-900 dark:text-white">One-time top-up</p>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
+            <p className="font-semibold text-ink">One-time top-up</p>
+            <p className="text-sm text-muted mt-0.5">
               Invest an extra lumpsum now, on top of your regular installment.
             </p>
           </button>
           <button
             type="button"
             onClick={() => setMode('increase')}
-            className="w-full text-left p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50/50 dark:hover:bg-brand-900/20"
+            className="w-full text-left p-4 rounded-xl border border-line hover:border-brand-400 hover:bg-brand-50/50 dark:hover:bg-brand-900/20"
           >
-            <p className="font-semibold text-slate-900 dark:text-white">Increase installment</p>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
+            <p className="font-semibold text-ink">Increase installment</p>
+            <p className="text-sm text-muted mt-0.5">
               Step up (or down) the regular {asset.sipFrequency === 'quarterly' ? 'quarterly' : 'monthly'} amount
               from a chosen date onward.
             </p>
@@ -2570,31 +2503,31 @@ function SipBuyMoreModal({
       {mode === 'topup' && (
         <div className="space-y-4">
           <div>
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Top-up amount</label>
+            <label className="text-xs font-medium text-muted">Top-up amount</label>
             <input
               type="number"
               inputMode="decimal"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="e.g. 10000"
-              className="mt-1 w-full border border-slate-200 dark:border-slate-700 bg-transparent rounded-lg px-3 py-2.5 text-sm"
+              className="mt-1 w-full border border-line bg-transparent rounded-lg px-3 py-2.5 text-sm"
               autoFocus
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Date</label>
+            <label className="text-xs font-medium text-muted">Date</label>
             <input
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="mt-1 w-full border border-slate-200 dark:border-slate-700 bg-transparent rounded-lg px-3 py-2.5 text-sm"
+              className="mt-1 w-full border border-line bg-transparent rounded-lg px-3 py-2.5 text-sm"
             />
           </div>
           <div className="flex gap-3">
             <button
               type="button"
               onClick={() => setMode('choose')}
-              className="flex-1 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+              className="flex-1 border border-line text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-surface-hover"
             >
               Back
             </button>
@@ -2602,7 +2535,7 @@ function SipBuyMoreModal({
               type="button"
               disabled={saving || !amount || Number(amount) <= 0}
               onClick={submitTopUp}
-              className="flex-1 bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors flex-1 bg-brand-600 hover:bg-brand-700 text-white disabled:opacity-50"
             >
               {saving ? 'Saving…' : 'Invest'}
             </button>
@@ -2613,7 +2546,7 @@ function SipBuyMoreModal({
       {mode === 'increase' && (
         <div className="space-y-4">
           <div>
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+            <label className="text-xs font-medium text-muted">
               New {asset.sipFrequency === 'quarterly' ? 'quarterly' : 'monthly'} amount
             </label>
             <input
@@ -2622,24 +2555,24 @@ function SipBuyMoreModal({
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder={asset.sipAmount ? `Currently ${asset.sipAmount}` : 'e.g. 5000'}
-              className="mt-1 w-full border border-slate-200 dark:border-slate-700 bg-transparent rounded-lg px-3 py-2.5 text-sm"
+              className="mt-1 w-full border border-line bg-transparent rounded-lg px-3 py-2.5 text-sm"
               autoFocus
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Effective from</label>
+            <label className="text-xs font-medium text-muted">Effective from</label>
             <input
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="mt-1 w-full border border-slate-200 dark:border-slate-700 bg-transparent rounded-lg px-3 py-2.5 text-sm"
+              className="mt-1 w-full border border-line bg-transparent rounded-lg px-3 py-2.5 text-sm"
             />
           </div>
           <div className="flex gap-3">
             <button
               type="button"
               onClick={() => setMode('choose')}
-              className="flex-1 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+              className="flex-1 border border-line text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-surface-hover"
             >
               Back
             </button>
@@ -2647,7 +2580,7 @@ function SipBuyMoreModal({
               type="button"
               disabled={saving || !amount || Number(amount) <= 0}
               onClick={submitIncrease}
-              className="flex-1 bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors flex-1 bg-brand-600 hover:bg-brand-700 text-white disabled:opacity-50"
             >
               {saving ? 'Saving…' : 'Update'}
             </button>
@@ -2738,26 +2671,26 @@ function HoldingDetailView({
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <button onClick={onBack} className="p-2 -ml-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 shrink-0">
+        <button onClick={onBack} className="p-2 -ml-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-muted shrink-0">
           <ArrowLeft size={18} />
         </button>
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex-1">Holding details</h2>
+        <h2 className="text-lg font-semibold text-ink flex-1">Holding details</h2>
         <div className="relative shrink-0" ref={txMenuOpen ? txMenuRef : undefined}>
           <button
             onClick={() => setTxMenuOpen((v) => !v)}
             title="Buy / Sell / Dividend"
-            className="h-9 w-9 flex items-center justify-center rounded-lg bg-brand-600 hover:bg-brand-700 text-white shadow-sm"
+            className="h-9 w-9 flex items-center justify-center rounded-lg bg-brand-600 hover:bg-brand-700 text-white shadow-xs transition-colors"
           >
             <Plus size={16} />
           </button>
           {txMenuOpen && (
-            <div className="absolute right-0 top-11 z-[60] w-44 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1">
+            <div className="absolute right-0 top-11 z-[60] w-44 bg-white dark:bg-slate-800 border border-line rounded-lg shadow-lg py-1">
               <button
                 onClick={() => {
                   setTxMenuOpen(false);
                   setTxMode('buy');
                 }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-2 hover:bg-slate-50 dark:hover:bg-slate-700"
               >
                 <TrendingUp size={14} className="text-emerald-600" /> Buy
               </button>
@@ -2767,7 +2700,7 @@ function HoldingDetailView({
                   setTxMode('sell');
                 }}
                 disabled={(asset.quantity ?? 0) <= 0}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent"
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-2 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent"
               >
                 <TrendingDown size={14} className="text-red-500" /> Sell
               </button>
@@ -2776,7 +2709,7 @@ function HoldingDetailView({
                   setTxMenuOpen(false);
                   setTxMode('dividend');
                 }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-2 hover:bg-slate-50 dark:hover:bg-slate-700"
               >
                 <Banknote size={14} className="text-brand-600" /> Dividend
               </button>
@@ -2786,7 +2719,7 @@ function HoldingDetailView({
         <button
           onClick={() => onEdit(asset)}
           title="Edit"
-          className="h-9 w-9 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0"
+          className="h-9 w-9 flex items-center justify-center rounded-lg border border-line hover:bg-surface-hover text-slate-600 dark:text-slate-300 shrink-0"
         >
           <Pencil size={16} />
         </button>
@@ -2809,13 +2742,13 @@ function HoldingDetailView({
       />
 
       <Modal open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)} title="Delete this holding?">
-        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-          This will permanently delete <strong className="uppercase">{asset.name}</strong>. This can't be undone.
+        <p className="text-sm text-muted mb-6">
+          This will permanently delete <strong>{asset.name}</strong>. This can't be undone.
         </p>
         <div className="flex gap-3">
           <button
             onClick={() => setConfirmDeleteOpen(false)}
-            className="flex-1 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="flex-1 border border-line text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-surface-hover"
           >
             Cancel
           </button>
@@ -2835,7 +2768,7 @@ function HoldingDetailView({
           brokerage app's holding header. */}
       <div className="flex items-center gap-3 px-1">
         <div className="min-w-0 flex-1">
-          <p className="text-lg sm:text-xl font-semibold text-slate-900 dark:text-white truncate uppercase">
+          <p className="text-lg sm:text-xl font-semibold text-ink truncate">
             {asset.symbol || asset.name}
           </p>
           <p className="text-sm mt-0.5">
@@ -2851,23 +2784,23 @@ function HoldingDetailView({
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
+      <div className="bg-surface rounded-2xl border border-line p-5">
         <div className="flex items-start justify-between">
           <div>
             <p className="text-xs text-slate-600">Current</p>
-            <p className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mt-0.5">
+            <p className="text-2xl sm:text-3xl font-bold text-ink mt-0.5">
               {maskPreciseAmount(value, asset.currency, privacyMode)}
             </p>
           </div>
           <div className="text-right">
             <p className="text-xs text-slate-600">Invested</p>
-            <p className="text-lg font-normal text-slate-900 dark:text-white -mt-0.5">
+            <p className="text-lg font-normal text-ink -mt-0.5">
               {maskPreciseAmount(invested ?? value, asset.currency, privacyMode)}
             </p>
           </div>
         </div>
 
-        <div className="border-t border-dashed border-slate-200 dark:border-slate-700 my-4" />
+        <div className="border-t border-dashed border-line my-4" />
 
         <div className="space-y-3">
           {pnl !== undefined && (
@@ -2884,7 +2817,7 @@ function HoldingDetailView({
             <>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-slate-600 dark:text-slate-300">Days elapsed</span>
-                <span className="font-semibold text-slate-800 dark:text-slate-100">
+                <span className="font-semibold text-ink">
                   {Math.floor((Date.now() - new Date(asset.startDate).getTime()) / (24 * 60 * 60 * 1000))} days
                 </span>
               </div>
@@ -2917,7 +2850,7 @@ function HoldingDetailView({
           {currentPrice !== undefined && (
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-600 dark:text-slate-300">Mkt price</span>
-              <span className="font-semibold text-slate-800 dark:text-slate-100">
+              <span className="font-semibold text-ink">
                 {formatPreciseCurrency(currentPrice, asset.currency)}
               </span>
             </div>
@@ -2925,7 +2858,7 @@ function HoldingDetailView({
           {asset.avgCost !== undefined && (
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-600 dark:text-slate-300">Avg price</span>
-              <span className="font-semibold text-slate-800 dark:text-slate-100">
+              <span className="font-semibold text-ink">
                 {formatPreciseCurrency(asset.avgCost, asset.currency)}
               </span>
             </div>
@@ -2933,7 +2866,7 @@ function HoldingDetailView({
           {qty > 0 && (
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-600 dark:text-slate-300">Total qty</span>
-              <span className="font-semibold text-slate-800 dark:text-slate-100">
+              <span className="font-semibold text-ink">
                 {WEIGHT_TRACKED_CLASSES.has(asset.assetClass) ? `${formatGrams(qty)} g` : qty}
               </span>
             </div>
@@ -2947,7 +2880,7 @@ function HoldingDetailView({
                 <span className="text-slate-600 dark:text-slate-300 flex items-center gap-1">
                   XIRR <Info size={12} className="text-slate-300" />
                 </span>
-                <span className="font-semibold text-slate-800 dark:text-slate-100">{xirr.toFixed(2)}%</span>
+                <span className="font-semibold text-ink">{xirr.toFixed(2)}%</span>
               </div>
             </div>
           </>
@@ -2957,9 +2890,9 @@ function HoldingDetailView({
       {asset.assetClass === 'sip' && <SipQuickActions asset={asset} onUpdate={onQuickUpdate} />}
 
       {orderedLots.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
+        <div className="bg-surface rounded-2xl border border-line p-5">
           <div className="flex items-center justify-between mb-1">
-            <h3 className="font-bold text-slate-900 dark:text-white">Breakdown</h3>
+            <h3 className="font-bold text-ink">Breakdown</h3>
             <div
               role="button"
               tabIndex={0}
@@ -2969,7 +2902,7 @@ function HoldingDetailView({
               }}
               className="inline-flex items-center gap-1 w-fit cursor-pointer select-none"
             >
-              <div className="flex items-center text-slate-500 dark:text-slate-400">
+              <div className="flex items-center text-muted">
                 <button
                   type="button"
                   onClick={(e) => {
@@ -3001,7 +2934,7 @@ function HoldingDetailView({
               </span>
             </div>
           </div>
-          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+          <div className="divide-y divide-line-soft">
             {orderedLots.map((lot, i) => {
               const isWeight = WEIGHT_TRACKED_CLASSES.has(asset.assetClass);
               const qtyLabel = isWeight ? `${formatGrams(lot.qty)}g` : `${lot.qty} qty`;
@@ -3017,7 +2950,7 @@ function HoldingDetailView({
                 return (
                   <div key={lot.id + i} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
                     <div>
-                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{qtyLabel}</p>
+                      <p className="text-sm font-semibold text-ink">{qtyLabel}</p>
                       <p className="text-xs text-slate-600 mt-0.5">{lot.date ?? '—'}</p>
                     </div>
                     <div className="text-right">
@@ -3037,11 +2970,11 @@ function HoldingDetailView({
               return (
                 <div key={lot.id + i} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
                   <div>
-                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{qtyLabel}</p>
+                    <p className="text-sm font-semibold text-ink">{qtyLabel}</p>
                     <p className="text-xs text-slate-600 mt-0.5">{lot.date ?? '—'}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                    <p className="text-sm font-semibold text-ink">
                       {formatPreciseCurrency(displayPrice, asset.currency)}
                     </p>
                     <p className="text-xs text-slate-600 mt-0.5">
@@ -3350,8 +3283,7 @@ function BuySellDividendModal({
     }
   };
 
-  const inputClass =
-    'mt-1 w-full border border-slate-200 dark:border-slate-700 bg-transparent rounded-lg px-3 py-2.5 text-sm';
+  const inputClass = `mt-1 ${inputClasses}`;
   const title = mode === 'buy' ? 'Buy' : mode === 'sell' ? 'Sell' : 'Dividend';
 
   return (
@@ -3360,11 +3292,11 @@ function BuySellDividendModal({
         {mode === 'buy' && (
           <>
             <div>
-              <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Quantity ({unitLabel})</label>
+              <label className="text-xs font-medium text-muted">Quantity ({unitLabel})</label>
               <input type="number" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="e.g. 10" className={inputClass} autoFocus />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Price per {isWeightTracked ? 'gram' : 'unit'}</label>
+              <label className="text-xs font-medium text-muted">Price per {isWeightTracked ? 'gram' : 'unit'}</label>
               <input type="number" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="e.g. 150" className={inputClass} />
             </div>
           </>
@@ -3373,13 +3305,13 @@ function BuySellDividendModal({
         {mode === 'sell' && (
           <>
             <div>
-              <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+              <label className="text-xs font-medium text-muted">
                 Quantity to sell ({unitLabel}) — you hold {currentQty}
               </label>
               <input type="number" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="e.g. 5" className={inputClass} autoFocus />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Sell price per {isWeightTracked ? 'gram' : 'unit'}</label>
+              <label className="text-xs font-medium text-muted">Sell price per {isWeightTracked ? 'gram' : 'unit'}</label>
               <input type="number" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="e.g. 160" className={inputClass} />
             </div>
           </>
@@ -3387,16 +3319,16 @@ function BuySellDividendModal({
 
         {mode === 'dividend' && (
           <div>
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Dividend amount</label>
+            <label className="text-xs font-medium text-muted">Dividend amount</label>
             <input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 250" className={inputClass} autoFocus />
           </div>
         )}
 
         {(mode === 'sell' || mode === 'dividend') && (
           <div>
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Credited to (optional)</label>
+            <label className="text-xs font-medium text-muted">Credited to (optional)</label>
             {newAccountOpen ? (
-              <div className="mt-1 border border-slate-200 dark:border-slate-700 rounded-lg p-3 space-y-2.5 bg-slate-50 dark:bg-slate-800/40">
+              <div className="mt-1 border border-line rounded-lg p-3 space-y-2.5 bg-slate-50 dark:bg-slate-800/40">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">New account</p>
                   <button
@@ -3413,13 +3345,13 @@ function BuySellDividendModal({
                     value={newAccountName}
                     onChange={(e) => setNewAccountName(e.target.value)}
                     placeholder="e.g. HDFC Savings"
-                    className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg px-2.5 py-2 text-sm"
+                    className="border border-line bg-surface rounded-lg px-2.5 py-2 text-sm"
                     autoFocus
                   />
                   <CustomSelect
                     value={newAccountType}
                     onChange={(v) => setNewAccountType(v as Exclude<AccountType, 'credit_card'>)}
-                    className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg px-2.5 py-2 text-sm"
+                    className="border border-line bg-surface rounded-lg px-2.5 py-2 text-sm"
                     options={ACCOUNT_TYPES.filter((t) => t.key !== 'credit_card').map((t) => ({ value: t.key, label: t.label }))}
                   />
                 </div>
@@ -3429,14 +3361,14 @@ function BuySellDividendModal({
                   value={newAccountBalance}
                   onChange={(e) => setNewAccountBalance(e.target.value)}
                   placeholder="Opening balance (optional)"
-                  className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg px-2.5 py-2 text-sm"
+                  className="w-full border border-line bg-surface rounded-lg px-2.5 py-2 text-sm"
                 />
                 {newAccountError && <p className="text-xs text-red-600">{newAccountError}</p>}
                 <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={() => setNewAccountOpen(false)}
-                    className="flex-1 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 py-2 rounded-lg text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-800"
+                    className="flex-1 border border-line text-slate-600 dark:text-slate-300 py-2 rounded-lg text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-800"
                   >
                     Cancel
                   </button>
@@ -3497,7 +3429,7 @@ function BuySellDividendModal({
         )}
 
         <div>
-          <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Date</label>
+          <label className="text-xs font-medium text-muted">Date</label>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
         </div>
 
@@ -3507,7 +3439,7 @@ function BuySellDividendModal({
           <button
             type="button"
             onClick={close}
-            className="flex-1 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="flex-1 border border-line text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-surface-hover"
           >
             Cancel
           </button>
@@ -3515,7 +3447,7 @@ function BuySellDividendModal({
             type="button"
             disabled={saving}
             onClick={mode === 'buy' ? submitBuy : mode === 'sell' ? submitSell : submitDividend}
-            className="flex-1 bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors flex-1 bg-brand-600 hover:bg-brand-700 text-white disabled:opacity-50"
           >
             {saving ? 'Saving…' : title}
           </button>
@@ -3593,13 +3525,13 @@ function AssetDetailPage({
           <ArrowLeft size={18} />
         </button>
         <div className="flex-1 min-w-0">
-          <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 uppercase truncate">{asset.name}</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-ink truncate">{asset.name}</h2>
           <p className="text-slate-600 text-sm">{category?.label ?? ASSET_CLASS_LABELS[asset.assetClass]}</p>
         </div>
         <button
           onClick={() => onEdit(asset)}
           title="Edit"
-          className="h-9 w-9 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 shrink-0"
+          className="h-9 w-9 flex items-center justify-center rounded-lg border border-line hover:bg-slate-50 text-slate-600 shrink-0"
         >
           <Pencil size={16} />
         </button>
@@ -3614,12 +3546,12 @@ function AssetDetailPage({
 
       <Modal open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)} title="Delete this asset?">
         <p className="text-sm text-slate-500 mb-6">
-          This will permanently delete <strong className="uppercase">{asset.name}</strong>. This can't be undone.
+          This will permanently delete <strong>{asset.name}</strong>. This can't be undone.
         </p>
         <div className="flex gap-3">
           <button
             onClick={() => setConfirmDeleteOpen(false)}
-            className="flex-1 border border-slate-200 text-slate-600 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50"
+            className="flex-1 border border-line text-slate-600 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50"
           >
             Cancel
           </button>
@@ -3635,19 +3567,19 @@ function AssetDetailPage({
         </div>
       </Modal>
 
-      <div className="bg-white rounded-2xl border border-slate-200 p-5">
+      <div className="bg-surface rounded-2xl border border-line p-5">
         <div className="flex items-start justify-between gap-3">
           <span className="inline-block bg-blue-50 text-blue-600 text-xs font-medium px-2.5 py-1 rounded-full">
             {category?.label ?? ASSET_CLASS_LABELS[asset.assetClass]}
           </span>
           <div className="text-right">
             <p className="text-xs text-slate-600 font-medium">INVESTED</p>
-            <p className="text-base font-semibold text-slate-800">
+            <p className="text-base font-semibold text-ink">
               {formatPreciseCurrency(invested ?? value, asset.currency)}
             </p>
           </div>
         </div>
-        <p className="text-4xl sm:text-5xl font-bold text-slate-900 mt-3">
+        <p className="text-4xl sm:text-5xl font-bold text-ink mt-3">
           {valuePending ? (
             <span className="inline-block h-8 w-32 rounded-lg bg-slate-100 animate-pulse align-middle" />
           ) : (
@@ -3667,7 +3599,7 @@ function AssetDetailPage({
         )}
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 p-5">
+      <div className="bg-surface rounded-2xl border border-line p-5">
         <p className="text-xs font-semibold tracking-wide text-slate-600 mb-4">DETAILS</p>
         <div className="grid grid-cols-2 gap-y-4 gap-x-4">
           <DetailField label="PRODUCT TYPE" value={ASSET_CLASS_LABELS[asset.assetClass]} />
@@ -3698,7 +3630,7 @@ function AssetDetailPage({
       </div>
 
       {asset.assetClass === 'sip' && mfSipProgress && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-5">
+        <div className="bg-surface rounded-2xl border border-line p-5">
           <p className="text-xs font-semibold tracking-wide text-slate-600 mb-4">SIP DETAILS</p>
           <div className="grid grid-cols-2 gap-y-4 gap-x-4">
             {asset.sipAmount !== undefined && (
@@ -3729,7 +3661,7 @@ function AssetDetailPage({
       {asset.assetClass === 'sip' && <SipQuickActions asset={asset} onUpdate={onQuickUpdate} />}
 
       {asset.recurringInvestment && recurringSip && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-5">
+        <div className="bg-surface rounded-2xl border border-line p-5">
           <p className="text-xs font-semibold tracking-wide text-slate-600 mb-4">RECURRING INVESTMENT (SIP)</p>
           <div className="grid grid-cols-2 gap-y-4 gap-x-4">
             {asset.sipAmount !== undefined && (
@@ -3752,7 +3684,7 @@ function AssetDetailPage({
       )}
 
       {notesLine && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-5">
+        <div className="bg-surface rounded-2xl border border-line p-5">
           <p className="text-xs font-semibold tracking-wide text-slate-600 mb-3">NOTES</p>
           <p className="text-sm text-slate-600 leading-relaxed">{notesLine}</p>
         </div>
@@ -3765,7 +3697,7 @@ function DetailField({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <p className="text-xs text-slate-600 mb-1">{label}</p>
-      <p className="text-sm font-medium text-slate-800">{value}</p>
+      <p className="text-sm font-medium text-ink">{value}</p>
     </div>
   );
 }
@@ -4622,7 +4554,7 @@ function AssetDetailsForm({
         <input
           value={name}
           onChange={(e) => setName(e.target.value.toUpperCase())}
-          className={`${inputClass} ${attemptedSubmit && nameMissing ? errorInputClass : ''} uppercase`}
+          className={`${inputClass} ${attemptedSubmit && nameMissing ? errorInputClass : ''}`}
           placeholder=""
         />
         {attemptedSubmit && nameMissing && <p className={errorTextClass}>Name is required.</p>}
@@ -4645,8 +4577,8 @@ function AssetDetailsForm({
       {onClose ? (
         <div className="flex items-start justify-between gap-3 -mx-4 sm:-mx-6 -mt-5 mb-1 px-4 sm:px-6 py-4 bg-[#F2E4CC] dark:bg-[#3A3020] border-b border-[#E3CBA0] dark:border-[#5A4A2E]">
           <div>
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Edit Asset</h2>
-            <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">
+            <h2 className="text-xl font-bold text-ink">Edit Asset</h2>
+            <p className="text-muted text-sm mt-0.5">
               {ASSET_CLASS_LABELS[assetClass] ?? assetClass}
             </p>
           </div>
@@ -4682,7 +4614,7 @@ function AssetDetailsForm({
                   onOpenChange={(open) => {
                     if (!open) setAssetTypeEditing(false);
                   }}
-                  className={`${inputClass} bg-white text-slate-700`}
+                  className={`${inputClass} bg-white text-ink-2`}
                   options={ASSET_TAXONOMY.flatMap((cat) =>
                     cat.types.map((t) => ({ value: t.value, label: t.label, group: cat.label }))
                   )}
@@ -4707,7 +4639,7 @@ function AssetDetailsForm({
                       return <CatIcon size={16} />;
                     })()}
                   </span>
-                  <span className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">
+                  <span className="text-sm font-medium text-ink truncate">
                     {ASSET_CLASS_LABELS[assetClass] ?? assetClass}
                   </span>
                 </span>
@@ -4720,7 +4652,7 @@ function AssetDetailsForm({
             <CustomSelect
               value={assetClass}
               onChange={(v) => setAssetClass(v as AssetClass)}
-              className={`${inputClass} bg-white text-slate-700`}
+              className={`${inputClass} bg-white text-ink-2`}
               options={[
                 ...(!effectiveCategory.types.some((t) => t.value === assetClass)
                   ? [{ value: assetClass, label: ASSET_CLASS_LABELS[assetClass] ?? assetClass }]
@@ -4731,7 +4663,7 @@ function AssetDetailsForm({
           </Field>
         ) : (
           <Field label="Asset Type">
-            <p className="text-sm font-medium text-slate-700 border border-slate-200 rounded-lg px-3 py-2.5 bg-slate-50">
+            <p className="text-sm font-medium text-ink-2 border border-line rounded-lg px-3 py-2.5 bg-slate-50">
               {ASSET_CLASS_LABELS[assetClass] ?? assetClass ?? 'Unknown'}
             </p>
           </Field>
@@ -4741,7 +4673,7 @@ function AssetDetailsForm({
             <CustomSelect
               value={market}
               onChange={(v) => setMarket(v as 'IN' | 'US')}
-              className={`${inputClass} bg-white text-slate-700`}
+              className={`${inputClass} bg-white text-ink-2`}
               options={[
                 { value: 'IN', label: '🇮🇳 India (NSE / BSE)' },
                 { value: 'US', label: '🇺🇸 United States (NASDAQ / NYSE)' },
@@ -4770,11 +4702,11 @@ function AssetDetailsForm({
                   className={`text-left rounded-xl border p-3.5 transition-colors ${
                     selected
                       ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500'
-                      : 'border-slate-200 bg-white hover:border-slate-300'
+                      : 'border-line bg-surface hover:border-slate-300'
                   }`}
                 >
                   <span
-                    className={`text-sm font-semibold ${selected ? 'text-brand-700' : 'text-slate-700'}`}
+                    className={`text-sm font-semibold ${selected ? 'text-brand-700' : 'text-ink-2'}`}
                   >
                     {purity === '24k' ? '24K (999)' : '22K (916)'}
                   </span>
@@ -4801,9 +4733,9 @@ function AssetDetailsForm({
         </Field>
       )}
       {isWeightTracked && (
-        <div className="space-y-3 border border-slate-100 bg-slate-50/60 rounded-xl p-4">
+        <div className="space-y-3 border border-line-soft bg-slate-50/60 rounded-xl p-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <p className="text-sm font-medium text-slate-700">Purchases</p>
+            <p className="text-sm font-medium text-ink-2">Purchases</p>
             <p className="text-xs text-slate-500">
               Total: <span className="font-semibold text-brand-700">{totalGrams || 0} g</span>
               {' · '}
@@ -4947,14 +4879,14 @@ function AssetDetailsForm({
                 />
               )}
               {symbolSearchOpen && symbolSuggestions.length > 0 && (
-                <div className="absolute z-10 mt-1 w-full max-h-64 overflow-auto bg-white border border-slate-200 rounded-lg shadow-lg">
+                <div className="absolute z-10 mt-1 w-full max-h-64 overflow-auto bg-surface border border-line rounded-lg shadow-lg">
                   {symbolSuggestions.map((s) => (
                     <button
                       key={s.symbol}
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => selectSymbol(s)}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-brand-50 border-b border-slate-100 last:border-0 flex items-center justify-between gap-3"
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-brand-50 border-b border-line-soft last:border-0 flex items-center justify-between gap-3"
                     >
                       <span className="truncate">
                         <span className="font-semibold">{s.symbol}</span>
@@ -4974,7 +4906,7 @@ function AssetDetailsForm({
                 symbolSuggestions.length === 0 &&
                 symbol.trim() === symbolSearchedQuery &&
                 symbol.trim().length >= 3 && (
-                  <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg px-3 py-2 text-sm">
+                  <div className="absolute z-10 mt-1 w-full bg-surface border border-line rounded-lg shadow-lg px-3 py-2 text-sm">
                     {symbolSearchFailed ? (
                       <span className="text-red-500">
                         Couldn't reach symbol search — check your connection, or enter the ticker directly.
@@ -5073,9 +5005,9 @@ function AssetDetailsForm({
               </div>
             </>
           ) : (
-          <div className="space-y-3 border border-slate-100 bg-slate-50/60 rounded-xl p-4">
+          <div className="space-y-3 border border-line-soft bg-slate-50/60 rounded-xl p-4">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <p className="text-sm font-medium text-slate-700">Purchases</p>
+              <p className="text-sm font-medium text-ink-2">Purchases</p>
               <p className="text-xs text-slate-500">
                 Total: <span className="font-semibold text-brand-700">{totalShareQty || 0}</span>
                 {' · Avg. Cost '}
@@ -5328,8 +5260,8 @@ function AssetDetailsForm({
         </>
       )}
       {isRecurringEligible && (
-        <div className="space-y-4 border border-slate-100 bg-slate-50/60 rounded-xl p-4">
-          <label className="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+        <div className="space-y-4 border border-line-soft bg-slate-50/60 rounded-xl p-4">
+          <label className="flex items-center gap-2 text-sm font-medium text-ink-2 cursor-pointer">
             <input
               type="checkbox"
               checked={recurringInvestment}
@@ -5407,7 +5339,7 @@ function AssetDetailsForm({
           <CustomSelect
             value={institution}
             onChange={setInstitution}
-            className={`${inputClass} bg-white text-slate-700`}
+            className={`${inputClass} bg-white text-ink-2`}
             placeholder="None"
             options={[
               { value: '', label: 'None' },
@@ -5420,7 +5352,7 @@ function AssetDetailsForm({
         </Field>
       )}
       {SIP_CLASSES.has(assetClass) && (
-        <div className="space-y-4 border border-slate-100 bg-slate-50/60 rounded-xl p-4">
+        <div className="space-y-4 border border-line-soft bg-slate-50/60 rounded-xl p-4">
           <Field label="Fund Name / Symbol (for live price)">
             <div className="relative">
               <input
@@ -5451,14 +5383,14 @@ function AssetDetailsForm({
                 />
               )}
               {fundSearchOpen && fundSuggestions.length > 0 && (
-                <div className="absolute z-10 mt-1 w-full max-h-64 overflow-auto bg-white border border-slate-200 rounded-lg shadow-lg">
+                <div className="absolute z-10 mt-1 w-full max-h-64 overflow-auto bg-surface border border-line rounded-lg shadow-lg">
                   {fundSuggestions.map((f) => (
                     <button
                       key={f.schemeCode}
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => selectFund(f)}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-brand-50 border-b border-slate-100 last:border-0"
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-brand-50 border-b border-line-soft last:border-0"
                     >
                       {f.schemeName}
                     </button>
@@ -5470,7 +5402,7 @@ function AssetDetailsForm({
                 fundSuggestions.length === 0 &&
                 fundQuery.trim() === fundSearchedQuery &&
                 fundQuery.trim().length >= 3 && (
-                  <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg px-3 py-2 text-sm">
+                  <div className="absolute z-10 mt-1 w-full bg-surface border border-line rounded-lg shadow-lg px-3 py-2 text-sm">
                     {fundSearchFailed ? (
                       <span className="text-red-500">
                         Couldn't reach the fund search — check your connection, or restart the dev
@@ -5555,13 +5487,13 @@ function AssetDetailsForm({
         </div>
       )}
       {DEPOSIT_LIKE_CLASSES.has(assetClass) && (
-        <div className="space-y-4 border border-slate-100 bg-slate-50/60 rounded-xl p-4">
+        <div className="space-y-4 border border-line-soft bg-slate-50/60 rounded-xl p-4">
           <div className="grid grid-cols-2 gap-3">
             <Field label="Bank / Institution">
               <input
                 value={institution}
                 onChange={(e) => setInstitution(e.target.value.toUpperCase())}
-                className={`${inputClass} uppercase`}
+                className={`${inputClass}`}
                 placeholder="e.g. HDFC Bank"
               />
             </Field>
@@ -5749,13 +5681,13 @@ function AssetDetailsForm({
         {showMoreDetails ? 'Hide details' : 'Show details'}
       </button>
       {showMoreDetails && (
-        <div className="space-y-4 border-t border-slate-100 dark:border-slate-800 pt-4">
+        <div className="space-y-4 border-t border-line-soft pt-4">
           <div className="grid grid-cols-2 gap-3">
             <Field label="Geography">
               <CustomSelect
                 value={geography}
                 onChange={setGeography}
-                className={`${inputClass} bg-white text-slate-700`}
+                className={`${inputClass} bg-white text-ink-2`}
                 placeholder="—"
                 options={GEOGRAPHY_OPTIONS.map((g) => ({ value: g.value as string, label: g.label }))}
               />
@@ -5770,11 +5702,11 @@ function AssetDetailsForm({
             </Field>
           </div>
           <Field label="Tags">
-            <div className="min-h-[38px] flex flex-wrap gap-1.5 items-center px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus-within:ring-2 focus-within:ring-brand-500">
+            <div className="min-h-[38px] flex flex-wrap gap-1.5 items-center px-2.5 py-1.5 rounded-lg border border-line bg-surface focus-within:ring-2 focus-within:ring-brand-500">
               {tags.map((t) => (
                 <span
                   key={t}
-                  className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-medium px-2 py-1 rounded-md"
+                  className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 text-ink-2 text-xs font-medium px-2 py-1 rounded-md"
                 >
                   {t}
                   <button
@@ -5825,7 +5757,7 @@ function AssetDetailsForm({
               className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
             />
             <div>
-              <div className="flex items-center gap-1.5 text-sm font-medium text-slate-800 dark:text-slate-100">
+              <div className="flex items-center gap-1.5 text-sm font-medium text-ink">
                 <EyeOff size={14} className="text-slate-500" /> Exclude from allocation
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
@@ -5841,7 +5773,7 @@ function AssetDetailsForm({
               className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
             />
             <div>
-              <div className="flex items-center gap-1.5 text-sm font-medium text-slate-800 dark:text-slate-100">
+              <div className="flex items-center gap-1.5 text-sm font-medium text-ink">
                 <AlertTriangle size={14} className="text-slate-500" /> Part of emergency fund
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
@@ -5860,19 +5792,19 @@ function AssetDetailsForm({
         <div className="flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 py-2.5 rounded-lg text-base font-medium"
+            className="flex-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-ink-2 py-2.5 rounded-lg text-base font-medium"
           >
             Cancel
           </button>
           <button
             onClick={submit}
-            className="flex-1 bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-base font-medium"
+            className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors flex-1 bg-brand-600 hover:bg-brand-700 text-white"
           >
             Save
           </button>
         </div>
       ) : (
-        <button onClick={submit} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-base font-medium">
+        <button onClick={submit} className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white">
           Save Asset
         </button>
       )}
@@ -5924,80 +5856,84 @@ function LiabilitiesTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900">Liabilities</h2>
-          <p className="text-slate-500 text-sm mt-0.5">
-            {liabilities.length} active ·{' '}
-            {formatPreciseCurrency(liabilities.reduce((s, l) => s + l.outstanding, 0))} outstanding
-          </p>
-        </div>
-        <button
-          onClick={onAdd}
-          className="w-full sm:w-auto justify-center flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-base font-medium"
-        >
-          <Plus size={18} /> Add Liability
-        </button>
-      </div>
+      <PageHeader
+        title="Liabilities"
+        description={
+          <>
+            {liabilities.length} active · {formatPreciseCurrency(liabilities.reduce((s, l) => s + l.outstanding, 0))} outstanding
+          </>
+        }
+        actions={
+          <Button onClick={onAdd} leftIcon={<Plus size={16} />} className="w-full sm:w-auto">
+            Add liability
+          </Button>
+        }
+      />
 
       <TabNav tab={tab} setTab={setTab} />
 
-      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-x-auto">
-        <table className="w-full text-base min-w-[820px]">
-          <thead className="bg-slate-50 dark:bg-slate-900/40 text-slate-500 dark:text-slate-400 text-left">
-            <tr>
-              <th className="px-4 py-3 font-medium">Name</th>
-              <th className="px-4 py-3 font-medium">Type</th>
-              <th className="px-4 py-3 font-medium">Outstanding</th>
-              <th className="px-4 py-3 font-medium">EMI</th>
-              <th className="px-4 py-3 font-medium"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-            {liabilities.map((l) => (
-              <tr key={l.id}>
-                <td className="px-4 py-3 font-medium text-slate-800 dark:text-slate-100 uppercase">{l.name}</td>
-                <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
-                  {l.liabilityClass ? LIABILITY_CLASS_LABELS[l.liabilityClass] : '—'}
-                </td>
-                <td className="px-4 py-3 text-slate-800 dark:text-slate-100">{formatPreciseCurrency(l.outstanding, l.currency)}</td>
-                <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{l.emi ? formatPreciseCurrency(l.emi, l.currency) : '—'}</td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-3 justify-end">
-                    <button
-                      onClick={() => {
-                        setEditing(l);
-                        setModalOpen(true);
-                      }}
-                      className="text-slate-600 hover:text-brand-600"
-                    >
-                      <Pencil size={18} />
-                    </button>
-                    <button onClick={() => setPendingDelete(l)} className="text-red-500 hover:text-red-600">
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {liabilities.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-14">
-                  <div className="flex flex-col items-center justify-center text-center gap-4">
-                    <p className="text-slate-600">No liabilities tracked. Add loans or credit lines here.</p>
-                    <button
-                      onClick={onAdd}
-                      className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-lg text-base font-medium"
-                    >
-                      <Plus size={18} /> Add Liability
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <Card padding="none" className="overflow-hidden">
+        {liabilities.length === 0 ? (
+          <EmptyState
+            icon={<Banknote size={18} />}
+            title="No liabilities tracked"
+            description="Add loans or credit lines to see your true net worth."
+            action={
+              <Button onClick={onAdd} leftIcon={<Plus size={16} />}>
+                Add liability
+              </Button>
+            }
+          />
+        ) : (
+          <TableContainer>
+            <Table className="min-w-[720px]">
+              <THead>
+                <tr>
+                  <Th>Name</Th>
+                  <Th>Type</Th>
+                  <Th align="right">Outstanding</Th>
+                  <Th align="right">EMI</Th>
+                  <th className="w-24" aria-hidden="true" />
+                </tr>
+              </THead>
+              <TBody>
+                {liabilities.map((l) => (
+                  <tr key={l.id} className="border-b border-line-soft last:border-b-0 transition-colors hover:bg-surface-hover/70">
+                    <Td className="font-medium">{l.name}</Td>
+                    <Td className="text-muted">{l.liabilityClass ? LIABILITY_CLASS_LABELS[l.liabilityClass] : '—'}</Td>
+                    <Td numeric>{formatPreciseCurrency(l.outstanding, l.currency)}</Td>
+                    <Td numeric className="text-muted font-normal">
+                      {l.emi ? formatPreciseCurrency(l.emi, l.currency) : '—'}
+                    </Td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-1 justify-end">
+                        <IconButton
+                          label="Edit liability"
+                          size="sm"
+                          onClick={() => {
+                            setEditing(l);
+                            setModalOpen(true);
+                          }}
+                        >
+                          <Pencil size={15} />
+                        </IconButton>
+                        <IconButton
+                          label="Delete liability"
+                          size="sm"
+                          onClick={() => setPendingDelete(l)}
+                          className="hover:!text-negative hover:!bg-negative-soft"
+                        >
+                          <Trash2 size={15} />
+                        </IconButton>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </TBody>
+            </Table>
+          </TableContainer>
+        )}
+      </Card>
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Edit Liability">
         {editing && <LiabilityDetailsForm initial={editing} onSave={handleSave} />}
@@ -6008,7 +5944,7 @@ function LiabilitiesTab({
         onClose={() => setPendingDelete(null)}
         onConfirm={confirmDelete}
         title="Delete this liability?"
-        description={<>This will permanently delete <strong className="uppercase">{pendingDelete?.name}</strong>. This can't be undone.</>}
+        description={<>This will permanently delete <strong>{pendingDelete?.name}</strong>. This can't be undone.</>}
       />
     </div>
   );
@@ -6068,7 +6004,7 @@ function LiabilityDetailsForm({
         <input
           value={name}
           onChange={(e) => setName(e.target.value.toUpperCase())}
-          className={`${inputClass} uppercase`}
+          className={`${inputClass}`}
           placeholder="e.g. Home Loan"
         />
       </Field>
@@ -6083,7 +6019,7 @@ function LiabilityDetailsForm({
         </Field>
       ) : (
         <Field label="Liability Type">
-          <p className="text-sm font-medium text-slate-700 border border-slate-200 rounded-lg px-3 py-2.5 bg-slate-50">
+          <p className="text-sm font-medium text-ink-2 border border-line rounded-lg px-3 py-2.5 bg-slate-50">
             {LIABILITY_CLASS_LABELS[liabilityClass]}
           </p>
         </Field>
@@ -6099,7 +6035,7 @@ function LiabilityDetailsForm({
       <Field label="Monthly EMI (optional)">
         <input type="number" value={emi} onChange={(e) => setEmi(e.target.value)} className={inputClass} placeholder="0" />
       </Field>
-      <button onClick={submit} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-base font-medium">
+      <button onClick={submit} className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white">
         Save Liability
       </button>
     </div>
@@ -6126,14 +6062,11 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-2xl font-bold text-slate-900">Net Worth</h2>
-        <p className="text-slate-500 text-sm mt-0.5">Everything you own and owe, in one view.</p>
-      </div>
+      <PageHeader title="Net worth" description="Everything you own and owe, in one view." />
 
       <TabNav tab={tab} setTab={setTab} />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <SummaryCard
           label="Assets"
           value={maskPreciseAmount(totalAssets, 'INR', privacyMode)}
@@ -6147,7 +6080,7 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
           loading={!wealthDataKnown}
         />
         <SummaryCard
-          label="Net Worth"
+          label="Net worth"
           value={maskPreciseAmount(netWorth, 'INR', privacyMode)}
           tone="slate"
           loading={!wealthDataKnown}
@@ -6173,17 +6106,18 @@ function AllocationTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) 
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-2xl font-bold text-slate-900">Allocation</h2>
-        <p className="text-slate-500 text-sm mt-0.5">How your wealth is spread across asset classes.</p>
-      </div>
+      <PageHeader title="Allocation" description="How your wealth is spread across asset classes." />
 
       <TabNav tab={tab} setTab={setTab} />
 
       {data.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-600">
-          Add assets to see how your wealth is allocated.
-        </div>
+        <Card padding="none">
+          <EmptyState
+            icon={<BarChart2 size={18} />}
+            title="Nothing to allocate yet"
+            description="Add assets to see how your wealth is spread out."
+          />
+        </Card>
       ) : (
         <AllocationChart data={data} total={total} />
       )}
@@ -6198,37 +6132,56 @@ function AllocationChart({
   data: { name: string; value: number; color: string }[];
   total: number;
 }) {
+  const sorted = [...data].sort((a, b) => b.value - a.value);
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-6 grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-      <ResponsiveContainer width="100%" height={280}>
-        <PieChart>
-          <Pie data={data} dataKey="value" nameKey="name" innerRadius={60} outerRadius={110}>
-            {data.map((entry) => (
-              <Cell key={entry.name} fill={entry.color} />
-            ))}
-          </Pie>
-          <Tooltip formatter={(v) => formatPreciseCurrency(Number(v))} />
-        </PieChart>
-      </ResponsiveContainer>
-      <div className="space-y-3">
-        {data
-          .sort((a, b) => b.value - a.value)
-          .map((d) => (
-            <div key={d.name} className="flex items-center justify-between text-base">
-              <div className="flex items-center gap-2">
-                <span className="h-3 w-3 rounded-full" style={{ backgroundColor: d.color }} />
-                <span className="text-slate-700 font-medium">{d.name}</span>
-              </div>
-              <div className="text-right">
-                <span className="text-slate-900 font-semibold">{formatPreciseCurrency(d.value)}</span>
-                <span className="text-slate-600 ml-2 text-sm">
-                  {total > 0 ? Math.round((d.value / total) * 100) : 0}%
-                </span>
-              </div>
-            </div>
-          ))}
+    <Card padding="lg" className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+      <div className="relative">
+        <ResponsiveContainer width="100%" height={260}>
+          <PieChart>
+            <Pie
+              data={sorted}
+              dataKey="value"
+              nameKey="name"
+              innerRadius={68}
+              outerRadius={104}
+              paddingAngle={2}
+              stroke="none"
+              isAnimationActive={false}
+            >
+              {sorted.map((entry) => (
+                <Cell key={entry.name} fill={entry.color} />
+              ))}
+            </Pie>
+            <Tooltip
+              formatter={(v) => formatPreciseCurrency(Number(v))}
+              contentStyle={chart.tooltip.contentStyle}
+              labelStyle={chart.tooltip.labelStyle}
+              itemStyle={chart.tooltip.itemStyle}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-xs text-muted">Total</span>
+          <span className="font-numeric text-base font-semibold text-ink">{formatPreciseCurrency(total)}</span>
+        </div>
       </div>
-    </div>
+      <ul className="divide-y divide-line-soft">
+        {sorted.map((d) => (
+          <li key={d.name} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="h-2.5 w-2.5 rounded-sm shrink-0" style={{ backgroundColor: d.color }} />
+              <span className="text-ink-2 font-medium truncate">{d.name}</span>
+            </div>
+            <div className="text-right shrink-0 font-numeric">
+              <span className="text-ink font-semibold">{formatPreciseCurrency(d.value)}</span>
+              <span className="text-muted font-normal ml-2 inline-block w-12">
+                {total > 0 ? ((d.value / total) * 100).toFixed(1) : '0.0'}%
+              </span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }
 
@@ -6255,8 +6208,7 @@ function Field({
   );
 }
 
-const inputClass =
-  'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-brand-500';
+const inputClass = inputClasses;
 
 // Same visual styling as inputClass but WITHOUT the `w-full`, so it's safe to
 // pair with flex-basis utilities (flex-1, w-14, etc.) inside a flex row.
@@ -6264,8 +6216,7 @@ const inputClass =
 // have equal specificity, and Tailwind's generated stylesheet order (not the
 // order classes are listed in JSX) decided which one won — so the currency
 // <select> kept rendering at full width and crushed the number input next to it.
-const fieldBaseClass =
-  'border border-slate-200 rounded-lg py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-brand-500';
+const fieldBaseClass = `min-h-10 sm:min-h-9 py-1.5 ${fieldBase}`;
 
 const errorInputClass = 'border-red-400 focus:ring-red-400';
 const errorTextClass = 'text-xs text-red-500 mt-1';

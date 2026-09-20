@@ -43,8 +43,8 @@ function PanelBody({
 }) {
   return (
     <>
-      <div className="flex items-center justify-between px-4 sm:px-6 pt-[calc(env(safe-area-inset-top)+16px)] pb-4 shrink-0 border-b border-slate-100 dark:border-slate-800">
-        <h3 className="text-[18px] font-semibold text-slate-900 dark:text-white tracking-tight">{title}</h3>
+      <div className="flex items-center justify-between px-4 sm:px-6 pt-[calc(env(safe-area-inset-top)+16px)] pb-4 shrink-0 border-b border-line-soft">
+        <h3 className="text-[18px] font-semibold text-ink tracking-tight">{title}</h3>
         <button
           onClick={onClose}
           className="keep-round tap-scale h-9 w-9 flex items-center justify-center text-slate-600 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200 transition-colors"
@@ -91,11 +91,11 @@ function ContentPanel({
          the panel below reveals a softened version of the page instead of
          sharp content (e.g. asset rows) peeking through. */}
       <div
-        className="fixed left-0 right-0 md:left-60 bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-40 bg-white/60 dark:bg-slate-900/60 backdrop-blur-md pointer-events-none"
+        className="fixed left-0 right-0 md:left-[var(--sb-w)] bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-40 bg-slate-900/30 pointer-events-none"
         style={{ top }}
       />
       <div
-        className="animate-backdrop-in fixed left-0 right-0 md:left-60 bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-50 bg-white dark:bg-slate-900 flex flex-col m-3 sm:m-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-lg overflow-hidden"
+        className="animate-backdrop-in fixed left-0 right-0 md:left-[var(--sb-w)] bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-50 bg-surface flex flex-col m-3 sm:m-4 rounded-2xl border border-line shadow-lg overflow-hidden"
         style={{ top }}
       >
         {hideHeader ? (
@@ -147,7 +147,7 @@ export default function Modal({
     // smaller than the true viewport — visibly not covering the bottom nav,
     // which itself renders outside `.app-scale` at full size.
     return createPortal(
-      <div className="animate-backdrop-in fixed inset-x-0 top-0 bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-50 bg-white dark:bg-slate-900 flex flex-col">
+      <div className="animate-backdrop-in fixed inset-x-0 top-0 bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-50 bg-surface flex flex-col">
         <PanelBody title={title} onClose={onClose}>
           {children}
         </PanelBody>
@@ -168,18 +168,18 @@ export default function Modal({
 
   return (
     <div
-      className="animate-backdrop-in fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-[2px] px-4"
+      className="animate-backdrop-in fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4"
       onClick={onClose}
     >
       <div
-        className={`animate-menu-in bg-white dark:bg-slate-800 shadow-xl w-full ${widthClassName} max-h-[90vh] flex flex-col`}
+        className={`animate-menu-in bg-surface border border-line shadow-xl w-full ${widthClassName} max-h-[90vh] flex flex-col`}
         style={{ borderRadius: 'var(--radius-modal)', transformOrigin: 'center' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header stays outside the scroll area — pinned in place, and its
            padding is never eaten by the scrollbar (see body below). */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
-          <h3 className="text-[18px] font-semibold text-slate-900 dark:text-white tracking-tight">{title}</h3>
+          <h3 className="text-[18px] font-semibold text-ink tracking-tight">{title}</h3>
           <button
             onClick={onClose}
             className="keep-round tap-scale h-8 w-8 flex items-center justify-center text-slate-600 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200 transition-colors"

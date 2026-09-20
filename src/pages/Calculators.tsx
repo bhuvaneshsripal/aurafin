@@ -9,7 +9,6 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import {
-  ArrowLeft,
   TrendingUp,
   Calendar,
   Coins,
@@ -24,6 +23,8 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '../utils/currency';
 import CustomSelect from '../components/CustomSelect';
+import { inputClasses } from '../components/ui';
+import { PageHeader } from '../components/ui';
 
 type CalcKey = 'xirr' | 'sip' | 'lumpsum' | 'phased' | 'cagr' | 'emi' | 'swp' | 'retirement' | 'fd';
 
@@ -149,19 +150,13 @@ export default function Calculators() {
 
   if (activeCalc) {
     return (
-      <div className="space-y-6 max-w-4xl">
-        <button
-          onClick={() => setActive(null)}
-          className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 hover:text-brand-600 dark:hover:text-brand-300"
-        >
-          <ArrowLeft size={16} /> Back to Calculators
-        </button>
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{activeCalc.label}</h1>
-          </div>
-          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">{activeCalc.description}</p>
-        </div>
+      <div className="space-y-5 max-w-4xl">
+        <PageHeader
+          title={activeCalc.label}
+          description={activeCalc.description}
+          onBack={() => setActive(null)}
+          backLabel="All calculators"
+        />
         {active === 'xirr' && <XirrCalculator />}
         {active === 'sip' && <SipCalculator />}
         {active === 'lumpsum' && <LumpsumCalculator />}
@@ -176,17 +171,12 @@ export default function Calculators() {
   }
 
   return (
-    <div className="space-y-8 max-w-4xl">
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Calculators</h1>
-        <p className="text-slate-500 dark:text-slate-400 text-base mt-1">
-          Project how your investments could grow over time.
-        </p>
-      </div>
+    <div className="space-y-6 max-w-4xl">
+      <PageHeader title="Calculators" description="Project how your investments could grow over time." />
 
       {GROUPS.map((group) => (
         <div key={group.title} className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-500">
+          <h2 className="text-xs font-medium text-muted">
             {group.title}
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -197,7 +187,7 @@ export default function Calculators() {
                   key={c.key}
                   disabled={c.soon}
                   onClick={() => !c.soon && setActive(c.key)}
-                  className={`text-left bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 flex items-start gap-4 transition-colors ${
+                  className={`text-left bg-surface rounded-2xl border border-line p-5 flex items-start gap-4 transition-colors ${
                     c.soon
                       ? 'opacity-60 cursor-not-allowed'
                       : 'hover:border-brand-400 dark:hover:border-brand-600 hover:bg-brand-50/40 dark:hover:bg-brand-900/30'
@@ -208,15 +198,15 @@ export default function Calculators() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="font-semibold text-slate-900 dark:text-white">{c.label}</p>
+                      <p className="font-semibold text-ink">{c.label}</p>
                       {c.soon && (
-                        <span className="text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded-full">
+                        <span className="text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-muted px-1.5 py-0.5 rounded-full">
                           Soon
                         </span>
                       )}
                       {!c.soon && <span className="text-slate-300 dark:text-slate-600 ml-auto">→</span>}
                     </div>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{c.description}</p>
+                    <p className="text-sm text-muted mt-0.5">{c.description}</p>
                   </div>
                 </button>
               );
@@ -239,8 +229,8 @@ function CalcShell({
 }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">{inputs}</div>
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
+      <div className="bg-surface rounded-2xl border border-line p-6 space-y-4">{inputs}</div>
+      <div className="bg-surface rounded-2xl border border-line p-6 space-y-4">
         {result}
         {chartData.length > 1 && (
           <ResponsiveContainer width="100%" height={220}>
@@ -291,7 +281,7 @@ function SipCalculator() {
     <CalcShell
       inputs={
         <>
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">SIP Details</h2>
+          <h2 className="text-lg font-semibold text-ink">SIP Details</h2>
           <Field label="Monthly Investment">
             <input type="number" value={monthly} onChange={(e) => setMonthly(e.target.value)} className={inputClass} />
           </Field>
@@ -308,14 +298,14 @@ function SipCalculator() {
       }
       result={
         <>
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Projected Value</h2>
+          <h2 className="text-lg font-semibold text-ink">Projected Value</h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Invested</p>
-              <p className="text-xl font-bold text-slate-900 dark:text-white">{formatCurrency(invested)}</p>
+              <p className="text-sm text-muted">Invested</p>
+              <p className="text-xl font-bold text-ink">{formatCurrency(invested)}</p>
             </div>
             <div>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Maturity Value</p>
+              <p className="text-sm text-muted">Maturity Value</p>
               <p className="text-xl font-bold text-brand-600 dark:text-brand-300">{formatCurrency(maturity)}</p>
             </div>
           </div>
@@ -346,7 +336,7 @@ function LumpsumCalculator() {
     <CalcShell
       inputs={
         <>
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Lumpsum Details</h2>
+          <h2 className="text-lg font-semibold text-ink">Lumpsum Details</h2>
           <Field label="Investment Amount">
             <input type="number" value={principal} onChange={(e) => setPrincipal(e.target.value)} className={inputClass} />
           </Field>
@@ -360,8 +350,8 @@ function LumpsumCalculator() {
       }
       result={
         <>
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Projected Value</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Maturity Value</p>
+          <h2 className="text-lg font-semibold text-ink">Projected Value</h2>
+          <p className="text-sm text-muted">Maturity Value</p>
           <p className="text-2xl font-bold text-brand-600 dark:text-brand-300">{formatCurrency(maturity)}</p>
         </>
       }
@@ -456,8 +446,8 @@ function PhasedCalculator() {
     <CalcShell
       inputs={
         <>
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Investment Phases</h2>
-          <p className="text-xs text-slate-600 dark:text-slate-500 -mt-2">
+          <h2 className="text-lg font-semibold text-ink">Investment Phases</h2>
+          <p className="text-xs text-muted -mt-2">
             One fund, monthly investment that changes over time. Example: ₹1,000/month from year 1 to 3, then
             ₹5,000/month from year 3 to 13, then ₹10,000/month from year 13 to 20 — everything compounds together.
           </p>
@@ -498,7 +488,7 @@ function PhasedCalculator() {
                     if (window.confirm('Remove this phase?')) removePhase(p.id);
                   }}
                   disabled={phases.length <= 1}
-                  className="mb-0.5 h-[42px] w-10 shrink-0 rounded-lg border border-slate-200 dark:border-slate-800 flex items-center justify-center text-red-500 hover:text-red-600 hover:border-red-300 dark:hover:border-red-700 disabled:opacity-30 disabled:pointer-events-none"
+                  className="mb-0.5 h-[42px] w-10 shrink-0 rounded-lg border border-line flex items-center justify-center text-red-500 hover:text-red-600 hover:border-red-300 dark:hover:border-red-700 disabled:opacity-30 disabled:pointer-events-none"
                   aria-label="Remove phase"
                 >
                   <Trash2 size={16} />
@@ -522,32 +512,32 @@ function PhasedCalculator() {
       }
       result={
         <>
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Projected Value</h2>
+          <h2 className="text-lg font-semibold text-ink">Projected Value</h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Total Invested</p>
-              <p className="text-xl font-bold text-slate-900 dark:text-white">{formatCurrency(invested)}</p>
+              <p className="text-sm text-muted">Total Invested</p>
+              <p className="text-xl font-bold text-ink">{formatCurrency(invested)}</p>
             </div>
             <div>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Maturity Value (Year {totalYears})</p>
+              <p className="text-sm text-muted">Maturity Value (Year {totalYears})</p>
               <p className="text-xl font-bold text-brand-600 dark:text-brand-300">{formatCurrency(maturity)}</p>
             </div>
           </div>
           <div>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Estimated Gain</p>
+            <p className="text-sm text-muted">Estimated Gain</p>
             <p className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(gain)}</p>
           </div>
           {breakdown.length > 0 && (
-            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
-              <p className="text-xs font-medium text-slate-600 dark:text-slate-500 uppercase tracking-wide">
+            <div className="pt-2 border-t border-line-soft space-y-1.5">
+              <p className="text-xs font-medium text-muted">
                 Breakdown by phase
               </p>
               {breakdown.map((b, i) => (
                 <div key={i} className="flex items-center justify-between text-sm">
-                  <span className="text-slate-500 dark:text-slate-400">
+                  <span className="text-muted">
                     Year {b.from}–{b.to}: {formatCurrency(b.amount)}/mo
                   </span>
-                  <span className="font-medium text-slate-700 dark:text-slate-200">
+                  <span className="font-medium text-ink-2">
                     {formatCurrency(b.totalInvested)} invested
                   </span>
                 </div>
@@ -583,7 +573,7 @@ function FdCalculator() {
     <CalcShell
       inputs={
         <>
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Fixed Deposit Details</h2>
+          <h2 className="text-lg font-semibold text-ink">Fixed Deposit Details</h2>
           <Field label="Deposit Amount">
             <input type="number" value={principal} onChange={(e) => setPrincipal(e.target.value)} className={inputClass} />
           </Field>
@@ -610,8 +600,8 @@ function FdCalculator() {
       }
       result={
         <>
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Projected Value</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Maturity Value</p>
+          <h2 className="text-lg font-semibold text-ink">Projected Value</h2>
+          <p className="text-sm text-muted">Maturity Value</p>
           <p className="text-2xl font-bold text-brand-600 dark:text-brand-300">{formatCurrency(maturity)}</p>
         </>
       }
@@ -641,7 +631,7 @@ function CagrCalculator() {
     <CalcShell
       inputs={
         <>
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">CAGR Details</h2>
+          <h2 className="text-lg font-semibold text-ink">CAGR Details</h2>
           <Field label="Initial Value">
             <input type="number" value={initial} onChange={(e) => setInitial(e.target.value)} className={inputClass} />
           </Field>
@@ -655,8 +645,8 @@ function CagrCalculator() {
       }
       result={
         <>
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Result</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Compound Annual Growth Rate</p>
+          <h2 className="text-lg font-semibold text-ink">Result</h2>
+          <p className="text-sm text-muted">Compound Annual Growth Rate</p>
           <p className="text-2xl font-bold text-brand-600 dark:text-brand-300">
             {Number.isFinite(cagr) ? cagr.toFixed(2) : '0.00'}%
           </p>
@@ -705,7 +695,7 @@ function EmiCalculator() {
     <CalcShell
       inputs={
         <>
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Loan Details</h2>
+          <h2 className="text-lg font-semibold text-ink">Loan Details</h2>
           <Field label="Loan Amount">
             <input type="number" value={principal} onChange={(e) => setPrincipal(e.target.value)} className={inputClass} />
           </Field>
@@ -719,24 +709,24 @@ function EmiCalculator() {
       }
       result={
         <>
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">EMI Breakup</h2>
+          <h2 className="text-lg font-semibold text-ink">EMI Breakup</h2>
           <div className="grid grid-cols-1 gap-4">
             <div>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Monthly EMI</p>
+              <p className="text-sm text-muted">Monthly EMI</p>
               <p className="text-xl font-bold text-brand-600 dark:text-brand-300">{formatCurrency(emi)}</p>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Total Interest</p>
-                <p className="text-lg font-semibold text-slate-900 dark:text-white">{formatCurrency(totalInterest)}</p>
+                <p className="text-sm text-muted">Total Interest</p>
+                <p className="text-lg font-semibold text-ink">{formatCurrency(totalInterest)}</p>
               </div>
               <div>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Total Payment</p>
-                <p className="text-lg font-semibold text-slate-900 dark:text-white">{formatCurrency(totalPayment)}</p>
+                <p className="text-sm text-muted">Total Payment</p>
+                <p className="text-lg font-semibold text-ink">{formatCurrency(totalPayment)}</p>
               </div>
             </div>
           </div>
-          <p className="text-xs text-slate-600 dark:text-slate-500">Remaining loan balance by year, below.</p>
+          <p className="text-xs text-muted">Remaining loan balance by year, below.</p>
         </>
       }
       chartData={chartData}
@@ -804,9 +794,9 @@ function XirrCalculator() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
-        <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Cash Flows</h2>
-        <p className="text-xs text-slate-600 dark:text-slate-500 -mt-2">
+      <div className="bg-surface rounded-2xl border border-line p-6 space-y-4">
+        <h2 className="text-lg font-semibold text-ink">Cash Flows</h2>
+        <p className="text-xs text-muted -mt-2">
           Enter each investment as a negative amount on the date you invested.
         </p>
         {flows.map((f) => (
@@ -827,7 +817,7 @@ function XirrCalculator() {
             <button
               onClick={() => removeFlow(f.id)}
               disabled={flows.length === 1}
-              className="text-slate-600 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-30 shrink-0 text-sm px-2"
+              className="text-muted hover:text-red-500 dark:hover:text-red-400 disabled:opacity-30 shrink-0 text-sm px-2"
             >
               ✕
             </button>
@@ -837,7 +827,7 @@ function XirrCalculator() {
           + Add cash flow
         </button>
 
-        <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3">
+        <div className="pt-2 border-t border-line-soft space-y-3">
           <Field label="Current Value (positive)">
             <input
               type="number"
@@ -857,13 +847,13 @@ function XirrCalculator() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
-        <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Result</h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400">Annualized Return (XIRR)</p>
+      <div className="bg-surface rounded-2xl border border-line p-6 space-y-4">
+        <h2 className="text-lg font-semibold text-ink">Result</h2>
+        <p className="text-sm text-muted">Annualized Return (XIRR)</p>
         <p className="text-2xl font-bold text-brand-600 dark:text-brand-300">
           {rate !== null ? `${(rate * 100).toFixed(2)}%` : '—'}
         </p>
-        <p className="text-xs text-slate-600 dark:text-slate-500">
+        <p className="text-xs text-muted">
           Based on the timing and size of each cash flow entered, plus the current value.
         </p>
       </div>
@@ -916,7 +906,7 @@ function SwpCalculator() {
     <CalcShell
       inputs={
         <>
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Withdrawal Plan</h2>
+          <h2 className="text-lg font-semibold text-ink">Withdrawal Plan</h2>
           <Field label="Starting Corpus">
             <input type="number" value={corpus} onChange={(e) => setCorpus(e.target.value)} className={inputClass} />
           </Field>
@@ -948,17 +938,17 @@ function SwpCalculator() {
       }
       result={
         <>
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Result</h2>
+          <h2 className="text-lg font-semibold text-ink">Result</h2>
           {depleted ? (
             <>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Corpus lasts</p>
+              <p className="text-sm text-muted">Corpus lasts</p>
               <p className="text-2xl font-bold text-brand-600 dark:text-brand-300">{lastsYears} years</p>
             </>
           ) : (
             <>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Balance after 50 years</p>
+              <p className="text-sm text-muted">Balance after 50 years</p>
               <p className="text-2xl font-bold text-brand-600 dark:text-brand-300">{formatCurrency(endingBalance)}</p>
-              <p className="text-xs text-slate-600 dark:text-slate-500">
+              <p className="text-xs text-muted">
                 Your corpus outlasts the 50-year projection window at this withdrawal rate.
               </p>
             </>
@@ -1037,7 +1027,7 @@ function RetirementCalculator() {
     <CalcShell
       inputs={
         <>
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Your Plan</h2>
+          <h2 className="text-lg font-semibold text-ink">Your Plan</h2>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Current Age">
               <input type="number" value={currentAge} onChange={(e) => setCurrentAge(e.target.value)} className={inputClass} />
@@ -1085,18 +1075,18 @@ function RetirementCalculator() {
       }
       result={
         <>
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Result</h2>
+          <h2 className="text-lg font-semibold text-ink">Result</h2>
           <div className="grid grid-cols-1 gap-4">
             <div>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Corpus Needed at Retirement</p>
+              <p className="text-sm text-muted">Corpus Needed at Retirement</p>
               <p className="text-xl font-bold text-brand-600 dark:text-brand-300">{formatCurrency(corpusNeeded)}</p>
             </div>
             <div>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Monthly SIP Required</p>
-              <p className="text-xl font-bold text-slate-900 dark:text-white">{formatCurrency(requiredSip)}</p>
+              <p className="text-sm text-muted">Monthly SIP Required</p>
+              <p className="text-xl font-bold text-ink">{formatCurrency(requiredSip)}</p>
             </div>
           </div>
-          <p className="text-xs text-slate-600 dark:text-slate-500">
+          <p className="text-xs text-muted">
             Corpus balance through retirement, assuming expenses keep rising with inflation, below.
           </p>
         </>
@@ -1109,11 +1099,10 @@ function RetirementCalculator() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1 block">{label}</span>
+      <span className="text-sm font-medium text-muted mb-1 block">{label}</span>
       {children}
     </label>
   );
 }
 
-const inputClass =
-  'w-full border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-brand-500';
+const inputClass = inputClasses;

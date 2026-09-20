@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Wallet,
@@ -10,82 +10,114 @@ import {
   Smartphone,
   Lock,
   LineChart,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import { useAppLockStore } from '../store/appLockStore';
+import { useAuthStore } from '../store/authStore';
+import { useAvatarStore } from '../store/avatarStore';
+import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
+import { useUiStore } from '../store/uiStore';
 import ProfileSwitcher from './ProfileSwitcher';
 import AppLogo from './AppLogo';
 
-const mainLinks = [
-  { to: '/', label: 'Overview', icon: LayoutDashboard },
-  { to: '/wealth', label: 'Wealth', icon: Wallet, end: true },
-  { to: '/wealth/performance', label: 'Performance', icon: LineChart },
-  { to: '/transactions', label: 'Money', icon: Receipt },
-  { to: '/essentials', label: 'Essentials', icon: Target },
+type NavLinkDef = { to: string; label: string; icon: typeof LayoutDashboard; end?: boolean };
+
+// Grouped by what the person is doing, not by how the app is built.
+const groups: { label: string; links: NavLinkDef[] }[] = [
+  {
+    label: 'Portfolio',
+    links: [
+      { to: '/', label: 'Overview', icon: LayoutDashboard },
+      { to: '/wealth', label: 'Wealth', icon: Wallet, end: true },
+      { to: '/wealth/performance', label: 'Performance', icon: LineChart },
+    ],
+  },
+  {
+    label: 'Money & planning',
+    links: [
+      { to: '/transactions', label: 'Money', icon: Receipt },
+      { to: '/essentials', label: 'Essentials', icon: Target },
+    ],
+  },
+  {
+    label: 'Tools',
+    links: [
+      { to: '/import', label: 'Import', icon: FileUp },
+      { to: '/calculators', label: 'Calculators', icon: Calculator },
+    ],
+  },
 ];
 
-const toolLinks = [
-  { to: '/import', label: 'Import', icon: FileUp },
-  { to: '/calculators', label: 'Calculators', icon: Calculator },
+const accountLinks: NavLinkDef[] = [
   { to: '/settings', label: 'Settings', icon: Settings },
+  { to: '/install', label: 'Install app', icon: Smartphone },
 ];
 
-const utilityLinks = [
-  { to: '/install', label: 'Install App', icon: Smartphone },
-];
-
-function NavItem({
-  to,
-  label,
-  icon: Icon,
-  end,
-}: {
-  to: string;
-  label: string;
-  icon: typeof LayoutDashboard;
-  end?: boolean;
-}) {
+function NavItem({ to, label, icon: Icon, end }: NavLinkDef) {
   return (
     <NavLink
       to={to}
       end={end ?? to === '/'}
+      title={label}
       className={({ isActive }) =>
-        `flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-150 ${
+        `sb-item flex items-center gap-2.5 h-9 px-2.5 rounded-lg text-[14px] font-medium transition-colors duration-150 ${
           isActive
-            ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300'
-            : 'text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+            ? 'bg-primary-soft text-primary-ink'
+            : 'text-slate-600 hover:bg-surface-hover hover:text-ink'
         }`
       }
     >
-      {({ isActive }) => (
-        <>
-          <Icon size={18} strokeWidth={isActive ? 2.25 : 1.75} />
-          {label}
-        </>
-      )}
+      <Icon size={18} strokeWidth={1.75} className="shrink-0" />
+      <span className="sb-label truncate">{label}</span>
     </NavLink>
+  );
+}
+
+/** Shown under the logo when the account has no household profiles yet. */
+function AccountChip() {
+  const user = useAuthStore((s) => s.user);
+  const avatarUrl = useAvatarStore((s) => s.dataUrl) ?? user?.photoURL ?? null;
+  const navigate = useNavigate();
+  const name = user?.displayName ?? user?.email ?? 'Your account';
+  const initial = name.charAt(0).toUpperCase();
+  return (
+    <button
+      type="button"
+      onClick={() => navigate('/settings')}
+      title={name}
+      className="sb-chip w-full h-10 flex items-center gap-2.5 px-2.5 rounded-lg border border-line bg-surface text-sm font-medium text-ink hover:bg-surface-hover transition-colors"
+    >
+      {avatarUrl ? (
+        <img src={avatarUrl} alt="" className="h-5 w-5 rounded-md object-cover shrink-0" referrerPolicy="no-referrer" />
+      ) : (
+        <span className="h-5 w-5 rounded-md shrink-0 flex items-center justify-center text-[11px] font-semibold text-white bg-brand-600">
+          {initial}
+        </span>
+      )}
+      <span className="sb-label truncate flex-1 text-left">{name}</span>
+    </button>
   );
 }
 
 export default function Sidebar() {
   const lockEnabled = useAppLockStore((s) => s.enabled);
   const lockNow = useAppLockStore((s) => s.lockNow);
+  const hasProfiles = useHouseholdProfilesStore((s) => s.profiles.length > 0);
+  const collapsed = useUiStore((s) => s.sidebarCollapsed);
+  const toggleSidebar = useUiStore((s) => s.toggleSidebar);
 
   return (
     <aside
-      className="
-        hidden md:flex md:sticky top-0 left-0
-        flex-col w-60 shrink-0 h-screen
-        border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900
-        px-4 py-5
-      "
+      style={{ width: 'var(--sb-w)' }}
+      className="hidden md:flex md:sticky top-0 left-0 flex-col shrink-0 h-screen border-r border-line bg-surface px-3 py-4 transition-[width] duration-200"
     >
-      <div className="px-1 mb-7 flex items-center justify-between gap-2">
+      {/* Brand */}
+      <div className="h-9 mb-4 px-1 flex items-center justify-between gap-2">
         <span className="flex items-center gap-2.5 min-w-0">
-          <AppLogo className="w-9 h-9 rounded-full shrink-0" />
-          <span className="font-luxury text-[20px] font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-1.5 min-w-0">
-            <span className="truncate">
-              Aurafin<span className="text-brand-600">.</span>
-            </span>
+          <AppLogo className="w-7 h-7 rounded-full" />
+          <span className="sb-label font-luxury text-[17px] text-ink truncate">
+            Aurafin<span className="text-brand-600">.</span>
           </span>
         </span>
         {lockEnabled && (
@@ -94,50 +126,59 @@ export default function Sidebar() {
             onClick={lockNow}
             title="Lock Aurafin now"
             aria-label="Lock Aurafin now"
-            className="tap-scale h-8 w-8 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 shrink-0"
+            className="sb-label tap-scale h-8 w-8 flex items-center justify-center rounded-lg text-muted hover:bg-surface-hover hover:text-ink shrink-0"
           >
             <Lock size={16} />
           </button>
         )}
       </div>
 
-      <ProfileSwitcher />
+      {/* Profile / account selector */}
+      <div className="mb-5">{hasProfiles ? <ProfileSwitcher /> : <AccountChip />}</div>
 
-      <nav className="flex flex-col gap-0.5">
-        {mainLinks.map((link) => (
-          <NavItem key={link.to} {...link} />
+      {/* Navigation */}
+      <div className="flex-1 overflow-y-auto no-scrollbar -mx-1 px-1 space-y-4">
+        {groups.map((g) => (
+          <nav key={g.label} aria-label={g.label}>
+            <p className="sb-label px-2.5 mb-1 text-xs font-medium text-faint">{g.label}</p>
+            <div className="sb-rail-only h-px bg-line-soft mx-2 mb-2" />
+            <div className="flex flex-col gap-0.5">
+              {g.links.map((link) => (
+                <NavItem key={link.to} {...link} />
+              ))}
+            </div>
+          </nav>
         ))}
-      </nav>
+      </div>
 
-      <div className="flex-1" />
-
-      <div className="mt-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-        <p className="px-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600 mb-1.5">
-          Tools
-        </p>
-        <nav className="flex flex-col gap-0.5">
-          {toolLinks.map((link) => (
+      {/* Account */}
+      <div className="pt-3 mt-3 border-t border-line-soft">
+        <nav aria-label="Account" className="flex flex-col gap-0.5">
+          {accountLinks.map((link) => (
             <NavItem key={link.to} {...link} />
           ))}
         </nav>
-      </div>
 
-      <nav className="flex flex-col gap-0.5 pt-2 mt-2 border-t border-slate-100 dark:border-slate-800">
-        {utilityLinks.map((link) => (
-          <NavItem key={link.to} {...link} />
-        ))}
-      </nav>
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          className="sb-item hidden lg:flex mt-1 w-full items-center gap-2.5 h-9 px-2.5 rounded-lg text-[14px] font-medium text-muted hover:bg-surface-hover hover:text-ink transition-colors"
+        >
+          {collapsed ? <PanelLeftOpen size={18} strokeWidth={1.75} /> : <PanelLeftClose size={18} strokeWidth={1.75} />}
+          <span className="sb-label">Collapse</span>
+        </button>
 
-      <div className="px-2.5 pt-3 mt-2 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-500">
-        <p>
+        <p className="sb-label px-2.5 pt-3 text-xs text-faint leading-relaxed">
           Developed by Bhuvanesh S ·{' '}
           <a
             href="https://www.linkedin.com/in/bhuvaneshs07"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-brand-600 dark:text-brand-400 hover:underline font-medium"
+            className="text-primary-ink hover:underline font-medium"
           >
-            Contact us
+            Contact
           </a>
         </p>
       </div>

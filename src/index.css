@@ -1,22 +1,39 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Playfair+Display:ital,wght@0,500;0,600;0,700;0,800;1,600&display=swap');
+/* Inter (the app's only typeface) is loaded by a <link> in index.html — a CSS
+   @import can't work here because Tailwind's layers precede it. */
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-@theme {
-  /* ---- Brand scale — restored to the original muted forest-green ---- */
-  --color-brand-50: #f0f6f2;
-  --color-brand-100: #dbe9e0;
-  --color-brand-200: #b8d4c3;
-  --color-brand-300: #8bb89e;
-  --color-brand-400: #5c9877;
-  --color-brand-500: #3d7a5a;
-  --color-brand-600: #2c6e49;
-  --color-brand-700: #24573c;
-  --color-brand-800: #1f4d3d;
-  --color-brand-900: #163a2c;
+/* ==========================================================================
+   AURAFIN DESIGN TOKENS
+   --------------------------------------------------------------------------
+   Everything visual hangs off this one @theme block. The app's existing
+   utility classes (`slate-*`, `brand-*`, `cream-*`, `rounded-2xl`,
+   `font-bold`, `shadow-sm`, …) all resolve to these tokens, so changing a
+   value here restyles every page at once.
 
-  /* Blue accent — used sparingly for links, informational states, secondary charts */
+   Two ways to consume them:
+   1. Semantic tokens (new code)   → bg-surface, text-ink, border-line,
+      text-positive …  These flip automatically in dark mode (see `.dark`
+      overrides further down), so no `dark:` variants are needed.
+   2. Scale tokens (existing code) → slate-*, brand-* …  Unchanged names.
+   ========================================================================== */
+@theme {
+  /* ---- Brand green -------------------------------------------------------
+     Professional finance green. 600 is the primary action colour (white text
+     on it is 5.3:1 — AA). */
+  --color-brand-50: #eef6f1;
+  --color-brand-100: #d9ebe0;
+  --color-brand-200: #b4d6c2;
+  --color-brand-300: #86bb9c;
+  --color-brand-400: #52a077;
+  --color-brand-500: #2f8558;
+  --color-brand-600: #247a4d;
+  --color-brand-700: #1d6440;
+  --color-brand-800: #175033;
+  --color-brand-900: #113c26;
+
+  /* Blue accent — links, informational states, secondary chart series. */
   --color-accent-50: #eff6ff;
   --color-accent-100: #dbeafe;
   --color-accent-200: #bfdbfe;
@@ -28,14 +45,50 @@
   --color-accent-800: #1e40af;
   --color-accent-900: #1e3a8a;
 
-  /* Semantic status colors */
-  --color-success-500: #22c55e;
-  --color-warning-500: #f59e0b;
-  --color-danger-500: #dc2626;
+  /* Status colours. */
+  --color-success-500: #22935a;
+  --color-warning-500: #b7791f;
+  --color-danger-500: #d1382f;
 
-  /* Gold — reserved for the Aurafin Pro experience: Crown icons, PRO
-     badges, the pricing card, and the Pro page. Not used anywhere else,
-     so it stays a clear, consistent signal for "this is a Pro feature". */
+  /* Existing code reaches for Tailwind's emerald/red directly for P&L.
+     Re-pointing those two scales here gives every profit/loss figure in the
+     app a darker, higher-contrast, more "financial" tone without touching a
+     single call site (stock emerald-600 on white is only ~3.7:1). */
+  --color-emerald-50: #edf7f1;
+  --color-emerald-100: #d6ecdf;
+  --color-emerald-200: #b0dbc2;
+  --color-emerald-400: #4cb27f;
+  --color-emerald-500: #22935a;
+  --color-emerald-600: #1b7f4b;
+  --color-emerald-700: #17663c;
+  --color-emerald-900: #0f3d25;
+  --color-red-50: #fdf2f1;
+  --color-red-100: #fbe0de;
+  --color-red-200: #f6c2be;
+  --color-red-300: #ef9a94;
+  --color-red-400: #e26a62;
+  --color-red-500: #d1382f;
+  --color-red-600: #b82f27;
+  --color-red-700: #96261f;
+  --color-red-900: #5c1a16;
+
+  /* Warning / caution tones: muted, not neon. */
+  --color-amber-50: #fdf6e7;
+  --color-amber-100: #f9e9c4;
+  --color-amber-200: #f1d38f;
+  --color-amber-300: #e6b95a;
+  --color-amber-400: #d9a23a;
+  --color-amber-500: #c48a1c;
+  --color-amber-600: #a56f10;
+  --color-amber-700: #85570f;
+  --color-orange-50: #fdf3ea;
+  --color-orange-100: #fae0c8;
+  --color-orange-400: #e08a4a;
+  --color-orange-500: #cf7431;
+  --color-orange-600: #b25f24;
+  --color-orange-700: #8f4b1d;
+
+  /* Gold — reserved for the Aurafin Pro experience only. */
   --color-gold-50: #fffbeb;
   --color-gold-100: #fef3c7;
   --color-gold-200: #fde68a;
@@ -47,154 +100,189 @@
   --color-gold-800: #6b4e0a;
   --color-gold-900: #4a360a;
 
-  /* Surfaces — cards stay pure white; the page background now carries a
-     slight warm sandal tint instead of a flat neutral gray, per request.
-     Reused as `bg-cream-*` across the app so this applies everywhere with
-     no per-file changes. */
+  /* Page + surface neutrals — a very light warm gray page behind pure white
+     cards. `bg-cream-100` is the page background everywhere it's used. */
   --color-cream-50: #ffffff;
-  --color-cream-100: #faf7f1;
-  --color-cream-200: #f5efe2;
-  --color-cream-300: #ecdfc7;
+  --color-cream-100: #f7f7f5;
+  --color-cream-200: #f0f0ec;
+  --color-cream-300: #e5e5e0;
 
-  /* Sandal — restored to the original warm tan/beige scale (used by the
-     lock-screen keypad, and now lightly echoed in the page background above). */
-  --color-sandal-50: #faf5ec;
-  --color-sandal-100: #f2e6d1;
-  --color-sandal-200: #e6cea8;
-  --color-sandal-300: #dab982;
-  --color-sandal-400: #c9a06b;
-  --color-sandal-500: #b98a4f;
-  --color-sandal-600: #9c723e;
-  --color-sandal-700: #7d5b33;
-  --color-sandal-800: #644a2c;
-  --color-sandal-900: #503d26;
+  /* Sandal is only used by the lock-screen keypad now. */
+  --color-sandal-50: #faf8f3;
+  --color-sandal-100: #f1ede2;
+  --color-sandal-200: #e3dcc8;
+  --color-sandal-300: #d3c8a9;
+  --color-sandal-400: #bfaf88;
+  --color-sandal-500: #a89468;
+  --color-sandal-600: #8c7a52;
+  --color-sandal-700: #6f6142;
+  --color-sandal-800: #574c35;
+  --color-sandal-900: #453d2c;
 
-  /* Inter everywhere — including the numeric/display/brand-wordmark roles
-     that previously used a monospace stack or a serif. Tabular numerals
-     are preserved via font-feature-settings on the numeric utility classes
-     below, not via a different typeface. */
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-display: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-numeric: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-hero-numeric: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-luxury: "Playfair Display", "Georgia", "Times New Roman", serif;
-
-  /* Neutral grayscale (light: background #FAFAFA / cards #FFFFFF / primary
-     text #111827 / secondary text #6B7280 / borders #E5E7EB). Reusing
-     Tailwind's `slate-*` scale as the token surface — as before — means
-     every existing `text-slate-500`, `border-slate-200`,
-     `dark:bg-slate-900`, etc. across the app automatically renders the new
-     palette without touching each component. */
-  --color-slate-50: #fafafa;
-  --color-slate-100: #f4f4f5;
-  --color-slate-200: #e5e7eb;
-  --color-slate-300: #d1d5db;
-  --color-slate-400: #9ca3af;
+  /* Neutral scale. Existing `text-slate-500`, `border-slate-200`,
+     `bg-slate-50` … all resolve here. Slightly warm to sit on the warm page. */
+  --color-slate-50: #fafaf8;
+  --color-slate-100: #f3f3f0;
+  --color-slate-200: #e5e5e0;
+  --color-slate-300: #d3d3cc;
+  --color-slate-400: #9a9a94;
   --color-slate-500: #6b7280;
-  --color-slate-600: #4b5563;
-  --color-slate-700: #374151;
-  --color-slate-800: #1f2937;
-  --color-slate-900: #111827;
-  --color-slate-950: #0a0b0d;
+  --color-slate-600: #52565e;
+  --color-slate-700: #3a3d43;
+  --color-slate-800: #262626;
+  --color-slate-900: #171717;
+  --color-slate-950: #0d0d0c;
+
+  /* ---- Semantic tokens (flip in dark mode) ------------------------------- */
+  --color-page: #f7f7f5;
+  --color-surface: #ffffff;
+  --color-surface-muted: #faf9f7;
+  --color-surface-hover: #f5f5f2;
+  --color-line: #e5e5e0;
+  --color-line-soft: #eeeeea;
+  --color-ink: #171717;
+  --color-ink-2: #3a3d43;
+  --color-muted: #6b7280;
+  --color-faint: #9a9a94;
+  --color-primary: #247a4d;
+  --color-primary-hover: #1d6440;
+  --color-primary-ink: #247a4d;
+  --color-primary-soft: #eef6f1;
+  --color-positive: #1b7f4b;
+  --color-positive-soft: #edf7f1;
+  --color-negative: #c93a32;
+  --color-negative-soft: #fdf2f1;
+  --color-warning: #a8690f;
+  --color-warning-soft: #fdf6e7;
+
+  /* ---- Typography --------------------------------------------------------
+     One family. Numerics are Inter too, with tabular figures switched on by
+     the .font-numeric utility below (not by a different typeface). */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--font-sans);
+  --font-numeric: var(--font-sans);
+  --font-hero-numeric: var(--font-sans);
+  --font-luxury: var(--font-sans);
+
+  /* Weight ladder: 400 body · 500 nav/labels/table · 600 headings/values ·
+     700 major headings only. Anything that used `font-bold` now renders at
+     600; `font-extrabold`/`font-black` map to 700. */
+  --font-weight-bold: 600;
+  --font-weight-extrabold: 700;
+  --font-weight-black: 700;
+
+  /* Type scale (rem; root is 17px × the user's Screen-size setting, so
+     `text-sm` lands at ≈14px in the content column). Large sizes are pulled
+     in so nothing shouts. */
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 1.75rem;
+  --text-3xl: 1.625rem;
+  --text-3xl--line-height: 2rem;
+  --text-4xl: 1.875rem;
+  --text-4xl--line-height: 2.25rem;
+  --text-5xl: 2.125rem;
+  --text-5xl--line-height: 2.5rem;
+
+  /* ---- Shape ------------------------------------------------------------- */
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem; /* controls  — buttons, inputs, menus items (8px) */
+  --radius-xl: 0.625rem; /* small panels, popovers (10px) */
+  --radius-2xl: 0.75rem; /* cards (12px) */
+  --radius-3xl: 0.875rem; /* modals / large sheets (14px) */
+
+  /* ---- Elevation: borders do most of the work; shadows are barely there --- */
+  --shadow-xs: 0 1px 2px 0 rgb(23 23 23 / 0.04);
+  --shadow-sm: 0 1px 2px 0 rgb(23 23 23 / 0.05);
+  --shadow-md: 0 2px 6px -1px rgb(23 23 23 / 0.07), 0 1px 2px -1px rgb(23 23 23 / 0.04);
+  --shadow-lg: 0 8px 24px -6px rgb(23 23 23 / 0.12), 0 2px 6px -2px rgb(23 23 23 / 0.06);
+  --shadow-xl: 0 16px 40px -10px rgb(23 23 23 / 0.16), 0 4px 10px -4px rgb(23 23 23 / 0.06);
+  --shadow-2xl: 0 24px 56px -14px rgb(23 23 23 / 0.22);
+
+  /* ---- Layout ------------------------------------------------------------ */
+  --spacing-sidebar: 14.5rem; /* `w-sidebar` / `left-sidebar` */
+  --spacing-header: 3.5rem; /* `h-header` */
 }
 
+/* Fixed component radii referenced by the global rules below. */
+:root {
+  --radius-card: var(--radius-2xl);
+  --radius-control: var(--radius-lg);
+  --radius-modal: var(--radius-3xl);
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur-fast: 150ms;
+  --dur-base: 200ms;
+}
+
+/* ---- Dark theme --------------------------------------------------------------
+   Warm charcoal rather than pure black: page < surface < raised. The slate
+   scale is re-pointed too, so existing `dark:bg-slate-900` cards,
+   `dark:border-slate-800` borders and `dark:bg-slate-800` hover fills all
+   pick up the new neutrals. `slate-500/600` (used for secondary text that
+   has no explicit dark variant) are lifted so helper text stays legible. */
+.dark {
+  --color-page: #0d0d0c;
+  --color-surface: #151514;
+  --color-surface-muted: #1a1a18;
+  --color-surface-hover: #1f1f1d;
+  --color-line: #2a2a27;
+  --color-line-soft: #21211f;
+  --color-ink: #f4f4f1;
+  --color-ink-2: #d6d6d0;
+  --color-muted: #a1a19a;
+  --color-faint: #74746e;
+  --color-primary: #2f8f5b;
+  --color-primary-hover: #37a168;
+  --color-primary-ink: #7fcea0;
+  --color-primary-soft: rgb(47 143 91 / 0.16);
+  --color-positive: #4cc286;
+  --color-positive-soft: rgb(76 194 134 / 0.14);
+  --color-negative: #f0817a;
+  --color-negative-soft: rgb(240 129 122 / 0.14);
+  --color-warning: #e3ac52;
+  --color-warning-soft: rgb(227 172 82 / 0.14);
+
+  --color-slate-950: #0d0d0c;
+  --color-slate-900: #151514;
+  --color-slate-800: #232321;
+  --color-slate-700: #34342f;
+  --color-slate-600: #a1a19a;
+  --color-slate-500: #a1a19a;
+  --color-slate-400: #74746e;
+  --color-emerald-600: #4cc286;
+  --color-emerald-500: #4cc286;
+  --color-red-500: #f0817a;
+  --color-red-600: #f0817a;
+}
+
+/* ==========================================================================
+   BASE
+   ========================================================================== */
 html {
   font-size: 17px;
   scroll-behavior: smooth;
-}
-
-/* Shrinks the page content area (topbar + routed page) a notch so more
-   fits on screen, while leaving the Sidebar and BottomNav (the actual
-   navigation bar) at their normal size — `zoom` scales layout without
-   touching the root font-size that the nav bars' rem-based sizing reads
-   from, so this stays scoped to the content column only. */
-.app-scale {
-  zoom: var(--app-zoom, 0.87);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   font-family: var(--font-sans);
+  font-optical-sizing: auto;
+  font-weight: 400;
+  color: var(--color-ink);
+  background-color: var(--color-page);
   -webkit-font-smoothing: antialiased;
-  background-color: var(--color-cream-100);
-}
-
-.dark body {
-  /* Gray-black page background — sits behind cards, which use pure black
-     (see --color-slate-900 override below) so surfaces read as a clear
-     step lighter than the page itself. */
-  background-color: #0a0a0a;
-}
-
-/* Card/surface backgrounds across the app reuse dark:bg-slate-900 —
-   overriding the token here (scoped to .dark) turns every card, sidebar,
-   topbar, and modal in dark mode pure black without touching each
-   component. Borders/secondary fills stay on slate-800 so edges and
-   nested chips remain visible against the black surface. */
-.dark {
-  --color-slate-900: #000000;
-}
-
-.font-display {
-  font-family: var(--font-display);
-}
-
-/* Premium bold numeric styling — applied to all money amounts, scores, and percentages */
-.font-numeric {
-  font-family: var(--font-numeric);
-  font-weight: 700;
-  font-feature-settings: "tnum" 1, "lnum" 1;
-  font-variant-numeric: tabular-nums lining-nums;
-  letter-spacing: 0.01em;
-}
-
-/* Dashboard hero figures (Net Worth, Invested). Uses the same Consolas
-   monospace stack as everything else — kept as a separate class so the
-   size/weight can still be tuned independently of body numerics. */
-.font-hero-numeric {
-  font-family: var(--font-hero-numeric);
-  font-weight: 700;
-  font-feature-settings: "tnum" 1, "lnum" 1;
-  font-variant-numeric: tabular-nums lining-nums;
-  letter-spacing: 0.01em;
-}
-
-/* Reserved for the "Aurafin" brand name wherever it appears in the UI —
-   an elegant serif in place of the app's default sans-serif, for a more
-   luxury feel. Applied only to the brand word itself, never body copy. */
-.font-luxury {
-  font-family: var(--font-luxury);
-  font-weight: 700;
-  letter-spacing: 0.005em;
-  font-style: normal;
-}
-
-/* Hero amounts (Net Worth, Invested, etc.) — premium bold, flat ink color.
-   No gradients/glow per the fintech redesign spec; the weight and tabular
-   figures do the work of making these numbers feel important. */
-.number-premium {
-  font-family: var(--font-numeric);
-  font-weight: 700;
-  font-feature-settings: "tnum" 1, "lnum" 1;
-  font-variant-numeric: tabular-nums lining-nums;
-  letter-spacing: -0.01em;
-  color: var(--color-slate-900);
-}
-
-.dark .number-premium {
-  color: #f4f4f5;
-}
-
-/* ---- Mobile performance & touch tuning (120fps target) ---- */
-html {
-  -webkit-tap-highlight-color: transparent;
-}
-
-body {
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   /* NOTE: don't set overscroll-behavior-y: none here — it silently disables
-     the browser's native pull-to-refresh gesture on mobile Chrome/Safari.
-     `auto` (the default) keeps that working while individual scrollable
-     overlays (modals, sheets) can still opt out with their own rule. */
+     the browser's native pull-to-refresh gesture on mobile Chrome/Safari. */
   touch-action: manipulation;
+}
+
+/* Scales the content column (top header + routed page) by the user's
+   Settings → Screen size. `zoom` scales layout without touching the root
+   font-size the sidebar/bottom-nav read from, so it stays scoped. */
+.app-scale {
+  zoom: var(--app-zoom, 0.95);
 }
 
 button,
@@ -202,9 +290,7 @@ a {
   touch-action: manipulation;
 }
 
-/* Tailwind's base reset leaves native <button> at the default arrow cursor
-   (only <a> gets a pointer automatically) — scoped narrowly to real
-   interactive elements so plain text/containers are never affected. */
+/* Tailwind's reset leaves <button> at the default arrow cursor. */
 button:not(:disabled),
 [role="button"]:not([aria-disabled="true"]),
 input[type="button"]:not(:disabled),
@@ -212,15 +298,50 @@ input[type="submit"]:not(:disabled),
 label[for] {
   cursor: pointer;
 }
-
 button:disabled,
 [role="button"][aria-disabled="true"] {
   cursor: not-allowed;
 }
 
-/* Native date inputs default to a chunky, oddly-inset calendar icon in
-   Chrome/Safari that clashes with our rounded field styling — trim it down
-   to a small icon that sits cleanly inside the field instead. */
+/* One consistent radius for every interactive control. Fully round things
+   (avatars, dots, the mobile FAB) opt back in with `.keep-round`. */
+button,
+input,
+select,
+textarea {
+  border-radius: var(--radius-control);
+}
+
+/* Focus: keyboard users always get a clear ring; form fields get the green
+   border + soft ring on any focus. Unlayered on purpose so it wins over the
+   assorted per-field utility classes and keeps every field consistent. */
+:where(a, button, [role="button"], summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+}
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--color-brand-600);
+  box-shadow: 0 0 0 3px rgb(36 122 77 / 0.16);
+}
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):focus,
+.dark select:focus,
+.dark textarea:focus {
+  border-color: var(--color-brand-400);
+  box-shadow: 0 0 0 3px rgb(82 160 119 / 0.22);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-slate-400);
+}
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--color-brand-600);
+}
+
+/* Native date inputs: trim Chrome/Safari's chunky calendar icon. */
 input[type="date"] {
   -webkit-appearance: none;
   appearance: none;
@@ -241,104 +362,224 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   filter: invert(1);
   opacity: 0.6;
 }
-.dark input[type="date"]::-webkit-calendar-picker-indicator:hover {
-  opacity: 0.9;
+
+/* Slim, quiet scrollbars where the browser draws them. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-slate-300) transparent;
+}
+.dark * {
+  scrollbar-color: var(--color-slate-700) transparent;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
-/* GPU-composited (transform/opacity only) animations — avoids layout/paint jank */
+::selection {
+  background: rgb(36 122 77 / 0.2);
+}
+
+/* ==========================================================================
+   TYPOGRAPHY UTILITIES
+   In the components layer so an explicit `font-medium`/`font-normal` on the
+   same element still wins (an unlayered rule would silently beat it).
+   ========================================================================== */
+@layer components {
+  .font-display {
+    font-family: var(--font-display);
+  }
+
+  /* Money, percentages, scores: Inter with tabular lining figures so columns
+     of numbers line up, at the "values" weight. */
+  .font-numeric,
+  .font-hero-numeric {
+    font-family: var(--font-numeric);
+    font-weight: 600;
+    font-feature-settings: "tnum" 1, "lnum" 1;
+    font-variant-numeric: tabular-nums lining-nums;
+    letter-spacing: -0.005em;
+  }
+
+  /* The wordmark: still Inter, just a touch tighter. */
+  .font-luxury {
+    font-family: var(--font-luxury);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    font-style: normal;
+  }
+
+  .number-premium {
+    font-family: var(--font-numeric);
+    font-weight: 600;
+    font-feature-settings: "tnum" 1, "lnum" 1;
+    font-variant-numeric: tabular-nums lining-nums;
+    letter-spacing: -0.01em;
+    color: var(--color-ink);
+  }
+
+  /* Table headers: small, medium weight, quiet. */
+  .th-label {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: var(--color-muted);
+  }
+}
+
+/* ==========================================================================
+   SURFACES & CONTROLS (legacy class names kept so existing markup restyles)
+   ========================================================================== */
+.card,
+.keep-round-card {
+  border-radius: var(--radius-card) !important;
+}
+
+.keep-round {
+  border-radius: 9999px !important;
+}
+/* Underline tabs need square corners so the active border is a straight line. */
+.keep-square {
+  border-radius: 0 !important;
+}
+
+.shadow-soft {
+  box-shadow: var(--shadow-xs);
+}
+.shadow-soft-md {
+  box-shadow: var(--shadow-sm);
+}
+
+/* Formerly a chunky "push-down" button. Now a flat, quiet press state. */
+.btn-press {
+  transition: background-color var(--dur-fast) ease, opacity var(--dur-fast) ease;
+}
+.btn-press:active {
+  opacity: 0.92;
+}
+
+/* Floating "+" (mobile). A true circle is appropriate for a FAB. */
+.fab-button {
+  border-radius: 9999px !important;
+  background: var(--color-brand-600);
+  box-shadow: 0 2px 8px rgb(17 60 38 / 0.22);
+  transition: background-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
+}
+.fab-button:hover {
+  background: var(--color-brand-700);
+}
+.fab-button:active {
+  background: var(--color-brand-800);
+}
+.fab-icon {
+  transition: transform var(--dur-base) var(--ease-out);
+}
+.fab-button.fab-open .fab-icon {
+  transform: rotate(45deg);
+}
+
+/* Small round floating utility buttons (privacy toggle). */
+.mini-fab {
+  border-radius: 9999px !important;
+  transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease;
+}
+.mini-fab:hover {
+  box-shadow: var(--shadow-md);
+}
+
+/* Quiet outlined round icon button (close buttons, edit-photo). Was a heavy
+   2px green ring; now a hairline that only picks up green on hover. */
+.icon-outline-green {
+  border-radius: 9999px !important;
+  border: 1px solid var(--color-line);
+  color: var(--color-slate-600);
+  background: var(--color-surface);
+  transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease;
+}
+.dark .icon-outline-green {
+  color: var(--color-slate-300);
+}
+.icon-outline-green:hover {
+  background: var(--color-brand-50);
+  color: var(--color-brand-700);
+  border-color: var(--color-brand-200);
+}
+.dark .icon-outline-green:hover {
+  background: var(--color-primary-soft);
+  color: var(--color-primary-ink);
+  border-color: var(--color-brand-700);
+}
+
+/* Tap feedback: a whisper of scale, not a squish. */
+.tap-scale {
+  transition: transform 100ms var(--ease-out), background-color var(--dur-fast) ease,
+    color var(--dur-fast) ease;
+}
+.tap-scale:active {
+  transform: scale(0.98);
+}
+
+/* ==========================================================================
+   MOTION — 150–200ms, opacity/transform only, no bounce/3D/flip.
+   ========================================================================== */
 @keyframes menu-in {
   from {
     opacity: 0;
-    transform: translate3d(0, -6px, 0) scale(0.96);
+    transform: translate3d(0, -4px, 0);
   }
   to {
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
+    transform: translate3d(0, 0, 0);
   }
 }
-
 .animate-menu-in {
-  animation: menu-in 140ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: menu-in var(--dur-fast) var(--ease-out);
   transform-origin: top right;
-  will-change: transform, opacity;
 }
 
-/* 3D pop-in for the FAB's quick-add menu card — tilts in with depth,
-   matching the button's own 3D feel, instead of a flat fade/slide. */
+/* Formerly a 3D tilt-in; now the same quiet rise as every other menu. */
 @keyframes menu-in-3d {
   from {
     opacity: 0;
-    transform: perspective(900px) rotateX(-18deg) translateY(14px) scale(0.9);
+    transform: translate3d(0, 6px, 0);
   }
   to {
     opacity: 1;
-    transform: perspective(900px) rotateX(0deg) translateY(0) scale(1);
+    transform: translate3d(0, 0, 0);
   }
+}
+.animate-menu-in-3d {
+  animation: menu-in-3d var(--dur-base) var(--ease-out);
+  transform-origin: bottom right;
+  box-shadow: var(--shadow-lg);
 }
 
 @keyframes pill-in {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.9);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
-
 .animate-pill-in {
-  animation: pill-in 180ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  animation: pill-in var(--dur-base) var(--ease-out) backwards;
 }
 
-.animate-menu-in-3d {
-  animation: menu-in-3d 260ms cubic-bezier(0.16, 1, 0.3, 1);
-  transform-origin: bottom right;
-  will-change: transform, opacity;
-  box-shadow:
-    0 2px 4px rgba(15, 23, 42, 0.06),
-    0 24px 48px rgba(15, 23, 42, 0.22),
-    0 8px 16px rgba(15, 23, 42, 0.12);
-}
-
-/* Logo coin-flip — plays once when the app logo/icon is clicked. A true
-   3D rotation (perspective + rotateY) so the coin edge is genuinely
-   visible edge-on mid-flip, with a small weighted bounce on landing. */
-@keyframes logo-coin-flip {
-  0% {
-    transform: perspective(600px) rotateY(0deg) scale(1);
-  }
-  35% {
-    transform: perspective(600px) rotateY(200deg) scale(1.14);
-  }
-  60% {
-    transform: perspective(600px) rotateY(340deg) scale(1.14);
-  }
-  80% {
-    transform: perspective(600px) rotateY(372deg) scale(0.97);
-  }
-  100% {
-    transform: perspective(600px) rotateY(360deg) scale(1);
-  }
-}
-
+/* The logo no longer spins; class kept so existing markup is harmless. */
 .logo-flip {
-  animation: logo-coin-flip 700ms cubic-bezier(0.22, 1, 0.36, 1);
-  transform-style: preserve-3d;
-  will-change: transform;
+  animation: none;
 }
 
-/* Each row in that menu lifts slightly on hover for a tactile feel */
 .menu-row-3d {
-  transition: transform 120ms cubic-bezier(0.16, 1, 0.3, 1), background-color 120ms ease;
-}
-
-.menu-row-3d:hover {
-  transform: translateX(2px) scale(1.015);
-}
-
-.menu-row-3d:active {
-  transform: translateX(2px) scale(0.98);
+  transition: background-color var(--dur-fast) ease;
 }
 
 @keyframes sheet-in {
@@ -349,10 +590,8 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
     transform: translate3d(0, 0, 0);
   }
 }
-
 .animate-sheet-in {
-  animation: sheet-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: transform;
+  animation: sheet-in var(--dur-base) var(--ease-out);
 }
 
 @keyframes backdrop-in {
@@ -363,169 +602,25 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
     opacity: 1;
   }
 }
-
 .animate-backdrop-in {
-  animation: backdrop-in 150ms ease-out;
+  animation: backdrop-in var(--dur-fast) ease-out;
 }
 
 @keyframes fab-in {
   from {
     opacity: 0;
-    transform: translate3d(0, 0, 0) scale(0.8);
+    transform: scale(0.92);
   }
   to {
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
+    transform: scale(1);
   }
 }
-
 .animate-fab-in {
-  animation: fab-in 160ms cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: transform, opacity;
+  animation: fab-in var(--dur-fast) var(--ease-out);
 }
 
-/* Snappy, GPU-friendly tap feedback */
-.tap-scale {
-  transition: transform 100ms cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: transform;
-}
-
-.tap-scale:active {
-  transform: scale(0.94);
-}
-
-/* ---- Premium fintech radius scale ---- */
-:root {
-  --radius-card: 16px;
-  --radius-control: 12px;
-  --radius-modal: 20px;
-}
-
-/* Cards — the app's primary "surface" container class. */
-.card,
-.keep-round-card {
-  border-radius: var(--radius-card) !important;
-}
-
-/* Buttons, inputs, dropdowns all share the same 12px control radius. */
-button,
-input,
-select,
-textarea {
-  border-radius: var(--radius-control);
-}
-
-/* Fully round elements (avatars, FAB, PIN dots) opt back in explicitly —
-   kept for the handful of components that need a true circle regardless
-   of the control radius above. */
-.keep-round {
-  border-radius: 9999px !important;
-}
-
-/* Soft shadow system — subtle elevation only, no heavy drop shadows. */
-.shadow-soft {
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.shadow-soft-md {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-}
-
-/* "Live" push-down feedback for primary action buttons (login/signup) —
-   same press feel as .mini-fab: a soft shadow that flattens and the button
-   nudges down when pressed, like a real button being clicked. */
-.btn-press {
-  box-shadow: 0 3px 0 0 rgba(0, 0, 0, 0.15);
-  transform: translateY(0);
-  transition: transform 100ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 100ms ease;
-}
-
-.btn-press:active {
-  transform: translateY(3px);
-  box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.15);
-}
-/* Floating action button — always a true circle, regardless of the
-   control radius above. */
-.fab-button {
-  border-radius: 9999px !important;
-  background: var(--color-brand-600);
-  box-shadow: 0 2px 8px rgba(22, 58, 44, 0.25);
-  transform: translateY(0);
-  transition: background-color 140ms ease, box-shadow 140ms ease;
-  will-change: box-shadow;
-}
-
-.fab-button:hover {
-  background: var(--color-brand-700);
-  box-shadow: 0 4px 12px rgba(22, 58, 44, 0.3);
-}
-
-.fab-button:active {
-  background: var(--color-brand-800);
-  box-shadow: 0 1px 4px rgba(22, 58, 44, 0.25);
-}
-
-.fab-icon {
-  transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.fab-button.fab-open .fab-icon {
-  transform: rotate(45deg);
-}
-
-/* Smaller round floating buttons (e.g. privacy toggle) — same round exemption,
-   lighter tactile lift since they're secondary controls, not the primary FAB. */
-.mini-fab {
-  border-radius: 9999px !important;
-  transition: transform 140ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 140ms ease;
-}
-
-.mini-fab:hover {
-  transform: translateY(-2px) scale(1.06);
-  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.18);
-}
-
-.mini-fab:active {
-  transform: translateY(1px) scale(0.95);
-}
-
-/* Green-outlined circular icon badge — used for secondary/utility icon
-   buttons (profile photo edit, close buttons, small toggles) so they carry
-   a consistent brand accent instead of plain gray. Same round-exemption
-   pattern as .fab-button/.mini-fab above, since the global `* { border-
-   radius: 0 }` rule needs a higher-specificity class to opt back in. */
-.icon-outline-green {
-  border-radius: 9999px !important;
-  border: 2px solid var(--color-brand-500);
-  color: var(--color-brand-600);
-  background: white;
-  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
-}
-
-.dark .icon-outline-green {
-  border-color: var(--color-brand-400);
-  color: var(--color-brand-300);
-  background: var(--color-slate-800);
-}
-
-.icon-outline-green:hover {
-  background: var(--color-brand-600);
-  color: white;
-  border-color: var(--color-brand-600);
-}
-
-.no-scrollbar {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-
-/* Wrong-PIN feedback — GPU-only (transform), so it stays smooth even on
-   low-end devices. Small/fast enough to read as a "no" without feeling
-   like a punishment. */
+/* Wrong-PIN feedback — small and fast; still says "no" without punishing. */
 @keyframes shake {
   10%,
   90% {
@@ -538,118 +633,78 @@ textarea {
   30%,
   50%,
   70% {
-    transform: translate3d(-4px, 0, 0);
+    transform: translate3d(-3px, 0, 0);
   }
   40%,
   60% {
-    transform: translate3d(4px, 0, 0);
+    transform: translate3d(3px, 0, 0);
   }
 }
-
 .animate-shake {
-  animation: shake 420ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
-  will-change: transform;
+  animation: shake 380ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }
 
-/* Routed page content — a quick, cheap fade+rise (opacity/transform only,
-   no layout properties) so switching pages reads as a soft crossfade
-   instead of a hard cut while the new route mounts. */
-/* Gentle up/down float — used by the Aurafin Pro hero crown icon only. */
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-6px);
-  }
-}
-
-/* Lock screen: smooth unlock (fades + scales away to reveal the app
-   underneath) and a matching gentle entrance when it (re)locks. */
+/* Lock screen enter/leave. */
 @keyframes lock-in {
   from {
     opacity: 0;
-    transform: scale(0.97);
   }
   to {
     opacity: 1;
-    transform: scale(1);
   }
 }
-
 @keyframes lock-unlock {
   from {
     opacity: 1;
-    transform: scale(1);
-    filter: blur(0px);
   }
   to {
     opacity: 0;
-    transform: scale(1.05);
-    filter: blur(6px);
   }
 }
-
 .animate-lock-in {
-  animation: lock-in 240ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: lock-in var(--dur-base) ease-out;
 }
-
 .animate-lock-unlock {
-  animation: lock-unlock 380ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: lock-unlock 240ms ease-in forwards;
 }
 
+/* Route change: a quick fade, no travel. */
 @keyframes page-in {
   from {
     opacity: 0;
-    transform: translate3d(0, 6px, 0);
   }
   to {
     opacity: 1;
-    transform: translate3d(0, 0, 0);
   }
 }
-
 .animate-page-in {
-  animation: page-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: page-in var(--dur-fast) ease-out;
 }
 
-/* Applied to a headline figure the moment it swaps from a loading skeleton
-   to its real value (Net Worth, Invested, Assets/Liabilities totals, etc.)
-   so the swap reads as a smooth reveal instead of an abrupt pop-in —
-   especially noticeable on a slower mobile connection where that swap
-   happens later and is more likely to catch the eye mid-scroll. */
+/* A headline figure swapping from skeleton to value. */
 @keyframes value-in {
   from {
     opacity: 0;
-    transform: translate3d(0, 3px, 0);
   }
   to {
     opacity: 1;
-    transform: translate3d(0, 0, 0);
   }
 }
-
 .animate-value-in {
-  animation: value-in 260ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: value-in var(--dur-base) ease-out;
 }
 
-/* Loading ellipsis — three dots that fade/bounce in sequence. Used wherever
-   a figure (like Net Worth) is waiting on a live network round-trip, so the
-   wait reads as "still working" rather than a stalled placeholder. */
+/* "Still working" ellipsis. */
 @keyframes loading-dot {
   0%,
   80%,
   100% {
     opacity: 0.25;
-    transform: translateY(0);
   }
   40% {
     opacity: 1;
-    transform: translateY(-3px);
   }
 }
-
 .loading-dots span {
   animation: loading-dot 1.2s infinite ease-in-out both;
 }
@@ -663,20 +718,83 @@ textarea {
   animation-delay: 0.3s;
 }
 
-/* Respect the OS-level "reduce motion" setting: keep state changes (the
-   shake still communicates "wrong PIN" via the dots turning red) but drop
-   the actual movement for anyone who's opted out of animation. */
+/* Respect the OS "reduce motion" setting. */
 @media (prefers-reduced-motion: reduce) {
   .animate-shake,
   .animate-page-in,
   .animate-value-in,
   .animate-menu-in,
   .animate-menu-in-3d,
-  .logo-flip,
+  .animate-sheet-in,
+  .animate-pill-in,
+  .animate-fab-in,
   .animate-lock-in,
   .animate-lock-unlock,
   .loading-dots span,
   [class*='animate-[float'] {
     animation: none !important;
   }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* ==========================================================================
+   SIDEBAR RAIL
+   --sb-w is the live sidebar width (Sidebar itself, and Modal's content
+   panel, both read it). Expanded on desktop, an icon rail on tablet widths,
+   and a persisted manual collapse toggle on desktop (html[data-sidebar]).
+   Unlayered on purpose: these must beat the utility classes on the items.
+   ========================================================================== */
+:root {
+  --sb-w: var(--spacing-sidebar);
+}
+.sb-rail-only {
+  display: none;
+}
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  :root {
+    --sb-w: 4.25rem;
+  }
+  .sb-label {
+    display: none !important;
+  }
+  .sb-rail-only {
+    display: block;
+  }
+  .sb-item,
+  .sb-chip {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+@media (min-width: 1024px) {
+  html[data-sidebar="collapsed"] {
+    --sb-w: 4.25rem;
+  }
+  html[data-sidebar="collapsed"] .sb-label {
+    display: none !important;
+  }
+  html[data-sidebar="collapsed"] .sb-rail-only {
+    display: block;
+  }
+  html[data-sidebar="collapsed"] .sb-item,
+  html[data-sidebar="collapsed"] .sb-chip {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+/* Error fields keep a red border even while focused (the global focus rule
+   above would otherwise turn them green). */
+input.border-red-400:focus,
+select.border-red-400:focus,
+textarea.border-red-400:focus,
+input[aria-invalid="true"]:focus,
+select[aria-invalid="true"]:focus,
+textarea[aria-invalid="true"]:focus {
+  border-color: var(--color-red-400);
+  box-shadow: 0 0 0 3px rgb(209 56 47 / 0.15);
 }

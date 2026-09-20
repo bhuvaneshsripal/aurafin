@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
-import { Smartphone, Monitor } from 'lucide-react';
+import { Smartphone, Monitor, CheckCircle2 } from 'lucide-react';
 import { useInstallPromptStore, triggerInstallPrompt } from '../store/installPromptStore';
+import { Button, Card, PageHeader } from '../components/ui';
 
 export default function InstallApp() {
   const installed = useInstallPromptStore((s) => s.installed);
@@ -12,47 +13,50 @@ export default function InstallApp() {
   }, [installed]);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Install App</h1>
-        <p className="text-slate-500 text-base mt-1">
-          Add <span className="font-luxury">Aurafin</span> to your home screen or desktop for quick access.
-        </p>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        title="Install app"
+        description={
+          <>
+            Add <span className="font-luxury">Aurafin</span> to your home screen or desktop for quick access.
+          </>
+        }
+      />
 
       {installed ? (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
-          <p className="text-sm font-medium text-brand-600">
+        <Card padding="lg" className="flex items-center gap-3">
+          <CheckCircle2 size={18} className="text-positive shrink-0" />
+          <p className="text-sm font-medium text-ink">
             <span className="font-luxury">Aurafin</span> is already installed as an app on this device.
           </p>
-        </div>
+        </Card>
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
-              <Smartphone size={22} className="text-brand-600 mb-3" />
-              <p className="font-semibold text-slate-800 dark:text-slate-100 mb-1">Mobile</p>
-              <p className="text-sm text-slate-500">
-                Open this site in your phone's browser, then choose "Add to Home Screen" from the
-                browser menu.
+            <Card padding="lg">
+              <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-primary-soft text-primary-ink">
+                <Smartphone size={18} />
+              </span>
+              <p className="text-sm font-semibold text-ink mb-1">Mobile</p>
+              <p className="text-sm text-muted">
+                Open this site in your phone's browser, then choose "Add to Home Screen" from the browser menu.
               </p>
-            </div>
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
-              <Monitor size={22} className="text-brand-600 mb-3" />
-              <p className="font-semibold text-slate-800 dark:text-slate-100 mb-1">Desktop</p>
-              <p className="text-sm text-slate-500">
-                Click the install icon in your browser's address bar to add{' '}
-                <span className="font-luxury">Aurafin</span> as a desktop app.
+            </Card>
+            <Card padding="lg">
+              <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-primary-soft text-primary-ink">
+                <Monitor size={18} />
+              </span>
+              <p className="text-sm font-semibold text-ink mb-1">Desktop</p>
+              <p className="text-sm text-muted">
+                Click the install icon in your browser's address bar to add <span className="font-luxury">Aurafin</span>{' '}
+                as a desktop app.
               </p>
-            </div>
+            </Card>
           </div>
 
-          <button
-            onClick={triggerInstallPrompt}
-            className="border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
-          >
-            Show Install Prompt
-          </button>
+          <Button variant="secondary" onClick={triggerInstallPrompt}>
+            Show install prompt
+          </Button>
         </>
       )}
     </div>

@@ -19,9 +19,9 @@ import {
   type AccountType,
 } from '../../utils/accountVisuals';
 import type { Asset, Liability } from '../../types';
+import { inputClasses } from '../../components/ui';
 
-const inputClass =
-  'w-full border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-lg px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-brand-500';
+const inputClass = inputClasses;
 
 type AccountRow = {
   id: string;
@@ -230,8 +230,8 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-sm text-slate-500 dark:text-slate-400">Net balance</p>
-        <p className="text-2xl font-bold text-slate-900 dark:text-white">
+        <p className="text-sm text-muted">Net balance</p>
+        <p className="text-2xl font-bold text-ink">
           {accountsDataKnown ? (
             <span className="animate-value-in inline-block">
               <Amount value={total} />
@@ -253,7 +253,7 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
           return (
             <div
               key={rowKey}
-              className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5"
+              className="bg-surface rounded-2xl border border-line p-5"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
@@ -265,7 +265,7 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <p className="font-semibold text-slate-800 dark:text-slate-100 truncate uppercase">{row.name}</p>
+                      <p className="font-semibold text-ink truncate">{row.name}</p>
                       {isDefault ? (
                         <span className="flex items-center gap-1 text-[11px] font-medium text-amber-500 dark:text-amber-400 shrink-0">
                           <Star size={11} className="fill-amber-400 text-amber-400" />
@@ -280,7 +280,7 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
                         </button>
                       )}
                     </div>
-                    <p className="text-xs text-slate-600 dark:text-slate-500 mt-0.5 truncate">
+                    <p className="text-xs text-muted mt-0.5 truncate">
                       {typeLabel}
                       {row.institution ? ` · ${row.institution}` : ''}
                       {row.last4 ? `  •• ${row.last4}` : ''}
@@ -314,26 +314,26 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
 
               <p
                 className={`text-2xl font-bold mt-4 ${
-                  row.kind === 'liability' ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'
+                  row.kind === 'liability' ? 'text-red-600 dark:text-red-400' : 'text-ink'
                 }`}
               >
                 {row.kind === 'liability' ? '-' : ''}
                 <Amount value={row.value} currency={row.currency} />
               </p>
-              <p className="text-[11px] font-semibold tracking-wide uppercase text-slate-600 dark:text-slate-500 mt-0.5">
+              <p className="text-xs font-medium text-muted mt-0.5">
                 Current balance
               </p>
 
               {isExpanded && (
-                <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-3 text-xs">
+                <div className="mt-4 pt-4 border-t border-line-soft grid grid-cols-2 gap-3 text-xs">
                   <div>
-                    <p className="text-slate-600 dark:text-slate-500">Type</p>
-                    <p className="text-slate-700 dark:text-slate-200 font-medium mt-0.5">{typeLabel}</p>
+                    <p className="text-muted">Type</p>
+                    <p className="text-ink-2 font-medium mt-0.5">{typeLabel}</p>
                   </div>
                   {row.balanceAsOf && (
                     <div>
-                      <p className="text-slate-600 dark:text-slate-500">Balance as of</p>
-                      <p className="text-slate-700 dark:text-slate-200 font-medium mt-0.5">{row.balanceAsOf}</p>
+                      <p className="text-muted">Balance as of</p>
+                      <p className="text-ink-2 font-medium mt-0.5">{row.balanceAsOf}</p>
                     </div>
                   )}
                 </div>
@@ -342,13 +342,13 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
           );
         })}
         {accounts.length === 0 && (
-          <div className="col-span-full bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-14 flex flex-col items-center justify-center text-center gap-4">
-            <p className="text-slate-600 dark:text-slate-500 text-sm">
+          <div className="col-span-full bg-surface rounded-xl border border-line px-4 py-14 flex flex-col items-center justify-center text-center gap-4">
+            <p className="text-muted text-sm">
               No accounts yet. Add a bank, card, cash, or wallet to get started.
             </p>
             <button
               onClick={() => onOpenChange(true)}
-              className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-lg text-base font-medium"
+              className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors bg-brand-600 hover:bg-brand-700 text-white"
             >
               Add Account
             </button>
@@ -386,7 +386,7 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
         onClose={() => setPendingDelete(null)}
         onConfirm={confirmDelete}
         title="Delete this account?"
-        description={<>This will permanently delete <strong className="uppercase">{pendingDelete?.name}</strong>. This can't be undone.</>}
+        description={<>This will permanently delete <strong>{pendingDelete?.name}</strong>. This can't be undone.</>}
       />
     </div>
   );
@@ -453,7 +453,7 @@ function AccountForm({
   return (
     <div className="space-y-5">
       <div>
-        <p className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+        <p className="text-sm font-medium text-ink-2 mb-2">
           Type <span className="text-red-500">*</span>
         </p>
         <div className="grid grid-cols-3 gap-2">
@@ -469,7 +469,7 @@ function AccountForm({
                 className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border py-3 text-xs font-medium transition-colors ${
                   active
                     ? 'border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300'
-                    : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    : 'border-line text-slate-600 dark:text-slate-300 hover:bg-surface-hover'
                 } ${lockType ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <Icon size={18} />
@@ -479,20 +479,20 @@ function AccountForm({
           })}
         </div>
         {lockType && (
-          <p className="text-xs text-slate-600 dark:text-slate-500 mt-1.5">
+          <p className="text-xs text-muted mt-1.5">
             Type can't be changed after an account is created — delete and re-add it instead.
           </p>
         )}
       </div>
 
       <label className="block">
-        <span className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-1 block">
+        <span className="text-sm font-medium text-ink-2 mb-1 block">
           Name <span className="text-red-500">*</span>
         </span>
         <input
           value={name}
           onChange={(e) => setName(e.target.value.toUpperCase())}
-          className={`${inputClass} uppercase`}
+          className={`${inputClass}`}
           placeholder="e.g. HDFC Savings"
         />
       </label>
@@ -500,12 +500,12 @@ function AccountForm({
       {showBankField && (
         <div className="grid grid-cols-3 gap-3">
           <label className="block col-span-2">
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-1 block">Bank</span>
+            <span className="text-sm font-medium text-ink-2 mb-1 block">Bank</span>
             <input
               list="bank-options"
               value={institution}
               onChange={(e) => setInstitution(e.target.value.toUpperCase())}
-              className={`${inputClass} uppercase`}
+              className={`${inputClass}`}
               placeholder="Pick or type a bank"
             />
             <datalist id="bank-options">
@@ -515,7 +515,7 @@ function AccountForm({
             </datalist>
           </label>
           <label className="block">
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-1 block">Last 4</span>
+            <span className="text-sm font-medium text-ink-2 mb-1 block">Last 4</span>
             <input
               value={last4}
               onChange={(e) => setLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
@@ -529,7 +529,7 @@ function AccountForm({
 
       <div className="grid grid-cols-3 gap-3">
         <label className="block col-span-2">
-          <span className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-1 block">
+          <span className="text-sm font-medium text-ink-2 mb-1 block">
             {lockType ? 'Current Balance' : 'Opening Balance'}
           </span>
           <input
@@ -541,21 +541,21 @@ function AccountForm({
           />
         </label>
         <label className="block">
-          <span className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-1 block">Currency</span>
+          <span className="text-sm font-medium text-ink-2 mb-1 block">Currency</span>
           <CurrencySelect value={currency} onChange={setCurrency} className={inputClass} />
         </label>
       </div>
 
       <label className="block">
-        <span className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-1 block">Balance as of</span>
+        <span className="text-sm font-medium text-ink-2 mb-1 block">Balance as of</span>
         <input type="date" value={balanceAsOf} onChange={(e) => setBalanceAsOf(e.target.value)} className={inputClass} />
-        <span className="text-xs text-slate-600 dark:text-slate-500 mt-1.5 block">
+        <span className="text-xs text-muted mt-1.5 block">
           Balance from this date forward — income, expenses and transfers dated on/after this adjust it live.
         </span>
       </label>
 
       <div>
-        <p className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Colour</p>
+        <p className="text-sm font-medium text-ink-2 mb-2">Colour</p>
         <div className="flex gap-2.5">
           {ACCOUNT_COLOURS.map((c) => (
             <button
@@ -572,7 +572,7 @@ function AccountForm({
       </div>
 
       <div>
-        <p className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Icon</p>
+        <p className="text-sm font-medium text-ink-2 mb-2">Icon</p>
         <div className="flex flex-wrap gap-2">
           {ACCOUNT_ICONS.map((i) => {
             const active = icon === i.key;
@@ -585,7 +585,7 @@ function AccountForm({
                 className={`h-10 w-14 rounded-lg flex items-center justify-center gap-1 text-xs font-medium border shrink-0 ${
                   active
                     ? 'border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300'
-                    : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    : 'border-line text-slate-500 dark:text-slate-300 hover:bg-surface-hover'
                 }`}
               >
                 {i.key === 'auto' ? 'Auto' : <Icon size={16} />}
@@ -595,7 +595,7 @@ function AccountForm({
         </div>
       </div>
 
-      <button onClick={submit} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-base font-medium">
+      <button onClick={submit} className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white">
         {submitLabel}
       </button>
     </div>

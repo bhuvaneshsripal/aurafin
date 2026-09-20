@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
-import { Plus, Trash2, Download, ChevronDown, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
+import { Plus, Trash2, Download, ChevronDown, ArrowDownCircle, ArrowUpCircle, Receipt } from 'lucide-react';
 import { useTransactionsStore } from '../../store/transactionsStore';
 import { useAuthStore } from '../../store/authStore';
 import { useHouseholdProfilesStore } from '../../store/householdProfilesStore';
@@ -9,9 +9,24 @@ import { exportToCsv } from '../../utils/exportCsv';
 import Modal from '../../components/Modal';
 import ConfirmDeleteModal from '../../components/ConfirmDeleteModal';
 import Amount from '../../components/Amount';
-import LoadingDots from '../../components/LoadingDots';
 import type { Transaction, TransactionType } from '../../types';
 import CurrencySelect from '../../components/CurrencySelect';
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  IconButton,
+  StatCard,
+  Table,
+  TableContainer,
+  TBody,
+  Td,
+  Th,
+  THead,
+  Tr,
+  inputClasses,
+} from '../../components/ui';
 
 export default function TransactionsTab() {
   const allTransactions = useTransactionsStore((s) => s.transactions);
@@ -80,46 +95,68 @@ export default function TransactionsTab() {
 
   const sorted = [...transactions].sort((a, b) => b.date.localeCompare(a.date));
 
+  const fmtDate = (iso: string) => {
+    const d = new Date(`${iso}T00:00:00`);
+    return Number.isNaN(d.getTime())
+      ? iso
+      : d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const net = income - expense;
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <p className="text-slate-500 dark:text-slate-400 text-sm sm:text-base">
-          {cashflowDataKnown ? (
-            <span className="animate-value-in inline-block">
-              <Amount value={income} /> in · <Amount value={expense} /> out
-            </span>
-          ) : (
-            <LoadingDots />
-          )}
+    <div className="space-y-5">
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+        <StatCard
+          dense
+          label="Income"
+          tone="positive"
+          loading={!cashflowDataKnown}
+          value={<Amount value={income} />}
+        />
+        <StatCard dense label="Expenses" loading={!cashflowDataKnown} value={<Amount value={expense} />} />
+        <StatCard
+          dense
+          label="Net"
+          loading={!cashflowDataKnown}
+          tone={net >= 0 ? 'default' : 'negative'}
+          value={<Amount value={net} />}
+        />
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-muted">
+          {transactions.length} {transactions.length === 1 ? 'entry' : 'entries'}
         </p>
         <div className="flex items-center gap-2">
-          <button
+          <Button
+            variant="secondary"
             onClick={handleExport}
             disabled={transactions.length === 0}
-            className="flex-1 sm:flex-none justify-center flex items-center gap-2 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 text-slate-600 dark:text-slate-300 px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium"
+            leftIcon={<Download size={15} />}
           >
-            <Download size={18} /> Export
-          </button>
-          <div className="relative flex-1 sm:flex-none" ref={menuRef}>
-            <button
+            Export
+          </Button>
+          <div className="relative" ref={menuRef}>
+            <Button
               onClick={() => setAddMenuOpen((o) => !o)}
-              className="w-full justify-center flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium"
+              leftIcon={<Plus size={16} />}
+              rightIcon={<ChevronDown size={15} className="opacity-80" />}
             >
-              <Plus size={18} /> Add <ChevronDown size={16} />
-            </button>
+              Add
+            </Button>
             {addMenuOpen && (
-              <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden z-10">
+              <div className="animate-menu-in absolute right-0 mt-2 w-48 bg-surface border border-line rounded-xl shadow-lg overflow-hidden z-10 py-1">
                 <button
                   onClick={() => openModal('expense')}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-base text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium text-ink-2 hover:bg-surface-hover"
                 >
-                  <ArrowDownCircle size={18} className="text-orange-500" /> Add Expense
+                  <ArrowDownCircle size={16} className="text-muted" /> Add expense
                 </button>
                 <button
                   onClick={() => openModal('income')}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-base text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium text-ink-2 hover:bg-surface-hover"
                 >
-                  <ArrowUpCircle size={18} className="text-brand-600" /> Add Income
+                  <ArrowUpCircle size={16} className="text-positive" /> Add income
                 </button>
               </div>
             )}
@@ -127,118 +164,94 @@ export default function TransactionsTab() {
         </div>
       </div>
 
-      {/* Mobile: card list (no cramped, cut-off columns) */}
-      <div className="md:hidden space-y-2">
-        {sorted.map((t) => (
-          <div
-            key={t.id}
-            className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3.5 flex items-center gap-3"
-          >
-            <div
-              className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${
-                t.type === 'income'
-                  ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-300'
-                  : 'bg-orange-50 dark:bg-orange-900/30 text-orange-500'
-              }`}
-            >
-              {t.type === 'income' ? <ArrowUpCircle size={20} /> : <ArrowDownCircle size={20} />}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="font-medium text-slate-800 dark:text-slate-100 truncate uppercase">{t.category}</p>
-              <p className="text-xs text-slate-600 dark:text-slate-500 mt-0.5">{t.date}</p>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <span
-                className={`font-semibold text-sm whitespace-nowrap ${
-                  t.type === 'expense' ? 'text-orange-600 dark:text-orange-400' : 'text-brand-600 dark:text-brand-300'
-                }`}
-              >
-                {t.type === 'expense' ? '-' : '+'}
-                <Amount value={t.amount} currency={t.currency} />
-              </span>
-              <button
-                onClick={() => setPendingDeleteId(t.id)}
-                className="tap-scale text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 p-1"
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-          </div>
-        ))}
-        {sorted.length === 0 && (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-14 flex flex-col items-center justify-center text-center gap-4">
-            <p className="text-slate-600 dark:text-slate-500 text-sm">
-              No entries yet. Log your salary, rent, groceries, and more.
-            </p>
-            <button
-              onClick={() => openModal('expense')}
-              className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-lg text-base font-medium"
-            >
-              <Plus size={18} /> Add Transaction
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Desktop: full table */}
-      <div className="hidden md:block bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-        <table className="w-full text-base">
-          <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-left">
-            <tr>
-              <th className="px-4 py-3 font-medium">Date</th>
-              <th className="px-4 py-3 font-medium">Category</th>
-              <th className="px-4 py-3 font-medium">Type</th>
-              <th className="px-4 py-3 font-medium">Amount</th>
-              <th className="px-4 py-3 font-medium"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+      {sorted.length === 0 ? (
+        <Card padding="none">
+          <EmptyState
+            icon={<Receipt size={18} />}
+            title="No entries yet"
+            description="Log your salary, rent, groceries, and more."
+            action={
+              <Button onClick={() => openModal('expense')} leftIcon={<Plus size={16} />}>
+                Add transaction
+              </Button>
+            }
+          />
+        </Card>
+      ) : (
+        <>
+          {/* Mobile: card list (no cramped, cut-off columns) */}
+          <ul className="md:hidden bg-surface rounded-2xl border border-line divide-y divide-line-soft overflow-hidden">
             {sorted.map((t) => (
-              <tr key={t.id}>
-                <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{t.date}</td>
-                <td className="px-4 py-3 font-medium text-slate-800 dark:text-slate-100 uppercase">{t.category}</td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`text-sm px-2 py-1 rounded-full font-medium ${
-                      t.type === 'income'
-                        ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300'
-                        : 'bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400'
-                    }`}
-                  >
-                    {t.type}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-slate-800 dark:text-slate-100">
-                  {t.type === 'expense' ? '-' : '+'}
+              <li key={t.id} className="px-4 py-3 flex items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-ink truncate">{t.category}</p>
+                  <p className="text-xs text-muted mt-0.5">{fmtDate(t.date)}</p>
+                </div>
+                <span
+                  className={`font-numeric text-sm font-semibold whitespace-nowrap ${
+                    t.type === 'income' ? 'text-positive' : 'text-ink'
+                  }`}
+                >
+                  {t.type === 'expense' ? '−' : '+'}
                   <Amount value={t.amount} currency={t.currency} />
-                </td>
-                <td className="px-4 py-3">
-                  <button onClick={() => setPendingDeleteId(t.id)} className="text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300">
-                    <Trash2 size={18} />
-                  </button>
-                </td>
-              </tr>
+                </span>
+                <IconButton
+                  label="Delete transaction"
+                  size="sm"
+                  onClick={() => setPendingDeleteId(t.id)}
+                  className="hover:!text-negative"
+                >
+                  <Trash2 size={15} />
+                </IconButton>
+              </li>
             ))}
-            {sorted.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-14">
-                  <div className="flex flex-col items-center justify-center text-center gap-4">
-                    <p className="text-slate-600 dark:text-slate-500">
-                      No entries yet. Log your salary, rent, groceries, and more.
-                    </p>
-                    <button
-                      onClick={() => openModal('expense')}
-                      className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-lg text-base font-medium"
-                    >
-                      <Plus size={18} /> Add Transaction
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+          </ul>
+
+          {/* Desktop: full table */}
+          <Card padding="none" className="hidden md:block overflow-hidden">
+            <TableContainer>
+              <Table>
+                <THead>
+                  <tr>
+                    <Th>Date</Th>
+                    <Th>Category</Th>
+                    <Th>Type</Th>
+                    <Th align="right">Amount</Th>
+                    <th className="w-12" aria-hidden="true" />
+                  </tr>
+                </THead>
+                <TBody>
+                  {sorted.map((t) => (
+                    <Tr key={t.id} className="group">
+                      <Td className="text-muted whitespace-nowrap">{fmtDate(t.date)}</Td>
+                      <Td className="font-medium">{t.category}</Td>
+                      <Td>
+                        <Badge variant={t.type === 'income' ? 'success' : 'neutral'}>
+                          {t.type === 'income' ? 'Income' : 'Expense'}
+                        </Badge>
+                      </Td>
+                      <Td numeric className={t.type === 'income' ? 'text-positive' : undefined}>
+                        {t.type === 'expense' ? '−' : '+'}
+                        <Amount value={t.amount} currency={t.currency} />
+                      </Td>
+                      <td className="px-2 py-2">
+                        <IconButton
+                          label="Delete transaction"
+                          size="sm"
+                          onClick={() => setPendingDeleteId(t.id)}
+                          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:!text-negative hover:!bg-negative-soft"
+                        >
+                          <Trash2 size={15} />
+                        </IconButton>
+                      </td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+            </TableContainer>
+          </Card>
+        </>
+      )}
 
       <Modal
         open={modalOpen}
@@ -294,7 +307,7 @@ function TransactionForm({
             className={`flex-1 py-2 rounded-lg text-base font-medium border ${
               type === t
                 ? 'bg-brand-600 text-white border-brand-600'
-                : 'border-slate-200 text-slate-500'
+                : 'border-line text-slate-500'
             }`}
           >
             {t === 'income' ? 'Income' : 'Expense'}
@@ -305,7 +318,7 @@ function TransactionForm({
         <input
           value={category}
           onChange={(e) => setCategory(e.target.value.toUpperCase())}
-          className={`${inputClass} uppercase`}
+          className={`${inputClass}`}
           placeholder="e.g. Rent, Salary, Groceries"
         />
       </Field>
@@ -320,7 +333,7 @@ function TransactionForm({
       <Field label="Date">
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
       </Field>
-      <button onClick={submit} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-base font-medium">
+      <button onClick={submit} className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white">
         Save Entry
       </button>
     </div>
@@ -336,5 +349,4 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-const inputClass =
-  'w-full border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-lg px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-brand-500';
+const inputClass = inputClasses;

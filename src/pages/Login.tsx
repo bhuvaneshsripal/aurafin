@@ -56,14 +56,14 @@ export default function Login() {
             alt="Aurafin logo"
             className="w-16 h-16 mx-auto mb-3 rounded-full"
           />
-          <h1 className="font-luxury text-4xl font-semibold text-slate-900 mb-2 tracking-tight">
+          <h1 className="font-luxury text-4xl font-semibold text-ink mb-2 tracking-tight">
             Aurafin<span className="text-brand-500">.</span>
           </h1>
           <p className="text-base text-slate-500">Your whole financial picture, in one place.</p>
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
-          <h2 className="text-xl font-semibold text-slate-900 mb-1">
+        <div className="bg-surface rounded-2xl border border-line shadow-sm p-8">
+          <h2 className="text-xl font-semibold text-ink mb-1">
             {mode === 'login' ? 'Welcome back' : 'Create your account'}
           </h2>
           <p className="text-sm text-slate-500 mb-6">
@@ -73,7 +73,7 @@ export default function Login() {
           <button
             onClick={handleGoogleLogin}
             disabled={googleLoading}
-            className="btn-press w-full flex items-center justify-center gap-2.5 border border-slate-200 rounded-lg py-2.5 text-base font-medium text-slate-700 hover:bg-slate-50 mb-3 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-press w-full flex items-center justify-center gap-2.5 border border-line rounded-lg py-2.5 text-base font-medium text-ink-2 hover:bg-slate-50 mb-3 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
               <path
@@ -108,7 +108,7 @@ export default function Login() {
               }
             }}
             disabled={guestLoading}
-            className="btn-press w-full flex items-center justify-center gap-2.5 border border-slate-200 rounded-lg py-2.5 text-base font-medium text-slate-700 hover:bg-slate-50 mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-press w-full flex items-center justify-center gap-2.5 border border-line rounded-lg py-2.5 text-base font-medium text-ink-2 hover:bg-slate-50 mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -131,7 +131,7 @@ export default function Login() {
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-brand-500"
+              className="w-full border border-line rounded-lg px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
             <div className="relative">
               <input
@@ -139,7 +139,7 @@ export default function Login() {
                 placeholder="Your password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full border border-slate-200 rounded-lg pl-3 pr-10 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full border border-line rounded-lg pl-3 pr-10 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
               <button
                 type="button"

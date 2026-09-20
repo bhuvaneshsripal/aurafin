@@ -31,10 +31,10 @@ export default function InstallPromptModal() {
             AU
           </div>
           <div>
-            <h3 className="text-base font-semibold text-slate-900 dark:text-white">
+            <h3 className="text-base font-semibold text-ink">
               Install <span className="font-luxury">Aurafin</span>
             </h3>
-            <p className="text-xs text-slate-600 dark:text-slate-500">Add to your home screen</p>
+            <p className="text-xs text-muted">Add to your home screen</p>
           </div>
         </div>
 
@@ -53,28 +53,28 @@ export default function InstallPromptModal() {
           </div>
         </div>
 
-        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2.5">
+        <p className="text-xs font-medium text-muted mb-2.5">
           To install, use your browser menu:
         </p>
         <div className="space-y-2.5 mb-5">
           <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-            <span className="flex items-center justify-center h-5 w-5 rounded-full bg-slate-100 dark:bg-slate-700 text-xs font-medium text-slate-500 dark:text-slate-400 shrink-0">
+            <span className="flex items-center justify-center h-5 w-5 rounded-full bg-slate-100 dark:bg-slate-700 text-xs font-medium text-muted shrink-0">
               1
             </span>
             Tap the <MoreVertical size={14} className="text-slate-600 shrink-0" /> menu in your browser
           </div>
           <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-            <span className="flex items-center justify-center h-5 w-5 rounded-full bg-slate-100 dark:bg-slate-700 text-xs font-medium text-slate-500 dark:text-slate-400 shrink-0">
+            <span className="flex items-center justify-center h-5 w-5 rounded-full bg-slate-100 dark:bg-slate-700 text-xs font-medium text-muted shrink-0">
               2
             </span>
             Tap <Download size={14} className="text-slate-600 shrink-0" /> Install app or{' '}
-            <span className="font-medium text-slate-800 dark:text-slate-100">Add to Home Screen</span>
+            <span className="font-medium text-ink">Add to Home Screen</span>
           </div>
         </div>
 
         <button
           onClick={() => setShowManualPrompt(false)}
-          className="w-full text-center text-sm font-medium text-slate-600 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 py-1"
+          className="w-full text-center text-sm font-medium text-muted hover:text-slate-600 dark:hover:text-slate-300 py-1"
         >
           Not now
         </button>

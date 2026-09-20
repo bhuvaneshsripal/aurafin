@@ -1,29 +1,61 @@
 import { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { ChevronDown, ChevronUp, ChevronRight, Scale, ArrowLeftRight, TrendingUp, Target } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ArrowUpRight, FileText, Wallet, Receipt, Target, TrendingUp } from 'lucide-react';
 import {
   ResponsiveContainer,
+  AreaChart,
+  Area,
   BarChart,
   Bar,
   XAxis,
   YAxis,
+  CartesianGrid,
   Tooltip,
+  PieChart,
+  Pie,
+  Cell,
 } from 'recharts';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useTransactionsStore } from '../store/transactionsStore';
 import { useGoalsStore } from '../store/goalsStore';
+import { useSnapshotsStore } from '../store/snapshotsStore';
 import { useLivePricesStore } from '../store/livePricesStore';
 import { useUiStore } from '../store/uiStore';
 import { useSyncStatusStore } from '../store/syncStatusStore';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
-import Amount from '../components/Amount';
-import LoadingDots from '../components/LoadingDots';
 import GoldPriceCard from '../components/GoldPriceCard';
 import { PortfolioPdfReport } from '../components/PortfolioPdfReport';
 import { PortfolioExportModal } from '../components/PortfolioExportModal';
-import { ASSET_CLASS_LABELS, formatCurrency, maskPreciseAmount } from '../utils/currency';
+import {
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  EmptyState,
+  PageHeader,
+  SegmentedControl,
+  StatCard,
+  Table,
+  TableContainer,
+  TBody,
+  Td,
+  Th,
+  THead,
+  Tr,
+  Skeleton,
+  chart,
+} from '../components/ui';
+import {
+  ASSET_CLASS_LABELS,
+  formatAxisAmount,
+  formatPercentMagnitude,
+  formatSignedCurrency,
+  maskAmount,
+} from '../utils/currency';
+import { ASSET_CLASS_TO_CATEGORY } from '../utils/taxonomy';
 import { resolveAssetValues } from '../utils/assetValues';
+import type { Goal, Snapshot, Transaction } from '../types';
 
 const INVESTMENT_CLASSES = new Set([
   'stock',
@@ -41,7 +73,6 @@ const INVESTMENT_CLASSES = new Set([
 ]);
 
 export default function Dashboard() {
-  const [cashflowOpen, setCashflowOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const allAssets = useAssetsStore((s) => s.assets);
   const allLiabilities = useLiabilitiesStore((s) => s.liabilities);
@@ -118,8 +149,6 @@ export default function Dashboard() {
     .reduce((s, t) => s + t.amount, 0);
 
   const investments = assets.filter((a) => INVESTMENT_CLASSES.has(a.assetClass));
-  const totalInvestments = investments.reduce((s, a) => s + a.value, 0);
-  const hasCashflow = transactions.length > 0;
   // Whether "does this person actually have any wealth/cashflow/goals data"
   // can be trusted yet, as opposed to just reflecting an offline cache that
   // hasn't finished loading. If the (unfiltered, all-profiles) collection
@@ -134,294 +163,41 @@ export default function Dashboard() {
   const goalsDataKnown = allGoals.length > 0 || goalsServerConfirmed;
   const hasWealth = assets.length > 0 || liabilities.length > 0;
 
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-            Net Worth · <span className="text-slate-600">₹ INR</span>
-          </p>
-          <p className="text-[11px] text-slate-600 dark:text-slate-500 flex items-center gap-1.5 mt-0.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
-            Live prices update every 60 seconds
-          </p>
-          {!wealthDataKnown ? (
-            <div className="mt-3 h-11 sm:h-12 flex items-center gap-2 rounded-lg bg-slate-100 dark:bg-slate-800 px-3">
-              <LoadingDots />
-            </div>
-          ) : hasWealth ? (
-            !netWorthReady ? (
-              <div className="mt-3 h-11 sm:h-12 flex items-center gap-2 rounded-lg bg-slate-100 dark:bg-slate-800 px-3">
-                <LoadingDots />
-                <span className="text-xs text-slate-600 dark:text-slate-500">Fetching live prices…</span>
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center gap-2.5 flex-wrap mt-2">
-                  <span className="font-hero-numeric text-4xl sm:text-5xl text-slate-900 dark:text-white break-words animate-value-in">
-                    {maskPreciseAmount(netWorth, 'INR', privacyMode)}
-                  </span>
-                  {investedAssetsTotal > 0 && (
-                    <span
-                      className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${
-                        netWorthPnl >= 0
-                          ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-300'
-                          : 'bg-red-50 dark:bg-red-900/30 text-red-500'
-                      }`}
-                    >
-                      {netWorthPnl >= 0 ? '+' : ''}
-                      {netWorthPnlPercent.toFixed(1)}% overall
-                    </span>
-                  )}
-                </div>
-                <MiniTrend isPositive={netWorthPnl >= 0} />
-              </>
-            )
-          ) : (
-            <>
-              <span className="font-hero-numeric text-4xl sm:text-5xl text-slate-900 dark:text-white block mt-2 break-words">
-                {maskPreciseAmount(0, 'INR', privacyMode)}
-              </span>
-              <Link to="/wealth" className="text-sm font-medium text-brand-700 dark:text-brand-300 hover:underline mt-2 inline-block">
-                Take your first snapshot →
-              </Link>
-            </>
-          )}
-        </div>
 
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-            Invested · <span className="text-slate-600">₹ INR</span>
-          </p>
-          {/* Invested is pure cost-basis (qty × avg cost, or the SIP schedule) —
-              it never needs a live price fetch, so once we know whether this
-              account has wealth data at all (wealthDataKnown, shared with the
-              Net Worth card alongside it), there's no further reason to gate
-              it behind a loading state; it just renders whatever's current. */}
-          {!wealthDataKnown ? (
-            <div className="mt-3 h-11 sm:h-12 flex items-center rounded-lg bg-slate-100 dark:bg-slate-800 px-3">
-              <LoadingDots />
-            </div>
-          ) : (
-            <span className="font-hero-numeric text-4xl sm:text-5xl text-slate-900 dark:text-white block mt-2 break-words animate-value-in">
-              {maskPreciseAmount(hasWealth ? investedAssetsTotal : 0, 'INR', privacyMode)}
-            </span>
-          )}
-        </div>
-      </div>
+  // ---- Derived for the new visual sections (all read-only views of the
+  // ---- same numbers computed above; nothing here changes a calculation).
+  const money = (v: number) => maskAmount(v, 'INR', privacyMode, { fractionDigits: 0 });
+  const signedMoney = (v: number) => (privacyMode ? '••••••' : formatSignedCurrency(v, 'INR', 0));
+  const ready = wealthDataKnown && (!hasWealth || netWorthReady);
 
-      <GoldPriceCard />
+  // Allocation by category — same rule as the Wealth → Allocation tab:
+  // holdings flagged "exclude from allocation" are left out.
+  const allocation = useMemo(() => {
+    const byCat = new Map<string, { key: string; label: string; color: string; value: number }>();
+    for (const a of assets) {
+      if (a.excludeFromAllocation) continue;
+      const { value } = resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram);
+      if (value <= 0) continue;
+      const cat = ASSET_CLASS_TO_CATEGORY[a.assetClass];
+      const key = cat?.key ?? 'other';
+      const cur = byCat.get(key) ?? { key, label: cat?.label ?? 'Other', color: cat?.color ?? '#64748b', value: 0 };
+      cur.value += value;
+      byCat.set(key, cur);
+    }
+    return [...byCat.values()].sort((x, y) => y.value - x.value);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assets, livePrices, sipValues, liveGoldPricePerGram]);
 
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-        {/* The whole header row toggles — not just the tiny chevron+label —
-           and padding lives here on the clickable row itself (not on the
-           outer card), so there's no dead padding gutter around the edges
-           that silently swallows clicks. RangePills gets its own
-           stopPropagation wrapper since its 7D/30D/90D buttons need to work
-           independently without also toggling the card. */}
-        <div
-          role="button"
-          tabIndex={0}
-          aria-expanded={cashflowOpen}
-          onClick={() => setCashflowOpen((o) => !o)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              setCashflowOpen((o) => !o);
-            }
-          }}
-          className="flex items-center justify-between gap-3 p-6 cursor-pointer select-none"
-        >
-          <span className="flex items-center gap-1.5 text-slate-800 dark:text-slate-100">
-            {cashflowOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Cashflow</span>
-          </span>
-          <div onClick={(e) => e.stopPropagation()}>
-            <RangePills />
-          </div>
-        </div>
-        {cashflowOpen && (
-          <div className="px-6 pb-6">
-            {hasCashflow ? (
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-slate-500">Income</p>
-                  <Amount value={monthIncome} className="font-display text-2xl font-semibold text-brand-700 dark:text-brand-300 block" />
-                </div>
-                <div>
-                  <p className="text-sm text-slate-500">Expenses</p>
-                  <Amount value={monthExpense} className="font-display text-2xl font-semibold text-orange-500 block" />
-                </div>
-              </div>
-            ) : (
-              <div className="text-center">
-                <p className="text-slate-600 text-sm mb-3">No income or spending logged in this window.</p>
-                <span className="text-sm font-medium text-brand-700 dark:text-brand-300">
-                  <Link to="/transactions" className="hover:underline">
-                    Add income →
-                  </Link>
-                  <span className="text-slate-300 mx-1">·</span>
-                  <Link to="/transactions" className="hover:underline">
-                    Add expense →
-                  </Link>
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      <Section
-        title="Wealth"
-        icon={Scale}
-        iconColor="text-indigo-500"
-        summary={netWorthReady ? <Amount value={netWorth} /> : <SummarySkeleton />}
-        to="/wealth"
-      >
-        <WealthSummary assets={assets} liabilities={liabilities} totalAssets={totalAssets} totalLiabilities={totalLiabilities} />
-      </Section>
-
-      <Section
-        title="Cashflow"
-        icon={ArrowLeftRight}
-        iconColor="text-violet-500"
-        summary={cashflowDataKnown ? <Amount value={monthIncome - monthExpense} /> : <SummarySkeleton />}
-        to="/transactions"
-      >
-        <CashflowSummary income={monthIncome} expense={monthExpense} transactions={transactions} />
-      </Section>
-
-      <Section
-        title="Investments"
-        icon={TrendingUp}
-        iconColor="text-brand-600"
-        summary={wealthDataKnown ? <Amount value={totalInvestments} /> : <SummarySkeleton />}
-        to="/wealth?tab=assets"
-      >
-        <InvestmentsSummary investments={investments} />
-      </Section>
-
-      <Section title="Goals" icon={Target} iconColor="text-orange-500" summary={goalsDataKnown ? `${goals.length}` : <SummarySkeleton />} to="/essentials?tab=goals">
-        <GoalsSummary goals={goals} netWorth={netWorthReady ? netWorth : 0} />
-      </Section>
-
-      {/* PDF Export Modal and Report */}
-      <PortfolioExportModal 
-        open={exportModalOpen} 
-        onClose={() => setExportModalOpen(false)} 
-      />
-
-      {/* Hidden report component - used only for PDF generation */}
-      <div style={{ display: 'none' }}>
-        <PortfolioPdfReport hideInPrint={false} />
-      </div>
-    </div>
+  const topHoldings = useMemo(
+    () =>
+      investments
+        .map((a) => ({ asset: a, ...resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram) }))
+        .sort((x, y) => y.value - x.value)
+        .slice(0, 5),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [investments, livePrices, sipValues, liveGoldPricePerGram]
   );
-}
 
-function SummarySkeleton() {
-  return (
-    <span className="inline-flex items-center h-4 align-middle">
-      <LoadingDots />
-    </span>
-  );
-}
-
-function Section({
-  title,
-  icon: Icon,
-  iconColor = 'text-brand-600',
-  summary,
-  to,
-  children,
-}: {
-  title: string;
-  icon: typeof Scale;
-  iconColor?: string;
-  summary: React.ReactNode;
-  to?: string;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
-  const navigate = useNavigate();
-  return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between px-6 py-4"
-      >
-        <div className="flex items-center gap-2 text-slate-800 dark:text-slate-100">
-          {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-          <Icon size={18} className={iconColor} />
-          <span className="font-semibold text-base">{title}</span>
-        </div>
-        <span className="font-semibold text-slate-900 dark:text-white">{summary}</span>
-      </button>
-      {open && (
-        <div className="px-6 pb-6">
-          {children}
-          {to && (
-            <button
-              onClick={() => navigate(to)}
-              className="mt-4 flex items-center gap-1 text-sm font-medium text-brand-700 dark:text-brand-300 hover:underline"
-            >
-              Go to {title} to add or edit <ChevronRight size={14} />
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-
-function WealthSummary({
-  assets,
-  liabilities,
-  totalAssets,
-  totalLiabilities,
-}: {
-  assets: ReturnType<typeof useAssetsStore.getState>['assets'];
-  liabilities: ReturnType<typeof useLiabilitiesStore.getState>['liabilities'];
-  totalAssets: number;
-  totalLiabilities: number;
-}) {
-  const total = totalAssets + totalLiabilities;
-  const assetPct = total > 0 ? Math.round((totalAssets / total) * 100) : 100;
-
-  if (assets.length === 0 && liabilities.length === 0) {
-    return <EmptyState text="Add assets or liabilities to see your wealth breakdown." to="/wealth" cta="Add asset or liability →" />;
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
-        <div className="h-full bg-brand-600" style={{ width: `${assetPct}%` }} />
-        <div className="h-full bg-red-400" style={{ width: `${100 - assetPct}%` }} />
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <p className="text-sm text-slate-500">Assets ({assetPct}%)</p>
-          <Amount value={totalAssets} className="text-lg font-semibold text-slate-900 dark:text-white" />
-        </div>
-        <div>
-          <p className="text-sm text-slate-500">Liabilities ({100 - assetPct}%)</p>
-          <Amount value={totalLiabilities} className="text-lg font-semibold text-slate-900 dark:text-white" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CashflowSummary({
-  income,
-  expense,
-  transactions,
-}: {
-  income: number;
-  expense: number;
-  transactions: ReturnType<typeof useTransactionsStore.getState>['transactions'];
-}) {
   const monthlyTrend = useMemo(() => {
     const map: Record<string, { income: number; expense: number }> = {};
     transactions.forEach((t) => {
@@ -433,180 +209,650 @@ function CashflowSummary({
     return Object.entries(map)
       .sort(([a], [b]) => a.localeCompare(b))
       .slice(-6)
-      .map(([month, v]) => ({ month, ...v }));
+      .map(([month, v]) => ({ month, label: monthLabel(month), ...v }));
   }, [transactions]);
 
-  if (transactions.length === 0) {
-    return <EmptyState text="Log income or expenses in Money to see your cashflow here." to="/transactions" cta="Add income or expense →" />;
-  }
+  const recentTransactions = useMemo(
+    () => [...transactions].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 6),
+    [transactions]
+  );
+
+  const savedThisMonth = monthIncome - monthExpense;
+  const savingsRate = monthIncome > 0 ? (savedThisMonth / monthIncome) * 100 : null;
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <p className="text-sm text-slate-500">Income this month</p>
-          <Amount value={income} className="text-lg font-semibold text-brand-600" />
-        </div>
-        <div>
-          <p className="text-sm text-slate-500">Expenses this month</p>
-          <Amount value={expense} className="text-lg font-semibold text-orange-500" />
-        </div>
-      </div>
-      {monthlyTrend.length > 1 && (
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={monthlyTrend}>
-            <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-            <YAxis tick={{ fontSize: 12 }} width={60} />
-            <Tooltip formatter={(v) => formatCurrency(Number(v))} />
-            <Bar dataKey="income" fill="#16a34a" radius={[6, 6, 0, 0]} />
-            <Bar dataKey="expense" fill="#f59e0b" radius={[6, 6, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      )}
-    </div>
-  );
-}
-
-function InvestmentsSummary({
-  investments,
-}: {
-  investments: ReturnType<typeof useAssetsStore.getState>['assets'];
-}) {
-  const livePrices = useLivePricesStore((s) => s.prices);
-  const sipValues = useLivePricesStore((s) => s.sipValues);
-  const liveGoldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
-  const privacyMode = useUiStore((s) => s.privacyMode);
-
-  if (investments.length === 0) {
-    return (
-      <EmptyState
-        text="Add equity, mutual fund, or crypto assets in Wealth to see them here."
-        to="/wealth?tab=assets"
-        cta="Add investment →"
+    <div className="space-y-5">
+      <PageHeader
+        title="Overview"
+        description="Your net worth, portfolio and cash flow at a glance."
+        meta={
+          <p className="flex items-center gap-1.5 text-xs text-muted">
+            <span className="h-1.5 w-1.5 rounded-full bg-brand-500 animate-pulse" />
+            Live prices update every 60 seconds
+          </p>
+        }
+        actions={
+          <Button variant="secondary" leftIcon={<FileText size={15} />} onClick={() => setExportModalOpen(true)}>
+            Export report
+          </Button>
+        }
       />
-    );
-  }
-  const sorted = [...investments].sort((a, b) => b.value - a.value);
-  const visible = sorted.slice(0, 4);
 
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {visible.map((a) => {
-          const { invested } = resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram);
-          return (
-            <div key={a.id} className="border border-slate-100 dark:border-slate-800 rounded-xl p-4">
-              <p className="font-medium text-slate-800 dark:text-slate-100 uppercase">{a.name}</p>
-              <span className="text-lg font-semibold text-slate-900 dark:text-white block">
-                {maskPreciseAmount(
-                  invested !== undefined ? invested : a.value,
-                  a.currency,
-                  privacyMode
-                )}
-              </span>
-              <p className="text-xs text-slate-600 mt-1">{ASSET_CLASS_LABELS[a.assetClass]}</p>
-            </div>
-          );
-        })}
-      </div>
-      {sorted.length > visible.length && (
-        <Link
-          to="/wealth"
-          className="inline-block text-sm font-medium text-brand-700 dark:text-brand-300 hover:underline"
-        >
-          View more →
-        </Link>
-      )}
-    </div>
-  );
-}
-
-function GoalsSummary({
-  goals,
-  netWorth,
-}: {
-  goals: ReturnType<typeof useGoalsStore.getState>['goals'];
-  netWorth: number;
-}) {
-  if (goals.length === 0) {
-    return <EmptyState text="Set a goal in Essentials to track your progress here." to="/essentials?tab=goals" cta="Add goal →" />;
-  }
-  const current = Math.max(0, netWorth);
-  return (
-    <div className="space-y-3">
-      {goals.slice(0, 4).map((g) => {
-        const pct = g.targetAmount > 0 ? Math.min(100, Math.round((current / g.targetAmount) * 100)) : 0;
-        return (
-          <div key={g.id}>
-            <div className="flex items-center justify-between text-sm mb-1">
-              <span className="font-medium text-slate-700 dark:text-slate-200 uppercase">{g.name}</span>
-              <span className="text-slate-600">{pct}%</span>
-            </div>
-            <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-              <div className="h-full bg-brand-600 rounded-full" style={{ width: `${pct}%` }} />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-/** Small sparkline under the Net Worth figure. Direction and color follow
- * the actual overall P&L instead of always trending up, so a portfolio
- * that's down shows a gently declining red line rather than a misleadingly
- * cheerful green climb. */
-function MiniTrend({ isPositive }: { isPositive: boolean }) {
-  const points = isPositive
-    ? '0,44 40,40 80,36 120,30 160,22 200,16 240,6'
-    : '0,10 40,15 80,20 120,26 160,32 200,37 240,42';
-  const stroke = isPositive ? 'var(--color-brand-600)' : '#ef4444';
-  return (
-    <div className="mt-3 h-14">
-      <svg viewBox="0 0 240 56" className="w-full h-full" preserveAspectRatio="none">
-        <polyline
-          points={points}
-          fill="none"
-          stroke={stroke}
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <StatCard
+          dense
+          label="Net worth"
+          loading={!ready}
+          value={money(hasWealth ? netWorth : 0)}
+          sublabel={hasWealth ? 'Assets minus liabilities' : <Link to="/wealth" className="text-primary-ink font-medium hover:underline">Add your first asset</Link>}
         />
-      </svg>
+        <StatCard
+          dense
+          label="Total invested"
+          loading={!wealthDataKnown}
+          value={money(hasWealth ? investedAssetsTotal : 0)}
+          sublabel="Cost basis"
+        />
+        <StatCard
+          dense
+          label="Current portfolio value"
+          loading={!ready}
+          value={money(hasWealth ? totalAssets : 0)}
+          sublabel={`${assets.length} ${assets.length === 1 ? 'holding' : 'holdings'}`}
+        />
+        <StatCard
+          dense
+          label="Profit / loss"
+          loading={!ready}
+          tone={!hasWealth || investedAssetsTotal <= 0 ? 'default' : netWorthPnl >= 0 ? 'positive' : 'negative'}
+          value={hasWealth ? signedMoney(netWorthPnl) : money(0)}
+          delta={
+            hasWealth && investedAssetsTotal > 0 && !privacyMode
+              ? { value: formatPercentMagnitude(netWorthPnlPercent), positive: netWorthPnl >= 0 }
+              : undefined
+          }
+          sublabel="vs. invested"
+        />
+      </div>
+
+      {/* Performance + allocation */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2">
+          <PerformanceCard privacyMode={privacyMode} />
+        </div>
+        <AllocationCard
+          data={allocation}
+          total={totalAssets}
+          loading={!ready}
+          hasWealth={hasWealth}
+          privacyMode={privacyMode}
+        />
+      </div>
+
+      {/* Cash flow + goals */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2">
+          <CashflowCard
+            loading={!cashflowDataKnown}
+            income={monthIncome}
+            expense={monthExpense}
+            saved={savedThisMonth}
+            savingsRate={savingsRate}
+            trend={monthlyTrend}
+            hasTransactions={transactions.length > 0}
+            privacyMode={privacyMode}
+          />
+        </div>
+        <GoalsCard
+          goals={goals}
+          netWorth={netWorthReady ? netWorth : 0}
+          loading={!goalsDataKnown}
+          privacyMode={privacyMode}
+        />
+      </div>
+
+      {/* Recent transactions + top holdings */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2">
+          <RecentTransactionsCard rows={recentTransactions} loading={!cashflowDataKnown} privacyMode={privacyMode} />
+        </div>
+        <TopHoldingsCard rows={topHoldings} loading={!ready} privacyMode={privacyMode} />
+      </div>
+
+      <GoldPriceCard />
+
+      {/* PDF Export Modal and Report */}
+      <PortfolioExportModal open={exportModalOpen} onClose={() => setExportModalOpen(false)} />
+
+      {/* Hidden report component - used only for PDF generation */}
+      <div style={{ display: 'none' }}>
+        <PortfolioPdfReport hideInPrint={false} />
+      </div>
     </div>
   );
 }
 
-function RangePills() {
-  const [active, setActive] = useState<'7D' | '30D' | '90D'>('30D');
+/* ------------------------------------------------------------------------ */
+
+function monthLabel(month: string) {
+  const [y, m] = month.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString('en-IN', { month: 'short' });
+}
+
+function shortDate(iso: string) {
+  const d = new Date(`${iso}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+}
+
+function ChartTooltip({
+  active,
+  payload,
+  label,
+  privacyMode,
+  labels,
+}: {
+  active?: boolean;
+  payload?: { name?: string; dataKey?: string | number; value?: number; color?: string }[];
+  label?: string;
+  privacyMode: boolean;
+  labels?: Record<string, string>;
+}) {
+  if (!active || !payload?.length) return null;
   return (
-    <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
-      {(['7D', '30D', '90D'] as const).map((r) => (
-        <button
-          key={r}
-          onClick={() => setActive(r)}
-          className={`text-xs font-semibold px-2.5 py-1 rounded-md transition-colors ${
-            active === r
-              ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
-              : 'text-slate-500 dark:text-slate-400'
-          }`}
-        >
-          {r}
-        </button>
+    <div className="rounded-xl border border-line bg-surface px-3 py-2 shadow-lg text-xs">
+      <p className="text-muted font-medium mb-1">{label}</p>
+      {payload.map((p) => (
+        <p key={String(p.dataKey)} className="flex items-center gap-2 text-ink">
+          <span className="h-2 w-2 rounded-full" style={{ background: p.color }} />
+          <span className="text-muted">{labels?.[String(p.dataKey)] ?? p.name}</span>
+          <span className="font-numeric ml-auto pl-3">
+            {privacyMode ? '••••••' : maskAmount(Number(p.value ?? 0), 'INR', false, { fractionDigits: 0 })}
+          </span>
+        </p>
       ))}
     </div>
   );
 }
 
-function EmptyState({ text, to, cta }: { text: string; to?: string; cta?: string }) {
+type Range = '3M' | '6M' | '1Y' | 'ALL';
+
+function PerformanceCard({ privacyMode }: { privacyMode: boolean }) {
+  const snapshots = useSnapshotsStore((s) => s.snapshots);
+  const [range, setRange] = useState<Range>('ALL');
+
+  const data = useMemo(() => {
+    const sorted = [...snapshots].sort((a: Snapshot, b: Snapshot) => a.date.localeCompare(b.date));
+    if (range === 'ALL') return sorted;
+    const months = range === '3M' ? 3 : range === '6M' ? 6 : 12;
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - months);
+    const iso = cutoff.toISOString().slice(0, 10);
+    return sorted.filter((s) => s.date >= iso);
+  }, [snapshots, range]);
+
+  const first = data[0];
+  const last = data[data.length - 1];
+  const change = first && last ? last.netWorth - first.netWorth : 0;
+  const changePct = first && first.netWorth > 0 ? (change / first.netWorth) * 100 : 0;
+
   return (
-    <div className="py-8 flex flex-col items-center justify-center gap-2 text-sm text-slate-600 text-center px-6">
-      <span>{text}</span>
-      {to && (
-        <Link to={to} className="text-brand-700 dark:text-brand-300 font-medium hover:underline">
-          {cta ?? 'Add now →'}
-        </Link>
+    <Card padding="lg" className="h-full">
+      <CardHeader
+        title="Portfolio performance"
+        description={
+          data.length >= 2 ? (
+            <span>
+              Net worth across {data.length} snapshots ·{' '}
+              <span className={change >= 0 ? 'text-positive font-medium' : 'text-negative font-medium'}>
+                {privacyMode ? '••••••' : `${formatSignedCurrency(change, 'INR', 0)} (${formatPercentMagnitude(changePct, 1)})`}
+              </span>
+            </span>
+          ) : (
+            'Net worth over time, from your saved snapshots'
+          )
+        }
+        actions={
+          <SegmentedControl<Range>
+            size="sm"
+            value={range}
+            onChange={setRange}
+            items={[
+              { key: '3M', label: '3M' },
+              { key: '6M', label: '6M' },
+              { key: '1Y', label: '1Y' },
+              { key: 'ALL', label: 'All' },
+            ]}
+          />
+        }
+      />
+      {data.length >= 2 ? (
+        <div className="h-[248px] -ml-2">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid stroke={chart.grid} strokeDasharray="3 3" vertical={false} />
+              <XAxis
+                dataKey="date"
+                tickFormatter={(d: string) =>
+                  new Date(`${d}T00:00:00`).toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })
+                }
+                tick={chart.tick}
+                axisLine={false}
+                tickLine={false}
+                minTickGap={28}
+              />
+              <YAxis
+                tickFormatter={(v: number) => (privacyMode ? '' : formatAxisAmount(v))}
+                tick={chart.tick}
+                axisLine={false}
+                tickLine={false}
+                width={56}
+                domain={['auto', 'auto']}
+              />
+              <Tooltip
+                cursor={chart.tooltip.cursor}
+                content={(p) => (
+                  <ChartTooltip
+                    {...(p as object)}
+                    label={p.label ? shortDate(String(p.label)) : ''}
+                    privacyMode={privacyMode}
+                    labels={{ netWorth: 'Net worth' }}
+                  />
+                )}
+              />
+              <Area
+                type="monotone"
+                dataKey="netWorth"
+                stroke={chart.primary}
+                strokeWidth={2}
+                fill={chart.primarySoft}
+                dot={false}
+                activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--color-surface)', fill: chart.primary }}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <EmptyState
+          compact
+          icon={<TrendingUp size={18} />}
+          title="Not enough history yet"
+          description="Use Add → Snapshot to record your net worth. Two or more snapshots draw this chart."
+        />
       )}
-    </div>
+    </Card>
+  );
+}
+
+function AllocationCard({
+  data,
+  total,
+  loading,
+  hasWealth,
+  privacyMode,
+}: {
+  data: { key: string; label: string; color: string; value: number }[];
+  total: number;
+  loading: boolean;
+  hasWealth: boolean;
+  privacyMode: boolean;
+}) {
+  const sum = data.reduce((s, d) => s + d.value, 0);
+  return (
+    <Card padding="lg" className="h-full">
+      <CardHeader
+        title="Asset allocation"
+        description="By asset category"
+        actions={
+          <Link to="/wealth?tab=allocation" className="text-[13px] font-medium text-primary-ink hover:underline">
+            Details
+          </Link>
+        }
+      />
+      {loading ? (
+        <div className="space-y-3">
+          <Skeleton className="h-36 w-36 rounded-full mx-auto" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-4/5" />
+        </div>
+      ) : !hasWealth || data.length === 0 ? (
+        <EmptyState
+          compact
+          icon={<Wallet size={18} />}
+          title="No assets yet"
+          description="Add holdings to see how your wealth is spread out."
+          action={
+            <Link to="/wealth" className="text-[13px] font-medium text-primary-ink hover:underline">
+              Add an asset
+            </Link>
+          }
+        />
+      ) : (
+        <div>
+          <div className="relative h-[168px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={data}
+                  dataKey="value"
+                  nameKey="label"
+                  innerRadius={54}
+                  outerRadius={78}
+                  paddingAngle={2}
+                  stroke="none"
+                  isAnimationActive={false}
+                >
+                  {data.map((d) => (
+                    <Cell key={d.key} fill={d.color} />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-xs text-muted">Total</span>
+              <span className="font-numeric text-[15px] font-semibold text-ink">
+                {maskAmount(total, 'INR', privacyMode, { fractionDigits: 0 })}
+              </span>
+            </div>
+          </div>
+          <ul className="mt-3 space-y-2">
+            {data.slice(0, 6).map((d) => (
+              <li key={d.key} className="flex items-center gap-2.5 text-sm">
+                <span className="h-2.5 w-2.5 rounded-sm shrink-0" style={{ background: d.color }} />
+                <span className="text-ink-2 truncate flex-1">{d.label}</span>
+                <span className="font-numeric font-medium text-ink">{sum > 0 ? ((d.value / sum) * 100).toFixed(1) : '0.0'}%</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function CashflowCard({
+  loading,
+  income,
+  expense,
+  saved,
+  savingsRate,
+  trend,
+  hasTransactions,
+  privacyMode,
+}: {
+  loading: boolean;
+  income: number;
+  expense: number;
+  saved: number;
+  savingsRate: number | null;
+  trend: { month: string; label: string; income: number; expense: number }[];
+  hasTransactions: boolean;
+  privacyMode: boolean;
+}) {
+  const m = (v: number) => maskAmount(v, 'INR', privacyMode, { fractionDigits: 0 });
+  return (
+    <Card padding="lg" className="h-full">
+      <CardHeader
+        title="Income & expenses"
+        description="This month, with the last six months for context"
+        actions={
+          <Link to="/transactions" className="text-[13px] font-medium text-primary-ink hover:underline">
+            View all
+          </Link>
+        }
+      />
+      {loading ? (
+        <Skeleton className="h-48 w-full" />
+      ) : !hasTransactions ? (
+        <EmptyState
+          compact
+          icon={<Receipt size={18} />}
+          title="No income or spending logged yet"
+          description="Log an income or expense with Add to see your cash flow here."
+        />
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <div>
+              <p className="text-xs text-muted">Income</p>
+              <p className="font-numeric text-base font-semibold text-positive mt-0.5">{m(income)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted">Expenses</p>
+              <p className="font-numeric text-base font-semibold text-ink mt-0.5">{m(expense)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted">Saved</p>
+              <p className={`font-numeric text-base font-semibold mt-0.5 ${saved >= 0 ? 'text-ink' : 'text-negative'}`}>
+                {m(saved)}
+                {savingsRate !== null && !privacyMode && (
+                  <span className="ml-1.5 text-xs font-medium text-muted">{savingsRate.toFixed(0)}%</span>
+                )}
+              </p>
+            </div>
+          </div>
+          {trend.length > 1 && (
+            <div className="h-[190px] -ml-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={trend} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} barGap={3}>
+                  <CartesianGrid stroke={chart.grid} strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="label" tick={chart.tick} axisLine={false} tickLine={false} />
+                  <YAxis
+                    tickFormatter={(v: number) => (privacyMode ? '' : formatAxisAmount(v))}
+                    tick={chart.tick}
+                    axisLine={false}
+                    tickLine={false}
+                    width={52}
+                  />
+                  <Tooltip
+                    cursor={{ fill: 'var(--color-surface-hover)' }}
+                    content={(p) => (
+                      <ChartTooltip
+                        {...(p as object)}
+                        privacyMode={privacyMode}
+                        labels={{ income: 'Income', expense: 'Expenses' }}
+                      />
+                    )}
+                  />
+                  <Bar dataKey="income" fill={chart.primary} radius={[3, 3, 0, 0]} maxBarSize={22} isAnimationActive={false} />
+                  <Bar dataKey="expense" fill="#d6b06b" radius={[3, 3, 0, 0]} maxBarSize={22} isAnimationActive={false} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
+
+function GoalsCard({
+  goals,
+  netWorth,
+  loading,
+  privacyMode,
+}: {
+  goals: Goal[];
+  netWorth: number;
+  loading: boolean;
+  privacyMode: boolean;
+}) {
+  return (
+    <Card padding="lg" className="h-full">
+      <CardHeader
+        title="Goals"
+        description={goals.length > 0 ? `${goals.length} ${goals.length === 1 ? 'goal' : 'goals'} in progress` : undefined}
+        actions={
+          <Link to="/essentials?tab=goals" className="text-[13px] font-medium text-primary-ink hover:underline">
+            Manage
+          </Link>
+        }
+      />
+      {loading ? (
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      ) : goals.length === 0 ? (
+        <EmptyState
+          compact
+          icon={<Target size={18} />}
+          title="No goals yet"
+          description="Set a target to track your progress here."
+          action={
+            <Link to="/essentials?tab=goals" className="text-[13px] font-medium text-primary-ink hover:underline">
+              Add a goal
+            </Link>
+          }
+        />
+      ) : (
+        <ul className="space-y-4">
+          {goals.slice(0, 4).map((g) => {
+            // Same rule as the Goals tab: every goal's progress follows live
+            // net worth (never a stale manual entry).
+            const current = Math.max(0, netWorth);
+            const pct = g.targetAmount > 0 ? Math.min(100, Math.max(0, Math.round((current / g.targetAmount) * 100))) : 0;
+            return (
+              <li key={g.id}>
+                <div className="flex items-baseline justify-between gap-3 text-sm mb-1.5">
+                  <span className="font-medium text-ink truncate">{g.name}</span>
+                  <span className="font-numeric text-xs font-medium text-muted shrink-0">{pct}%</span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                  <div className="h-full rounded-full bg-brand-600" style={{ width: `${pct}%` }} />
+                </div>
+                <p className="text-xs text-muted mt-1.5 font-numeric font-normal">
+                  {maskAmount(current, g.currency, privacyMode, { fractionDigits: 0 })} of{' '}
+                  {maskAmount(g.targetAmount, g.currency, privacyMode, { fractionDigits: 0 })}
+                </p>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function RecentTransactionsCard({
+  rows,
+  loading,
+  privacyMode,
+}: {
+  rows: Transaction[];
+  loading: boolean;
+  privacyMode: boolean;
+}) {
+  return (
+    <Card padding="none" className="h-full overflow-hidden">
+      <CardHeader
+        padded
+        divided
+        title="Recent transactions"
+        actions={
+          <Link to="/transactions" className="text-[13px] font-medium text-primary-ink hover:underline">
+            View all
+          </Link>
+        }
+      />
+      {loading ? (
+        <div className="p-5 space-y-3">
+          <Skeleton className="h-5 w-full" />
+          <Skeleton className="h-5 w-full" />
+          <Skeleton className="h-5 w-full" />
+        </div>
+      ) : rows.length === 0 ? (
+        <EmptyState compact icon={<Receipt size={18} />} title="No transactions yet" description="Income and expenses you log will appear here." />
+      ) : (
+        <TableContainer>
+          <Table>
+            <THead>
+              <tr>
+                <Th>Date</Th>
+                <Th>Category</Th>
+                <Th className="hidden sm:table-cell">Note</Th>
+                <Th align="right">Amount</Th>
+              </tr>
+            </THead>
+            <TBody>
+              {rows.map((t) => (
+                <Tr key={t.id}>
+                  <Td className="text-muted whitespace-nowrap">{shortDate(t.date)}</Td>
+                  <Td className="font-medium">{t.category}</Td>
+                  <Td className="hidden sm:table-cell text-muted max-w-[16rem] truncate">{t.note || '—'}</Td>
+                  <Td numeric className={t.type === 'income' ? 'text-positive' : undefined}>
+                    {privacyMode
+                      ? '••••••'
+                      : `${t.type === 'income' ? '+' : '−'}${maskAmount(t.amount, t.currency, false, { fractionDigits: 0 })}`}
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        </TableContainer>
+      )}
+    </Card>
+  );
+}
+
+function TopHoldingsCard({
+  rows,
+  loading,
+  privacyMode,
+}: {
+  rows: (ReturnType<typeof resolveAssetValues> & { asset: ReturnType<typeof useAssetsStore.getState>['assets'][number] })[];
+  loading: boolean;
+  privacyMode: boolean;
+}) {
+  return (
+    <Card padding="lg" className="h-full">
+      <CardHeader
+        title="Top holdings"
+        description="By current value"
+        actions={
+          <Link to="/wealth?tab=assets" className="text-[13px] font-medium text-primary-ink hover:underline inline-flex items-center gap-0.5">
+            All assets <ArrowUpRight size={13} />
+          </Link>
+        }
+      />
+      {loading ? (
+        <div className="space-y-3">
+          <Skeleton className="h-9 w-full" />
+          <Skeleton className="h-9 w-full" />
+          <Skeleton className="h-9 w-full" />
+        </div>
+      ) : rows.length === 0 ? (
+        <EmptyState
+          compact
+          icon={<TrendingUp size={18} />}
+          title="No investments yet"
+          description="Stocks, funds and crypto you add show up here."
+        />
+      ) : (
+        <ul className="divide-y divide-line-soft -my-2">
+          {rows.map(({ asset, value, pnlPercent }) => (
+            <li key={asset.id} className="flex items-center justify-between gap-3 py-2.5">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-ink truncate">{asset.name}</p>
+                <p className="text-xs text-muted truncate">{ASSET_CLASS_LABELS[asset.assetClass]}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="font-numeric text-sm font-semibold text-ink">
+                  {maskAmount(value, asset.currency, privacyMode, { fractionDigits: 0 })}
+                </p>
+                {pnlPercent !== undefined && !privacyMode ? (
+                  <p className={`font-numeric text-xs font-medium ${pnlPercent >= 0 ? 'text-positive' : 'text-negative'}`}>
+                    {pnlPercent >= 0 ? '+' : '−'}
+                    {formatPercentMagnitude(pnlPercent, 1)}
+                  </p>
+                ) : (
+                  <Badge className="invisible">–</Badge>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }

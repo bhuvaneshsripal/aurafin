@@ -27,7 +27,7 @@ import { useLiveSipValues } from './hooks/useLiveSipValues';
 import { useLiveGoldPrice } from './hooks/useLiveGoldPrice';
 import { useWeeklyDigestScheduler } from './hooks/useWeeklyDigestScheduler';
 import Sidebar from './components/Sidebar';
-import Topbar from './components/Topbar';
+import TopHeader from './components/TopHeader';
 import BottomNav from './components/BottomNav';
 import PrivacyFab from './components/PrivacyFab';
 import LockScreen from './components/LockScreen';
@@ -81,12 +81,12 @@ function AppShell() {
   }
 
   return (
-    <div className="flex min-h-screen bg-cream-100 dark:bg-slate-950">
+    <div className="flex min-h-screen bg-page">
       <LockScreen />
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0 app-scale">
-        <Topbar />
-        <main className="flex-1 p-4 pb-36 sm:p-6 sm:pb-36 md:p-8 md:pb-8 max-w-6xl mx-auto w-full">
+        <TopHeader />
+        <main className="flex-1 w-full max-w-[1240px] mx-auto px-4 pt-5 pb-36 sm:px-6 sm:pt-6 sm:pb-36 md:px-8 md:pt-7 md:pb-10">
           <ErrorBoundary key={location.pathname}>
             <Suspense fallback={<RouteFallback />}>
               <div key={location.pathname} className="animate-page-in">
@@ -248,6 +248,7 @@ export default function App() {
   const { user, loading, init } = useAuthStore();
   const initTheme = useUiStore((s) => s.initTheme);
   const initPrivacy = useUiStore((s) => s.initPrivacy);
+  const initSidebar = useUiStore((s) => s.initSidebar);
   const initLock = useAppLockStore((s) => s.init);
   const initDisplaySettings = useDisplaySettingsStore((s) => s.init);
   const initNotificationPrefs = useNotificationPreferencesStore((s) => s.init);
@@ -256,10 +257,11 @@ export default function App() {
     init();
     initTheme();
     initPrivacy();
+    initSidebar();
     initLock();
     initDisplaySettings();
     initNotificationPrefs();
-  }, [init, initTheme, initPrivacy, initLock, initDisplaySettings, initNotificationPrefs]);
+  }, [init, initTheme, initPrivacy, initSidebar, initLock, initDisplaySettings, initNotificationPrefs]);
 
   if (loading) {
     return null;

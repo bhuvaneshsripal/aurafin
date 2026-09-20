@@ -56,8 +56,8 @@ export default function BottomNav() {
         </div>
       )}
 
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 pb-[env(safe-area-inset-bottom)]">
-        <div className="grid grid-cols-4">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface border-t border-line pb-[env(safe-area-inset-bottom)]">
+        <div className="grid grid-cols-4 h-14">
           {primaryLinks.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
@@ -65,27 +65,23 @@ export default function BottomNav() {
               end={to === '/'}
               onClick={() => setMoreOpen(false)}
               className={({ isActive }) =>
-                `tap-scale flex flex-col items-center justify-center gap-1 py-2.5 text-[12px] font-semibold transition-colors ${
-                  isActive
-                    ? 'text-brand-600 dark:text-brand-300'
-                    : 'text-slate-500 dark:text-slate-400'
+                `tap-scale flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors ${
+                  isActive ? 'text-primary-ink' : 'text-muted'
                 }`
               }
             >
-              <Icon size={22} />
+              <Icon size={20} strokeWidth={1.75} />
               {label}
             </NavLink>
           ))}
 
           <button
             onClick={() => setMoreOpen(true)}
-            className={`tap-scale flex flex-col items-center justify-center gap-1 py-2.5 text-[12px] font-semibold transition-colors ${
-              isMoreActive
-                ? 'text-brand-600 dark:text-brand-300'
-                : 'text-slate-500 dark:text-slate-400'
+            className={`tap-scale flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors ${
+              isMoreActive ? 'text-primary-ink' : 'text-muted'
             }`}
           >
-            <MoreHorizontal size={22} />
+            <MoreHorizontal size={20} strokeWidth={1.75} />
             More
           </button>
         </div>
@@ -93,15 +89,15 @@ export default function BottomNav() {
 
       {moreOpen && (
         <div
-          className="animate-backdrop-in md:hidden fixed inset-0 z-50 bg-slate-900/40 flex items-end"
+          className="animate-backdrop-in md:hidden fixed inset-0 z-50 bg-slate-900/30 flex items-end"
           onClick={() => setMoreOpen(false)}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="animate-sheet-in w-full bg-white dark:bg-slate-900 rounded-t-2xl pb-[env(safe-area-inset-bottom)] max-h-[75vh] overflow-y-auto"
+            className="animate-sheet-in w-full bg-surface rounded-t-2xl border-t border-line pb-[env(safe-area-inset-bottom)] max-h-[75vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between px-5 pt-4 pb-2">
-              <h3 className="text-base font-semibold text-slate-900 dark:text-white">More</h3>
+              <h3 className="text-base font-semibold text-ink">More</h3>
               <button
                 onClick={() => setMoreOpen(false)}
                 className="icon-outline-green tap-scale h-9 w-9 flex items-center justify-center"
@@ -116,25 +112,25 @@ export default function BottomNav() {
                   to={to}
                   onClick={() => setMoreOpen(false)}
                   className={({ isActive }) =>
-                    `tap-scale flex flex-col items-center justify-center gap-2 rounded-xl px-2 py-4 text-xs font-medium text-center transition-colors ${
+                    `tap-scale flex flex-col items-center justify-center gap-2 rounded-xl border px-2 py-4 text-xs font-medium text-center transition-colors ${
                       isActive
-                        ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300'
-                        : 'bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                        ? 'bg-primary-soft text-primary-ink border-transparent'
+                        : 'bg-surface border-line text-slate-600 hover:bg-surface-hover'
                     }`
                   }
                 >
-                  <Icon size={20} />
+                  <Icon size={20} strokeWidth={1.75} />
                   {label}
                 </NavLink>
               ))}
             </div>
-            <div className="px-5 pb-6 pt-2 text-center text-xs text-slate-600 dark:text-slate-500">
+            <div className="px-5 pb-6 pt-2 text-center text-xs text-muted">
               Developed by Bhuvanesh S ·{' '}
               <a
                 href="https://www.linkedin.com/in/bhuvaneshs07"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-brand-600 dark:text-brand-400 hover:underline font-medium"
+                className="text-primary-ink hover:underline font-medium"
               >
                 Contact us
               </a>

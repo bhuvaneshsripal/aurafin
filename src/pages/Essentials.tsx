@@ -31,6 +31,8 @@ import type { Goal } from '../types';
 import { formatCurrency } from '../utils/currency';
 import CurrencySelect from '../components/CurrencySelect';
 import { useUrlTab } from '../hooks/useUrlTab';
+import { inputClasses } from '../components/ui';
+import { PageHeader, Tabs } from '../components/ui';
 
 type Tab = 'health' | 'goals';
 
@@ -38,32 +40,17 @@ export default function Essentials() {
   const [tab, setTab] = useUrlTab<Tab>(['health', 'goals'], 'health');
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Essentials</h1>
-        <p className="text-slate-500 dark:text-slate-400 text-base mt-1">Financial health check</p>
-      </div>
+    <div className="space-y-5">
+      <PageHeader title="Essentials" description="Financial health check" />
 
-      <div className="flex gap-2 border-b border-slate-200 dark:border-slate-800">
-        {(
-          [
-            ['health', 'Financial Health'],
-            ['goals', 'Goals'],
-          ] as [Tab, string][]
-        ).map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`px-4 py-2.5 text-base font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 ${
-              tab === key
-                ? 'border-brand-600 dark:border-brand-500 text-brand-700 dark:text-brand-300'
-                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <Tabs<Tab>
+        value={tab}
+        onChange={setTab}
+        items={[
+          { key: 'health', label: 'Financial health' },
+          { key: 'goals', label: 'Goals' },
+        ]}
+      />
 
       {tab === 'health' ? <HealthCheck /> : <GoalsTab />}
     </div>
@@ -174,15 +161,15 @@ function HealthCheck() {
         </div>
       )}
 
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
+      <div className="bg-surface rounded-2xl border border-line p-6 space-y-4">
         <button
           onClick={() => setSnapshotOpen((v) => !v)}
           className="w-full flex items-center justify-between text-left"
         >
           <div>
-            <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Your Financial Snapshot</h2>
+            <h2 className="text-lg font-semibold text-ink">Your Financial Snapshot</h2>
             {!snapshotOpen && hasProfile && (
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              <p className="text-sm text-muted mt-0.5">
                 Age {age || '—'} · Income <Amount value={monthlyIncome} /> · Expenses <Amount value={monthlyExpense} />
               </p>
             )}
@@ -209,13 +196,13 @@ function HealthCheck() {
                 <input
                   value={formatCurrency(monthlySavings)}
                   readOnly
-                  className={`${inputClass} bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed`}
+                  className={`${inputClass} bg-slate-50 dark:bg-slate-800 text-muted cursor-not-allowed`}
                 />
               </Field>
             </div>
             <button
               onClick={handleSaveSnapshot}
-              className="bg-brand-600 hover:bg-brand-700 text-white px-6 py-2.5 rounded-lg text-base font-medium"
+              className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors bg-brand-600 hover:bg-brand-700 text-white"
             >
               Save
             </button>
@@ -225,17 +212,17 @@ function HealthCheck() {
 
       {hasProfile && (
         !wealthDataKnown ? (
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 flex items-center justify-center h-32">
+          <div className="bg-surface rounded-2xl border border-line p-6 flex items-center justify-center h-32">
             <LoadingDots />
           </div>
         ) : (
         <div className="space-y-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
+          <div className="bg-surface rounded-2xl border border-line p-6">
             <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
               <div className="flex items-baseline gap-2">
                 <span className="text-4xl font-numeric text-[#8a3b2e] dark:text-[#e08a72]">{overall}</span>
                 <span className="text-slate-600 text-lg">/10</span>
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-600 ml-2">
+                <span className="text-xs font-medium text-slate-600 ml-2">
                   Overall Health Score
                 </span>
               </div>
@@ -255,44 +242,44 @@ function HealthCheck() {
             {/* Emergency Fund */}
             <HealthCard title="Emergency Fund" status={efStatus} icon={Shield} iconTone="emergency">
               <StatRow label="LIQUID ASSETS" value={<Amount value={liquidAssets} />} />
-              <p className="text-xs text-slate-600 dark:text-slate-500 -mt-2">Cash &amp; Savings · FD &amp; RD · Liquid / Debt Funds</p>
+              <p className="text-xs text-muted -mt-2">Cash &amp; Savings · FD &amp; RD · Liquid / Debt Funds</p>
               <StatRow label="RUNWAY" value={<><span className="font-numeric">{runwayMonths.toFixed(runwayMonths < 10 ? 1 : 0)}</span> months</>} />
               <ScaleBar value={runwayMonths} max={12} marks={['0', '3m', '6m', '12m+']} />
-              <p className="text-sm text-slate-500 dark:text-slate-400">Build at least 3 months of expenses in liquid savings</p>
+              <p className="text-sm text-muted">Build at least 3 months of expenses in liquid savings</p>
             </HealthCard>
 
             {/* Savings Rate */}
             <HealthCard title="Savings Rate" subtitle="intended · from financial profile" status={srStatus} icon={PiggyBank} iconTone="savings">
               <div>
                 <span className="text-3xl font-numeric text-brand-600 dark:text-brand-300">{Math.round(savingsRate * 100)}%</span>
-                <span className="text-slate-500 dark:text-slate-400 text-sm ml-1.5">of income saved</span>
+                <span className="text-muted text-sm ml-1.5">of income saved</span>
               </div>
-              <p className="text-xs text-slate-600 dark:text-slate-500">Based on your Financial Profile · actual savings may differ</p>
+              <p className="text-xs text-muted">Based on your Financial Profile · actual savings may differ</p>
               <div className="grid grid-cols-2 gap-4 pt-1">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Income</p>
-                  <p className="font-semibold text-slate-800 dark:text-slate-100">
+                  <p className="text-xs font-medium text-slate-600">Income</p>
+                  <p className="font-semibold text-ink">
                     <Amount value={monthlyIncome} />
                   </p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Expense</p>
-                  <p className="font-semibold text-slate-800 dark:text-slate-100">
+                  <p className="text-xs font-medium text-slate-600">Expense</p>
+                  <p className="font-semibold text-ink">
                     <Amount value={monthlyExpense} />
                   </p>
                 </div>
               </div>
               <ScaleBar value={savingsRate * 100} max={100} marks={['0%', '20%', '50%', '80%+']} />
               <div className="bg-slate-50 dark:bg-slate-800 rounded-lg px-3 py-2.5 flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                <span className="text-xs font-medium text-muted">
                   Time to Financial Independence
                 </span>
-                <span className="font-semibold text-slate-800 dark:text-slate-100 whitespace-nowrap">
+                <span className="font-semibold text-ink whitespace-nowrap">
                   {fiYears > 0 ? <>around <span className="font-numeric">{fiYears}</span> yrs</> : 'Already there!'}
                 </span>
               </div>
               <FiTimelineReference />
-              <p className="text-sm text-slate-500 dark:text-slate-400">
+              <p className="text-sm text-muted">
                 {savingsRate >= 0.5
                   ? "Outstanding! You're on a fast track to financial freedom"
                   : savingsRate >= 0.2
@@ -306,10 +293,10 @@ function HealthCheck() {
               <CoverInput label="YOUR COVER" value={termCover} onSave={(v) => saveField({ termCover: v })} />
               <StatRow label="IDEAL COVER" value={<Amount value={idealTerm} />} />
               <ScaleBar value={termCover} max={Math.max(idealTerm, 1)} marks={[]} />
-              <p className="text-xs text-slate-600 dark:text-slate-500">
+              <p className="text-xs text-muted">
                 Formula: 25 × Annual Expense − Net Worth = {formatCurrency(idealTerm)}
               </p>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
+              <p className="text-sm text-muted">
                 {termStatus === 'perfect'
                   ? 'Your term cover looks adequate'
                   : 'Your term cover is significantly below the recommended amount'}
@@ -322,32 +309,32 @@ function HealthCheck() {
               <CoverInput label="YOUR COVER" value={healthCover} onSave={(v) => saveField({ healthCover: v })} />
               <StatRow label="RECOMMENDED" value="Min ₹5L · Good ₹10L" />
               <ScaleBar value={healthCover} max={1000000} marks={[]} />
-              <p className="text-sm text-slate-500 dark:text-slate-400">Minimum ₹5L private health cover is recommended</p>
+              <p className="text-sm text-muted">Minimum ₹5L private health cover is recommended</p>
             </HealthCard>
 
             {/* Debt Ratio */}
             <HealthCard title="Debt Ratio" status={drStatus} className="sm:col-span-2 lg:col-span-3">
               <div>
-                <span className="text-3xl font-numeric text-slate-900 dark:text-white">{Math.round(debtRatio * 100)}%</span>
-                <span className="text-slate-500 dark:text-slate-400 text-sm ml-1.5">of assets are debt-funded</span>
+                <span className="text-3xl font-numeric text-ink">{Math.round(debtRatio * 100)}%</span>
+                <span className="text-muted text-sm ml-1.5">of assets are debt-funded</span>
               </div>
               <div className="grid grid-cols-2 gap-4 pt-1">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Total Assets</p>
-                  <p className="font-semibold text-slate-800 dark:text-slate-100">
+                  <p className="text-xs font-medium text-slate-600">Total Assets</p>
+                  <p className="font-semibold text-ink">
                     <Amount value={totalAssets} />
                   </p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Total Liabilities</p>
-                  <p className="font-semibold text-slate-800 dark:text-slate-100">
+                  <p className="text-xs font-medium text-slate-600">Total Liabilities</p>
+                  <p className="font-semibold text-ink">
                     <Amount value={totalLiabilities} />
                   </p>
                 </div>
               </div>
               <ScaleBar value={debtRatio * 100} max={100} marks={['0%', '10%', '30%', '50%+']} />
               <div className="bg-brand-50 dark:bg-brand-900/20 rounded-lg px-3 py-2.5 flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wide text-brand-700 dark:text-brand-300">Net Worth</span>
+                <span className="text-xs font-medium text-brand-700 dark:text-brand-300">Net Worth</span>
                 <span className="font-semibold text-brand-700 dark:text-brand-300">
                   <Amount value={netWorth} />
                 </span>
@@ -383,7 +370,7 @@ function FiTimelineReference() {
         <div className="grid grid-cols-5 gap-2 mt-2 text-center">
           {rows.map(([rate, years]) => (
             <div key={rate} className="bg-slate-50 dark:bg-slate-800 rounded-lg py-1.5">
-              <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">{rate}</p>
+              <p className="text-xs font-semibold text-ink-2">{rate}</p>
               <p className="text-[11px] text-slate-600">{years}</p>
             </div>
           ))}
@@ -403,7 +390,7 @@ const ICON_STYLES: Record<string, string> = {
   emergency: 'bg-blue-50 text-blue-500 dark:bg-blue-950/40 dark:text-blue-400',
   savings: 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400',
   term: 'bg-indigo-50 text-indigo-500 dark:bg-indigo-950/40 dark:text-indigo-400',
-  health: 'bg-rose-50 text-rose-500 dark:bg-rose-950/40 dark:text-rose-400',
+  health: 'bg-red-50 text-red-500 dark:bg-red-950/40 dark:text-red-400',
   debt: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
 };
 
@@ -426,7 +413,7 @@ function HealthCard({
 }) {
   const style = RISK_STYLES[status];
   return (
-    <div className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-3 ${className}`}>
+    <div className={`bg-surface rounded-2xl border border-line p-5 space-y-3 ${className}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           {Icon && (
@@ -435,8 +422,8 @@ function HealthCard({
             </span>
           )}
           <div>
-            <h3 className="font-semibold text-slate-800 dark:text-slate-100">{title}</h3>
-            {subtitle && <p className="text-xs text-slate-600 dark:text-slate-500 mt-0.5">{subtitle}</p>}
+            <h3 className="font-semibold text-ink">{title}</h3>
+            {subtitle && <p className="text-xs text-muted mt-0.5">{subtitle}</p>}
           </div>
         </div>
         <span className={`flex items-center gap-1.5 text-xs font-semibold whitespace-nowrap px-2.5 py-1 rounded-full ${PILL_STYLES[status]}`}>
@@ -452,8 +439,8 @@ function HealthCard({
 function StatRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">{label}</span>
-      <span className="font-semibold text-slate-800 dark:text-slate-100">{value}</span>
+      <span className="text-xs font-medium text-slate-600">{label}</span>
+      <span className="font-semibold text-ink">{value}</span>
     </div>
   );
 }
@@ -466,7 +453,7 @@ function ScaleBar({ value, max, marks }: { value: number; max: number; marks: st
         <div className="h-full bg-brand-500 rounded-full" style={{ width: `${pct}%` }} />
       </div>
       {marks.length > 0 && (
-        <div className="flex justify-between text-[11px] text-slate-600 dark:text-slate-500 mt-1">
+        <div className="flex justify-between text-[11px] text-muted mt-1">
           {marks.map((m) => (
             <span key={m}>{m}</span>
           ))}
@@ -488,21 +475,21 @@ function CoverInput({ label, value, onSave }: { label: string; value: number; on
 
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-600 mb-1">{label}</p>
+      <p className="text-xs font-medium text-slate-600 mb-1">{label}</p>
       <div className="flex items-center gap-2">
         <input
           type="number"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           placeholder="Enter cover amount"
-          className="flex-1 border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          className="flex-1 border border-line dark:bg-slate-800 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
         />
         <button
           onClick={commit}
           className={`h-9 w-9 shrink-0 flex items-center justify-center rounded-lg border ${
             savedTick
               ? 'border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-900/30 dark:text-brand-300'
-              : 'border-slate-200 dark:border-slate-700 text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800'
+              : 'border-line text-slate-600 hover:bg-surface-hover'
           }`}
         >
           <Check size={16} />
@@ -518,14 +505,14 @@ function DependentsRow({ value, onSave }: { value: number; onSave: (v: number) =
 
   return (
     <div className="flex items-center justify-between">
-      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">DEPENDENTS</span>
+      <span className="text-xs font-medium text-slate-600">DEPENDENTS</span>
       {editing ? (
         <div className="flex items-center gap-2">
           <input
             type="number"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            className="w-16 border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-lg px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-16 border border-line dark:bg-slate-800 dark:text-white rounded-lg px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-brand-500"
             autoFocus
           />
           <button
@@ -539,7 +526,7 @@ function DependentsRow({ value, onSave }: { value: number; onSave: (v: number) =
           </button>
         </div>
       ) : (
-        <span className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+        <span className="font-semibold text-ink flex items-center gap-2">
           {value} people
           <button onClick={() => setEditing(true)} className="text-slate-600 hover:text-brand-600 dark:hover:text-brand-300">
             <Pencil size={14} />
@@ -604,7 +591,7 @@ function GoalsTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-base text-slate-500 dark:text-slate-400 flex items-center gap-2">
+        <p className="text-base text-muted flex items-center gap-2">
           {goals.length} active goals
         </p>
         <button
@@ -612,7 +599,7 @@ function GoalsTab() {
             setEditing(null);
             setModalOpen(true);
           }}
-          className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-base font-medium"
+          className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors bg-brand-600 hover:bg-brand-700 text-white"
         >
           <Plus size={18} /> Add Goal
         </button>
@@ -623,16 +610,16 @@ function GoalsTab() {
           const current = Math.max(0, netWorth);
           const pct = g.targetAmount > 0 ? Math.min(100, Math.round((current / g.targetAmount) * 100)) : 0;
           return (
-            <div key={g.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+            <div key={g.id} className="bg-surface rounded-2xl border border-line p-5 shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-lg uppercase">{g.name}</h3>
+                <h3 className="font-semibold text-ink text-lg">{g.name}</h3>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => {
                       setEditing(g);
                       setModalOpen(true);
                     }}
-                    className="text-slate-600 dark:text-slate-500 hover:text-brand-600 dark:hover:text-brand-300"
+                    className="text-muted hover:text-brand-600 dark:hover:text-brand-300"
                   >
                     <Pencil size={16} />
                   </button>
@@ -644,7 +631,7 @@ function GoalsTab() {
               <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mb-2">
                 <div className="h-full bg-brand-600 rounded-full" style={{ width: `${wealthDataKnown ? pct : 0}%` }} />
               </div>
-              <div className="flex items-center justify-between text-sm text-slate-500 dark:text-slate-400">
+              <div className="flex items-center justify-between text-sm text-muted">
                 {wealthDataKnown ? (
                   <>
                     <span>{formatCurrency(current, g.currency)} · from Net Worth</span>
@@ -658,8 +645,8 @@ function GoalsTab() {
           );
         })}
         {goals.length === 0 && (
-          <div className="col-span-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-14 flex flex-col items-center justify-center text-center gap-4">
-            <p className="text-slate-600 dark:text-slate-500">
+          <div className="col-span-full bg-surface rounded-2xl border border-line p-14 flex flex-col items-center justify-center text-center gap-4">
+            <p className="text-muted">
               No goals yet. Set a retirement corpus, emergency fund, or education target.
             </p>
             <button
@@ -667,7 +654,7 @@ function GoalsTab() {
                 setEditing(null);
                 setModalOpen(true);
               }}
-              className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-lg text-base font-medium"
+              className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors bg-brand-600 hover:bg-brand-700 text-white"
             >
               <Plus size={18} /> Add Goal
             </button>
@@ -684,7 +671,7 @@ function GoalsTab() {
         onClose={() => setPendingDelete(null)}
         onConfirm={confirmDelete}
         title="Delete this goal?"
-        description={<>This will permanently delete <strong className="uppercase">{pendingDelete?.name}</strong>. This can't be undone.</>}
+        description={<>This will permanently delete <strong>{pendingDelete?.name}</strong>. This can't be undone.</>}
       />
     </div>
   );
@@ -746,10 +733,10 @@ function GoalForm({ initial, onSave }: { initial: Goal | null; onSave: (g: Goal)
           <CurrencySelect value={currency} onChange={setCurrency} className={inputClass} />
         </Field>
       </div>
-      <p className="text-xs text-slate-600 dark:text-slate-500 -mt-1">
+      <p className="text-xs text-muted -mt-1">
         Progress is calculated automatically from your current Net Worth — no need to update it manually.
       </p>
-      <button onClick={submit} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-base font-medium">
+      <button onClick={submit} className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white">
         Save Goal
       </button>
     </div>
@@ -759,11 +746,10 @@ function GoalForm({ initial, onSave }: { initial: Goal | null; onSave: (g: Goal)
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1 block">{label}</span>
+      <span className="text-sm font-medium text-muted mb-1 block">{label}</span>
       {children}
     </label>
   );
 }
 
-const inputClass =
-  'w-full border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-brand-500';
+const inputClass = inputClasses;

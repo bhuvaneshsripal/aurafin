@@ -33,13 +33,13 @@ export default class ErrorBoundary extends Component<Props, State> {
       return (
         <div className="flex flex-col items-center justify-center gap-3 py-24 px-6 text-center">
           <AlertTriangle className="text-red-500" size={28} />
-          <p className="text-slate-700 dark:text-slate-200 font-medium">
+          <p className="text-ink-2 font-medium">
             Something went wrong loading this page.
           </p>
           <p className="text-sm text-slate-600 max-w-sm">{this.state.error.message}</p>
           <button
             onClick={() => window.location.reload()}
-            className="mt-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
+            className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors mt-2 bg-brand-600 hover:bg-brand-700 text-white"
           >
             Reload
           </button>

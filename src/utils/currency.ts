@@ -105,6 +105,33 @@ export function maskPreciseAmount(value: number, currency: string = 'INR', priva
   return maskAmount(value, currency, privacyMode, { fractionDigits: 2 });
 }
 
+/** "+₹1,80.00" / "-₹118.41" — sign shown once, up front (and "+" for gains). */
+export function formatSignedCurrency(amount: number, currency: string = 'INR', fractionDigits: number = 2) {
+  const sign = amount > 0 ? '+' : amount < 0 ? '-' : '';
+  return `${sign}${formatCurrency(Math.abs(amount), currency, { fractionDigits })}`;
+}
+
+/** "0.64%" — always unsigned; direction is carried by colour and the signed amount. */
+export function formatPercentMagnitude(percent: number, fractionDigits: number = 2) {
+  return `${Math.abs(percent).toFixed(fractionDigits)}%`;
+}
+
+/** Short Indian-style axis label: ₹1.2Cr · ₹8.4L · ₹45K. Only for chart axes. */
+export function formatAxisAmount(value: number, currency: string = 'INR') {
+  const symbol = CURRENCY_SYMBOLS[currency] ?? '';
+  const abs = Math.abs(value);
+  const sign = value < 0 ? '-' : '';
+  const trim = (n: number) => n.toFixed(1).replace(/\.0$/, '');
+  if (currency === 'INR') {
+    if (abs >= 1e7) return `${sign}${symbol}${trim(abs / 1e7)}Cr`;
+    if (abs >= 1e5) return `${sign}${symbol}${trim(abs / 1e5)}L`;
+  } else {
+    if (abs >= 1e6) return `${sign}${symbol}${trim(abs / 1e6)}M`;
+  }
+  if (abs >= 1e3) return `${sign}${symbol}${trim(abs / 1e3)}K`;
+  return `${sign}${symbol}${Math.round(abs)}`;
+}
+
 // Asset-class labels/colors now live in ./taxonomy.ts (full 39-type taxonomy).
 // Re-exported here so existing imports from '../utils/currency' keep working.
 export { ASSET_CLASS_LABELS, ASSET_CLASS_COLORS } from './taxonomy';

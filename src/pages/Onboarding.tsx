@@ -79,7 +79,7 @@ export default function Onboarding() {
     <div className="min-h-screen flex items-center justify-center bg-cream-100 dark:bg-slate-950 px-4 py-10">
       <div className="w-full max-w-md">
         <div className="text-center mb-6">
-          <h1 className="font-luxury text-4xl font-semibold text-slate-900 dark:text-white tracking-tight">
+          <h1 className="font-luxury text-4xl font-semibold text-ink tracking-tight">
             Aurafin<span className="text-brand-500">.</span>
           </h1>
         </div>
@@ -99,7 +99,7 @@ export default function Onboarding() {
           ))}
         </div>
 
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-8">
+        <div className="bg-surface rounded-2xl border border-line shadow-sm p-8">
           {step === 'welcome' && <WelcomeStep onNext={() => goTo(1)} onSkipAll={skipAll} onBack={() => navigate(-1)} />}
 
           {step === 'profile' && (
@@ -148,17 +148,15 @@ function WelcomeStep({ onNext, onSkipAll, onBack }: { onNext: () => void; onSkip
   return (
     <div className="flex flex-col items-center text-center gap-5">
       <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
-        isGuest 
-          ? 'bg-orange-50 dark:bg-orange-900/40' 
-          : 'bg-brand-50 dark:bg-brand-900/40'
+        'bg-brand-50 dark:bg-brand-900/40'
       }`}>
-        <Sparkles size={26} className={isGuest ? 'text-orange-600' : 'text-brand-600'} />
+        <Sparkles size={26} className="text-brand-600" />
       </div>
       <div>
-        <h2 className="font-luxury text-2xl font-semibold text-slate-900 dark:text-white mb-2">
+        <h2 className="font-luxury text-2xl font-semibold text-ink mb-2">
           {isGuest ? 'Guest Mode' : 'Welcome to Aurafin'}
         </h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+        <p className="text-sm text-muted leading-relaxed">
           {isGuest
             ? <>Explore <span className="font-luxury">Aurafin</span> with temporary guest access. Your data will be cleared when you log out. Create an account anytime to save your data permanently.</>
             : 'Your privacy-first net worth tracker. Your data lives in your own account — no ads, no selling your data. Just you and your numbers.'
@@ -185,7 +183,7 @@ function WelcomeStep({ onNext, onSkipAll, onBack }: { onNext: () => void; onSkip
           <button
             type="button"
             onClick={onBack}
-            className="text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+            className="text-sm font-medium text-muted hover:text-slate-700 dark:hover:text-slate-200"
           >
             ← Back
           </button>
@@ -196,7 +194,7 @@ function WelcomeStep({ onNext, onSkipAll, onBack }: { onNext: () => void; onSkip
           <button
             type="button"
             onClick={onSkipAll}
-            className="border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="border border-line text-slate-600 dark:text-slate-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-surface-hover"
           >
             Skip All
           </button>
@@ -204,9 +202,7 @@ function WelcomeStep({ onNext, onSkipAll, onBack }: { onNext: () => void; onSkip
             type="button"
             onClick={onNext}
             className={`flex items-center justify-center gap-2 px-6 py-2 rounded-lg text-sm font-medium text-white ${
-              isGuest
-                ? 'bg-orange-600 hover:bg-orange-700'
-                : 'bg-brand-600 hover:bg-brand-700'
+              'bg-brand-600 hover:bg-brand-700'
             }`}
           >
             Get Started
@@ -220,7 +216,7 @@ function WelcomeStep({ onNext, onSkipAll, onBack }: { onNext: () => void; onSkip
 
 function FeatureBox({ icon: Icon, label }: { icon: typeof Coins; label: string }) {
   return (
-    <div className="flex flex-col items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+    <div className="flex flex-col items-center gap-1.5 rounded-xl border border-line p-3">
       <Icon size={18} className="text-brand-600" />
       <span className="text-[11px] leading-tight text-slate-600 dark:text-slate-300">{label}</span>
     </div>
@@ -259,10 +255,10 @@ function ProfileStep({
   return (
     <div>
       <div className="text-center mb-6">
-        <h2 className="font-luxury text-2xl font-semibold text-slate-900 dark:text-white mb-1">
+        <h2 className="font-luxury text-2xl font-semibold text-ink mb-1">
           Your Financial Profile
         </h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
+        <p className="text-sm text-muted">
           Optional — helps us provide personalised financial health insights.
         </p>
       </div>
@@ -307,14 +303,14 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1.5">{label}</label>
+      <label className="block text-xs text-muted mb-1.5">{label}</label>
       <input
         type="number"
         inputMode="decimal"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+        className="w-full border border-line bg-white dark:bg-slate-800 rounded-lg px-3.5 py-2.5 text-sm text-ink placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
       />
     </div>
   );
@@ -344,10 +340,10 @@ function AssetsStep({
   return (
     <div>
       <div className="text-center mb-6">
-        <h2 className="font-luxury text-2xl font-semibold text-slate-900 dark:text-white mb-1">
+        <h2 className="font-luxury text-2xl font-semibold text-ink mb-1">
           Add your assets
         </h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
+        <p className="text-sm text-muted">
           Import from your broker or add manually. You can always do this later.
         </p>
       </div>
@@ -361,10 +357,10 @@ function AssetsStep({
           <Upload size={17} className="text-brand-600" />
         </span>
         <span className="flex-1 min-w-0">
-          <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
+          <span className="block text-sm font-semibold text-ink">
             Import from Broker
           </span>
-          <span className="block text-xs text-slate-500 dark:text-slate-400">
+          <span className="block text-xs text-muted">
             Upload a CSV/Excel export from your broker
           </span>
         </span>
@@ -377,7 +373,7 @@ function AssetsStep({
         <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
       </div>
 
-      <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Asset Type</p>
+      <p className="text-xs text-muted mb-2">Asset Type</p>
       <div className="grid grid-cols-2 gap-3">
         {ASSET_TAXONOMY.map((cat) => {
           const isSelected = selected.includes(cat.key);
@@ -390,11 +386,11 @@ function AssetsStep({
               className={`flex flex-col items-center gap-1.5 rounded-xl border p-4 text-center transition-colors ${
                 isSelected
                   ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/30'
-                  : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  : 'border-line hover:bg-surface-hover'
               }`}
             >
               <Icon size={18} className="text-slate-600 dark:text-slate-300" />
-              <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{cat.label}</span>
+              <span className="text-sm font-medium text-ink">{cat.label}</span>
               <span className="text-[11px] text-slate-600">
                 {cat.types.length} {cat.types.length === 1 ? 'type' : 'types'}
               </span>
@@ -445,10 +441,10 @@ function SecureStep({
         <ShieldCheck size={26} className="text-brand-600" />
       </div>
       <div>
-        <h2 className="font-luxury text-2xl font-semibold text-slate-900 dark:text-white mb-2">
+        <h2 className="font-luxury text-2xl font-semibold text-ink mb-2">
           Secure Your App
         </h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+        <p className="text-sm text-muted leading-relaxed">
           Set a 4-digit PIN to lock the app when you're away. You can change or remove it anytime
           in Settings.
         </p>
@@ -457,7 +453,7 @@ function SecureStep({
       <button
         type="button"
         onClick={() => setPinModalOpen(true)}
-        className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium"
+        className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors bg-brand-600 hover:bg-brand-700 text-white"
       >
         <Lock size={16} />
         Set Up PIN
@@ -468,13 +464,13 @@ function SecureStep({
       <Modal open={pinModalOpen} onClose={() => setPinModalOpen(false)} title="Set Up App Lock">
         <div className="space-y-4">
           <div>
-            <label className="block text-xs text-slate-500 dark:text-slate-400 mb-2 text-center">
+            <label className="block text-xs text-muted mb-2 text-center">
               4-digit PIN
             </label>
             <PinBoxInput value={pin} onChange={setPinInput} autoFocus />
           </div>
           <div>
-            <label className="block text-xs text-slate-500 dark:text-slate-400 mb-2 text-center">
+            <label className="block text-xs text-muted mb-2 text-center">
               Confirm PIN
             </label>
             <PinBoxInput value={confirmPin} onChange={setConfirmPin} />
@@ -483,7 +479,7 @@ function SecureStep({
           <button
             type="button"
             onClick={savePin}
-            className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2 rounded-full text-sm font-medium"
+            className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white"
           >
             Save PIN
           </button>
@@ -514,7 +510,7 @@ function StepNav({
         <button
           type="button"
           onClick={onBack}
-          className="text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+          className="text-sm font-medium text-muted hover:text-slate-700 dark:hover:text-slate-200"
         >
           ← Back
         </button>
@@ -522,14 +518,14 @@ function StepNav({
           <button
             type="button"
             onClick={onSkip}
-            className="border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="border border-line text-slate-600 dark:text-slate-300 px-3 py-2 rounded-lg text-sm font-medium hover:bg-surface-hover"
           >
             Skip
           </button>
           <button
             type="button"
             onClick={onSkipAll}
-            className="border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="border border-line text-slate-600 dark:text-slate-300 px-3 py-2 rounded-lg text-sm font-medium hover:bg-surface-hover"
           >
             Skip All
           </button>

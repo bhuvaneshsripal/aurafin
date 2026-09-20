@@ -8,6 +8,11 @@ interface UiState {
    * pages that show their own bottom toolbar (e.g. bulk-selection actions)
    * in the same corner, so the two don't overlap. */
   hideFab: boolean;
+  /** Desktop sidebar collapsed to an icon rail. (On tablet widths the rail is
+   *  always used; on phones the bottom nav replaces the sidebar entirely.) */
+  sidebarCollapsed: boolean;
+  toggleSidebar: () => void;
+  initSidebar: () => void;
   toggleTheme: () => void;
   togglePrivacy: () => void;
   initTheme: () => void;
@@ -17,6 +22,15 @@ interface UiState {
 
 function applyTheme(theme: 'light' | 'dark') {
   document.documentElement.classList.toggle('dark', theme === 'dark');
+}
+
+const SIDEBAR_KEY = 'aurafin-sidebar-collapsed';
+
+// The collapsed state is driven from CSS (see index.css → --sb-w and the
+// `.sb-*` rules) via a data attribute, so the sidebar, the Modal content
+// panel and anything else that needs the sidebar's width stay in sync.
+function applySidebar(collapsed: boolean) {
+  document.documentElement.dataset.sidebar = collapsed ? 'collapsed' : 'expanded';
 }
 
 // Auto re-hide amounts 15 minutes after opening the eye.
@@ -47,6 +61,27 @@ export const useUiStore = create<UiState>((set, get) => ({
   theme: 'light',
   privacyMode: true,
   hideFab: false,
+  sidebarCollapsed: false,
+  initSidebar: () => {
+    let collapsed = false;
+    try {
+      collapsed = localStorage.getItem(SIDEBAR_KEY) === '1';
+    } catch {
+      // storage unavailable — default to expanded
+    }
+    applySidebar(collapsed);
+    set({ sidebarCollapsed: collapsed });
+  },
+  toggleSidebar: () => {
+    const next = !get().sidebarCollapsed;
+    applySidebar(next);
+    try {
+      localStorage.setItem(SIDEBAR_KEY, next ? '1' : '0');
+    } catch {
+      // ignore
+    }
+    set({ sidebarCollapsed: next });
+  },
   setHideFab: (hide) => set({ hideFab: hide }),
   initTheme: () => {
     const stored = localStorage.getItem('aurafin-theme');

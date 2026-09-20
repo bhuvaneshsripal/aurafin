@@ -198,14 +198,14 @@ export const PortfolioPdfReport = ({ hideInPrint = false }: PortfolioPdfReportPr
             <p className="text-xs text-slate-500 mt-2">{liabilities.length} liabilities</p>
           </div>
 
-          <div className={`p-6 rounded-lg border-2 ${gainPercent >= 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-            <p className={`text-sm font-semibold mb-2 ${gainPercent >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+          <div className={`p-6 rounded-lg border-2 ${gainPercent >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+            <p className={`text-sm font-semibold mb-2 ${gainPercent >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
               Overall Gain/Loss
             </p>
-            <p className={`text-3xl font-bold ${gainPercent >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+            <p className={`text-3xl font-bold ${gainPercent >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
               {gainPercent >= 0 ? '+' : ''}{gainPercent.toFixed(2)}%
             </p>
-            <p className={`text-xs mt-2 ${gainPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <p className={`text-xs mt-2 ${gainPercent >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
               {maskPreciseAmount(gains, 'INR', privacyMode)}
             </p>
           </div>
@@ -232,7 +232,7 @@ export const PortfolioPdfReport = ({ hideInPrint = false }: PortfolioPdfReportPr
 
           <div className="col-span-2 bg-slate-50 p-6 rounded-lg border border-slate-200">
             <p className="text-slate-600 text-sm font-semibold mb-2">Net Cashflow</p>
-            <p className={`text-3xl font-bold ${monthIncome - monthExpense >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+            <p className={`text-3xl font-bold ${monthIncome - monthExpense >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
               {maskPreciseAmount(monthIncome - monthExpense, 'INR', privacyMode)}
             </p>
           </div>
@@ -352,7 +352,7 @@ export const PortfolioPdfReport = ({ hideInPrint = false }: PortfolioPdfReportPr
                       <td className="text-right py-2 px-3">{asset.quantity?.toFixed(2) || '-'}</td>
                       <td className="text-right py-2 px-3 font-semibold">{formatCurrency(assetValue.value, 'INR')}</td>
                       <td className="text-right py-2 px-3">{formatCurrency(assetValue.invested || assetValue.value, 'INR')}</td>
-                      <td className={`text-right py-2 px-3 font-semibold ${gain >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                      <td className={`text-right py-2 px-3 font-semibold ${gain >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
                         {gain >= 0 ? '+' : ''}{formatCurrency(gain, 'INR')}
                       </td>
                     </tr>

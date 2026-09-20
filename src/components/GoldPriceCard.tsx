@@ -26,16 +26,16 @@ function RateBlock({
   accent: string;
 }) {
   return (
-    <div className="flex-1 rounded-xl border border-slate-100 dark:border-slate-800 p-4">
+    <div className="flex-1 rounded-xl border border-line-soft p-4">
       <div className="flex items-center gap-1.5">
         <span className={`w-2 h-2 rounded-full ${accent}`} />
-        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{label}</span>
+        <span className="text-[13px] font-medium text-muted">{label}</span>
       </div>
-      <p className="font-numeric text-2xl font-bold text-slate-900 dark:text-white mt-1.5">
+      <p className="font-numeric text-xl font-semibold text-ink mt-1.5">
         {formatCurrency(perGram, 'INR', { fractionDigits: 2 })}
         <span className="text-xs font-medium text-slate-600 ml-1">/ gram</span>
       </p>
-      <p className="font-numeric text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+      <p className="font-numeric text-sm text-muted mt-0.5">
         {formatCurrency(perGram * 10, 'INR', { fractionDigits: 0 })}
         <span className="text-xs text-slate-600 ml-1">/ 10g</span>
       </p>
@@ -65,31 +65,31 @@ export default function GoldPriceCard() {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+    <div className="bg-surface border border-line rounded-2xl shadow-xs overflow-hidden">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="w-full flex items-center justify-between gap-2 text-left p-6"
+        className="w-full flex items-center justify-between gap-2 text-left px-5 py-4"
       >
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-amber-500 bg-amber-50 dark:bg-amber-900/20 rounded-xl p-2 flex items-center justify-center shrink-0">
+          <span className="text-amber-600 bg-amber-50 dark:bg-amber-900/20 rounded-lg p-2 flex items-center justify-center shrink-0">
             <Coins className="w-4 h-4" />
           </span>
           <div className="min-w-0">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Live Gold Price</p>
-            <p className="text-[11px] text-slate-600 dark:text-slate-500">India · per gram, calibrated live estimate</p>
+            <p className="text-sm font-semibold text-ink">Live gold price</p>
+            <p className="text-xs text-muted">India · per gram, calibrated live estimate</p>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {price24k !== null && !loading && (
-            <span className="flex items-center gap-1 text-[11px] font-medium text-brand-600 dark:text-brand-300">
+            <span className="flex items-center gap-1 text-xs font-medium text-primary-ink">
               <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
               Live
             </span>
           )}
           <ChevronDown
-            className={`w-4 h-4 text-slate-600 dark:text-slate-500 transition-transform duration-200 ${
+            className={`w-4 h-4 text-muted transition-transform duration-200 ${
               expanded ? 'rotate-180' : ''
             }`}
           />
@@ -97,11 +97,11 @@ export default function GoldPriceCard() {
       </button>
 
       {expanded && (
-        <div className="px-6 pb-6">
+        <div className="px-5 pb-5">
           {price24k === null && loading && (
             <div className="flex items-center gap-2 rounded-lg bg-slate-100 dark:bg-slate-800 px-3 py-3">
               <RefreshCw className="w-3.5 h-3.5 text-slate-600 animate-spin" />
-              <span className="text-xs text-slate-600 dark:text-slate-500">Fetching live gold rate…</span>
+              <span className="text-xs text-muted">Fetching live gold rate…</span>
             </div>
           )}
 
@@ -115,7 +115,7 @@ export default function GoldPriceCard() {
                 <RateBlock label="24K (999)" perGram={price24k} accent="bg-amber-500" />
                 <RateBlock label="22K (916)" perGram={goldPricePerGram22k(price24k)} accent="bg-amber-300" />
               </div>
-              <p className="text-[11px] text-slate-600 dark:text-slate-500 mt-3">
+              <p className="text-[11px] text-muted mt-3">
                 {error ? 'Showing last known rate · ' : ''}Updated {timeAgo(asOf)}
               </p>
             </>

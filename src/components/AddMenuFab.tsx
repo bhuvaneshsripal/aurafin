@@ -30,7 +30,7 @@ type MenuItem = {
  * Floating "+" action button that expands into a single grouped card —
  * matching the reference design: a "CASHFLOW" section (Expense / Income /
  * Transfer) and a "WEALTH" section (Asset / Liability / Snapshot), each with
- * an uppercase gray section header, a plain icon + label row per item, and a
+ * an gray section header, a plain icon + label row per item, and a
  * divider between the two groups. The "+" itself turns into a solid green
  * "X" in place while the card is open.
  *
@@ -69,10 +69,10 @@ export default function AddMenuFab({ onSelect }: { onSelect: (type: AddMenuType)
               setOpen(false);
               onSelect(key);
             }}
-            className="flex w-full items-center gap-3 rounded-xl bg-white px-4 py-3 text-left shadow-md hover:bg-slate-50"
+            className="flex w-full items-center gap-3 rounded-xl bg-surface px-4 py-3 text-left shadow-md hover:bg-slate-50"
           >
             <Icon size={18} className={iconClass} />
-            <span className="text-base text-slate-800">{label}</span>
+            <span className="text-base text-ink">{label}</span>
           </button>
         ))}
       </div>

@@ -60,12 +60,12 @@ export const PortfolioExportModal = ({ open, onClose, reportElementId = 'portfol
         )}
 
         <div className="space-y-4">
-          <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+          <div className="border border-line rounded-lg p-4">
             <div className="flex items-start gap-3">
               <FileText size={20} className="text-brand-600 dark:text-brand-400 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <h3 className="font-semibold text-slate-900 dark:text-white mb-1">PDF Report</h3>
-                <p className="text-sm text-slate-600 dark:text-slate-400">
+                <h3 className="font-semibold text-ink mb-1">PDF Report</h3>
+                <p className="text-sm text-muted">
                   Comprehensive portfolio report with summary, asset breakdown, liabilities, and detailed listings.
                 </p>
               </div>
@@ -73,7 +73,7 @@ export const PortfolioExportModal = ({ open, onClose, reportElementId = 'portfol
           </div>
         </div>
 
-        <div className="flex gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+        <div className="flex gap-3 pt-4 border-t border-line">
           <button
             onClick={onClose}
             className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
@@ -100,7 +100,7 @@ export const PortfolioExportModal = ({ open, onClose, reportElementId = 'portfol
           </button>
         </div>
 
-        <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
+        <p className="text-xs text-muted text-center">
           Note: First-time export may take a moment to load required libraries.
         </p>
       </div>

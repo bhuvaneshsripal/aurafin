@@ -15,6 +15,7 @@ import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { upsertDoc } from '../hooks/useFirestoreSync';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
+import { buttonClasses, inputClasses } from './ui';
 import Modal from './Modal';
 import type { Asset, Snapshot, Transaction, TransactionType } from '../types';
 import CurrencySelect from './CurrencySelect';
@@ -63,7 +64,7 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
       <div className={isFab ? 'relative' : 'relative'} ref={ref}>
         {menuOpen && isFab && (
           <div
-            className="fixed inset-0 bg-slate-900/40 backdrop-blur-[1px] z-20"
+            className="fixed inset-0 bg-slate-900/30 z-20"
             onClick={() => setMenuOpen(false)}
             aria-hidden="true"
           />
@@ -75,12 +76,12 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
           className={
             isFab
               ? `fab-button${menuOpen ? ' fab-open' : ''} tap-scale relative z-30 flex items-center justify-center text-white h-14 w-14`
-              : 'tap-scale flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2.5 rounded-lg text-base font-medium'
+              : buttonClasses('primary', 'md', 'pl-3 pr-3')
           }
         >
           {isFab ? <Plus size={24} className="fab-icon" /> : (
             <>
-              <Plus size={18} /> Add <ChevronDown size={16} />
+              <Plus size={16} /> Add <ChevronDown size={15} className="opacity-80" />
             </>
           )}
         </button>
@@ -90,31 +91,31 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
             className="absolute bottom-full right-0 mb-3 flex flex-col items-end gap-2 z-30"
             style={{ transformOrigin: 'bottom right' }}
           >
-            <PillItem delay={5} icon={ArrowUpRight} color="text-orange-500" label="Expense" onClick={() => open('expense')} />
-            <PillItem delay={4} icon={ArrowDownLeft} color="text-emerald-700" label="Income" onClick={() => open('income')} />
-            <PillItem delay={3} icon={ArrowLeftRight} color="text-slate-700" label="Transfer" onClick={() => open('transfer')} />
-            <PillItem delay={2} icon={Coins} color="text-slate-700" label="Asset" onClick={() => open('asset')} />
-            <PillItem delay={1} icon={Landmark} color="text-red-500" label="Liability" onClick={() => open('liability')} />
-            <PillItem delay={0} icon={Camera} color="text-slate-500" label="Snapshot" onClick={() => open('snapshot')} />
+            <PillItem delay={5} icon={ArrowUpRight} color="text-muted" label="Expense" onClick={() => open('expense')} />
+            <PillItem delay={4} icon={ArrowDownLeft} color="text-muted" label="Income" onClick={() => open('income')} />
+            <PillItem delay={3} icon={ArrowLeftRight} color="text-muted" label="Transfer" onClick={() => open('transfer')} />
+            <PillItem delay={2} icon={Coins} color="text-muted" label="Asset" onClick={() => open('asset')} />
+            <PillItem delay={1} icon={Landmark} color="text-muted" label="Liability" onClick={() => open('liability')} />
+            <PillItem delay={0} icon={Camera} color="text-muted" label="Snapshot" onClick={() => open('snapshot')} />
           </div>
         )}
 
         {menuOpen && !isFab && (
-          <div className="animate-menu-in absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden z-30">
-            <p className="px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
+          <div className="animate-menu-in absolute right-0 mt-2 w-60 bg-surface border border-line rounded-xl shadow-lg overflow-hidden z-30 pb-1">
+            <p className="px-4 pt-3 pb-1 text-xs font-medium text-faint">
               Cashflow
             </p>
-            <MenuItem icon={ArrowDownLeft} color="text-orange-500" label="Expense" onClick={() => open('expense')} />
-            <MenuItem icon={ArrowUpRight} color="text-emerald-700" label="Income" onClick={() => open('income')} />
-            <MenuItem icon={ArrowLeftRight} color="text-sky-500" label="Transfer" onClick={() => open('transfer')} />
+            <MenuItem icon={ArrowDownLeft} color="text-muted" label="Expense" onClick={() => open('expense')} />
+            <MenuItem icon={ArrowUpRight} color="text-muted" label="Income" onClick={() => open('income')} />
+            <MenuItem icon={ArrowLeftRight} color="text-muted" label="Transfer" onClick={() => open('transfer')} />
 
-            <div className="border-t border-slate-100 dark:border-slate-700 mt-1" />
-            <p className="px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
+            <div className="border-t border-line-soft mt-1" />
+            <p className="px-4 pt-3 pb-1 text-xs font-medium text-faint">
               Wealth
             </p>
-            <MenuItem icon={Coins} color="text-teal-600" label="Asset" onClick={() => open('asset')} />
-            <MenuItem icon={Landmark} color="text-red-500" label="Liability" onClick={() => open('liability')} />
-            <MenuItem icon={Camera} color="text-slate-500" label="Snapshot" onClick={() => open('snapshot')} />
+            <MenuItem icon={Coins} color="text-muted" label="Asset" onClick={() => open('asset')} />
+            <MenuItem icon={Landmark} color="text-muted" label="Liability" onClick={() => open('liability')} />
+            <MenuItem icon={Camera} color="text-muted" label="Snapshot" onClick={() => open('snapshot')} />
           </div>
         )}
       </div>
@@ -155,7 +156,7 @@ function PillItem({
     <button
       onClick={onClick}
       style={{ animationDelay: `${delay * 30}ms` }}
-      className="animate-pill-in tap-scale flex items-center gap-2 rounded-full bg-white dark:bg-slate-800 pl-3 pr-4 py-2 shadow-lg text-sm font-semibold text-slate-900 dark:text-white whitespace-nowrap"
+      className="animate-pill-in tap-scale flex items-center gap-2 border border-line bg-surface pl-3 pr-4 py-2 shadow-lg text-sm font-medium text-ink whitespace-nowrap"
     >
       <Icon size={15} className={color} />
       {label}
@@ -177,7 +178,7 @@ function MenuItem({
   return (
     <button
       onClick={onClick}
-      className="menu-row-3d w-full flex items-center gap-3 px-4 py-2.5 text-base text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+      className="menu-row-3d w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-ink-2 hover:bg-surface-hover"
     >
       <Icon size={18} className={color} />
       {label}
@@ -185,13 +186,12 @@ function MenuItem({
   );
 }
 
-const inputClass =
-  'w-full border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-brand-500';
+const inputClass = inputClasses;
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1 block">{label}</span>
+      <span className="text-sm font-medium text-muted mb-1 block">{label}</span>
       {children}
     </label>
   );
@@ -239,7 +239,7 @@ function TransactionForm({ type, onDone }: { type: TransactionType; onDone: () =
       <Field label="Date">
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
       </Field>
-      <button onClick={submit} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-base font-medium">
+      <button onClick={submit} className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white">
         Save
       </button>
     </div>
@@ -296,7 +296,7 @@ function TransferForm({ onDone }: { onDone: () => void }) {
       <Field label="Amount">
         <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} placeholder="0" />
       </Field>
-      <button onClick={submit} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-base font-medium">
+      <button onClick={submit} className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white">
         Record Transfer
       </button>
     </div>
@@ -326,24 +326,24 @@ function SnapshotForm({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-500 dark:text-slate-400">
+      <p className="text-sm text-muted">
         This saves today's net worth so you can track how it changes over time on your Overview chart.
       </p>
       <div className="bg-slate-50 dark:bg-slate-700 rounded-lg p-4 text-sm space-y-1">
         <div className="flex justify-between">
           <span className="text-slate-500">Total Assets</span>
-          <span className="font-medium text-slate-800 dark:text-slate-100">{totalAssets.toLocaleString(undefined, { useGrouping: true })}</span>
+          <span className="font-medium text-ink">{totalAssets.toLocaleString(undefined, { useGrouping: true })}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-slate-500">Total Liabilities</span>
-          <span className="font-medium text-slate-800 dark:text-slate-100">{totalLiabilities.toLocaleString(undefined, { useGrouping: true })}</span>
+          <span className="font-medium text-ink">{totalLiabilities.toLocaleString(undefined, { useGrouping: true })}</span>
         </div>
         <div className="flex justify-between border-t border-slate-200 dark:border-slate-600 pt-1 mt-1">
           <span className="text-slate-500">Net Worth</span>
-          <span className="font-semibold text-slate-900 dark:text-white">{netWorth.toLocaleString(undefined, { useGrouping: true })}</span>
+          <span className="font-semibold text-ink">{netWorth.toLocaleString(undefined, { useGrouping: true })}</span>
         </div>
       </div>
-      <button onClick={submit} className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-base font-medium">
+      <button onClick={submit} className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white">
         Save Snapshot
       </button>
     </div>

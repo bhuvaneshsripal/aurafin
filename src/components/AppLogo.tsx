@@ -1,51 +1,11 @@
-import { useEffect, useState } from 'react';
-
 /**
- * The Aurafin coin logo. Plays a one-shot 3D coin-flip animation
- * (see `.logo-flip` / `logo-coin-flip` in index.css) automatically
- * every 3 seconds, and also on click — a nice little easter egg,
- * similar to clicking a brand mark elsewhere.
- *
- * `key={spin}` forces React to remount the <img> on every trigger so the
- * CSS animation restarts cleanly even back-to-back, instead of being a
- * no-op because the class name didn't change.
- *
- * The circular clip lives on this outer, untransformed wrapper (not on the
- * animated <img> itself). Combining `border-radius` with a 3D
- * `perspective()/rotateY()` transform on the *same* element makes some
- * browsers stop clipping correctly mid-animation — the square image box
- * flashes through during the flip. An `overflow-hidden` ancestor that
- * never transforms clips its transformed child reliably in every browser,
- * so the logo always reads as a plain circle with no square edges.
+ * The Aurafin coin logo. Static — the old auto-spinning coin flip was purely
+ * decorative motion, so it's gone. The circular clip lives on this wrapper.
  */
 export default function AppLogo({ className }: { className?: string }) {
-  const [spin, setSpin] = useState(0);
-
-  useEffect(() => {
-    const id = setInterval(() => setSpin((s) => s + 1), 3000);
-    return () => clearInterval(id);
-  }, []);
-
   return (
-    <span
-      role="button"
-      tabIndex={0}
-      onClick={() => setSpin((s) => s + 1)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          setSpin((s) => s + 1);
-        }
-      }}
-      className={`inline-block overflow-hidden cursor-pointer select-none ${className ?? ''}`}
-    >
-      <img
-        key={spin}
-        src="/logo-icon.png"
-        alt="Aurafin"
-        title="Aurafin"
-        className={`block h-full w-full object-cover ${spin > 0 ? 'logo-flip' : ''}`}
-      />
+    <span className={`inline-block overflow-hidden select-none shrink-0 ${className ?? ''}`}>
+      <img src="/logo-icon.png" alt="Aurafin" title="Aurafin" className="block h-full w-full object-cover" />
     </span>
   );
 }

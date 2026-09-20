@@ -49,6 +49,7 @@ import { exportDomToPdf } from '../utils/exportPdf';
 import Modal from '../components/Modal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import type { Asset } from '../types';
+import { Button, Input, PageHeader, SegmentedControl } from '../components/ui';
 
 // ---------------------------------------------------------------------------
 // Small local helpers
@@ -65,8 +66,8 @@ function pctLabel(v: number | undefined) {
 }
 
 function signClass(v: number | undefined) {
-  if (v === undefined || Math.abs(v) < 0.005) return 'text-slate-600 dark:text-slate-400';
-  return v > 0 ? 'text-brand-600 dark:text-brand-400' : 'text-red-600 dark:text-red-400';
+  if (v === undefined || Math.abs(v) < 0.005) return 'text-muted';
+  return v > 0 ? 'text-positive' : 'text-negative';
 }
 
 function moneyLabel(v: number | undefined, currency: string, privacy: boolean) {
@@ -185,32 +186,26 @@ function SummaryCard({
   tooltip?: string;
   icon: React.ReactNode;
 }) {
-  const toneClass =
-    tone === 'positive'
-      ? 'text-brand-600 dark:text-brand-400'
-      : tone === 'negative'
-        ? 'text-red-600 dark:text-red-400'
-        : 'text-slate-900 dark:text-white';
+  const toneClass = tone === 'positive' ? 'text-positive' : tone === 'negative' ? 'text-negative' : 'text-ink';
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-soft flex flex-col gap-2 min-w-0">
-      <div className="flex items-center justify-between">
-        <span className="text-[13px] font-medium text-slate-500 dark:text-slate-400 flex items-center">
+    <div className="bg-surface rounded-2xl border border-line p-4 sm:p-5 shadow-xs flex flex-col gap-2 min-w-0">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[13px] font-medium text-muted flex items-center">
           {label}
           {tooltip && <InfoTip text={tooltip} />}
         </span>
-        <span className="text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-900/30 rounded-xl p-1.5 flex items-center justify-center shrink-0">
-          {icon}
-        </span>
+        <span className="text-faint shrink-0">{icon}</span>
       </div>
-      <div className={`font-numeric text-[26px] leading-tight font-bold truncate ${toneClass}`}>{value}</div>
-      <div className="flex items-center gap-2 text-[12.5px]">
+      {/* Never truncated: long ₹ figures wrap instead of being cut to "₹21,75,…". */}
+      <div className={`font-numeric text-xl sm:text-[22px] leading-7 font-semibold break-words ${toneClass}`}>{value}</div>
+      <div className="flex items-center gap-2 text-xs">
         {percent && (
-          <span className={`font-semibold flex items-center gap-0.5 ${toneClass}`}>
+          <span className={`font-medium flex items-center gap-0.5 ${toneClass}`}>
             {tone === 'positive' ? <ArrowUpRight size={13} /> : tone === 'negative' ? <ArrowDownRight size={13} /> : null}
             {percent}
           </span>
         )}
-        <span className="text-slate-500 dark:text-slate-500">{sublabel}</span>
+        <span className="text-muted">{sublabel}</span>
       </div>
     </div>
   );
@@ -291,22 +286,22 @@ function PortfolioPerformanceChart({
   const hasData = points.length > 1;
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-soft">
+    <div className="bg-surface rounded-2xl border border-line p-5 shadow-soft">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div>
-          <h3 className="text-[15px] font-semibold text-slate-900 dark:text-white">Portfolio Performance</h3>
-          <p className="text-[12.5px] text-slate-500 dark:text-slate-400">
+          <h3 className="text-[15px] font-semibold text-ink">Portfolio Performance</h3>
+          <p className="text-[12.5px] text-muted">
             {mode === 'value' ? 'Capital deployed over time, from your actual buys & sells' : 'Realized + unrealized P&L over time'}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-50 dark:bg-slate-800">
+          <div className="flex rounded-lg border border-line p-0.5 bg-slate-50 dark:bg-slate-800">
             {(['value', 'pnl'] as const).map((m) => (
               <button
                 key={m}
                 onClick={() => setMode(m)}
                 className={`px-2.5 py-1 rounded-md text-[12px] font-semibold transition-colors ${
-                  mode === m ? 'bg-white dark:bg-slate-900 text-brand-700 dark:text-brand-300 shadow-sm' : 'text-slate-500 dark:text-slate-400'
+                  mode === m ? 'bg-surface text-brand-700 dark:text-brand-300 shadow-sm' : 'text-muted'
                 }`}
               >
                 {m === 'value' ? 'Value' : 'P&L'}
@@ -324,7 +319,7 @@ function PortfolioPerformanceChart({
             className={`px-2.5 py-1 rounded-full text-[12px] font-semibold border transition-colors ${
               period === p.key
                 ? 'bg-brand-600 border-brand-600 text-white'
-                : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                : 'border-line text-slate-600 dark:text-slate-300 hover:bg-surface-hover'
             }`}
           >
             {p.label}
@@ -340,8 +335,8 @@ function PortfolioPerformanceChart({
             <AreaChart data={points} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="pnlFillPositive" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#2c6e49" stopOpacity={0.28} />
-                  <stop offset="100%" stopColor="#2c6e49" stopOpacity={0.02} />
+                  <stop offset="0%" stopColor="#247a4d" stopOpacity={0.1} />
+                  <stop offset="100%" stopColor="#247a4d" stopOpacity={0.1} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="text-slate-100 dark:text-slate-800" />
@@ -371,7 +366,7 @@ function PortfolioPerformanceChart({
               <Area
                 type="monotone"
                 dataKey="total"
-                stroke="#2c6e49"
+                stroke="#247a4d"
                 strokeWidth={2}
                 fill="url(#pnlFillPositive)"
                 isAnimationActive
@@ -405,13 +400,13 @@ function SoldRow({
   return (
     <tr
       onClick={onOpen}
-      className="cursor-pointer border-b border-slate-100 dark:border-slate-800 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
+      className="cursor-pointer border-b border-line-soft last:border-0 hover:bg-surface-hover/60 transition-colors"
     >
       <td className="py-3 pr-3">
         <div className="flex items-center gap-2.5">
           <AssetBadge asset={h.asset} size={32} />
           <div className="min-w-0">
-            <p className="text-[13.5px] font-semibold text-slate-900 dark:text-white truncate">{h.asset.name}</p>
+            <p className="text-[13.5px] font-semibold text-ink truncate">{h.asset.name}</p>
             <p className="text-[11.5px] text-slate-500 dark:text-slate-500">{ASSET_CLASS_LABELS[h.asset.assetClass]}</p>
           </div>
         </div>
@@ -423,8 +418,8 @@ function SoldRow({
       <td className="py-3 pr-3 text-right font-numeric text-[13px] text-slate-700 dark:text-slate-300">{fmt(h.totalSaleProceeds, currency, privacy)}</td>
       <td className={`py-3 pr-3 text-right font-numeric text-[13px] font-semibold ${signClass(h.realizedPnl)}`}>{moneyLabel(h.realizedPnl, currency, privacy)}</td>
       <td className={`py-3 pr-3 text-right font-numeric text-[13px] font-semibold ${signClass(h.realizedPnlPercent)}`}>{pctLabel(h.realizedPnlPercent)}</td>
-      <td className="py-3 pr-3 text-right text-[12.5px] text-slate-500 dark:text-slate-400">{formatShortDate(h.buyLots[0]?.date)}</td>
-      <td className="py-3 pl-3 text-[12.5px] text-slate-500 dark:text-slate-400">{formatShortDate(h.sales[h.sales.length - 1]?.date)}</td>
+      <td className="py-3 pr-3 text-right text-[12.5px] text-muted">{formatShortDate(h.buyLots[0]?.date)}</td>
+      <td className="py-3 pl-3 text-[12.5px] text-muted">{formatShortDate(h.sales[h.sales.length - 1]?.date)}</td>
       <td className="py-3 pl-1 text-right">
         <button
           type="button"
@@ -454,10 +449,10 @@ function PerformersCard({ title, icon, items, currency, privacy }: {
   privacy: boolean;
 }) {
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-soft">
+    <div className="bg-surface rounded-2xl border border-line p-5 shadow-soft">
       <div className="flex items-center gap-2 mb-3">
         {icon}
-        <h3 className="text-[14px] font-semibold text-slate-900 dark:text-white">{title}</h3>
+        <h3 className="text-[14px] font-semibold text-ink">{title}</h3>
       </div>
       {items.length === 0 ? (
         <p className="text-[12.5px] text-slate-400 py-3">Not enough data yet.</p>
@@ -488,7 +483,7 @@ function ActivityRow({ entry, currency, privacy }: { entry: ActivityEntry; curre
   const [open, setOpen] = useState(false);
   const isBuy = entry.type === 'buy';
   return (
-    <div className="border-b border-slate-100 dark:border-slate-800 last:border-0">
+    <div className="border-b border-line-soft last:border-0">
       <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-3 py-3 text-left">
         <span
           className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
@@ -498,7 +493,7 @@ function ActivityRow({ entry, currency, privacy }: { entry: ActivityEntry; curre
           {isBuy ? <ArrowDownRight size={16} /> : <ArrowUpRight size={16} />}
         </span>
         <div className="flex-1 min-w-0">
-          <p className="text-[13.5px] font-semibold text-slate-900 dark:text-white truncate">
+          <p className="text-[13.5px] font-semibold text-ink truncate">
             {isBuy ? 'Buy' : 'Sell'} · {entry.asset.name}
           </p>
           <p className="text-[12px] text-slate-500 dark:text-slate-500">
@@ -506,7 +501,7 @@ function ActivityRow({ entry, currency, privacy }: { entry: ActivityEntry; curre
           </p>
         </div>
         <div className="text-right shrink-0">
-          <p className="font-numeric text-[13px] font-semibold text-slate-900 dark:text-white">{fmt(entry.netAmount, currency, privacy)}</p>
+          <p className="font-numeric text-[13px] font-semibold text-ink">{fmt(entry.netAmount, currency, privacy)}</p>
           {entry.realizedPnl !== undefined && (
             <p className={`font-numeric text-[11.5px] font-medium ${signClass(entry.realizedPnl)}`}>{moneyLabel(entry.realizedPnl, currency, privacy)}</p>
           )}
@@ -553,7 +548,7 @@ function AssetDetailModal({ h, currency, privacy, onClose }: { h: HoldingPnl | n
           <div className="flex items-center gap-3">
             <AssetBadge asset={h.asset} size={44} />
             <div>
-              <p className="text-[15px] font-semibold text-slate-900 dark:text-white">{h.asset.name}</p>
+              <p className="text-[15px] font-semibold text-ink">{h.asset.name}</p>
               <p className="text-[12.5px] text-slate-500 dark:text-slate-500">
                 {ASSET_CLASS_LABELS[h.asset.assetClass]} {h.asset.symbol ? `· ${h.asset.symbol}` : ''}
               </p>
@@ -570,7 +565,7 @@ function AssetDetailModal({ h, currency, privacy, onClose }: { h: HoldingPnl | n
           </div>
 
           <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4">
-            <p className="text-[12.5px] text-slate-500 dark:text-slate-400 mb-1">Unrealized P&L</p>
+            <p className="text-[12.5px] text-muted mb-1">Unrealized P&L</p>
             <p className={`font-numeric text-[20px] font-bold ${signClass(h.unrealizedPnl)}`}>
               {moneyLabel(h.unrealizedPnl, currency, privacy)}{' '}
               <span className="text-[14px]">({pctLabel(h.unrealizedPnlPercent)})</span>
@@ -612,7 +607,7 @@ function AssetDetailModal({ h, currency, privacy, onClose }: { h: HoldingPnl | n
               <DetailRow label="Current Value" value={fmt(h.currentValue, currency, privacy)} />
               <DetailRow label="Realized P&L" value={moneyLabel(h.realizedPnl, currency, privacy)} valueClass={signClass(h.realizedPnl)} />
               <DetailRow label="Unrealized P&L" value={moneyLabel(h.unrealizedPnl, currency, privacy)} valueClass={signClass(h.unrealizedPnl)} />
-              <div className="flex justify-between gap-3 pt-1.5 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex justify-between gap-3 pt-1.5 border-t border-line-soft">
                 <span className="font-semibold text-slate-700 dark:text-slate-300">Lifetime P&L</span>
                 <span className={`font-numeric font-bold ${signClass(h.totalPnl)}`}>{moneyLabel(h.totalPnl, currency, privacy)}</span>
               </div>
@@ -627,8 +622,8 @@ function AssetDetailModal({ h, currency, privacy, onClose }: { h: HoldingPnl | n
 function StatBox({ label, value }: { label: string; value: string }) {
   return (
     <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3">
-      <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-0.5">{label}</p>
-      <p className="font-numeric text-[14px] font-bold text-slate-900 dark:text-white truncate">{value}</p>
+      <p className="text-[11px] text-muted mb-0.5">{label}</p>
+      <p className="font-numeric text-[14px] font-bold text-ink truncate">{value}</p>
     </div>
   );
 }
@@ -648,7 +643,7 @@ function MiniTable({ headers, rows, lastColClass }: { headers: string[]; rows: s
         </thead>
         <tbody>
           {rows.map((row, ri) => (
-            <tr key={ri} className="border-t border-slate-100 dark:border-slate-800">
+            <tr key={ri} className="border-t border-line-soft">
               {row.map((cell, ci) => (
                 <td
                   key={ci}
@@ -733,33 +728,33 @@ function ExportReportModal({
   return (
     <Modal open={open} onClose={onClose} title="Export Report">
       <div className="space-y-3">
-        <p className="text-[13px] text-slate-500 dark:text-slate-400">
+        <p className="text-[13px] text-muted">
           Includes your summary totals, current holdings, sold investments, and full transaction history{portfolio.holdings.length === 0 ? ' (once you have investments to show).' : '.'}
         </p>
         {error && <p className="text-[12.5px] text-red-600">{error}</p>}
         <button
           onClick={handlePdf}
           disabled={busy !== null}
-          className="w-full flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left disabled:opacity-60"
+          className="w-full flex items-center gap-3 rounded-xl border border-line px-4 py-3 hover:bg-surface-hover transition-colors text-left disabled:opacity-60"
         >
-          <span className="w-9 h-9 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
+          <span className="w-9 h-9 rounded-lg bg-red-50 dark:bg-red-900/30 text-negative flex items-center justify-center shrink-0">
             {busy === 'pdf' ? <Loader size={16} className="animate-spin" /> : <FileText size={16} />}
           </span>
           <span>
-            <span className="block text-[13.5px] font-semibold text-slate-900 dark:text-white">Download as PDF</span>
+            <span className="block text-[13.5px] font-semibold text-ink">Download as PDF</span>
             <span className="block text-[12px] text-slate-500 dark:text-slate-500">Formatted summary report</span>
           </span>
         </button>
         <button
           onClick={handleCsv}
           disabled={busy !== null}
-          className="w-full flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left disabled:opacity-60"
+          className="w-full flex items-center gap-3 rounded-xl border border-line px-4 py-3 hover:bg-surface-hover transition-colors text-left disabled:opacity-60"
         >
           <span className="w-9 h-9 rounded-lg bg-accent-50 dark:bg-accent-900/30 text-accent-600 dark:text-accent-400 flex items-center justify-center shrink-0">
             {busy === 'csv' ? <Loader size={16} className="animate-spin" /> : <TableIcon size={16} />}
           </span>
           <span>
-            <span className="block text-[13.5px] font-semibold text-slate-900 dark:text-white">Download as CSV</span>
+            <span className="block text-[13.5px] font-semibold text-ink">Download as CSV</span>
             <span className="block text-[12px] text-slate-500 dark:text-slate-500">Complete transaction-level data</span>
           </span>
         </button>
@@ -774,17 +769,17 @@ function ExportReportModal({
 
 function EmptyState() {
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-10 text-center flex flex-col items-center gap-3 shadow-soft">
-      <span className="w-14 h-14 rounded-2xl bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 flex items-center justify-center">
+    <div className="bg-surface rounded-2xl border border-line p-10 text-center flex flex-col items-center gap-3 shadow-soft">
+      <span className="w-14 h-14 rounded-2xl bg-brand-50 dark:bg-brand-900/30 text-positive flex items-center justify-center">
         <Sparkles size={26} />
       </span>
-      <h3 className="text-[17px] font-semibold text-slate-900 dark:text-white">Start tracking your investment journey</h3>
-      <p className="text-[13.5px] text-slate-500 dark:text-slate-400 max-w-sm">
+      <h3 className="text-[17px] font-semibold text-ink">Start tracking your investment journey</h3>
+      <p className="text-[13.5px] text-muted max-w-sm">
         Add your first investment to see your portfolio performance, realized gains, and complete profit &amp; loss history.
       </p>
       <Link
         to="/wealth?add=1"
-        className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-[13.5px] font-semibold transition-colors"
+        className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors mt-2 bg-brand-600 hover:bg-brand-700 text-white text-[13.5px] transition-colors"
       >
         Add Investment
       </Link>
@@ -906,37 +901,25 @@ export default function InvestmentPnL() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-[22px] font-bold text-slate-900 dark:text-white tracking-tight">Profit &amp; Loss</h1>
-          <p className="text-[13.5px] text-slate-500 dark:text-slate-400">Track your complete investment performance, from the very first transaction.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {currencies.length > 1 && (
-            <div className="flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-white dark:bg-slate-900">
-              {currencies.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setCurrency(c)}
-                  className={`px-2.5 py-1.5 rounded-md text-[12.5px] font-semibold transition-colors ${
-                    activeCurrency === c ? 'bg-brand-600 text-white' : 'text-slate-500 dark:text-slate-400'
-                  }`}
-                >
-                  {CURRENCY_SYMBOLS[c] ?? c}
-                </button>
-              ))}
-            </div>
-          )}
-          <button
-            onClick={() => setExportOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-[13px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-          >
-            <Download size={15} />
-            <span className="hidden sm:inline">Export Report</span>
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Profit & loss"
+        description="Track your complete investment performance, from the very first transaction."
+        actions={
+          <>
+            {currencies.length > 1 && (
+              <SegmentedControl<string>
+                value={activeCurrency}
+                onChange={setCurrency}
+                items={currencies.map((c) => ({ key: c, label: CURRENCY_SYMBOLS[c] ?? c }))}
+              />
+            )}
+            <Button variant="secondary" leftIcon={<Download size={15} />} onClick={() => setExportOpen(true)}>
+              <span className="hidden sm:inline">Export report</span>
+              <span className="sm:hidden">Export</span>
+            </Button>
+          </>
+        }
+      />
 
       {!hasAnyInvestments ? (
         <EmptyState />
@@ -945,27 +928,26 @@ export default function InvestmentPnL() {
           {/* Filters */}
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative flex-1 min-w-[180px] max-w-xs">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
+              <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search investments..."
-                className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[13px] focus:outline-none focus:ring-2 focus:ring-brand-500"
+                placeholder="Search investments"
+                aria-label="Search investments"
+                leftIcon={<Search size={15} />}
               />
             </div>
-            <button
+            <Button
+              variant="secondary"
               onClick={() => setFiltersOpen((o) => !o)}
-              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-[13px] font-semibold transition-colors ${
-                filtersOpen ? 'border-brand-500 text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-900/30' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
-              }`}
+              className={filtersOpen ? '!border-brand-500 !text-primary-ink !bg-primary-soft' : ''}
+              rightIcon={<ChevronDown size={14} className={`transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />}
             >
               Filters
-              <ChevronDown size={14} className={`transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
-            </button>
+            </Button>
           </div>
 
           {filtersOpen && (
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 space-y-3">
+            <div className="bg-surface rounded-2xl border border-line p-4 space-y-3">
               <FilterGroup label="Type" options={TYPE_FILTERS} value={typeFilter} onChange={setTypeFilter} />
               <FilterGroup label="Position" options={POSITION_FILTERS} value={positionFilter} onChange={(v) => setPositionFilter(v as any)} />
               <FilterGroup label="Performance" options={PERFORMANCE_FILTERS} value={performanceFilter} onChange={(v) => setPerformanceFilter(v as any)} />
@@ -975,7 +957,7 @@ export default function InvestmentPnL() {
 
           <div ref={reportRef} id="investment-pnl-report" className="space-y-5">
             {/* Summary cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
               <SummaryCard
                 label="Total Invested"
                 value={fmt(portfolio.totalInvested, activeCurrency, privacyMode)}
@@ -1036,21 +1018,21 @@ export default function InvestmentPnL() {
             />
 
             {/* P&L Breakdown */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-soft">
-              <h3 className="text-[15px] font-semibold text-slate-900 dark:text-white mb-4">P&amp;L Breakdown</h3>
+            <div className="bg-surface rounded-2xl border border-line p-5 shadow-soft">
+              <h3 className="text-[15px] font-semibold text-ink mb-4">P&amp;L Breakdown</h3>
               <div className="grid grid-cols-3 gap-4 mb-5">
                 <BreakdownStat label="Unrealized Profit" value={moneyLabel(portfolio.unrealizedPnl, activeCurrency, privacyMode)} tone={signClass(portfolio.unrealizedPnl)} />
                 <BreakdownStat label="Realized Profit" value={moneyLabel(portfolio.realizedPnl, activeCurrency, privacyMode)} tone={signClass(portfolio.realizedPnl)} />
                 <BreakdownStat label="Total Profit" value={moneyLabel(portfolio.totalPnl, activeCurrency, privacyMode)} tone={signClass(portfolio.totalPnl)} />
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-                <BreakdownStat label="Profitable (sold)" value={String(portfolio.profitableCount)} tone="text-brand-600 dark:text-brand-400" />
-                <BreakdownStat label="Loss-making (sold)" value={String(portfolio.lossMakingCount)} tone="text-red-600 dark:text-red-400" />
-                <BreakdownStat label="Completed Positions" value={String(portfolio.completedCount)} tone="text-slate-900 dark:text-white" />
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-line-soft">
+                <BreakdownStat label="Profitable (sold)" value={String(portfolio.profitableCount)} tone="text-positive" />
+                <BreakdownStat label="Loss-making (sold)" value={String(portfolio.lossMakingCount)} tone="text-negative" />
+                <BreakdownStat label="Completed Positions" value={String(portfolio.completedCount)} tone="text-ink" />
                 <BreakdownStat
                   label="Win Rate"
                   value={portfolio.winRatePercent !== undefined ? `${portfolio.winRatePercent.toFixed(1)}%` : '—'}
-                  tone="text-slate-900 dark:text-white"
+                  tone="text-ink"
                   tooltip="Calculated only from fully-sold (closed) positions — active holdings aren't counted as a win or loss yet."
                 />
               </div>
@@ -1059,10 +1041,10 @@ export default function InvestmentPnL() {
             {/* Current Holdings */}
             <Link
               to="/wealth"
-              className="block bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-soft hover:border-brand-300 dark:hover:border-brand-700 transition-colors"
+              className="block bg-surface rounded-2xl border border-line p-5 shadow-soft hover:border-brand-300 dark:hover:border-brand-700 transition-colors"
             >
               <div className="flex items-center justify-between">
-                <h3 className="text-[15px] font-semibold text-slate-900 dark:text-white">Current Holdings</h3>
+                <h3 className="text-[15px] font-semibold text-ink">Current Holdings</h3>
                 <span className="flex items-center gap-1.5 text-[12px] text-slate-400">
                   {filteredActive.length} holding{filteredActive.length === 1 ? '' : 's'}
                   <ChevronRight size={14} />
@@ -1071,9 +1053,9 @@ export default function InvestmentPnL() {
             </Link>
 
             {/* Sold Investments */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-soft">
+            <div className="bg-surface rounded-2xl border border-line p-5 shadow-soft">
               <button onClick={() => setSoldExpanded((o) => !o)} className="w-full flex items-center justify-between mb-1">
-                <h3 className="text-[15px] font-semibold text-slate-900 dark:text-white">Sold Investments</h3>
+                <h3 className="text-[15px] font-semibold text-ink">Sold Investments</h3>
                 <span className="flex items-center gap-2 text-[12px] text-slate-400">
                   {filteredSold.length} sold
                   <ChevronDown size={15} className={`transition-transform ${soldExpanded ? 'rotate-180' : ''}`} />
@@ -1086,7 +1068,7 @@ export default function InvestmentPnL() {
                   <div className="overflow-x-auto mt-2">
                     <table className="w-full">
                       <thead>
-                        <tr className="text-left text-[11.5px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800">
+                        <tr className="text-left text-xs font-medium text-slate-400 dark:text-slate-500 border-b border-line-soft">
                           <th className="py-2 pr-3 font-semibold">Asset</th>
                           <th className="py-2 pr-3 text-right font-semibold">Qty Sold</th>
                           <th className="py-2 pr-3 text-right font-semibold">Total Cost</th>
@@ -1114,7 +1096,7 @@ export default function InvestmentPnL() {
                   </div>
                 ))}
               {!soldExpanded && filteredSold.length > 5 && (
-                <button onClick={() => setSoldExpanded(true)} className="text-[12.5px] font-semibold text-brand-600 dark:text-brand-400 mt-2">
+                <button onClick={() => setSoldExpanded(true)} className="text-[12.5px] font-semibold text-positive mt-2">
                   Show all {filteredSold.length} sold investments →
                 </button>
               )}
@@ -1127,9 +1109,9 @@ export default function InvestmentPnL() {
             </div>
 
             {/* Investment Activity */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-soft">
+            <div className="bg-surface rounded-2xl border border-line p-5 shadow-soft">
               <div className="flex items-center justify-between mb-1">
-                <h3 className="text-[15px] font-semibold text-slate-900 dark:text-white">Investment Activity</h3>
+                <h3 className="text-[15px] font-semibold text-ink">Investment Activity</h3>
                 <span className="text-[12px] text-slate-400">{activity.length} transaction{activity.length === 1 ? '' : 's'}</span>
               </div>
               {activity.length === 0 ? (
@@ -1155,7 +1137,7 @@ export default function InvestmentPnL() {
         title="Delete this sold investment?"
         description={
           <>
-            This will permanently delete <strong className="uppercase">{pendingDeleteSold?.asset.name}</strong> and its entire buy/sell history. This can't be undone.
+            This will permanently delete <strong>{pendingDeleteSold?.asset.name}</strong> and its entire buy/sell history. This can't be undone.
           </>
         }
         confirmLabel="Delete"
@@ -1167,11 +1149,11 @@ export default function InvestmentPnL() {
 function BreakdownStat({ label, value, tone, tooltip }: { label: string; value: string; tone: string; tooltip?: string }) {
   return (
     <div>
-      <p className="text-[12px] text-slate-500 dark:text-slate-400 flex items-center">
+      <p className="text-[12px] text-muted flex items-center">
         {label}
         {tooltip && <InfoTip text={tooltip} />}
       </p>
-      <p className={`font-numeric text-[18px] font-bold ${tone}`}>{value}</p>
+      <p className={`font-numeric text-base sm:text-[18px] font-semibold whitespace-nowrap ${tone}`}>{value}</p>
     </div>
   );
 }
@@ -1189,7 +1171,7 @@ function FilterGroup<T extends string>({
 }) {
   return (
     <div>
-      <p className="text-[11.5px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1.5">{label}</p>
+      <p className="text-xs font-medium text-slate-400 dark:text-slate-500 mb-1.5">{label}</p>
       <div className="flex flex-wrap gap-1.5">
         {options.map((o) => (
           <button
@@ -1198,7 +1180,7 @@ function FilterGroup<T extends string>({
             className={`px-2.5 py-1 rounded-full text-[12px] font-semibold border transition-colors ${
               value === o.key
                 ? 'bg-brand-600 border-brand-600 text-white'
-                : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                : 'border-line text-slate-600 dark:text-slate-300 hover:bg-surface-hover'
             }`}
           >
             {o.label}

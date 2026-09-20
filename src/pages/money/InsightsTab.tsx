@@ -57,7 +57,7 @@ export default function InsightsTab() {
         >
           <ChevronLeft size={18} />
         </button>
-        <span className="font-semibold text-slate-900 dark:text-white text-lg">{monthLabel(month)}</span>
+        <span className="font-semibold text-ink text-lg">{monthLabel(month)}</span>
         <button
           onClick={() => setMonth((m) => shiftMonth(m, 1))}
           className="tap-scale h-8 w-8 flex items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -67,30 +67,30 @@ export default function InsightsTab() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
-          <p className="text-sm text-slate-500 dark:text-slate-400">Income</p>
+        <div className="bg-surface rounded-2xl border border-line p-4">
+          <p className="text-sm text-muted">Income</p>
           <p className="text-xl font-bold text-brand-600 dark:text-brand-300">
             {cashflowDataKnown ? <Amount value={income} /> : <LoadingDots />}
           </p>
         </div>
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
-          <p className="text-sm text-slate-500 dark:text-slate-400">Spent</p>
+        <div className="bg-surface rounded-2xl border border-line p-4">
+          <p className="text-sm text-muted">Spent</p>
           <p className="text-xl font-bold text-orange-500">
             {cashflowDataKnown ? <Amount value={expense} /> : <LoadingDots />}
           </p>
         </div>
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
-          <p className="text-sm text-slate-500 dark:text-slate-400">Planned (Budget)</p>
-          <p className="text-xl font-bold text-slate-900 dark:text-white">
+        <div className="bg-surface rounded-2xl border border-line p-4">
+          <p className="text-sm text-muted">Planned (Budget)</p>
+          <p className="text-xl font-bold text-ink">
             {planned > 0 ? <Amount value={planned} /> : '—'}
           </p>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6">
-        <h2 className="font-semibold text-slate-900 dark:text-white mb-4">Spending by category</h2>
+      <div className="bg-surface rounded-2xl border border-line p-4 sm:p-6">
+        <h2 className="font-semibold text-ink mb-4">Spending by category</h2>
         {byCategory.length === 0 ? (
-          <div className="text-center text-slate-600 dark:text-slate-500 text-sm py-10">
+          <div className="text-center text-muted text-sm py-10">
             No expenses logged for this month yet.
           </div>
         ) : (
@@ -111,8 +111,8 @@ export default function InsightsTab() {
               {byCategory.map((c, i) => (
                 <div key={c.name} className="flex items-center gap-2.5">
                   <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                  <span className="flex-1 text-sm text-slate-600 dark:text-slate-300 truncate uppercase">{c.name}</span>
-                  <span className="text-sm font-medium text-slate-800 dark:text-slate-100 whitespace-nowrap">
+                  <span className="flex-1 text-sm text-slate-600 dark:text-slate-300 truncate">{c.name}</span>
+                  <span className="text-sm font-medium text-ink whitespace-nowrap">
                     <Amount value={c.value} />
                   </span>
                 </div>

@@ -6,6 +6,7 @@ import BudgetTab from './money/BudgetTab';
 import AccountsTab from './money/AccountsTab';
 import InsightsTab from './money/InsightsTab';
 import { useUrlTab } from '../hooks/useUrlTab';
+import { Button, IconButton, PageHeader, Tabs } from '../components/ui';
 
 const TABS = [
   {
@@ -47,50 +48,30 @@ export default function Money() {
   const active = TABS.find((t) => t.key === tab)!;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">{active.title}</h1>
-          </div>
-          <p className="text-slate-500 dark:text-slate-400 text-sm sm:text-base mt-1">{active.subtitle}</p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {tab === 'accounts' && (
-            <button
-              onClick={() => setAccountsModalOpen(true)}
-              className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium"
-            >
-              <Plus size={18} /> Add Account
-            </button>
-          )}
-          <button
-            onClick={() => navigate('/settings')}
-            title="Money settings"
-            className="tap-scale h-10 w-10 flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-          >
-            <SettingsIcon size={20} />
-          </button>
-        </div>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        title={active.title}
+        description={active.subtitle}
+        actionsInline
+        actions={
+          <>
+            {tab === 'accounts' && (
+              <Button onClick={() => setAccountsModalOpen(true)} leftIcon={<Plus size={16} />}>
+                Add account
+              </Button>
+            )}
+            <IconButton label="Money settings" onClick={() => navigate('/settings')}>
+              <SettingsIcon size={18} />
+            </IconButton>
+          </>
+        }
+      />
 
-      <div className="border-b border-slate-200 dark:border-slate-800">
-        <div className="flex gap-6 overflow-x-auto">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`shrink-0 pb-3 text-sm sm:text-base font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
-                tab === t.key
-                  ? 'border-brand-600 text-brand-700 dark:text-brand-300'
-                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <Tabs<TabKey>
+        value={tab}
+        onChange={setTab}
+        items={TABS.map((t) => ({ key: t.key, label: t.label }))}
+      />
 
       {tab === 'transactions' && <TransactionsTab />}
       {tab === 'budget' && <BudgetTab />}

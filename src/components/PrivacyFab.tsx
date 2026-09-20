@@ -3,7 +3,7 @@ import { useUiStore } from '../store/uiStore';
 
 /**
  * Small floating "show/hide amounts" toggle, pinned to the bottom-right
- * corner on desktop/laptop layouts only. The original toggle in the Topbar
+ * corner on desktop/laptop layouts only. The original toggle in the top header
  * stays put on both desktop and mobile — this is just a second, quick-reach
  * copy for desktop, where the bottom-right corner is otherwise empty.
  */

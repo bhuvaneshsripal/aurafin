@@ -156,7 +156,7 @@ export default function CurrencySelect({ value, onChange, className = '', disabl
           <div
             ref={menuRef}
             role="listbox"
-            className={`animate-menu-in fixed z-[1000] max-h-72 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg py-1.5 ${
+            className={`animate-menu-in fixed z-[1000] max-h-72 overflow-y-auto bg-white dark:bg-slate-800 border border-line rounded-xl shadow-lg py-1.5 ${
               coords.openUp ? '-translate-y-full' : ''
             }`}
             style={{ top: coords.top, left: coords.left, width: Math.max(coords.width, 128) }}
@@ -183,8 +183,8 @@ export default function CurrencySelect({ value, onChange, className = '', disabl
                     selected
                       ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-medium'
                       : active
-                        ? 'bg-slate-50 dark:bg-slate-700/60 text-slate-700 dark:text-slate-200'
-                        : 'text-slate-700 dark:text-slate-200'
+                        ? 'bg-slate-50 dark:bg-slate-700/60 text-ink-2'
+                        : 'text-ink-2'
                   }`}
                 >
                   <span className="flex items-center gap-1.5 truncate">

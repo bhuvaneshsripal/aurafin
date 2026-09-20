@@ -204,7 +204,7 @@ export default function CustomSelect({
           <div
             ref={menuRef}
             role="listbox"
-            className={`animate-menu-in fixed z-[1000] max-h-72 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg py-1.5 ${
+            className={`animate-menu-in fixed z-[1000] max-h-72 overflow-y-auto bg-white dark:bg-slate-800 border border-line rounded-xl shadow-lg py-1.5 ${
               coords.openUp ? '-translate-y-full' : ''
             }`}
             style={{ top: coords.top, left: coords.left, width: coords.width }}
@@ -220,8 +220,8 @@ export default function CustomSelect({
                 <div key={opt.value}>
                   {showGroupHeader && (
                     <div
-                      className={`px-3.5 pt-2.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 ${
-                        i > 0 ? 'mt-1 border-t border-slate-100 dark:border-slate-700' : ''
+                      className={`px-3.5 pt-2.5 pb-1 text-xs font-medium text-slate-400 dark:text-slate-500 ${
+                        i > 0 ? 'mt-1 border-t border-line-soft' : ''
                       }`}
                     >
                       {opt.group}
@@ -246,8 +246,8 @@ export default function CustomSelect({
                       isSelected
                         ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-medium'
                         : active
-                          ? 'bg-slate-50 dark:bg-slate-700/60 text-slate-700 dark:text-slate-200'
-                          : 'text-slate-700 dark:text-slate-200'
+                          ? 'bg-slate-50 dark:bg-slate-700/60 text-ink-2'
+                          : 'text-ink-2'
                     }`}
                   >
                     <span className="truncate text-left">{opt.label}</span>

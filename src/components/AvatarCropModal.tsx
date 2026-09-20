@@ -121,7 +121,7 @@ export default function AvatarCropModal({ open, image, onCancel, onConfirm }: Av
     <Modal open={open} onClose={onCancel} title="Adjust photo">
       <div className="flex flex-col items-center gap-5">
         <div
-          className="relative rounded-full overflow-hidden border border-slate-200 dark:border-slate-700 shadow-inner cursor-grab active:cursor-grabbing touch-none select-none"
+          className="relative rounded-full overflow-hidden border border-line shadow-inner cursor-grab active:cursor-grabbing touch-none select-none"
           style={{ width: VIEWPORT, height: VIEWPORT }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -142,7 +142,7 @@ export default function AvatarCropModal({ open, image, onCancel, onConfirm }: Av
             type="button"
             onClick={rotateLeft}
             aria-label="Rotate left"
-            className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="p-2 rounded-lg border border-line text-slate-500 dark:text-slate-300 hover:bg-surface-hover"
           >
             <RotateCcw size={16} />
           </button>
@@ -150,7 +150,7 @@ export default function AvatarCropModal({ open, image, onCancel, onConfirm }: Av
             type="button"
             onClick={rotateRight}
             aria-label="Rotate right"
-            className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="p-2 rounded-lg border border-line text-slate-500 dark:text-slate-300 hover:bg-surface-hover"
           >
             <RotateCw size={16} />
           </button>
@@ -170,20 +170,20 @@ export default function AvatarCropModal({ open, image, onCancel, onConfirm }: Av
           <ZoomIn size={16} className="text-slate-600 shrink-0" />
         </div>
 
-        <p className="text-xs text-slate-600 dark:text-slate-500 -mt-2">Drag to reposition, slide/pinch to zoom, or rotate.</p>
+        <p className="text-xs text-muted -mt-2">Drag to reposition, slide/pinch to zoom, or rotate.</p>
 
         <div className="flex gap-3 w-full">
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="flex-1 border border-line text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-surface-hover"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleConfirm}
-            className="flex-1 bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-lg text-sm font-medium"
+            className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors flex-1 bg-brand-600 hover:bg-brand-700 text-white"
           >
             Save Photo
           </button>
