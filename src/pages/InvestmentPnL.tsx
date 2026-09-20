@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   TrendingUp,
@@ -20,6 +20,7 @@ import {
   Loader,
   Sparkles,
   Trash2,
+  RotateCcw,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -34,14 +35,19 @@ import { useAssetsStore } from '../store/assetsStore';
 import { useLivePricesStore } from '../store/livePricesStore';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import { useUiStore } from '../store/uiStore';
+import { useAuthStore } from '../store/authStore';
+import { upsertDoc } from '../hooks/useFirestoreSync';
 import {
   computePortfolioPnl,
+  computeHoldingPnl,
   buildActivityFeed,
   isInvestable,
   type HoldingPnl,
   type ActivityEntry,
   type PortfolioPnl,
+  type RealizedSaleDetail,
 } from '../utils/investmentPnl';
+import { resolveAssetValues } from '../utils/assetValues';
 import { ASSET_CLASS_LABELS, ASSET_CLASS_COLORS } from '../utils/taxonomy';
 import { formatCurrency, maskAmount, maskPreciseAmount, CURRENCY_SYMBOLS } from '../utils/currency';
 import { exportToCsv } from '../utils/exportCsv';
@@ -427,10 +433,10 @@ function SoldRow({
             e.stopPropagation();
             onDelete();
           }}
-          title="Delete this sold investment"
-          className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+          title="Move back to holdings"
+          className="p-1.5 rounded-lg text-slate-400 hover:text-positive hover:bg-positive/10 transition-colors"
         >
-          <Trash2 size={15} />
+          <RotateCcw size={15} />
         </button>
       </td>
     </tr>
@@ -540,7 +546,40 @@ function DetailRow({ label, value, valueClass }: { label: string; value: string;
 // Asset detail modal (spec #13)
 // ---------------------------------------------------------------------------
 
-function AssetDetailModal({ h, currency, privacy, onClose }: { h: HoldingPnl | null; currency: string; privacy: boolean; onClose: () => void }) {
+function AssetDetailModal({
+  h,
+  currency,
+  privacy,
+  onClose,
+  onDeleteSale,
+}: {
+  h: HoldingPnl | null;
+  currency: string;
+  privacy: boolean;
+  onClose: () => void;
+  onDeleteSale: (asset: Asset, saleId: string) => Promise<void>;
+}) {
+  const [pendingDeleteSale, setPendingDeleteSale] = useState<RealizedSaleDetail | null>(null);
+  const [deletingSale, setDeletingSale] = useState(false);
+
+  // The modal component stays mounted even while closed (h becomes null),
+  // so clear any leftover confirm-delete state from the previous holding
+  // rather than letting it linger for the next one opened.
+  useEffect(() => {
+    if (!h) setPendingDeleteSale(null);
+  }, [h]);
+
+  const confirmDeleteSale = async () => {
+    if (!h || !pendingDeleteSale) return;
+    setDeletingSale(true);
+    try {
+      await onDeleteSale(h.asset, pendingDeleteSale.id);
+      setPendingDeleteSale(null);
+    } finally {
+      setDeletingSale(false);
+    }
+  };
+
   return (
     <Modal open={!!h} onClose={onClose} title={h?.asset.name ?? ''} widthClassName="max-w-lg">
       {h && (
@@ -585,17 +624,51 @@ function AssetDetailModal({ h, currency, privacy, onClose }: { h: HoldingPnl | n
           {h.sales.length > 0 && (
             <div>
               <h4 className="text-[13px] font-semibold text-slate-800 dark:text-slate-200 mb-2">Sell History</h4>
-              <MiniTable
-                rows={h.sales.map((s) => [
-                  formatShortDate(s.date),
-                  `${s.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })}`,
-                  fmt(s.sellPrice, currency, privacy, true),
-                  fmt(s.saleValue, currency, privacy),
-                  moneyLabel(s.realizedPnl, currency, privacy),
-                ])}
-                headers={['Date', 'Qty', 'Price', 'Sale Value', 'Realized P&L']}
-                lastColClass={(i) => signClass(h.sales[i]?.realizedPnl)}
-              />
+              <div className="overflow-x-auto -mx-1">
+                <table className="w-full text-[12.5px]">
+                  <thead>
+                    <tr className="text-slate-400 dark:text-slate-500">
+                      {['Date', 'Qty', 'Price', 'Sale Value', 'Realized P&L', ''].map((head, i) => (
+                        <th key={head || 'actions'} className={`px-1 py-1 font-medium ${i === 0 ? 'text-left' : 'text-right'}`}>
+                          {head}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {h.sales.map((s) => (
+                      <tr key={s.id} className="border-t border-line-soft">
+                        <td className="px-1 py-1.5 font-numeric text-left text-slate-500">{formatShortDate(s.date)}</td>
+                        <td className="px-1 py-1.5 font-numeric text-right text-slate-800 dark:text-slate-200">
+                          {s.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                        </td>
+                        <td className="px-1 py-1.5 font-numeric text-right text-slate-800 dark:text-slate-200">
+                          {fmt(s.sellPrice, currency, privacy, true)}
+                        </td>
+                        <td className="px-1 py-1.5 font-numeric text-right text-slate-800 dark:text-slate-200">
+                          {fmt(s.saleValue, currency, privacy)}
+                        </td>
+                        <td className={`px-1 py-1.5 font-numeric text-right ${signClass(s.realizedPnl)}`}>
+                          {moneyLabel(s.realizedPnl, currency, privacy)}
+                        </td>
+                        <td className="px-1 py-1.5 text-right">
+                          <button
+                            type="button"
+                            onClick={() => setPendingDeleteSale(s)}
+                            title="Delete this sale"
+                            className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-[11.5px] text-muted mt-1.5">
+                Deleting a sale undoes it — the quantity sold goes back to being held, so a fully sold holding returns to your active holdings.
+              </p>
             </div>
           )}
 
@@ -615,6 +688,23 @@ function AssetDetailModal({ h, currency, privacy, onClose }: { h: HoldingPnl | n
           </div>
         </div>
       )}
+      <ConfirmDeleteModal
+        open={!!pendingDeleteSale}
+        onClose={() => setPendingDeleteSale(null)}
+        onConfirm={confirmDeleteSale}
+        busy={deletingSale}
+        title="Delete this sale?"
+        description={
+          <>
+            This undoes the sale of{' '}
+            <strong>
+              {pendingDeleteSale?.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })} {h?.unitLabel}
+            </strong>{' '}
+            on {formatShortDate(pendingDeleteSale?.date)} — the quantity goes back to being held. This can't be undone.
+          </>
+        }
+        confirmLabel="Delete sale"
+      />
     </Modal>
   );
 }
@@ -793,13 +883,14 @@ function EmptyState() {
 
 export default function InvestmentPnL() {
   const allAssets = useAssetsStore((s) => s.assets);
-  const removeAsset = useAssetsStore((s) => s.remove);
+  const addOrUpdateAsset = useAssetsStore((s) => s.addOrUpdate);
   const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
   const assets = activeProfileId ? allAssets.filter((a) => a.profileId === activeProfileId) : allAssets;
   const livePrices = useLivePricesStore((s) => s.prices);
   const sipValues = useLivePricesStore((s) => s.sipValues);
   const goldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
   const privacyMode = useUiStore((s) => s.privacyMode);
+  const user = useAuthStore((s) => s.user);
 
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
@@ -811,10 +902,69 @@ export default function InvestmentPnL() {
   const [exportOpen, setExportOpen] = useState(false);
   const [soldExpanded, setSoldExpanded] = useState(false);
   const [pendingDeleteSold, setPendingDeleteSold] = useState<HoldingPnl | null>(null);
+  const [movingSoldBack, setMovingSoldBack] = useState(false);
 
-  const confirmDeleteSold = () => {
-    if (pendingDeleteSold) removeAsset(pendingDeleteSold.asset.id);
-    setPendingDeleteSold(null);
+  // Moves a fully-sold holding back to active holdings by clearing every
+  // sale lot on it at once — the same "undo" math handleDeleteSale runs for
+  // a single sale, just applied to the whole sell history. Once saleLots is
+  // empty the asset's quantity/avgCost/investedValue are recomputed back to
+  // what they were before any sale, isFullySold() stops being true, and it
+  // reappears in Wealth's Holdings list on its own while dropping out of
+  // this Sold Investments table.
+  const confirmDeleteSold = async () => {
+    if (!pendingDeleteSold || !user) {
+      setPendingDeleteSold(null);
+      return;
+    }
+    const asset = pendingDeleteSold.asset;
+    setMovingSoldBack(true);
+    try {
+      const { remainingQty, avgBuyCost, investedValue } = computeHoldingPnl({ ...asset, saleLots: [] }, undefined, false);
+      const updatedAsset: Asset = {
+        ...asset,
+        saleLots: [],
+        quantity: remainingQty,
+        avgCost: avgBuyCost,
+        investedValue,
+        updatedAt: Date.now(),
+      };
+      await upsertDoc(user, 'assets', updatedAsset);
+      // Reflect it locally right away rather than waiting on the round trip.
+      addOrUpdateAsset(updatedAsset);
+      setPendingDeleteSold(null);
+    } finally {
+      setMovingSoldBack(false);
+    }
+  };
+
+  // Undoes one sale on a holding (from the Sell History list in the asset
+  // detail modal) by dropping that entry from saleLots and recomputing the
+  // holding's live-facing fields (quantity/avgCost/investedValue) from
+  // whatever lot history remains — the exact same math the Sell flow itself
+  // uses, run in reverse. Nothing else about the holding is touched: its
+  // buy lots, other sales, and everything else stay exactly as they were.
+  // Once the remaining quantity is back above zero, `isFullySold` (used by
+  // Wealth.tsx's Holdings list) stops treating it as sold and it reappears
+  // there on its own — this never needs to move it anywhere itself.
+  const handleDeleteSale = async (asset: Asset, saleId: string) => {
+    if (!user) return;
+    const saleLots = (asset.saleLots ?? []).filter((l) => l.id !== saleId);
+    const { remainingQty, avgBuyCost, investedValue } = computeHoldingPnl({ ...asset, saleLots }, undefined, false);
+    const updatedAsset: Asset = {
+      ...asset,
+      saleLots,
+      quantity: remainingQty,
+      avgCost: avgBuyCost,
+      investedValue,
+      updatedAt: Date.now(),
+    };
+    await upsertDoc(user, 'assets', updatedAsset);
+    // Optimistically reflect the change locally right away instead of
+    // waiting on the Firestore round trip, so the modal (and the
+    // Active/Sold lists behind it) update immediately.
+    addOrUpdateAsset(updatedAsset);
+    const resolved = resolveAssetValues(updatedAsset, livePrices, sipValues, goldPricePerGram);
+    setSelectedHolding(computeHoldingPnl(updatedAsset, resolved.currentPrice, resolved.isLive));
   };
 
   // Every currency present among investment-holding assets — the book has
@@ -1128,19 +1278,28 @@ export default function InvestmentPnL() {
         </>
       )}
 
-      <AssetDetailModal h={selectedHolding} currency={activeCurrency} privacy={privacyMode} onClose={() => setSelectedHolding(null)} />
+      <AssetDetailModal
+        h={selectedHolding}
+        currency={activeCurrency}
+        privacy={privacyMode}
+        onClose={() => setSelectedHolding(null)}
+        onDeleteSale={handleDeleteSale}
+      />
       <ExportReportModal open={exportOpen} onClose={() => setExportOpen(false)} reportRef={reportRef} portfolio={portfolio} currency={activeCurrency} activity={activityAll} />
       <ConfirmDeleteModal
         open={!!pendingDeleteSold}
         onClose={() => setPendingDeleteSold(null)}
         onConfirm={confirmDeleteSold}
-        title="Delete this sold investment?"
+        busy={movingSoldBack}
+        busyLabel="Moving back..."
+        tone="neutral"
+        title="Move this back to your holdings?"
         description={
           <>
-            This will permanently delete <strong>{pendingDeleteSold?.asset.name}</strong> and its entire buy/sell history. This can't be undone.
+            This undoes the sale(s) on <strong>{pendingDeleteSold?.asset.name}</strong> — the quantity goes back to being held, and it moves out of Sold Investments here and back into your Holdings in Wealth.
           </>
         }
-        confirmLabel="Delete"
+        confirmLabel="Move back"
       />
     </div>
   );

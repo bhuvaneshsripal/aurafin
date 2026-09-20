@@ -9,7 +9,12 @@ interface ConfirmDeleteModalProps {
   title?: ReactNode;
   description?: ReactNode;
   confirmLabel?: string;
+  busyLabel?: string;
   busy?: boolean;
+  /** 'destructive' (default) renders the confirm button red, for actions
+   *  that can't be undone. 'neutral' uses the app's accent color instead,
+   *  for confirmations that reverse or move something rather than erase it. */
+  tone?: 'destructive' | 'neutral';
 }
 
 /** Shared confirmation dialog for any delete/remove action in the app.
@@ -21,7 +26,9 @@ export default function ConfirmDeleteModal({
   title = 'Delete this?',
   description = "This can't be undone.",
   confirmLabel = 'Delete',
+  busyLabel = 'Deleting...',
   busy = false,
+  tone = 'destructive',
 }: ConfirmDeleteModalProps) {
   useEffect(() => {
     if (!open) return;
@@ -50,9 +57,11 @@ export default function ConfirmDeleteModal({
           type="button"
           disabled={busy}
           onClick={onConfirm}
-          className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white py-2.5 rounded-lg text-sm font-medium"
+          className={`flex-1 disabled:opacity-60 text-white py-2.5 rounded-lg text-sm font-medium ${
+            tone === 'neutral' ? 'bg-positive hover:opacity-90' : 'bg-red-600 hover:bg-red-700'
+          }`}
         >
-          {busy ? 'Deleting...' : confirmLabel}
+          {busy ? busyLabel : confirmLabel}
         </button>
       </div>
     </Modal>
