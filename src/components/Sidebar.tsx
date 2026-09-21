@@ -1,9 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
-  Wallet,
   Target,
-  Receipt,
   Settings,
   FileUp,
   Calculator,
@@ -13,6 +11,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react';
+import WealthIcon from './icons/WealthIcon';
+import MoneyIcon from './icons/MoneyIcon';
 import { useAppLockStore } from '../store/appLockStore';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
@@ -29,14 +29,14 @@ const groups: { label: string; links: NavLinkDef[] }[] = [
     label: 'Portfolio',
     links: [
       { to: '/', label: 'Overview', icon: LayoutDashboard },
-      { to: '/wealth', label: 'Wealth', icon: Wallet, end: true },
+      { to: '/wealth', label: 'Wealth', icon: WealthIcon, end: true },
       { to: '/wealth/performance', label: 'Performance', icon: LineChart },
     ],
   },
   {
     label: 'Money & planning',
     links: [
-      { to: '/transactions', label: 'Money', icon: Receipt },
+      { to: '/transactions', label: 'Money', icon: MoneyIcon },
       { to: '/essentials', label: 'Essentials', icon: Target },
     ],
   },

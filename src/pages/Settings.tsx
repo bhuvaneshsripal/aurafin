@@ -18,6 +18,7 @@ import { useNotificationPreferencesStore, type NotificationChannelKey } from '..
 import PinBoxInput from '../components/PinBoxInput';
 import { auth } from '../firebase/config';
 import CurrencySelect from '../components/CurrencySelect';
+import Badge from '../components/ui/Badge';
 import { loadImageFromFile } from '../utils/imageResize';
 import { formatDateTime } from '../utils/date';
 import AvatarCropModal from '../components/AvatarCropModal';
@@ -985,10 +986,12 @@ function Toggle({
   checked,
   onChange,
   label,
+  disabled,
 }: {
   checked: boolean;
   onChange: () => void;
   label: string;
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -996,8 +999,9 @@ function Toggle({
       role="switch"
       aria-checked={checked}
       aria-label={label}
+      disabled={disabled}
       onClick={onChange}
-      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 ${
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 ${
         checked ? 'bg-brand-600' : 'bg-slate-300 dark:bg-slate-700'
       }`}
     >
@@ -1032,7 +1036,10 @@ function NotificationsCard() {
 
   return (
     <Card>
-      <h2 className="text-sm font-semibold text-ink mb-1">Notifications</h2>
+      <div className="flex items-center gap-2 mb-1">
+        <h2 className="text-sm font-semibold text-ink">Notifications</h2>
+        <Badge variant="neutral">Coming soon</Badge>
+      </div>
       <p className="text-xs text-muted mb-4">
         Choose how you'd like to be reached. Changes take effect immediately.
       </p>
@@ -1040,7 +1047,7 @@ function NotificationsCard() {
         {NOTIFICATION_ROWS.map((row) => (
           <div
             key={row.title}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-slate-50 dark:bg-slate-800/40 px-4 py-3"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-slate-50 dark:bg-slate-800/40 px-4 py-3 opacity-60"
           >
             <span className="text-sm font-medium text-ink">{row.title}</span>
             <div className="flex items-center gap-5">
@@ -1052,6 +1059,7 @@ function NotificationsCard() {
                     checked={prefs[key]}
                     onChange={() => toggle(key)}
                     label={`${label} notifications for ${row.title}`}
+                    disabled
                   />
                 </div>
               ))}

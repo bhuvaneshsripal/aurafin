@@ -24,7 +24,7 @@ import {
 import { formatCurrency } from '../utils/currency';
 import { toIsoDate } from '../utils/date';
 import CustomSelect from '../components/CustomSelect';
-import { inputClasses } from '../components/ui';
+import { DateInput, inputClasses } from '../components/ui';
 import { PageHeader } from '../components/ui';
 
 type CalcKey = 'xirr' | 'sip' | 'lumpsum' | 'phased' | 'cagr' | 'emi' | 'swp' | 'retirement' | 'fd';
@@ -802,10 +802,9 @@ function XirrCalculator() {
         </p>
         {flows.map((f) => (
           <div key={f.id} className="flex items-center gap-2">
-            <input
-              type="date"
+            <DateInput
               value={f.date}
-              onChange={(e) => updateFlow(f.id, { date: e.target.value })}
+              onChange={(v) => updateFlow(f.id, { date: v })}
               className={inputClass}
             />
             <input
@@ -838,10 +837,9 @@ function XirrCalculator() {
             />
           </Field>
           <Field label="As of Date">
-            <input
-              type="date"
+            <DateInput
               value={currentDate}
-              onChange={(e) => setCurrentDate(e.target.value)}
+              onChange={(v) => setCurrentDate(v)}
               className={inputClass}
             />
           </Field>

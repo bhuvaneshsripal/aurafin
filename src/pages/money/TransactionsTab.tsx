@@ -6,7 +6,7 @@ import { useHouseholdProfilesStore } from '../../store/householdProfilesStore';
 import { useSyncStatusStore } from '../../store/syncStatusStore';
 import { upsertDoc, removeDoc } from '../../hooks/useFirestoreSync';
 import { exportToCsv } from '../../utils/exportCsv';
-import { toIsoDate } from '../../utils/date';
+import { formatDate, toIsoDate } from '../../utils/date';
 import Modal from '../../components/Modal';
 import ConfirmDeleteModal from '../../components/ConfirmDeleteModal';
 import Amount from '../../components/Amount';
@@ -27,6 +27,7 @@ import {
   THead,
   Tr,
   inputClasses,
+  DateInput,
 } from '../../components/ui';
 
 export default function TransactionsTab() {
@@ -79,7 +80,7 @@ export default function TransactionsTab() {
     exportToCsv(
       'transactions',
       transactions.map((t) => ({
-        Date: t.date,
+        Date: formatDate(t.date),
         Category: t.category,
         Type: t.type,
         Amount: t.amount,
@@ -96,12 +97,7 @@ export default function TransactionsTab() {
 
   const sorted = [...transactions].sort((a, b) => b.date.localeCompare(a.date));
 
-  const fmtDate = (iso: string) => {
-    const d = new Date(`${iso}T00:00:00`);
-    return Number.isNaN(d.getTime())
-      ? iso
-      : d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-  };
+  const fmtDate = (iso: string) => formatDate(iso) || iso;
   const net = income - expense;
 
   return (
@@ -332,7 +328,7 @@ function TransactionForm({
         </Field>
       </div>
       <Field label="Date">
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
+        <DateInput value={date} onChange={(v) => setDate(v)} className={inputClass} />
       </Field>
       <button onClick={submit} className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white">
         Save Entry

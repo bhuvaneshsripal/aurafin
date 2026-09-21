@@ -1,5 +1,44 @@
+import { useEffect, useRef } from 'react';
 import type { InputHTMLAttributes, LabelHTMLAttributes, ReactNode, Ref, TextareaHTMLAttributes } from 'react';
 import { cn } from './cn';
+
+/** Walks up from a node to find the nearest scrollable ancestor (a modal body,
+ *  a scrollable panel, etc). Falls back to the window/page itself. */
+function findScrollParent(el: HTMLElement | null): HTMLElement | null {
+  let node = el?.parentElement ?? null;
+  while (node) {
+    const style = getComputedStyle(node);
+    const canScrollY = /(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight;
+    if (canScrollY) return node;
+    node = node.parentElement;
+  }
+  return null;
+}
+
+/** Number inputs change their value on scroll by default while focused — this
+ *  redirects that scroll to move the page/container instead, like any other
+ *  element. Attached as a real (non-passive) DOM listener because React's
+ *  onWheel is passive and can't call preventDefault(). */
+function useDisableNumberInputScroll(inputRef: React.RefObject<HTMLInputElement | null>, isNumber: boolean) {
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el || !isNumber) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const scrollParent = findScrollParent(el);
+      if (scrollParent) {
+        scrollParent.scrollTop += e.deltaY;
+        scrollParent.scrollLeft += e.deltaX;
+      } else {
+        window.scrollBy({ top: e.deltaY, left: e.deltaX });
+      }
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, [inputRef, isNumber]);
+}
 
 /** Shared field look: white, hairline border, 8px radius, 36px tall. The green
  *  focus border/ring comes from the global `:focus` rule in index.css. */
@@ -25,6 +64,9 @@ export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
 
 export default function Input({ invalid, leftIcon, prefix, className, ref, ...rest }: InputProps) {
   const adornment = leftIcon ?? prefix;
+  const localRef = useRef<HTMLInputElement | null>(null);
+  useDisableNumberInputScroll(localRef, rest.type === 'number');
+
   return (
     <div className="relative w-full">
       {adornment && (
@@ -33,7 +75,11 @@ export default function Input({ invalid, leftIcon, prefix, className, ref, ...re
         </span>
       )}
       <input
-        ref={ref}
+        ref={(node) => {
+          localRef.current = node;
+          if (typeof ref === 'function') ref(node);
+          else if (ref) (ref as React.MutableRefObject<HTMLInputElement | null>).current = node;
+        }}
         aria-invalid={invalid || undefined}
         className={cn(inputClasses, adornment && 'pl-9', invalid && 'border-red-400 hover:border-red-400', className)}
         {...rest}

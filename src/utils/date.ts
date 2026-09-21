@@ -68,3 +68,39 @@ export function formatDateTime(input: Date | string | number): string {
   if (Number.isNaN(d.getTime())) return '';
   return `${pad2(d.getDate())}-${pad2(d.getMonth() + 1)}-${d.getFullYear()}, ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
+
+/** Stored "YYYY-MM-DD" (or "" / undefined) → "DD-MM-YYYY" text for a date
+ *  field. Returns "" for anything that isn't a date. */
+export function isoToDisplay(iso: string | undefined | null): string {
+  return iso ? formatDate(iso) : '';
+}
+
+/** "DD-MM-YYYY" text → stored "YYYY-MM-DD", or null when the text isn't a
+ *  complete, real calendar date (e.g. 31-02-2026 or 21-09-26). */
+export function displayToIso(text: string): string | null {
+  const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(text.trim());
+  if (!m) return null;
+  const day = Number(m[1]);
+  const month = Number(m[2]);
+  const year = Number(m[3]);
+  if (year < 1900 || year > 2100) return null;
+  const probe = new Date(year, month - 1, day);
+  if (probe.getFullYear() !== year || probe.getMonth() !== month - 1 || probe.getDate() !== day) return null;
+  return `${m[3]}-${m[2]}-${m[1]}`;
+}
+
+/** Live input mask for a DD-MM-YYYY text field: keeps digits only, inserts
+ *  the "-" separators as the person types, and caps the length at 10.
+ *  `prev` is the text before this keystroke so backspacing over a "-"
+ *  works instead of the mask re-adding it. Pasting "2026-09-21" or
+ *  "21/09/2026" is understood too. */
+export function maskDateInput(raw: string, prev = ''): string {
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw.trim());
+  if (iso) return `${iso[3]}-${iso[2]}-${iso[1]}`;
+  const digits = raw.replace(/\D/g, '').slice(0, 8);
+  let out = digits.slice(0, 2);
+  if (digits.length > 2) out += `-${digits.slice(2, 4)}`;
+  if (digits.length > 4) out += `-${digits.slice(4)}`;
+  else if ((digits.length === 2 || digits.length === 4) && raw.length > prev.length) out += '-';
+  return out;
+}

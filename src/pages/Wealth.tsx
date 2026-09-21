@@ -44,7 +44,7 @@ import {
 } from 'recharts';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLivePricesStore, resolvePreviousClose } from '../store/livePricesStore';
-import { toIsoDate } from '../utils/date';
+import { formatDate, toIsoDate } from '../utils/date';
 import { goldPricePerGram22k } from '../utils/goldPrice';
 import { computeHoldingPnl, computePortfolioPnl, isFullySold } from '../utils/investmentPnl';
 import { useSyncStatusStore } from '../store/syncStatusStore';
@@ -74,6 +74,7 @@ import {
   inputClasses,
   fieldBase,
   chart,
+  DateInput,
 } from '../components/ui';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import CurrencySelect from '../components/CurrencySelect';
@@ -2295,7 +2296,7 @@ function SipQuickActions({
         <div className="flex items-center gap-2">
           <span className={`h-2 w-2 rounded-full ${isPaused ? 'bg-amber-500' : 'bg-emerald-500'}`} />
           <span className="text-sm font-medium text-ink-2">
-            {isPaused ? `Paused since ${asset.sipPausedAt}` : 'SIP active'}
+            {isPaused ? `Paused since ${formatDate(asset.sipPausedAt!)}` : 'SIP active'}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -2386,10 +2387,9 @@ function SipPauseModal({
           <label className="text-xs font-medium text-muted">
             {isPaused ? 'Resumed from' : 'Paused from'}
           </label>
-          <input
-            type="date"
+          <DateInput
             value={date}
-            onChange={(e) => setDate(e.target.value)}
+            onChange={(v) => setDate(v)}
             max={todayIso}
             min={isPaused ? asset.sipPausedAt : asset.startDate}
             className="mt-1 w-full border border-line bg-transparent rounded-lg px-3 py-2.5 text-sm"
@@ -2526,10 +2526,9 @@ function SipBuyMoreModal({
           </div>
           <div>
             <label className="text-xs font-medium text-muted">Date</label>
-            <input
-              type="date"
+            <DateInput
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={(v) => setDate(v)}
               className="mt-1 w-full border border-line bg-transparent rounded-lg px-3 py-2.5 text-sm"
             />
           </div>
@@ -2571,10 +2570,9 @@ function SipBuyMoreModal({
           </div>
           <div>
             <label className="text-xs font-medium text-muted">Effective from</label>
-            <input
-              type="date"
+            <DateInput
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={(v) => setDate(v)}
               className="mt-1 w-full border border-line bg-transparent rounded-lg px-3 py-2.5 text-sm"
             />
           </div>
@@ -2961,7 +2959,7 @@ function HoldingDetailView({
                   <div key={lot.id + i} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
                     <div>
                       <p className="text-sm font-semibold text-ink">{qtyLabel}</p>
-                      <p className="text-xs text-slate-600 mt-0.5">{lot.date ?? '—'}</p>
+                      <p className="text-xs text-slate-600 mt-0.5">{lot.date ? formatDate(lot.date) : '—'}</p>
                     </div>
                     <div className="text-right">
                       <p className={`text-sm font-semibold ${lotPositive ? 'text-emerald-600' : 'text-red-500'}`}>
@@ -2981,7 +2979,7 @@ function HoldingDetailView({
                 <div key={lot.id + i} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
                   <div>
                     <p className="text-sm font-semibold text-ink">{qtyLabel}</p>
-                    <p className="text-xs text-slate-600 mt-0.5">{lot.date ?? '—'}</p>
+                    <p className="text-xs text-slate-600 mt-0.5">{lot.date ? formatDate(lot.date) : '—'}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-semibold text-ink">
@@ -3440,7 +3438,7 @@ function BuySellDividendModal({
 
         <div>
           <label className="text-xs font-medium text-muted">Date</label>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
+          <DateInput value={date} onChange={(v) => setDate(v)} className={inputClass} />
         </div>
 
         {error && <p className="text-xs text-red-600">{error}</p>}
@@ -3635,7 +3633,7 @@ function AssetDetailPage({
           {asset.interestRate !== undefined && (
             <DetailField label="INTEREST RATE" value={`${asset.interestRate}% p.a.`} />
           )}
-          {asset.maturityDate && <DetailField label="MATURITY DATE" value={asset.maturityDate} />}
+          {asset.maturityDate && <DetailField label="MATURITY DATE" value={formatDate(asset.maturityDate)} />}
         </div>
       </div>
 
@@ -3649,11 +3647,11 @@ function AssetDetailPage({
                 value={`${formatPreciseCurrency(asset.sipAmount, asset.currency)} / ${asset.sipFrequency === 'quarterly' ? 'quarter' : 'month'}`}
               />
             )}
-            {asset.startDate && <DetailField label="STARTED" value={asset.startDate} />}
+            {asset.startDate && <DetailField label="STARTED" value={formatDate(asset.startDate)} />}
             <DetailField label="INSTALLMENTS SO FAR" value={`${mfSipProgress.installmentsElapsed}`} />
             <DetailField label="STATUS" value={mfSipProgress.isPaused ? 'Paused' : 'Active'} />
             {mfSipProgress.nextInstallmentDate && (
-              <DetailField label="NEXT DUE" value={mfSipProgress.nextInstallmentDate} />
+              <DetailField label="NEXT DUE" value={formatDate(mfSipProgress.nextInstallmentDate)} />
             )}
             {(asset.sipTopUps?.length ?? 0) > 0 && (
               <DetailField
@@ -3680,10 +3678,10 @@ function AssetDetailPage({
                 value={`${formatPreciseCurrency(asset.sipAmount, asset.currency)} / ${asset.sipFrequency === 'quarterly' ? 'quarter' : 'month'}`}
               />
             )}
-            {asset.startDate && <DetailField label="STARTED" value={asset.startDate} />}
+            {asset.startDate && <DetailField label="STARTED" value={formatDate(asset.startDate)} />}
             <DetailField label="INSTALLMENTS SO FAR" value={`${recurringSip.installmentsElapsed}`} />
             {recurringSip.nextInstallmentDate && (
-              <DetailField label="NEXT DUE" value={recurringSip.nextInstallmentDate} />
+              <DetailField label="NEXT DUE" value={formatDate(recurringSip.nextInstallmentDate)} />
             )}
           </div>
           <p className="text-xs text-slate-600 mt-4">
@@ -4640,13 +4638,13 @@ function AssetDetailsForm({
               <button
                 type="button"
                 onClick={() => setAssetTypeEditing(true)}
-                className="w-full flex items-center justify-between gap-3 rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 px-3.5 py-3 text-left"
+                className="w-full min-h-10 sm:min-h-9 flex items-center justify-between gap-3 rounded-lg border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-1 text-left"
               >
-                <span className="flex items-center gap-3 min-w-0">
-                  <span className="h-9 w-9 shrink-0 rounded-lg bg-white dark:bg-slate-800 flex items-center justify-center text-emerald-600">
+                <span className="flex items-center gap-2 min-w-0">
+                  <span className="h-6 w-6 shrink-0 rounded-md bg-white dark:bg-slate-800 flex items-center justify-center text-emerald-600">
                     {(() => {
                       const CatIcon = ASSET_CLASS_TO_CATEGORY[assetClass]?.icon ?? TrendingUp;
-                      return <CatIcon size={16} />;
+                      return <CatIcon size={13} />;
                     })()}
                   </span>
                   <span className="text-sm font-medium text-ink truncate">
@@ -4810,10 +4808,9 @@ function AssetDetailsForm({
                     <>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         <Field label="Date">
-                          <input
-                            type="date"
+                          <DateInput
                             value={lot.date ?? ''}
-                            onChange={(e) => updatePurchaseLot(lot.id, { date: e.target.value })}
+                            onChange={(v) => updatePurchaseLot(lot.id, { date: v })}
                             className={inputClass}
                           />
                         </Field>
@@ -4940,10 +4937,9 @@ function AssetDetailsForm({
             <>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <Field label="Date">
-                  <input
-                    type="date"
+                  <DateInput
                     value={shareLots[0].date ?? ''}
-                    onChange={(e) => updateShareLot(shareLots[0].id, { date: e.target.value })}
+                    onChange={(v) => updateShareLot(shareLots[0].id, { date: v })}
                     className={inputClass}
                   />
                 </Field>
@@ -4975,7 +4971,7 @@ function AssetDetailsForm({
                         onChange={(v) =>
                           handleLotPriceCurrencyChange(shareLots[0].id, v, shareLots[0].price)
                         }
-                        className={`${fieldBaseClass} w-16 shrink-0 px-1.5`}
+                        className={`${fieldBaseClass} w-[5.25rem] shrink-0`}
                         menuWidth={100}
                         options={[
                           { value: currency, label: currency },
@@ -5096,11 +5092,10 @@ function AssetDetailsForm({
                     <>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       <Field label="Date">
-                        <input
-                          type="date"
+                        <DateInput
                           value={lot.date ?? ''}
-                          onChange={(e) => updateShareLot(lot.id, { date: e.target.value })}
-                          className={`${inputClass} pr-2`}
+                          onChange={(v) => updateShareLot(lot.id, { date: v })}
+                          className={`${inputClass}`}
                         />
                       </Field>
                       {mode === 'qty' ? (
@@ -5130,7 +5125,7 @@ function AssetDetailsForm({
                               onChange={(v) =>
                                 setLotAmountCurrency((m) => ({ ...m, [lot.id]: v }))
                               }
-                              className={`${fieldBaseClass} w-16 shrink-0 px-1.5`}
+                              className={`${fieldBaseClass} w-[5.25rem] shrink-0`}
                               menuWidth={100}
                               options={[
                                 { value: currency, label: currency },
@@ -5154,7 +5149,7 @@ function AssetDetailsForm({
                             <CustomSelect
                               value={lotPriceCurrency[lot.id] ?? currency}
                               onChange={(v) => handleLotPriceCurrencyChange(lot.id, v, lot.price)}
-                              className={`${fieldBaseClass} w-20 shrink-0 px-1.5`}
+                              className={`${fieldBaseClass} w-[5.25rem] shrink-0`}
                               menuWidth={100}
                               options={[
                                 { value: currency, label: currency },
@@ -5307,10 +5302,9 @@ function AssetDetailsForm({
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Start Date">
-                  <input
-                    type="date"
+                  <DateInput
                     value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
+                    onChange={(v) => setStartDate(v)}
                     className={inputClass}
                   />
                 </Field>
@@ -5332,7 +5326,7 @@ function AssetDetailsForm({
                   {stockSipProgress.installmentsElapsed > 0
                     ? `${stockSipProgress.installmentsElapsed} installment${stockSipProgress.installmentsElapsed === 1 ? '' : 's'} due since start`
                     : 'No installments due yet'}
-                  {stockSipProgress.nextInstallmentDate && ` · Next due ${stockSipProgress.nextInstallmentDate}`}
+                  {stockSipProgress.nextInstallmentDate && ` · Next due ${formatDate(stockSipProgress.nextInstallmentDate)}`}
                 </p>
               )}
               <p className="text-xs text-slate-600">
@@ -5464,10 +5458,9 @@ function AssetDetailsForm({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Start Date">
-              <input
-                type="date"
+              <DateInput
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={(v) => setStartDate(v)}
                 className={inputClass}
               />
             </Field>
@@ -5520,18 +5513,16 @@ function AssetDetailsForm({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Start Date">
-              <input
-                type="date"
+              <DateInput
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={(v) => setStartDate(v)}
                 className={inputClass}
               />
             </Field>
             <Field label="Maturity Date">
-              <input
-                type="date"
+              <DateInput
                 value={maturityDate}
-                onChange={(e) => setMaturityDate(e.target.value)}
+                onChange={(v) => setMaturityDate(v)}
                 className={inputClass}
               />
             </Field>

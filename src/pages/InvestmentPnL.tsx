@@ -52,7 +52,7 @@ import { ASSET_CLASS_LABELS, ASSET_CLASS_COLORS } from '../utils/taxonomy';
 import { formatCurrency, maskAmount, maskPreciseAmount, CURRENCY_SYMBOLS } from '../utils/currency';
 import { exportToCsv } from '../utils/exportCsv';
 import { exportDomToPdf } from '../utils/exportPdf';
-import { toIsoDate } from '../utils/date';
+import { formatDate, toIsoDate } from '../utils/date';
 import Modal from '../components/Modal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import type { Asset } from '../types';
@@ -85,9 +85,7 @@ function moneyLabel(v: number | undefined, currency: string, privacy: boolean) {
 
 function formatShortDate(iso: string | undefined) {
   if (!iso || iso.startsWith('0000') || iso.startsWith('9999')) return '—';
-  const d = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+  return formatDate(iso) || '—';
 }
 
 /** Initials badge shown in place of a company/fund logo — deterministically
@@ -349,7 +347,7 @@ function PortfolioPerformanceChart({
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="text-slate-100 dark:text-slate-800" />
               <XAxis
                 dataKey="date"
-                tickFormatter={(d: string) => formatShortDate(d).replace(/, \d{4}$/, '')}
+                tickFormatter={(d: string) => formatShortDate(d)}
                 tick={{ fontSize: 11, fill: '#94a3b8' }}
                 axisLine={false}
                 tickLine={false}
@@ -796,7 +794,7 @@ function ExportReportModal({
       exportToCsv(
         `investment-transactions-${toIsoDate()}`,
         activity.map((e) => ({
-          Date: e.date ?? '',
+          Date: e.date ? formatDate(e.date) : '',
           Type: e.type === 'buy' ? 'BUY' : 'SELL',
           Asset: e.asset.name,
           Symbol: e.asset.symbol ?? '',

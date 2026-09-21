@@ -15,7 +15,7 @@ import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { upsertDoc } from '../hooks/useFirestoreSync';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
-import { buttonClasses, inputClasses } from './ui';
+import { buttonClasses, DateInput, inputClasses } from './ui';
 import Modal from './Modal';
 import type { Asset, Snapshot, Transaction, TransactionType } from '../types';
 import CurrencySelect from './CurrencySelect';
@@ -238,7 +238,7 @@ function TransactionForm({ type, onDone }: { type: TransactionType; onDone: () =
         </Field>
       </div>
       <Field label="Date">
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
+        <DateInput value={date} onChange={(v) => setDate(v)} className={inputClass} />
       </Field>
       <button onClick={submit} className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white">
         Save

@@ -27,7 +27,7 @@ import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import GoldPriceCard from '../components/GoldPriceCard';
 import { PortfolioPdfReport } from '../components/PortfolioPdfReport';
 import { PortfolioExportModal } from '../components/PortfolioExportModal';
-import { toIsoDate, toIsoMonth } from '../utils/date';
+import { formatDate, toIsoDate, toIsoMonth } from '../utils/date';
 import {
   Badge,
   Button,
@@ -273,7 +273,7 @@ export default function Dashboard() {
       {/* Performance + allocation */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2">
-          <PerformanceCard privacyMode={privacyMode} />
+          <PerformanceCard privacyMode={privacyMode} pnl={netWorthPnl} />
         </div>
         <AllocationCard
           data={allocation}
@@ -335,8 +335,7 @@ function monthLabel(month: string) {
 }
 
 function shortDate(iso: string) {
-  const d = new Date(`${iso}T00:00:00`);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+  return formatDate(iso) || iso;
 }
 
 function ChartTooltip({
@@ -371,7 +370,7 @@ function ChartTooltip({
 
 type Range = '3M' | '6M' | '1Y' | 'ALL';
 
-function PerformanceCard({ privacyMode }: { privacyMode: boolean }) {
+function PerformanceCard({ privacyMode, pnl }: { privacyMode: boolean; pnl: number }) {
   const snapshots = useSnapshotsStore((s) => s.snapshots);
   const [range, setRange] = useState<Range>('ALL');
 
@@ -389,10 +388,11 @@ function PerformanceCard({ privacyMode }: { privacyMode: boolean }) {
   const last = data[data.length - 1];
   const change = first && last ? last.netWorth - first.netWorth : 0;
   const changePct = first && first.netWorth > 0 ? (change / first.netWorth) * 100 : 0;
-  // Line/fill follow the same red-when-down convention as the change
-  // figure above it, instead of always drawing green even on a losing
-  // stretch.
-  const isDown = change < 0;
+  // Line/fill follow the same red-when-down convention as the Profit/loss
+  // KPI above it (overall P&L vs. invested), not just the change between
+  // the first and last snapshot — a portfolio can be underwater on cost
+  // basis even while net worth has held flat across snapshots.
+  const isDown = pnl < 0;
   const lineColor = isDown ? chart.negative : chart.primary;
   const fillColor = isDown ? chart.negativeSoft : chart.primarySoft;
 

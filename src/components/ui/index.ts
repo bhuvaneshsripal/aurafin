@@ -5,6 +5,8 @@ export type { ButtonVariant, ButtonSize } from './buttonStyles';
 export type { ButtonProps, IconButtonProps } from './Button';
 export { default as Card, CardHeader } from './Card';
 export { default as Input, Textarea, Label, Field, inputClasses, fieldBase } from './Input';
+export { default as DateInput } from './DateInput';
+export type { DateInputProps } from './DateInput';
 export { default as Select } from './Select';
 export { default as Badge } from './Badge';
 export type { BadgeVariant } from './Badge';

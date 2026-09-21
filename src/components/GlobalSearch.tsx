@@ -11,6 +11,7 @@ import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import { resolveAssetValues } from '../utils/assetValues';
 import { ASSET_CLASS_LABELS, maskPreciseAmount } from '../utils/currency';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
+import { formatDate } from '../utils/date';
 
 const MAX_PER_GROUP = 5;
 const MAX_RECENT_SEARCHES = 5;
@@ -323,7 +324,7 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
                         <ResultRow
                           key={t.id}
                           title={t.note?.trim() || t.category}
-                          subtitle={`${t.category} · ${t.date}`}
+                          subtitle={`${t.category} · ${formatDate(t.date)}`}
                           trailing={`${t.type === 'expense' ? '-' : '+'}${maskPreciseAmount(t.amount, t.currency, privacyMode)}`}
                           trailingColor={t.type === 'expense' ? 'text-red-500' : 'text-emerald-600'}
                           onClick={() => goTo('/transactions?tab=transactions')}

@@ -2,6 +2,7 @@ import type { Asset, Liability, Snapshot } from '../types';
 import type { SipLiveEntry } from '../store/livePricesStore';
 import { resolveAssetValues, type ResolvedAssetValues } from './assetValues';
 import { formatCurrency } from './currency';
+import { formatDate } from './date';
 import { ASSET_CLASS_TO_CATEGORY } from './taxonomy';
 import type { WeeklyDigestEmailParams } from './otp';
 
@@ -22,8 +23,7 @@ function formatPercent(value: number) {
 
 function formatWeekRange(now: Date) {
   const start = new Date(now.getTime() - 6 * DAY_MS);
-  const fmt = (d: Date) => d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-  return `${fmt(start)} \u2013 ${fmt(now)}, ${now.getFullYear()}`;
+  return `${formatDate(start)} \u2013 ${formatDate(now)}`;
 }
 
 export interface WeeklyDigestInputs {
@@ -122,10 +122,7 @@ export function buildWeeklyDigestPayload(
       .slice(0, MAX_LIST_ITEMS)
       .map(
         (a) =>
-          `${a.name} \u2014 updated ${new Date(a.updatedAt).toLocaleDateString('en-IN', {
-            day: 'numeric',
-            month: 'short',
-          })}`
+          `${a.name} \u2014 updated ${formatDate(a.updatedAt)}`
       )
       .join('\n') || 'No changes to your holdings this week';
 

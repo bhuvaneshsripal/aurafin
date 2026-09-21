@@ -4,6 +4,8 @@
  *  the Insights tab body (which uses the start/end bounds to filter
  *  transactions) stay in sync without duplicating the date math. */
 
+import { formatDate } from './date';
+
 export type InsightsRangeKey = 'thisMonth' | 'lastMonth' | '3m' | '6m' | '12m' | 'ytd' | 'custom';
 
 export const RANGE_OPTIONS: { key: InsightsRangeKey; label: string }[] = [
@@ -50,9 +52,7 @@ function shortMonthYear(d: Date): string {
 
 function formatDateShort(iso: string): string {
   if (!iso) return '';
-  const d = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+  return formatDate(iso) || iso;
 }
 
 export function getInsightsRange(key: InsightsRangeKey, customFrom?: string, customTo?: string): InsightsRange {

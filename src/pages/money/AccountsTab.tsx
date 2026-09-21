@@ -18,9 +18,9 @@ import {
   resolveAccountIcon,
   type AccountType,
 } from '../../utils/accountVisuals';
-import { toIsoDate } from '../../utils/date';
+import { formatDate, toIsoDate } from '../../utils/date';
 import type { Asset, Liability } from '../../types';
-import { inputClasses } from '../../components/ui';
+import { DateInput, inputClasses } from '../../components/ui';
 
 const inputClass = inputClasses;
 
@@ -334,7 +334,7 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
                   {row.balanceAsOf && (
                     <div>
                       <p className="text-muted">Balance as of</p>
-                      <p className="text-ink-2 font-medium mt-0.5">{row.balanceAsOf}</p>
+                      <p className="text-ink-2 font-medium mt-0.5">{formatDate(row.balanceAsOf)}</p>
                     </div>
                   )}
                 </div>
@@ -549,7 +549,7 @@ function AccountForm({
 
       <label className="block">
         <span className="text-sm font-medium text-ink-2 mb-1 block">Balance as of</span>
-        <input type="date" value={balanceAsOf} onChange={(e) => setBalanceAsOf(e.target.value)} className={inputClass} />
+        <DateInput value={balanceAsOf} onChange={(v) => setBalanceAsOf(v)} className={inputClass} />
         <span className="text-xs text-muted mt-1.5 block">
           Balance from this date forward — income, expenses and transfers dated on/after this adjust it live.
         </span>

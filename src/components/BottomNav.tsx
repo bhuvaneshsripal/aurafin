@@ -2,8 +2,6 @@ import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
-  Wallet,
-  Receipt,
   Target,
   MoreHorizontal,
   FileUp,
@@ -13,14 +11,16 @@ import {
   X,
   LineChart,
 } from 'lucide-react';
+import WealthIcon from './icons/WealthIcon';
+import MoneyIcon from './icons/MoneyIcon';
 import QuickAddMenu from './QuickAddMenu';
 import { useUiStore } from '../store/uiStore';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 const primaryLinks = [
   { to: '/', label: 'Overview', icon: LayoutDashboard },
-  { to: '/wealth', label: 'Wealth', icon: Wallet },
-  { to: '/transactions', label: 'Money', icon: Receipt },
+  { to: '/wealth', label: 'Wealth', icon: WealthIcon },
+  { to: '/transactions', label: 'Money', icon: MoneyIcon },
 ];
 
 interface MoreLink {
