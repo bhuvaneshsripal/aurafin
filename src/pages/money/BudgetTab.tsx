@@ -15,6 +15,7 @@ import { useAuthStore } from '../../store/authStore';
 import { upsertDoc, removeDoc } from '../../hooks/useFirestoreSync';
 import { BUDGET_CATEGORIES } from '../../utils/budgetCategories';
 import { formatCurrency } from '../../utils/currency';
+import { toIsoMonth } from '../../utils/date';
 import type { BudgetItem } from '../../types';
 
 function monthLabel(month: string) {
@@ -37,7 +38,7 @@ export default function BudgetTab() {
   const budgetItems = useBudgetStore((s) => s.items);
   const transactions = useTransactionsStore((s) => s.transactions);
 
-  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [month, setMonth] = useState(() => toIsoMonth());
   const [draft, setDraft] = useState<BudgetItem[]>([]);
   const [addOpen, setAddOpen] = useState(true);
   const [newCategory, setNewCategory] = useState('');

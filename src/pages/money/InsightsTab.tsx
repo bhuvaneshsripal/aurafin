@@ -5,6 +5,7 @@ import { useTransactionsStore } from '../../store/transactionsStore';
 import { useBudgetStore } from '../../store/budgetStore';
 import { useSyncStatusStore } from '../../store/syncStatusStore';
 import { formatCurrency } from '../../utils/currency';
+import { toIsoMonth } from '../../utils/date';
 import Amount from '../../components/Amount';
 import LoadingDots from '../../components/LoadingDots';
 
@@ -29,7 +30,7 @@ export default function InsightsTab() {
   // Dashboard.tsx — otherwise Income/Spent briefly flash ₹0 while
   // transactions are still loading.
   const cashflowDataKnown = transactions.length > 0 || transactionsServerConfirmed;
-  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [month, setMonth] = useState(() => toIsoMonth());
 
   const monthTx = transactions.filter((t) => t.date.startsWith(month));
   const income = monthTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);

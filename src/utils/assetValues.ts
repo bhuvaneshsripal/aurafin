@@ -2,6 +2,7 @@ import type { Asset } from '../types';
 import { resolveLivePrice, resolveSipLiveValue, type SipLiveEntry } from '../store/livePricesStore';
 import { goldPricePerGram22k } from './goldPrice';
 import { DEPOSIT_LIKE_CLASSES } from './taxonomy';
+import { toIsoDate } from './date';
 
 export interface ResolvedAssetValues {
   invested: number | undefined;
@@ -334,7 +335,7 @@ export function computeSipProgress(asset: Asset, asOf: Date = new Date()): SipPr
   let installmentsElapsed = 0;
   let installmentsTotal = 0;
   while (candidate.getTime() <= asOf.getTime()) {
-    const iso = candidate.toISOString().slice(0, 10);
+    const iso = toIsoDate(candidate);
     if (!isWithinPauseRanges(iso, pauseRanges)) {
       installmentsElapsed++;
       installmentsTotal += effectiveSipAmount(sipAmountSchedule, sipAmount, iso);
@@ -342,7 +343,7 @@ export function computeSipProgress(asset: Asset, asOf: Date = new Date()): SipPr
     candidate = shiftMonths(candidate.getFullYear(), candidate.getMonth(), day, step);
   }
 
-  const nextInstallmentDate = isPaused ? undefined : candidate.toISOString().slice(0, 10);
+  const nextInstallmentDate = isPaused ? undefined : toIsoDate(candidate);
   const totalInvested = initial + installmentsTotal + topUpsTotal;
   return { totalInvested, installmentsElapsed, nextInstallmentDate, isPaused };
 }
@@ -405,7 +406,7 @@ export function listSipInstallments(
   }
 
   while (candidate.getTime() <= asOf.getTime()) {
-    const iso = candidate.toISOString().slice(0, 10);
+    const iso = toIsoDate(candidate);
     if (!isWithinPauseRanges(iso, pauseRanges)) {
       points.push({ date: iso, amount: effectiveSipAmount(sipAmountSchedule, sipAmount, iso) });
     }

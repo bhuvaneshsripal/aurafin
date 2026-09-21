@@ -52,6 +52,7 @@ import { ASSET_CLASS_LABELS, ASSET_CLASS_COLORS } from '../utils/taxonomy';
 import { formatCurrency, maskAmount, maskPreciseAmount, CURRENCY_SYMBOLS } from '../utils/currency';
 import { exportToCsv } from '../utils/exportCsv';
 import { exportDomToPdf } from '../utils/exportPdf';
+import { toIsoDate } from '../utils/date';
 import Modal from '../components/Modal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import type { Asset } from '../types';
@@ -279,7 +280,7 @@ function PortfolioPerformanceChart({
       series.push({ date: ev.date, invested: Math.max(0, invested), realized, total: Math.max(0, invested) });
     }
     // Always end on a live "Today" point.
-    const today = new Date().toISOString().slice(0, 10);
+    const today = toIsoDate();
     series.push({
       date: today,
       invested: currentInvested,
@@ -779,7 +780,7 @@ function ExportReportModal({
     setBusy('pdf');
     setError('');
     try {
-      await exportDomToPdf(reportRef.current, `Investment-PnL-Report-${new Date().toISOString().slice(0, 10)}`, 'AuraFin — Investment Profit & Loss Report');
+      await exportDomToPdf(reportRef.current, `Investment-PnL-Report-${toIsoDate()}`, 'AuraFin — Investment Profit & Loss Report');
       onClose();
     } catch (err) {
       console.error(err);
@@ -793,7 +794,7 @@ function ExportReportModal({
     setBusy('csv');
     try {
       exportToCsv(
-        `investment-transactions-${new Date().toISOString().slice(0, 10)}`,
+        `investment-transactions-${toIsoDate()}`,
         activity.map((e) => ({
           Date: e.date ?? '',
           Type: e.type === 'buy' ? 'BUY' : 'SELL',

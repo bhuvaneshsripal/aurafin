@@ -319,6 +319,18 @@ textarea {
   outline: 2px solid var(--color-brand-500);
   outline-offset: 2px;
 }
+/* Recharts puts tabindex="0" on its chart SVG/sector elements purely for
+   keyboard accessibility — it isn't a real clickable control, so tapping
+   or clicking a chart (donut, bar, line, ...) shouldn't draw the same
+   focus ring a button or link gets. */
+.recharts-wrapper:focus,
+.recharts-wrapper:focus-visible,
+.recharts-surface:focus,
+.recharts-surface:focus-visible,
+.recharts-pie-sector:focus,
+.recharts-pie-sector:focus-visible {
+  outline: none;
+}
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):focus,
 select:focus,
 textarea:focus {

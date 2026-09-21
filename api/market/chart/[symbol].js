@@ -10,13 +10,7 @@ import { fetchNseQuote } from '../../_lib/nse.js';
 
 // US tickers (AAPL, TSLA, GOOGL, ...) are used as-is on Yahoo — no
 // exchange suffix needed, unlike NSE/BSE symbols which need .NS/.BO.
-async function fetchYahooFallback(rawSymbol, market) {
-  const yahooSymbol =
-    market === 'US'
-      ? rawSymbol
-      : /\.(NS|BO)$/i.test(rawSymbol)
-        ? rawSymbol
-        : `${rawSymbol}.NS`;
+async function fetchYahooQuote(yahooSymbol) {
   const upstream = await fetch(
     `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=1d`,
     { headers: { 'User-Agent': 'Mozilla/5.0' } }
@@ -29,9 +23,33 @@ async function fetchYahooFallback(rawSymbol, market) {
   const previousClose = meta?.previousClose ?? meta?.chartPreviousClose;
   return {
     price,
-    currency: meta?.currency ?? (market === 'US' ? 'USD' : 'INR'),
+    currency: meta?.currency,
     previousClose: typeof previousClose === 'number' && Number.isFinite(previousClose) ? previousClose : undefined,
   };
+}
+
+// Was: always forced ".NS" onto Indian symbols before asking Yahoo, so a
+// BSE-only stock (no NSE listing) either came back empty — silently
+// dropping that holding out of every portfolio total, including 1D
+// returns — or, worse, coincidentally matched an unrelated NSE symbol and
+// returned a wrong price/previousClose for it. Now: try NSE first (the
+// common case), and if that doesn't yield a usable quote, retry the same
+// bare symbol suffixed ".BO" before giving up.
+async function fetchYahooFallback(rawSymbol, market) {
+  if (market === 'US') {
+    const quote = await fetchYahooQuote(rawSymbol);
+    return quote ? { ...quote, currency: quote.currency ?? 'USD' } : null;
+  }
+
+  const bare = rawSymbol.replace(/\.(NS|BO)$/i, '');
+  const alreadySuffixed = /\.(NS|BO)$/i.test(rawSymbol);
+
+  const candidates = alreadySuffixed ? [rawSymbol] : [`${bare}.NS`, `${bare}.BO`];
+  for (const candidate of candidates) {
+    const quote = await fetchYahooQuote(candidate);
+    if (quote) return { ...quote, currency: quote.currency ?? 'INR' };
+  }
+  return null;
 }
 
 export default async function handler(req, res) {

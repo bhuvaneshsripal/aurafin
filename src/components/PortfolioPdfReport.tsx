@@ -3,6 +3,7 @@ import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useTransactionsStore } from '../store/transactionsStore';
 import { useLivePricesStore } from '../store/livePricesStore';
+import { formatDateTime, toIsoMonth } from '../utils/date';
 import { useUiStore } from '../store/uiStore';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import { resolveAssetValues } from '../utils/assetValues';
@@ -83,7 +84,7 @@ export const PortfolioPdfReport = ({ hideInPrint = false }: PortfolioPdfReportPr
   const gains = totalAssets - investedAssetsTotal;
   const gainPercent = investedAssetsTotal > 0 ? (gains / investedAssetsTotal) * 100 : 0;
 
-  const thisMonth = new Date().toISOString().slice(0, 7);
+  const thisMonth = toIsoMonth();
   const monthIncome = useMemo(
     () =>
       transactions
@@ -167,7 +168,7 @@ export const PortfolioPdfReport = ({ hideInPrint = false }: PortfolioPdfReportPr
       {/* Header */}
       <div className="mb-8 border-b-2 border-slate-200 pb-6">
         <h1 className="text-4xl font-bold mb-2">Portfolio Report</h1>
-        <p className="text-slate-600">Generated on {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}</p>
+        <p className="text-slate-600">Generated on {formatDateTime(new Date())}</p>
       </div>
 
       {/* Summary Section */}
@@ -214,7 +215,7 @@ export const PortfolioPdfReport = ({ hideInPrint = false }: PortfolioPdfReportPr
 
       {/* Cashflow Section */}
       <div className="mb-8 page-break-before">
-        <h2 className="text-2xl font-bold mb-6">Monthly Cashflow ({new Date().toISOString().slice(0, 7)})</h2>
+        <h2 className="text-2xl font-bold mb-6">Monthly Cashflow ({toIsoMonth()})</h2>
         <div className="grid grid-cols-2 gap-6">
           <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
             <p className="text-blue-700 text-sm font-semibold mb-2">Income</p>

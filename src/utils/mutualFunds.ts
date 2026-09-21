@@ -1,4 +1,5 @@
 import type { SipInstallmentPoint } from './assetValues';
+import { toIsoDate } from './date';
 
 /** mfapi.in — free, no-key Indian mutual fund NAV API, proxied in dev via vite.config.ts */
 const MF_BASE = '/api/mf';
@@ -107,10 +108,6 @@ function writeStoredNav(key: string, data: FundNavHistory) {
   } catch {
     // Storage full/unavailable — the in-memory cache still covers this session.
   }
-}
-
-function toIsoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
 }
 
 /**

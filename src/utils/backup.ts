@@ -8,6 +8,7 @@ import type {
   FinancialProfile,
   HouseholdProfile,
 } from '../types';
+import { toIsoDate } from './date';
 
 /**
  * A full, human-readable snapshot of everything in an Aurafin account —
@@ -65,7 +66,7 @@ export function downloadBackupJson(backup: AurafinBackup) {
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  const date = new Date().toISOString().slice(0, 10);
+  const date = toIsoDate();
   link.href = url;
   link.download = `aurafin-backup-${date}.json`;
   document.body.appendChild(link);

@@ -20,6 +20,7 @@ import Modal from './Modal';
 import type { Asset, Snapshot, Transaction, TransactionType } from '../types';
 import CurrencySelect from './CurrencySelect';
 import CustomSelect from './CustomSelect';
+import { toIsoDate } from '../utils/date';
 
 type QuickAction = 'expense' | 'income' | 'transfer' | 'asset' | 'liability' | 'snapshot' | null;
 
@@ -202,7 +203,7 @@ function TransactionForm({ type, onDone }: { type: TransactionType; onDone: () =
   const [category, setCategory] = useState('');
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('INR');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(toIsoDate());
 
   const submit = async () => {
     if (!user || !category || !amount) return;
@@ -315,7 +316,7 @@ function SnapshotForm({ onDone }: { onDone: () => void }) {
     if (!user) return;
     const snapshot: Snapshot = {
       id: crypto.randomUUID(),
-      date: new Date().toISOString().slice(0, 10),
+      date: toIsoDate(),
       netWorth,
       totalAssets,
       totalLiabilities,

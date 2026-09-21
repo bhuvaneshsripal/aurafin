@@ -2,6 +2,7 @@
  * PDF Export utility for portfolio reports
  * Uses html2canvas and jspdf to generate PDF files
  */
+import { formatDate, formatDateTime } from './date';
 
 /**
  * html2canvas@1.4.1 can't parse CSS `oklch()` colors, and Tailwind v4's
@@ -143,7 +144,7 @@ export async function exportDomToPdf(
       pdf.setFontSize(24);
       pdf.text(title, pdf.internal.pageSize.getWidth() / 2, 40, { align: 'center' });
       pdf.setFontSize(10);
-      pdf.text(`Generated on ${new Date().toLocaleDateString()}`, pdf.internal.pageSize.getWidth() / 2, 50, {
+      pdf.text(`Generated on ${formatDate(new Date())}`, pdf.internal.pageSize.getWidth() / 2, 50, {
         align: 'center',
       });
       pdf.addPage();
@@ -206,6 +207,6 @@ export function generatePortfolioSummary(
     gainPercent,
     monthlyIncome,
     monthlyExpense,
-    generatedAt: new Date().toLocaleString(),
+    generatedAt: formatDateTime(new Date()),
   };
 }

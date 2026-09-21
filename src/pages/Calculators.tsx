@@ -22,6 +22,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { formatCurrency } from '../utils/currency';
+import { toIsoDate } from '../utils/date';
 import CustomSelect from '../components/CustomSelect';
 import { inputClasses } from '../components/ui';
 import { PageHeader } from '../components/ui';
@@ -770,7 +771,7 @@ function xirrRate(cashflows: { date: Date; amount: number }[]): number | null {
 }
 
 function XirrCalculator() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toIsoDate();
   const [flows, setFlows] = useState<Cashflow[]>([{ id: 1, date: today, amount: '-100000' }]);
   const [currentValue, setCurrentValue] = useState('130000');
   const [currentDate, setCurrentDate] = useState(today);

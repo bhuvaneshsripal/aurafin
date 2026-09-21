@@ -6,6 +6,7 @@ export const chart = {
   primarySoft: 'rgba(36,122,77,0.10)',
   positive: '#1b7f4b',
   negative: '#c93a32',
+  negativeSoft: 'rgba(201,58,50,0.10)',
   warning: '#c48a1c',
   grid: 'var(--color-line-soft)',
   axis: 'var(--color-faint)',

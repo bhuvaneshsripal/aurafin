@@ -18,6 +18,7 @@ import {
   resolveAccountIcon,
   type AccountType,
 } from '../../utils/accountVisuals';
+import { toIsoDate } from '../../utils/date';
 import type { Asset, Liability } from '../../types';
 import { inputClasses } from '../../components/ui';
 
@@ -370,7 +371,7 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
               last4: editingRow.last4 ?? '',
               openingBalance: editingRow.value,
               currency: editingRow.currency,
-              balanceAsOf: editingRow.balanceAsOf ?? new Date().toISOString().slice(0, 10),
+              balanceAsOf: editingRow.balanceAsOf ?? toIsoDate(),
               colour: editingRow.colour ?? ACCOUNT_COLOURS[0],
               icon: editingRow.icon ?? 'auto',
             }}
@@ -429,7 +430,7 @@ function AccountForm({
   const [last4, setLast4] = useState(initial?.last4 ?? '');
   const [openingBalance, setOpeningBalance] = useState(initial?.openingBalance?.toString() ?? '0');
   const [currency, setCurrency] = useState(initial?.currency ?? 'INR');
-  const [balanceAsOf, setBalanceAsOf] = useState(initial?.balanceAsOf ?? new Date().toISOString().slice(0, 10));
+  const [balanceAsOf, setBalanceAsOf] = useState(initial?.balanceAsOf ?? toIsoDate());
   const [colour, setColour] = useState(initial?.colour ?? ACCOUNT_COLOURS[0]);
   const [icon, setIcon] = useState(initial?.icon ?? 'auto');
 

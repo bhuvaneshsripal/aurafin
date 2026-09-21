@@ -19,6 +19,7 @@ import PinBoxInput from '../components/PinBoxInput';
 import { auth } from '../firebase/config';
 import CurrencySelect from '../components/CurrencySelect';
 import { loadImageFromFile } from '../utils/imageResize';
+import { formatDateTime } from '../utils/date';
 import AvatarCropModal from '../components/AvatarCropModal';
 import {
   SECURITY_QUESTIONS,
@@ -1611,7 +1612,7 @@ function DataTab() {
         {pendingRestore && (
           <>
             <p className="text-sm text-muted mb-4">
-              This backup was made on <strong>{new Date(pendingRestore.exportedAt).toLocaleString()}</strong> and
+              This backup was made on <strong>{formatDateTime(pendingRestore.exportedAt)}</strong> and
               contains <strong>{countBackupItems(pendingRestore)}</strong> item{countBackupItems(pendingRestore) === 1 ? '' : 's'}.
               They'll be added into <strong>{user?.email}</strong> — anything already in your account stays as is,
               and items with the same ID as ones already in your account will be overwritten with the backup's version.

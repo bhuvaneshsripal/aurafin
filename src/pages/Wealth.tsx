@@ -44,6 +44,7 @@ import {
 } from 'recharts';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLivePricesStore, resolvePreviousClose } from '../store/livePricesStore';
+import { toIsoDate } from '../utils/date';
 import { goldPricePerGram22k } from '../utils/goldPrice';
 import { computeHoldingPnl, computePortfolioPnl, isFullySold } from '../utils/investmentPnl';
 import { useSyncStatusStore } from '../store/syncStatusStore';
@@ -1252,11 +1253,20 @@ function AssetsTab({
     })
     .sort((a, b) => defaultAssetClassRank(a) - defaultAssetClassRank(b) || (a.order ?? 0) - (b.order ?? 0) || a.updatedAt - b.updatedAt);
 
-  const totalValue = assets.reduce((s, a) => s + resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).value, 0);
+  // Allocation % is based on money put in (cost basis), not current
+  // market value — so a holding's slice of the pie stays put day to day
+  // and only moves when you actually buy/sell, instead of shifting every
+  // time prices move (which used to make winners look "more allocated"
+  // and losers look "less allocated" with no actual trade behind it).
+  const totalInvestedForAlloc = assets.reduce((s, a) => {
+    const c = resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram);
+    return s + (c.invested ?? c.value);
+  }, 0);
 
   const rows = filtered.map((a) => {
     const computed = resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram);
-    const alloc = totalValue > 0 ? (computed.value / totalValue) * 100 : 0;
+    const allocBasis = computed.invested ?? computed.value;
+    const alloc = totalInvestedForAlloc > 0 ? (allocBasis / totalInvestedForAlloc) * 100 : 0;
     // Per-unit 1D change (only meaningful for symbol-priced holdings that
     // have a previous close — e.g. direct stocks; undefined for everything
     // else, which the Holdings table below renders as "—" rather than 0).
@@ -2331,7 +2341,7 @@ function SipPauseModal({
   onUpdate: (a: Asset) => void | Promise<void>;
 }) {
   const isPaused = !!asset.sipPausedAt;
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = toIsoDate();
   const [date, setDate] = useState(todayIso);
   const [saving, setSaving] = useState(false);
 
@@ -2426,14 +2436,14 @@ function SipBuyMoreModal({
 }) {
   const [mode, setMode] = useState<'choose' | 'topup' | 'increase'>('choose');
   const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(toIsoDate());
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
       setMode('choose');
       setAmount('');
-      setDate(new Date().toISOString().slice(0, 10));
+      setDate(toIsoDate());
     }
   }, [open]);
 
@@ -3036,7 +3046,7 @@ function BuySellDividendModal({
   const [qty, setQty] = useState('');
   const [price, setPrice] = useState('');
   const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => toIsoDate());
   // '' = "No cash account (position only)" — crediting proceeds/dividends to
   // a bank account is opt-in, since some people track buys/sells purely at
   // the holding level and don't want every sale to nudge a cash balance.
@@ -3059,7 +3069,7 @@ function BuySellDividendModal({
       setQty('');
       setPrice('');
       setAmount('');
-      setDate(new Date().toISOString().slice(0, 10));
+      setDate(toIsoDate());
       setAccountId('');
       setError('');
       setNewAccountOpen(false);

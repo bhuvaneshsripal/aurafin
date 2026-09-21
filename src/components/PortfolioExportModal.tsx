@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Download, FileText, Loader } from 'lucide-react';
 import { exportDomToPdf } from '../utils/exportPdf';
+import { toIsoDate } from '../utils/date';
 import Modal from './Modal';
 
 interface PortfolioExportModalProps {
@@ -23,7 +24,7 @@ export const PortfolioExportModal = ({ open, onClose, reportElementId = 'portfol
         throw new Error('Report element not found. Please ensure the portfolio report is rendered.');
       }
 
-      const filename = `Portfolio-Report-${new Date().toISOString().split('T')[0]}`;
+      const filename = `Portfolio-Report-${toIsoDate()}`;
       await exportDomToPdf(
         reportElement,
         filename,

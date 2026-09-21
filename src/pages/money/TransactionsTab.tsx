@@ -6,6 +6,7 @@ import { useHouseholdProfilesStore } from '../../store/householdProfilesStore';
 import { useSyncStatusStore } from '../../store/syncStatusStore';
 import { upsertDoc, removeDoc } from '../../hooks/useFirestoreSync';
 import { exportToCsv } from '../../utils/exportCsv';
+import { toIsoDate } from '../../utils/date';
 import Modal from '../../components/Modal';
 import ConfirmDeleteModal from '../../components/ConfirmDeleteModal';
 import Amount from '../../components/Amount';
@@ -283,7 +284,7 @@ function TransactionForm({
   const [category, setCategory] = useState('');
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('INR');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(toIsoDate());
 
   const submit = () => {
     if (!category || !amount) return;

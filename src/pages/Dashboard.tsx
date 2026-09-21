@@ -27,6 +27,7 @@ import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import GoldPriceCard from '../components/GoldPriceCard';
 import { PortfolioPdfReport } from '../components/PortfolioPdfReport';
 import { PortfolioExportModal } from '../components/PortfolioExportModal';
+import { toIsoDate, toIsoMonth } from '../utils/date';
 import {
   Badge,
   Button,
@@ -140,7 +141,7 @@ export default function Dashboard() {
   const netWorthPnl = totalAssets - investedAssetsTotal;
   const netWorthPnlPercent = investedAssetsTotal > 0 ? (netWorthPnl / investedAssetsTotal) * 100 : 0;
 
-  const thisMonth = new Date().toISOString().slice(0, 7);
+  const thisMonth = toIsoMonth();
   const monthIncome = transactions
     .filter((t) => t.type === 'income' && t.date.startsWith(thisMonth))
     .reduce((s, t) => s + t.amount, 0);
@@ -239,7 +240,7 @@ export default function Dashboard() {
       />
 
       {/* KPI strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         <StatCard
           dense
           label="Net worth"
@@ -253,13 +254,6 @@ export default function Dashboard() {
           loading={!wealthDataKnown}
           value={money(hasWealth ? investedAssetsTotal : 0)}
           sublabel="Cost basis"
-        />
-        <StatCard
-          dense
-          label="Current portfolio value"
-          loading={!ready}
-          value={money(hasWealth ? totalAssets : 0)}
-          sublabel={`${assets.length} ${assets.length === 1 ? 'holding' : 'holdings'}`}
         />
         <StatCard
           dense
@@ -387,7 +381,7 @@ function PerformanceCard({ privacyMode }: { privacyMode: boolean }) {
     const months = range === '3M' ? 3 : range === '6M' ? 6 : 12;
     const cutoff = new Date();
     cutoff.setMonth(cutoff.getMonth() - months);
-    const iso = cutoff.toISOString().slice(0, 10);
+    const iso = toIsoDate(cutoff);
     return sorted.filter((s) => s.date >= iso);
   }, [snapshots, range]);
 
@@ -395,6 +389,12 @@ function PerformanceCard({ privacyMode }: { privacyMode: boolean }) {
   const last = data[data.length - 1];
   const change = first && last ? last.netWorth - first.netWorth : 0;
   const changePct = first && first.netWorth > 0 ? (change / first.netWorth) * 100 : 0;
+  // Line/fill follow the same red-when-down convention as the change
+  // figure above it, instead of always drawing green even on a losing
+  // stretch.
+  const isDown = change < 0;
+  const lineColor = isDown ? chart.negative : chart.primary;
+  const fillColor = isDown ? chart.negativeSoft : chart.primarySoft;
 
   return (
     <Card padding="lg" className="h-full">
@@ -463,11 +463,11 @@ function PerformanceCard({ privacyMode }: { privacyMode: boolean }) {
               <Area
                 type="monotone"
                 dataKey="netWorth"
-                stroke={chart.primary}
+                stroke={lineColor}
                 strokeWidth={2}
-                fill={chart.primarySoft}
+                fill={fillColor}
                 dot={false}
-                activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--color-surface)', fill: chart.primary }}
+                activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--color-surface)', fill: lineColor }}
               />
             </AreaChart>
           </ResponsiveContainer>
