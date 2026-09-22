@@ -18,7 +18,6 @@ import { useNotificationPreferencesStore, type NotificationChannelKey } from '..
 import PinBoxInput, { type PinBoxInputHandle } from '../components/PinBoxInput';
 import { auth } from '../firebase/config';
 import CurrencySelect from '../components/CurrencySelect';
-import Badge from '../components/ui/Badge';
 import { loadImageFromFile } from '../utils/imageResize';
 import { formatDateTime } from '../utils/date';
 import AvatarCropModal from '../components/AvatarCropModal';
@@ -1051,7 +1050,9 @@ function NotificationsCard() {
     <Card>
       <div className="flex items-center gap-2 mb-1">
         <h2 className="text-sm font-semibold text-ink">Notifications</h2>
-        <Badge variant="neutral">Coming soon</Badge>
+        <span className="text-xs font-medium text-brand-600 bg-brand-50 dark:bg-brand-500/10 dark:text-brand-400 px-2 py-0.5 rounded-full">
+          Coming Soon
+        </span>
       </div>
       <p className="text-xs text-muted mb-4">
         Choose how you'd like to be reached. Changes take effect immediately.
@@ -1721,7 +1722,7 @@ export default function Settings() {
       <PageHeader title="Settings" description="Account, preferences & privacy" />
 
       <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-6 items-start">
-        <nav className="bg-page rounded-2xl p-1.5 flex md:flex-col gap-0.5 overflow-x-auto no-scrollbar md:overflow-visible">
+        <nav className="bg-white rounded-2xl p-1.5 inline-flex md:flex md:flex-col gap-0.5 overflow-x-auto no-scrollbar md:overflow-visible w-fit max-w-full md:w-full">
           {TABS.map((t) => (
             <button
               key={t.key}

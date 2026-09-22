@@ -227,7 +227,6 @@ export default function Dashboard() {
     <div className="space-y-5">
       <PageHeader
         title="Overview"
-        description="Your net worth, portfolio and cash flow at a glance."
         meta={
           <p className="flex items-center gap-1.5 text-xs text-muted">
             <span className="h-1.5 w-1.5 rounded-full bg-brand-500 animate-pulse" />

@@ -49,6 +49,21 @@ export default function TopHeader() {
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || e.key.toLowerCase() !== 'm') return;
+      const target = e.target as HTMLElement | null;
+      const typing =
+        target &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+      if (typing) return;
+      e.preventDefault();
+      togglePrivacy();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [togglePrivacy]);
+
+  useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) setProfileOpen(false);
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false);
@@ -74,21 +89,14 @@ export default function TopHeader() {
     <>
       <div
         id="app-topbar"
-        className="sticky top-0 z-30 h-14 grid grid-cols-[1fr_auto_1fr] md:flex items-center gap-2 sm:gap-3 px-4 sm:px-6 md:px-8 bg-page md:justify-between"
+        className="sticky top-0 z-30 h-14 grid grid-cols-[auto_1fr] md:flex items-center gap-2 sm:gap-3 px-4 sm:px-6 md:px-8 bg-white border-b border-line md:justify-between"
       >
-        {/* Mobile: brand mark, left column */}
+        {/* Mobile: brand mark + profile switcher together, left-aligned */}
         <span className="md:hidden flex items-center gap-2 min-w-0">
-          <AppLogo className="w-6 h-6 rounded-full" />
-          <span className="font-brand text-[15px] text-ink truncate">
+          <AppLogo className="w-6 h-6 rounded-full shrink-0" />
+          <span className="font-brand text-[15px] text-ink truncate shrink-0">
             Aurafin<span className="text-brand-600">.</span>
           </span>
-        </span>
-
-        {/* Mobile: profile switcher, centered in its own column so it isn't
-            crowded against the logo on one side while the action icons sit
-            far away on the other — matches the centered-title convention
-            most mobile app headers use. */}
-        <span className="md:hidden flex items-center justify-center gap-2 min-w-0">
           <ProfileSwitcher compact />
           {lockEnabled && (
             <IconButton label="Lock Aurafin now" size="sm" onClick={lockNow} className="tap-scale shrink-0">
@@ -107,7 +115,10 @@ export default function TopHeader() {
             <QuickAddMenu />
           </div>
 
-          <IconButton label={privacyMode ? 'Show amounts' : 'Hide amounts'} onClick={togglePrivacy}>
+          <IconButton
+            label={`${privacyMode ? 'Show amounts' : 'Hide amounts'} (Ctrl+M)`}
+            onClick={togglePrivacy}
+          >
             {privacyMode ? <EyeOff size={18} /> : <Eye size={18} />}
           </IconButton>
 
