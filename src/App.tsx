@@ -19,6 +19,8 @@ import {
   useFirestoreCollectionSync,
   useAvatarSync,
   useAppLockSync,
+  useWealthFilterSync,
+  useAutoNetWorthHistory,
   assignOrphanDataToProfile,
   ALL_USER_COLLECTIONS,
 } from './hooks/useFirestoreSync';
@@ -66,8 +68,14 @@ function AppShell() {
   // First-time sign-ups/sign-ins get the full-screen onboarding wizard with
   // none of the normal chrome (sidebar/topbar/bottom nav) — matches how
   // Login is rendered outside the shell. Any route they try to hit while
-  // onboarding is pending bounces back to /onboarding.
-  if (needsOnboarding) {
+  // onboarding is pending bounces back to /onboarding — except /import,
+  // which the wizard's "Import from Broker" step links to directly. That
+  // link fires completeOnboarding() and navigate('/import') together, and
+  // checking location.pathname here (rather than only needsOnboarding)
+  // means /import renders immediately and reliably even if the onboarding
+  // flag hasn't finished propagating yet, instead of racing back to
+  // /onboarding and bouncing on to the Dashboard.
+  if (needsOnboarding && location.pathname !== '/import') {
     return (
       <ErrorBoundary key="onboarding">
         <Suspense fallback={<RouteFallback />}>
@@ -174,6 +182,11 @@ function DataSync() {
   useFirestoreCollectionSync<HouseholdProfile>('profiles', setHouseholdProfiles);
   useAvatarSync();
   useAppLockSync();
+  useWealthFilterSync();
+  // Auto-records today's net worth as real history whenever assets/
+  // liabilities change — see useAutoNetWorthHistory for why this needs to
+  // be mounted after the sync-status flags it waits on are wired up above.
+  useAutoNetWorthHistory();
 
   // One-time backfill: data created before household profiles existed has
   // no profileId. While there's exactly one profile, "whose data is this"
@@ -232,13 +245,24 @@ function DataSync() {
  * `needsOnboarding` skips the gate: a brand-new account has no data to
  * wait for, and the onboarding wizard doesn't render anything
  * data-dependent, so making it wait here would just be a pointless delay.
+ *
+ * `/import` is also exempted, for the same reason AppShell special-cases
+ * it: the wizard's "Import from Broker" step fires completeOnboarding()
+ * and navigate('/import') together, so needsOnboarding can flip to false
+ * a render before the first Firestore snapshot lands for a brand-new
+ * account. Without this exemption, this gate would return null right
+ * then — unmounting AppShell (and the router state it's about to act on)
+ * until data finishes loading — and once it remounts, the person has
+ * often already bailed out to the default route, landing on the
+ * Dashboard instead of the import screen they actually clicked into.
  */
 function AppReady({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
   const needsOnboarding = useAuthStore((s) => s.needsOnboarding);
   const loadedCollections = useSyncStatusStore((s) => s.loadedCollections);
   const initialDataLoaded = ALL_USER_COLLECTIONS.every((c) => loadedCollections[c]);
 
-  if (!needsOnboarding && !initialDataLoaded) {
+  if (!needsOnboarding && !initialDataLoaded && location.pathname !== '/import') {
     return null;
   }
   return <>{children}</>;

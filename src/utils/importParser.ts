@@ -149,6 +149,21 @@ const CLASS_HEADERS = ['class', 'asset class', 'category', 'type'];
 const CURRENCY_HEADERS = ['currency', 'ccy'];
 const ISIN_HEADERS = ['isin', 'isin code', 'isin no', 'isin no.'];
 
+// A distinct trading-symbol column, when the sheet also has a separate full
+// company-name column (Groww's order history has both "Stock name" and
+// "Symbol"; Zerodha's holdings export only has one combined column, which
+// still gets picked up fine since it's also a NAME_HEADERS candidate).
+const SYMBOL_HEADERS = ['symbol', 'tradingsymbol', 'trading symbol', 'ticker', 'stock symbol', 'scrip code'];
+
+// Some broker exports are a *transaction/order history* (one row per trade,
+// e.g. Groww's "Stocks Order History") rather than a snapshot of current
+// holdings (one row per holding, e.g. Zerodha Console). These carry a
+// Buy/Sell column that a naive header match would otherwise mistake for an
+// asset-class column (see CLASS_HEADERS including the very generic "type").
+const TXN_TYPE_HEADERS = ['type', 'txn type', 'transaction type', 'order type', 'buy/sell', 'trade type'];
+const ORDER_STATUS_HEADERS = ['order status', 'status'];
+const EXECUTION_DATE_HEADERS = ['execution date and time', 'execution date', 'order date', 'trade date', 'order execution time'];
+
 // Header names that only ever show up in broker holdings exports. If we
 // see one of these and there's no explicit asset-class column, we can
 // safely assume every row in the sheet is an equity holding.
@@ -183,6 +198,9 @@ const ALL_HEADER_CANDIDATES = new Set([
   ...CLASS_HEADERS,
   ...CURRENCY_HEADERS,
   ...ISIN_HEADERS,
+  ...SYMBOL_HEADERS,
+  ...ORDER_STATUS_HEADERS,
+  ...EXECUTION_DATE_HEADERS,
 ]);
 
 const CLASS_KEYWORD_MAP: Record<string, AssetClass> = {
@@ -281,6 +299,169 @@ function toNumber(value: unknown): number {
   return 0;
 }
 
+function normalizeText(s: string): string {
+  return s.trim().toLowerCase();
+}
+
+/**
+ * Confirms a header that *looks* like it could be an asset-class column
+ * (see CLASS_HEADERS including the very generic "type") is actually a
+ * Buy/Sell transaction-type column, by sniffing its values, rather than
+ * assuming from the header name alone. Returns undefined if the header
+ * doesn't exist or its values don't look like Buy/Sell.
+ */
+function findTransactionTypeKey(headers: string[], rows: Record<string, unknown>[]): string | undefined {
+  const key = findHeaderKey(headers, TXN_TYPE_HEADERS);
+  if (!key) return undefined;
+  const sample = rows.slice(0, 25).map((r) => normalizeText(String(r[key] ?? '')));
+  const txnLike = sample.filter((v) => v === 'buy' || v === 'sell').length;
+  return txnLike > 0 ? key : undefined;
+}
+
+/** Loosely parses the date formats broker exports tend to use (notably
+ *  Groww's "20-04-2026 09:00 AM") into a sortable timestamp. Returns 0 for
+ *  anything unrecognized rather than throwing — a stable sort then just
+ *  falls back to file order for those rows, which is a reasonable default
+ *  since most exports are already chronological. */
+function parseDateLoose(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'string') {
+    const s = value.trim();
+    const m = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:\s+(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)?)?/);
+    if (m) {
+      const [, dd, mm, yyyy, hh, min, ampm] = m;
+      let hour = hh ? parseInt(hh, 10) : 0;
+      if (ampm) {
+        const isPM = ampm.toLowerCase() === 'pm';
+        if (isPM && hour < 12) hour += 12;
+        if (!isPM && hour === 12) hour = 0;
+      }
+      const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd), hour, min ? parseInt(min, 10) : 0);
+      if (!Number.isNaN(d.getTime())) return d.getTime();
+    }
+    const parsed = Date.parse(s);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return 0;
+}
+
+interface TxnKeys {
+  nameKey?: string;
+  symbolKey?: string;
+  isinKey?: string;
+  qtyKey?: string;
+  valueKey?: string;
+  txnTypeKey: string;
+  statusKey?: string;
+  dateKey?: string;
+  currencyKey?: string;
+}
+
+const EXECUTED_STATUSES = new Set(['executed', 'complete', 'completed', 'filled', 'success', 'fully executed']);
+
+/**
+ * Turns a broker's *order/transaction history* (one row per trade — e.g.
+ * Groww's "Stocks Order History" export) into current net holdings, since
+ * that's what every other import source (a holdings snapshot) already
+ * produces. Walks the trades in chronological order per symbol, tracking a
+ * running quantity and average cost: a Buy adds to both; a Sell reduces
+ * quantity and removes that quantity's share of the cost basis at the
+ * *current* running average cost (the standard average-cost method).
+ * Rejected/cancelled/pending orders are skipped when a status column says
+ * so. Symbols fully exited (net quantity down to zero) are dropped, since
+ * there's nothing currently held to import.
+ *
+ * There's no current market price in a trade log, so `value` is seeded
+ * from the resulting invested value — a fine placeholder, since any row
+ * with a symbol and quantity gets picked up by the live-price poller
+ * (useLivePrices) within seconds of being saved and corrected there.
+ */
+function aggregateTransactionRows(rows: Record<string, unknown>[], keys: TxnKeys): ParsedRow[] {
+  const { nameKey, symbolKey, isinKey, qtyKey, valueKey, txnTypeKey, statusKey, dateKey, currencyKey } = keys;
+
+  const ordered = dateKey
+    ? [...rows].sort((a, b) => parseDateLoose(a[dateKey]) - parseDateLoose(b[dateKey]))
+    : rows;
+
+  interface Group {
+    name: string;
+    symbol: string;
+    isin: string;
+    currency: string;
+    qty: number;
+    invested: number;
+  }
+  const groups = new Map<string, Group>();
+
+  for (const raw of ordered) {
+    if (statusKey) {
+      const status = normalizeText(String(raw[statusKey] ?? ''));
+      if (status && !EXECUTED_STATUSES.has(status)) continue;
+    }
+
+    const type = normalizeText(String(raw[txnTypeKey] ?? ''));
+    if (type !== 'buy' && type !== 'sell') continue;
+
+    const name = nameKey ? String(raw[nameKey] ?? '').trim() : '';
+    const symbol = (symbolKey ? String(raw[symbolKey] ?? '').trim() : name).toUpperCase();
+    const isin = isinKey ? String(raw[isinKey] ?? '').trim().toUpperCase() : '';
+    const key = symbol || isin || normalizeText(name);
+    if (!key) continue;
+
+    const qty = qtyKey ? toNumber(raw[qtyKey]) : 0;
+    const txnValue = valueKey ? toNumber(raw[valueKey]) : 0;
+    if (qty <= 0) continue;
+
+    let group = groups.get(key);
+    if (!group) {
+      group = {
+        name,
+        symbol,
+        isin,
+        currency: currencyKey ? String(raw[currencyKey] ?? 'INR').trim() || 'INR' : 'INR',
+        qty: 0,
+        invested: 0,
+      };
+      groups.set(key, group);
+    }
+
+    if (type === 'buy') {
+      group.qty += qty;
+      group.invested += txnValue;
+    } else {
+      const avgCost = group.qty > 0 ? group.invested / group.qty : 0;
+      const sellQty = Math.min(qty, group.qty);
+      group.qty -= sellQty;
+      group.invested -= sellQty * avgCost;
+      if (group.qty <= 0.0001) {
+        group.qty = 0;
+        group.invested = 0;
+      }
+    }
+  }
+
+  const result: ParsedRow[] = [];
+  for (const g of groups.values()) {
+    if (g.qty <= 0) continue;
+    const avgCost = g.invested / g.qty;
+    result.push({
+      raw: {},
+      name: g.name || g.symbol,
+      value: g.invested,
+      assetClass: 'stock',
+      currency: g.currency,
+      valid: (g.name.length > 0 || g.symbol.length > 0) && g.qty > 0,
+      symbol: g.symbol || undefined,
+      isin: g.isin || undefined,
+      quantity: g.qty,
+      avgCost: avgCost > 0 ? avgCost : undefined,
+      investedValue: g.invested > 0 ? g.invested : undefined,
+    });
+  }
+  return result;
+}
+
 /**
  * Reads a File (CSV or Excel) and returns parsed rows with best-effort
  * column mapping. Works for .csv, .xlsx, and .xls since SheetJS handles
@@ -333,16 +514,43 @@ export async function parseSpreadsheetFile(file: File): Promise<ParsedRow[]> {
 
   const nameKey = findHeaderKey(headers, NAME_HEADERS);
   const valueKey = findHeaderKey(headers, VALUE_HEADERS);
-  const classKey = findHeaderKey(headers, CLASS_HEADERS);
   const currencyKey = findHeaderKey(headers, CURRENCY_HEADERS);
   const qtyKey = findHeaderKey(headers, QTY_HEADERS);
+  const isinKey = findHeaderKey(headers, ISIN_HEADERS);
+  // A distinct trading-symbol column (Groww's order history has both
+  // "Stock name" and "Symbol"). Falls back to nameKey further down when
+  // there isn't one, matching how a Zerodha-style sheet works today (its
+  // single "Symbol"/"Instrument" column serves as both).
+  const symbolColKey = findHeaderKey(headers, SYMBOL_HEADERS);
+
+  // A "Type" column is ambiguous: some sheets use it for asset category
+  // (Stock/Gold/FD), others (order/transaction histories) use it for
+  // Buy/Sell. Sniff the actual values before trusting the header name.
+  const txnTypeKey = findTransactionTypeKey(headers, rows);
+
+  if (txnTypeKey) {
+    return aggregateTransactionRows(rows, {
+      nameKey,
+      symbolKey: symbolColKey,
+      isinKey,
+      qtyKey,
+      valueKey,
+      txnTypeKey,
+      statusKey: findHeaderKey(headers, ORDER_STATUS_HEADERS),
+      dateKey: findHeaderKey(headers, EXECUTION_DATE_HEADERS),
+      currencyKey,
+    });
+  }
+
+  // txnTypeKey is undefined here (handled above), so a "Type" column at
+  // this point is safe to treat as an asset-class column.
+  const classKey = findHeaderKey(headers, CLASS_HEADERS);
   const ltpKey = findHeaderKey(headers, PRICE_HEADERS);
   const avgPriceKey = findHeaderKey(headers, AVG_PRICE_HEADERS);
   const priceKey = ltpKey ?? avgPriceKey;
   const investedKey = findHeaderKey(headers, INVESTED_HEADERS);
   const pnlKey = findHeaderKey(headers, PNL_HEADERS);
   const pnlPercentKey = findHeaderKey(headers, PNL_PERCENT_HEADERS);
-  const isinKey = findHeaderKey(headers, ISIN_HEADERS);
 
   // No asset-class column at all, but the sheet clearly looks like a
   // broker holdings export -> treat every row as equity by default.
@@ -351,9 +559,11 @@ export async function parseSpreadsheetFile(file: File): Promise<ParsedRow[]> {
 
   return rows.map((raw) => {
     const name = nameKey ? String(raw[nameKey] ?? '').trim() : '';
-    const symbol = nameKey && nameKey !== 'name' && nameKey !== 'asset' && nameKey !== 'asset name'
-      ? name.toUpperCase()
-      : name.toUpperCase();
+    // Prefer a distinct trading-symbol column when the sheet has one
+    // separate from the display name (e.g. Groww's "Symbol" next to
+    // "Stock name"); otherwise fall back to the name itself, matching
+    // sheets (like Zerodha's) where one column serves as both.
+    const symbol = (symbolColKey ? String(raw[symbolColKey] ?? '').trim() : name).toUpperCase();
 
     const quantity = qtyKey ? toNumber(raw[qtyKey]) : undefined;
     const avgCost = avgPriceKey ? toNumber(raw[avgPriceKey]) : undefined;
@@ -417,10 +627,6 @@ export interface ImportMergeResult {
   updatedCount: number;
   /** Rows that didn't match anything and will be added as new holdings. */
   addedCount: number;
-}
-
-function normalizeText(s: string): string {
-  return s.trim().toLowerCase();
 }
 
 /**

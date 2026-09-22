@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, memo } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Sparkles,
@@ -18,7 +18,7 @@ import { useAssetsStore } from '../store/assetsStore';
 import { upsertDoc } from '../hooks/useFirestoreSync';
 import { ASSET_TAXONOMY } from '../utils/taxonomy';
 import Modal from '../components/Modal';
-import PinBoxInput from '../components/PinBoxInput';
+import PinBoxInput, { type PinBoxInputHandle } from '../components/PinBoxInput';
 import CustomSelect from '../components/CustomSelect';
 import CurrencySelect from '../components/CurrencySelect';
 import {
@@ -687,6 +687,16 @@ const SecureStep = memo((props: SecureStepProps) => {
   const [pin, setPinInput] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [pinError, setPinError] = useState('');
+  const confirmPinRef = useRef<PinBoxInputHandle>(null);
+
+  // Jump to the Confirm PIN boxes once the 4-digit PIN is complete — done
+  // as an effect so it fires after the digit has committed to the DOM,
+  // rather than mid-keystroke where the focus call was getting lost.
+  useEffect(() => {
+    if (pin.length === 4) {
+      confirmPinRef.current?.focus();
+    }
+  }, [pin]);
 
   const savePin = useCallback(() => {
     if (!/^\d{4}$/.test(pin)) {
@@ -744,7 +754,7 @@ const SecureStep = memo((props: SecureStepProps) => {
             <label className="block text-xs text-muted mb-2 text-center">
               Confirm PIN
             </label>
-            <PinBoxInput value={confirmPin} onChange={setConfirmPin} />
+            <PinBoxInput ref={confirmPinRef} value={confirmPin} onChange={setConfirmPin} />
           </div>
           {pinError && <p className="text-xs text-red-500">{pinError}</p>}
           <button

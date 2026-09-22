@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import { friendlyAuthError } from '../utils/authErrors';
 
 export default function Login() {
   const { loginWithGoogle, loginWithEmail, registerWithEmail, loginAsGuest } = useAuthStore();
@@ -18,7 +19,9 @@ export default function Login() {
       if (mode === 'login') await loginWithEmail(email, password);
       else await registerWithEmail(email, password);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong');
+      setError(
+        friendlyAuthError(e, mode === 'login' ? 'We couldn\u2019t log you in. Please try again.' : 'We couldn\u2019t create your account. Please try again.')
+      );
     }
   };
 
@@ -31,16 +34,13 @@ export default function Login() {
       // signInWithPopup rejects (e.g. popup blocked, closed by the user,
       // an unauthorized domain, or a misconfigured Firebase project) and
       // previously nothing caught that rejection - the button just looked
-      // like it did nothing. Surface it instead.
+      // like it did nothing. Surface it instead, in plain language rather
+      // than Firebase's raw "Firebase: Error (auth/...)" message.
       const code = (e as { code?: string })?.code;
-      if (code === 'auth/popup-blocked') {
-        setError('Your browser blocked the Google sign-in popup. Please allow popups for this site and try again.');
-      } else if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
         // User closed the popup themselves - not really an error worth showing.
-      } else if (code === 'auth/unauthorized-domain') {
-        setError('This domain is not authorized for Google sign-in yet. Add it under Firebase Console > Authentication > Settings > Authorized domains.');
       } else {
-        setError(e instanceof Error ? e.message : 'Google sign-in failed. Please try again.');
+        setError(friendlyAuthError(e, 'Google sign-in failed. Please try again.'));
       }
     } finally {
       setGoogleLoading(false);
@@ -103,7 +103,7 @@ export default function Login() {
               try {
                 await loginAsGuest();
               } catch (e) {
-                setError(e instanceof Error ? e.message : 'Failed to continue as guest');
+                setError(friendlyAuthError(e, 'We couldn\u2019t start a guest session. Please try again.'));
                 setGuestLoading(false);
               }
             }}

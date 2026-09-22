@@ -53,6 +53,8 @@ export type LiabilityClass =
   | 'car_loan'
   | 'education_loan'
   | 'gold_loan'
+  | 'business_loan'
+  | 'friends_family'
   | 'credit_card'
   | 'line_of_credit'
   | 'other_liability';
@@ -265,6 +267,16 @@ export interface Liability {
   isDefaultAccount?: boolean;
   /** Which household profile this liability belongs to. */
   profileId?: string;
+  /** Bank / NBFC / person this liability is owed to. */
+  lender?: string;
+  /** Annual interest rate (%). */
+  interestRate?: number;
+  /** Loan start / drawdown date (ISO yyyy-mm-dd). */
+  startDate?: string;
+  /** Next payment / bill due date (ISO yyyy-mm-dd) — e.g. a credit card's due date. */
+  dueDate?: string;
+  /** Free-form notes. */
+  notes?: string;
 }
 
 export interface FinancialProfile {

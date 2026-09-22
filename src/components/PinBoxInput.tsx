@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { forwardRef, useImperativeHandle, useRef } from 'react';
 import type { KeyboardEvent, ClipboardEvent } from 'react';
 
 interface PinBoxInputProps {
@@ -8,31 +8,54 @@ interface PinBoxInputProps {
   autoFocus?: boolean;
   /** Mask entered digits as dots, like a password field. Defaults to true. */
   mask?: boolean;
+  /** Called once, right when the last box is filled in (all `length` digits present). */
+  onComplete?: (value: string) => void;
+}
+
+/** Lets a parent move focus into this box group imperatively, e.g. to jump
+ *  from a "PIN" group straight into a "confirm PIN" group once it's full. */
+export interface PinBoxInputHandle {
+  focus: () => void;
 }
 
 /** Four (or `length`) individual round digit boxes for entering a PIN,
  *  instead of one long rectangular text field. Handles auto-advance on
  *  type, backspace-to-previous, arrow-key navigation, and paste. */
-export default function PinBoxInput({
-  value,
-  onChange,
-  length = 4,
-  autoFocus = false,
-  mask = true,
-}: PinBoxInputProps) {
+function PinBoxInput(
+  {
+    value,
+    onChange,
+    length = 4,
+    autoFocus = false,
+    mask = true,
+    onComplete,
+  }: PinBoxInputProps,
+  ref: React.Ref<PinBoxInputHandle>
+) {
   const refs = useRef<(HTMLInputElement | null)[]>([]);
+
+  useImperativeHandle(ref, () => ({
+    focus: () => refs.current[0]?.focus(),
+  }));
 
   const setDigit = (index: number, digit: string) => {
     const chars = value.split('');
     chars[index] = digit;
-    onChange(chars.join('').slice(0, length));
+    const next = chars.join('').slice(0, length);
+    onChange(next);
+    return next;
   };
 
   const handleChange = (index: number, raw: string) => {
     const digit = raw.replace(/\D/g, '').slice(-1);
     if (!digit) return;
-    setDigit(index, digit);
-    if (index < length - 1) refs.current[index + 1]?.focus();
+    const next = setDigit(index, digit);
+    if (index < length - 1) {
+      refs.current[index + 1]?.focus();
+    } else if (next.length === length && !next.includes('')) {
+      // Last box just got filled — hand off to whatever comes next (e.g. the confirm-PIN boxes).
+      onComplete?.(next);
+    }
   };
 
   const handleKeyDown = (index: number, e: KeyboardEvent<HTMLInputElement>) => {
@@ -56,7 +79,11 @@ export default function PinBoxInput({
     if (!pasted) return;
     e.preventDefault();
     onChange(pasted);
-    refs.current[Math.min(pasted.length, length - 1)]?.focus();
+    if (pasted.length === length) {
+      onComplete?.(pasted);
+    } else {
+      refs.current[Math.min(pasted.length, length - 1)]?.focus();
+    }
   };
 
   return (
@@ -81,3 +108,5 @@ export default function PinBoxInput({
     </div>
   );
 }
+
+export default forwardRef(PinBoxInput);

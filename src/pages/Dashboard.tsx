@@ -50,8 +50,10 @@ import {
 import {
   ASSET_CLASS_LABELS,
   formatAxisAmount,
+  formatCurrency,
   formatPercentMagnitude,
   formatSignedCurrency,
+  formatPreciseCurrency,
   maskAmount,
 } from '../utils/currency';
 import { ASSET_CLASS_TO_CATEGORY } from '../utils/taxonomy';
@@ -273,7 +275,7 @@ export default function Dashboard() {
       {/* Performance + allocation */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2">
-          <PerformanceCard privacyMode={privacyMode} pnl={netWorthPnl} />
+          <NetWorthOverTimeCard privacyMode={privacyMode} />
         </div>
         <AllocationCard
           data={allocation}
@@ -370,71 +372,175 @@ function ChartTooltip({
 
 type Range = '3M' | '6M' | '1Y' | 'ALL';
 
-function PerformanceCard({ privacyMode, pnl }: { privacyMode: boolean; pnl: number }) {
+const RANGE_LABEL: Record<Range, string> = {
+  '3M': 'the last 3 months',
+  '6M': 'the last 6 months',
+  '1Y': 'the last 12 months',
+  ALL: 'your full history',
+};
+
+/** Tooltip for the Net worth over time chart. Unlike the generic
+ *  ChartTooltip above, this also looks up the *previous* real history
+ *  point (by date, in the currently-displayed series) so it can show the
+ *  change and % change since that point — recharts only hands the
+ *  tooltip renderer the hovered point itself. */
+function NetWorthTooltip({
+  active,
+  payload,
+  label,
+  privacyMode,
+  data,
+}: {
+  active?: boolean;
+  payload?: readonly unknown[];
+  label?: string;
+  privacyMode: boolean;
+  data: Snapshot[];
+}) {
+  if (!active || !payload?.length) return null;
+  const idx = data.findIndex((d) => d.date === label);
+  const point = idx >= 0 ? data[idx] : null;
+  if (!point) return null;
+  const prev = idx > 0 ? data[idx - 1] : null;
+  const change = prev ? point.netWorth - prev.netWorth : null;
+  const changePct = prev && prev.netWorth !== 0 ? ((change as number) / prev.netWorth) * 100 : null;
+
+  return (
+    <div className="rounded-xl border border-line bg-surface px-3 py-2.5 shadow-lg text-xs min-w-[168px]">
+      <p className="text-muted font-medium mb-1.5">{formatDate(point.date)}</p>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-muted">Net worth</span>
+        <span className="font-numeric font-semibold text-ink">
+          {privacyMode ? '••••••' : formatPreciseCurrency(point.netWorth)}
+        </span>
+      </div>
+      {change !== null && (
+        <div className="flex items-center justify-between gap-3 mt-1.5 pt-1.5 border-t border-line-soft">
+          <span className="text-muted">Change</span>
+          <span className={`font-numeric font-medium ${change >= 0 ? 'text-positive' : 'text-negative'}`}>
+            {privacyMode
+              ? '••••••'
+              : `${formatSignedCurrency(change, 'INR', 0)}${changePct !== null ? ` (${formatPercentMagnitude(changePct, 1)})` : ''}`}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
+  // Real, stored history only — the same `snapshots` collection the manual
+  // "Take Snapshot" action writes to, plus (via useAutoNetWorthHistory,
+  // mounted in DataSync) an automatic entry for today whenever assets or
+  // liabilities change. Never computed/faked here: this card only ever
+  // renders points that actually exist in Firestore for this user.
   const snapshots = useSnapshotsStore((s) => s.snapshots);
   const [range, setRange] = useState<Range>('ALL');
 
-  const data = useMemo(() => {
+  const allHistory = useMemo(() => {
     const sorted = [...snapshots].sort((a: Snapshot, b: Snapshot) => a.date.localeCompare(b.date));
-    if (range === 'ALL') return sorted;
+    // Collapse multiple entries saved on the same day down to the latest
+    // one, so re-saving mid-day never draws a misleading near-vertical
+    // jump or repeats an x-axis label.
+    const byDate = new Map<string, Snapshot>();
+    for (const s of sorted) byDate.set(s.date, s);
+    return [...byDate.values()];
+  }, [snapshots]);
+
+  const data = useMemo(() => {
+    if (range === 'ALL') return allHistory;
     const months = range === '3M' ? 3 : range === '6M' ? 6 : 12;
     const cutoff = new Date();
     cutoff.setMonth(cutoff.getMonth() - months);
     const iso = toIsoDate(cutoff);
-    return sorted.filter((s) => s.date >= iso);
-  }, [snapshots, range]);
+    return allHistory.filter((s) => s.date >= iso);
+  }, [allHistory, range]);
 
   const first = data[0];
   const last = data[data.length - 1];
-  const change = first && last ? last.netWorth - first.netWorth : 0;
-  const changePct = first && first.netWorth > 0 ? (change / first.netWorth) * 100 : 0;
-  // Line/fill follow the same red-when-down convention as the Profit/loss
-  // KPI above it (overall P&L vs. invested), not just the change between
-  // the first and last snapshot — a portfolio can be underwater on cost
-  // basis even while net worth has held flat across snapshots.
-  const isDown = pnl < 0;
+  const hasTrend = data.length >= 2;
+  const change = hasTrend ? last.netWorth - first.netWorth : 0;
+  const changePct = hasTrend && first.netWorth !== 0 ? (change / first.netWorth) * 100 : 0;
+  const isDown = change < 0;
   const lineColor = isDown ? chart.negative : chart.primary;
   const fillColor = isDown ? chart.negativeSoft : chart.primarySoft;
+
+  // Y-axis domain: padded around the data's own min/max (not forced to
+  // start at 0) so real movement is legible, but with a floor on the
+  // padded span so a handful of rupees of noise between snapshots never
+  // gets stretched into a dramatic-looking cliff.
+  const yDomain = useMemo((): [number, number] | undefined => {
+    if (data.length === 0) return undefined;
+    const values = data.map((d) => d.netWorth);
+    const minV = Math.min(...values);
+    const maxV = Math.max(...values);
+    const mid = (minV + maxV) / 2 || 1;
+    const rawSpan = maxV - minV;
+    const minSpan = Math.max(Math.abs(mid) * 0.06, 1);
+    const span = Math.max(rawSpan, minSpan);
+    const pad = span * 0.2;
+    return [minV - pad, maxV + pad];
+  }, [data]);
+
+  const summary = !hasTrend
+    ? 'Your net worth across the selected period.'
+    : `${change >= 0 ? 'Up' : 'Down'} ${
+        privacyMode ? '••••••' : formatCurrency(Math.abs(change), 'INR', { fractionDigits: 0 })
+      } (${formatPercentMagnitude(changePct, 1)}) over ${RANGE_LABEL[range]}`;
 
   return (
     <Card padding="lg" className="h-full">
       <CardHeader
-        title="Portfolio performance"
+        title="Net worth over time"
         description={
-          data.length >= 2 ? (
-            <span>
-              Net worth across {data.length} snapshots ·{' '}
-              <span className={change >= 0 ? 'text-positive font-medium' : 'text-negative font-medium'}>
-                {privacyMode ? '••••••' : `${formatSignedCurrency(change, 'INR', 0)} (${formatPercentMagnitude(changePct, 1)})`}
-              </span>
-            </span>
-          ) : (
-            'Net worth over time, from your saved snapshots'
-          )
+          <span className={hasTrend ? (change >= 0 ? 'text-positive font-medium' : 'text-negative font-medium') : ''}>
+            {summary}
+          </span>
         }
         actions={
-          <SegmentedControl<Range>
-            size="sm"
-            value={range}
-            onChange={setRange}
-            items={[
-              { key: '3M', label: '3M' },
-              { key: '6M', label: '6M' },
-              { key: '1Y', label: '1Y' },
-              { key: 'ALL', label: 'All' },
-            ]}
-          />
+          allHistory.length >= 2 ? (
+            <SegmentedControl<Range>
+              size="sm"
+              value={range}
+              onChange={setRange}
+              items={[
+                { key: '3M', label: '3M' },
+                { key: '6M', label: '6M' },
+                { key: '1Y', label: '1Y' },
+                { key: 'ALL', label: 'All' },
+              ]}
+            />
+          ) : undefined
         }
       />
-      {data.length >= 2 ? (
-        <div className="h-[248px] -ml-2">
+
+      {data.length > 0 && (
+        <div className="flex items-baseline gap-2 mb-3">
+          <span className="text-xs text-muted">
+            {data.length === 1 ? 'Only data point' : 'Latest'} · {formatDate(last.date)}
+          </span>
+          <span className="font-numeric text-lg font-semibold text-ink">
+            {privacyMode ? '••••••' : formatPreciseCurrency(last.netWorth)}
+          </span>
+        </div>
+      )}
+
+      {data.length === 0 ? (
+        <EmptyState
+          compact
+          icon={<TrendingUp size={18} />}
+          title="No history yet"
+          description="Your net-worth history will appear here as you build your financial timeline."
+        />
+      ) : (
+        <div className="h-[220px] -ml-2">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid stroke={chart.grid} strokeDasharray="3 3" vertical={false} />
               <XAxis
                 dataKey="date"
                 tickFormatter={(d: string) =>
-                  new Date(`${d}T00:00:00`).toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })
+                  new Date(`${d}T00:00:00`).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
                 }
                 tick={chart.tick}
                 axisLine={false}
@@ -447,16 +553,18 @@ function PerformanceCard({ privacyMode, pnl }: { privacyMode: boolean; pnl: numb
                 axisLine={false}
                 tickLine={false}
                 width={56}
-                domain={['auto', 'auto']}
+                domain={yDomain ?? ['auto', 'auto']}
+                allowDecimals={false}
               />
               <Tooltip
                 cursor={chart.tooltip.cursor}
                 content={(p) => (
-                  <ChartTooltip
-                    {...(p as object)}
-                    label={p.label ? shortDate(String(p.label)) : ''}
+                  <NetWorthTooltip
+                    active={p.active}
+                    payload={p.payload}
+                    label={p.label ? String(p.label) : undefined}
                     privacyMode={privacyMode}
-                    labels={{ netWorth: 'Net worth' }}
+                    data={data}
                   />
                 )}
               />
@@ -466,19 +574,13 @@ function PerformanceCard({ privacyMode, pnl }: { privacyMode: boolean; pnl: numb
                 stroke={lineColor}
                 strokeWidth={2}
                 fill={fillColor}
-                dot={false}
-                activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--color-surface)', fill: lineColor }}
+                dot={data.length <= 6 ? { r: 4, strokeWidth: 2, stroke: 'var(--color-surface)', fill: lineColor } : false}
+                activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-surface)', fill: lineColor }}
+                isAnimationActive={data.length > 1}
               />
             </AreaChart>
           </ResponsiveContainer>
         </div>
-      ) : (
-        <EmptyState
-          compact
-          icon={<TrendingUp size={18} />}
-          title="Not enough history yet"
-          description="Use Add → Snapshot to record your net worth. Two or more snapshots draw this chart."
-        />
       )}
     </Card>
   );

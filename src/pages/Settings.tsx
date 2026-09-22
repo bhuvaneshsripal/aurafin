@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   updateProfile,
@@ -15,7 +15,7 @@ import { useAppLockStore } from '../store/appLockStore';
 import { useDisplaySettingsStore, FONT_MIN_SCALE, FONT_MAX_SCALE, SCREEN_MIN_SCALE, SCREEN_MAX_SCALE } from '../store/displaySettingsStore';
 import { useGoldSettingsStore } from '../store/goldSettingsStore';
 import { useNotificationPreferencesStore, type NotificationChannelKey } from '../store/notificationPreferencesStore';
-import PinBoxInput from '../components/PinBoxInput';
+import PinBoxInput, { type PinBoxInputHandle } from '../components/PinBoxInput';
 import { auth } from '../firebase/config';
 import CurrencySelect from '../components/CurrencySelect';
 import Badge from '../components/ui/Badge';
@@ -603,6 +603,16 @@ function AppLockCard() {
   const [pin, setPinInput] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [pinError, setPinError] = useState('');
+  const confirmPinRef = useRef<PinBoxInputHandle>(null);
+
+  // Jump to the Confirm PIN boxes once the 4-digit PIN is complete — done
+  // as an effect so it fires after the digit has committed to the DOM,
+  // rather than mid-keystroke where the focus call was getting lost.
+  useEffect(() => {
+    if (pin.length === 4) {
+      confirmPinRef.current?.focus();
+    }
+  }, [pin]);
 
   const savePin = () => {
     if (!/^\d{4}$/.test(pin)) {
@@ -681,7 +691,7 @@ function AppLockCard() {
           </div>
           <div>
             <label className="block text-xs text-muted mb-2 text-center">Confirm PIN</label>
-            <PinBoxInput value={confirmPin} onChange={setConfirmPin} />
+            <PinBoxInput ref={confirmPinRef} value={confirmPin} onChange={setConfirmPin} />
           </div>
           {pinError && <p className="text-xs text-red-500">{pinError}</p>}
           <button
@@ -690,6 +700,9 @@ function AppLockCard() {
           >
             Save PIN
           </button>
+          <p className="text-xs text-muted text-center">
+            Forgot your PIN? There's no email reset — entering the wrong PIN 3 times in a row signs you out automatically, so you can log back in with your account and set a new one here.
+          </p>
         </div>
       </Modal>
 
@@ -1708,7 +1721,7 @@ export default function Settings() {
       <PageHeader title="Settings" description="Account, preferences & privacy" />
 
       <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-6 items-start">
-        <nav className="bg-surface rounded-2xl border border-line p-1.5 flex md:flex-col gap-0.5 overflow-x-auto no-scrollbar md:overflow-visible">
+        <nav className="bg-page rounded-2xl p-1.5 flex md:flex-col gap-0.5 overflow-x-auto no-scrollbar md:overflow-visible">
           {TABS.map((t) => (
             <button
               key={t.key}

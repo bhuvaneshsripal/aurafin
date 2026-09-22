@@ -13,6 +13,7 @@ import {
 import { useAuthStore } from '../store/authStore';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
+import { useSnapshotsStore } from '../store/snapshotsStore';
 import { upsertDoc } from '../hooks/useFirestoreSync';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { buttonClasses, DateInput, inputClasses } from './ui';
@@ -308,15 +309,23 @@ function SnapshotForm({ onDone }: { onDone: () => void }) {
   const user = useAuthStore((s) => s.user);
   const assets = useAssetsStore((s) => s.assets);
   const liabilities = useLiabilitiesStore((s) => s.liabilities);
+  const snapshots = useSnapshotsStore((s) => s.snapshots);
   const totalAssets = assets.reduce((s, a) => s + a.value, 0);
   const totalLiabilities = liabilities.reduce((s, l) => s + l.outstanding, 0);
   const netWorth = totalAssets - totalLiabilities;
 
+  const today = toIsoDate();
+  // Reuse today's snapshot if one was already saved today, instead of
+  // adding another point on the same date — two+ snapshots sharing a date
+  // squash the Overview chart's x-axis (every tick reads the same day) and
+  // draw a misleading near-vertical jump between them.
+  const todaysSnapshot = snapshots.find((s) => s.date === today);
+
   const submit = async () => {
     if (!user) return;
     const snapshot: Snapshot = {
-      id: crypto.randomUUID(),
-      date: toIsoDate(),
+      id: todaysSnapshot?.id ?? crypto.randomUUID(),
+      date: today,
       netWorth,
       totalAssets,
       totalLiabilities,
@@ -328,7 +337,9 @@ function SnapshotForm({ onDone }: { onDone: () => void }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted">
-        This saves today's net worth so you can track how it changes over time on your Overview chart.
+        {todaysSnapshot
+          ? "This updates today's snapshot with your current net worth."
+          : "This saves today's net worth so you can track how it changes over time on your Overview chart."}
       </p>
       <div className="bg-slate-50 dark:bg-slate-700 rounded-lg p-4 text-sm space-y-1">
         <div className="flex justify-between">

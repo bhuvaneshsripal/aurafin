@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   UploadCloud,
   CheckCircle2,
@@ -10,9 +10,11 @@ import { useAuthStore } from '../store/authStore';
 import { useAssetsStore } from '../store/assetsStore';
 import { bulkUpsertDocs } from '../hooks/useFirestoreSync';
 import { parseSpreadsheetFile, rowsToAssets, type ParsedRow } from '../utils/importParser';
+import { fetchLiveQuotes, type LiveQuoteDetail } from '../utils/marketPrices';
 import { formatCurrency, formatPreciseCurrency } from '../utils/currency';
 import { ASSET_TAXONOMY } from '../utils/taxonomy';
 import { exportToCsv, exportToXlsx, IMPORT_TEMPLATE_ROWS } from '../utils/exportCsv';
+import { takePendingImportFile } from '../utils/pendingImportFile';
 import type { AssetClass } from '../types';
 import CustomSelect from '../components/CustomSelect';
 import { PageHeader, SegmentedControl } from '../components/ui';
@@ -153,6 +155,29 @@ const BROKERS: Broker[] = [
   },
 ];
 
+/**
+ * Order-history exports (e.g. Groww's "Stocks Order History") have no LTP
+ * column, so aggregateTransactionRows() (in importParser) can only fill in
+ * invested value/avg cost — current price and P&L are left undefined,
+ * which is why they'd otherwise sit at "—" in the review table until the
+ * holding is saved and picked up by the regular live-price poller. This
+ * fetches a one-off quote for those rows right away so the review table
+ * shows real numbers instead of a blank column.
+ */
+function applyLiveQuote(row: ParsedRow, quoteMap: Map<string, LiveQuoteDetail>): ParsedRow {
+  if (!row.symbol || !row.quantity || row.quantity <= 0 || row.currentPrice !== undefined) {
+    return row;
+  }
+  const quote = quoteMap.get(row.symbol.trim().toUpperCase());
+  if (!quote) return row;
+
+  const value = quote.price * row.quantity;
+  const pnl = row.investedValue !== undefined ? value - row.investedValue : undefined;
+  const pnlPercent = pnl !== undefined && row.investedValue ? (pnl / row.investedValue) * 100 : undefined;
+
+  return { ...row, currentPrice: quote.price, value, pnl, pnlPercent };
+}
+
 export default function Import() {
   const user = useAuthStore((s) => s.user);
   const existingAssets = useAssetsStore((s) => s.assets);
@@ -184,6 +209,26 @@ export default function Import() {
       }
       setRows(parsed);
       setStatus('ready');
+
+      // Best-effort: fill in current price/P&L for rows the parser
+      // couldn't (order-history imports like Groww's have no LTP column).
+      // Merged in by symbol once the quotes arrive, so it doesn't clobber
+      // any asset-class edits or row removals made in the meantime.
+      const needsLivePrice = parsed.filter(
+        (r) => r.symbol && r.quantity && r.quantity > 0 && r.currentPrice === undefined
+      );
+      if (needsLivePrice.length > 0) {
+        fetchLiveQuotes(
+          needsLivePrice.map((r) => ({ key: r.symbol!, isin: r.isin, name: r.name }))
+        )
+          .then((quoteMap) => {
+            if (quoteMap.size === 0) return;
+            setRows((prev) => prev.map((r) => applyLiveQuote(r, quoteMap)));
+          })
+          .catch(() => {
+            // Leave the row as-is; it'll still get corrected once saved.
+          });
+      }
     } catch (e) {
       setStatus('error');
       setErrorMsg(e instanceof Error ? e.message : 'Could not read that file.');
@@ -195,6 +240,15 @@ export default function Import() {
     const file = e.dataTransfer.files?.[0];
     if (file) handleFile(file);
   };
+
+  // Picked up straight from the OS file picker onboarding's "Import from
+  // Broker" opened directly — parse it immediately instead of making the
+  // person click through and browse for the same file again.
+  useEffect(() => {
+    const file = takePendingImportFile();
+    if (file) handleFile(file);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const updateRowClass = (index: number, assetClass: AssetClass) => {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, assetClass } : r)));

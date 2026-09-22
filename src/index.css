@@ -415,11 +415,25 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
     letter-spacing: -0.005em;
   }
 
-  /* The wordmark: still Inter, just a touch tighter. */
+  /* The wordmark: still Inter, just a touch tighter. Shared by every
+     "Aurafin" mention in the app (headings, lock screen, PIN keypad —
+     .font-luxury cascades to descendants), so it stays the plain Inter cut;
+     see .font-brand below for the one place that gets the premium serif. */
   .font-luxury {
     font-family: var(--font-luxury);
     font-weight: 600;
     letter-spacing: -0.02em;
+    font-style: normal;
+  }
+
+  /* The top-left brand mark only (Sidebar wordmark next to the logo) — a
+     premium display serif, kept separate from .font-luxury so it doesn't
+     cascade into the PIN keypad, onboarding headings, or anywhere else
+     "Aurafin" appears in body copy. */
+  .font-brand {
+    font-family: "Playfair Display", "Georgia", serif;
+    font-weight: 600;
+    letter-spacing: 0.01em;
     font-style: normal;
   }
 
@@ -615,6 +629,20 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 .animate-backdrop-in {
   animation: backdrop-in var(--dur-fast) ease-out;
+}
+
+/* Brand mark: one full turn, used for both the automatic 4s tick and the
+   click-triggered spin (AppLogo restarts this by remounting the <img>). */
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.animate-logo-spin {
+  animation: logo-spin 0.7s cubic-bezier(0.45, 0, 0.2, 1);
 }
 
 @keyframes fab-in {

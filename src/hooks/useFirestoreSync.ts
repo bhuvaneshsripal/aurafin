@@ -4,7 +4,13 @@ import { db } from '../firebase/config';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
 import { useAppLockStore, readGuestAppLock } from '../store/appLockStore';
+import { useWealthFilterStore, type WealthFilterSelection } from '../store/wealthFilterStore';
 import { useSyncStatusStore } from '../store/syncStatusStore';
+import { useAssetsStore } from '../store/assetsStore';
+import { useLiabilitiesStore } from '../store/liabilitiesStore';
+import { useSnapshotsStore } from '../store/snapshotsStore';
+import { toIsoDate } from '../utils/date';
+import type { Snapshot } from '../types';
 
 /** Every subcollection kept under users/{uid} that DataSync listens to.
  *  Exported so App.tsx can check that every one of them has completed its
@@ -280,6 +286,78 @@ export async function removeAvatar(uid: string) {
 }
 
 /**
+ * Automatically records today's net worth as a real historical data point
+ * whenever the user's assets/liabilities change — so the "Net worth over
+ * time" chart on the Dashboard builds a genuine day-by-day history without
+ * requiring the user to remember to hit "Take Snapshot" first.
+ *
+ * Writes to the same `users/{uid}/snapshots` collection (and local
+ * `snapshotsStore`) the manual snapshot flow already uses — same
+ * {id, date, netWorth, totalAssets, totalLiabilities} shape, same
+ * one-entry-per-day rule — this just keeps that entry current
+ * automatically. Nothing here is fake or interpolated: every point this
+ * produces reflects the real assets/liabilities totals at the moment it
+ * was written.
+ */
+export function useAutoNetWorthHistory() {
+  const user = useAuthStore((s) => s.user);
+  const assets = useAssetsStore((s) => s.assets);
+  const liabilities = useLiabilitiesStore((s) => s.liabilities);
+  const assetsServerConfirmed = useSyncStatusStore((s) => s.assetsServerConfirmed);
+  const liabilitiesServerConfirmed = useSyncStatusStore((s) => s.liabilitiesServerConfirmed);
+  const snapshots = useSnapshotsStore((s) => s.snapshots);
+  const addOrUpdate = useSnapshotsStore((s) => s.addOrUpdate);
+
+  useEffect(() => {
+    if (!user) return;
+    // Wait until both collections have delivered (or been forced past) a
+    // real first load. Recording before then would write a false ₹0 entry
+    // for today from the still-empty initial store state, silently
+    // clobbering (or hiding behind) real history.
+    if (!assetsServerConfirmed || !liabilitiesServerConfirmed) return;
+    // An account with nothing entered yet isn't a real "₹0 net worth" data
+    // point — don't record one.
+    if (assets.length === 0 && liabilities.length === 0) return;
+
+    const totalAssets = assets.reduce((sum, a) => sum + a.value, 0);
+    // Liabilities may genuinely be empty for a user who only tracks
+    // assets — that's not "unavailable" data, it's a real total of 0, so
+    // net worth still just falls back to totalAssets exactly as the
+    // reduce below already produces.
+    const totalLiabilities = liabilities.reduce((sum, l) => sum + l.outstanding, 0);
+    const netWorth = totalAssets - totalLiabilities;
+
+    const today = toIsoDate();
+    const existing = snapshots.find((s) => s.date === today);
+
+    // Never write a duplicate — only touch Firestore (and the store) when
+    // today's entry doesn't exist yet or the totals actually changed.
+    if (
+      existing &&
+      existing.netWorth === netWorth &&
+      existing.totalAssets === totalAssets &&
+      existing.totalLiabilities === totalLiabilities
+    ) {
+      return;
+    }
+
+    const entry: Snapshot = {
+      id: existing?.id ?? crypto.randomUUID(),
+      date: today,
+      netWorth,
+      totalAssets,
+      totalLiabilities,
+    };
+    // Optimistic local update so today's point/chart reflects the change
+    // immediately — matters most for guest accounts, whose localStorage
+    // write below isn't picked back up by a live listener the way a
+    // signed-in user's Firestore write is.
+    addOrUpdate(entry);
+    upsertDoc(user, 'snapshots', entry);
+  }, [user, assets, liabilities, assetsServerConfirmed, liabilitiesServerConfirmed, snapshots, addOrUpdate]);
+}
+
+/**
  * Keeps the App Lock PIN (appLockStore) in sync with its source of truth:
  * the doc at users/{uid}/meta/appLock for regular users, or a per-guest
  * localStorage key for anonymous users — same split every other synced
@@ -315,6 +393,99 @@ export function useAppLockSync() {
     );
     return () => unsub();
   }, [user, syncFromRemote]);
+}
+
+function guestWealthFilterKey(uid: string): string {
+  return `aurafin-guest-${uid}-wealthFilters`;
+}
+
+/** Read a guest (anonymous user)'s saved Wealth filter selection from
+ *  localStorage, mirroring readGuestAppLock's guest fallback pattern. */
+function readGuestWealthFilters(uid: string): WealthFilterSelection | null {
+  try {
+    const raw = localStorage.getItem(guestWealthFilterKey(uid));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return {
+      categories: Array.isArray(parsed?.categories) ? parsed.categories : [],
+      types: Array.isArray(parsed?.types) ? parsed.types : [],
+      currencies: Array.isArray(parsed?.currencies) ? parsed.currencies : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeGuestWealthFilters(uid: string, value: WealthFilterSelection) {
+  try {
+    localStorage.setItem(guestWealthFilterKey(uid), JSON.stringify(value));
+  } catch {
+    // localStorage unavailable — filter just won't survive a refresh.
+  }
+}
+
+/**
+ * Keeps the Wealth ▸ Assets tab's Category/Type/Currency filter selection
+ * (wealthFilterStore) in sync with users/{uid}/meta/wealthFilters — same
+ * singleton-doc pattern as the avatar and App Lock PIN above. This is what
+ * makes a filter chosen on one device (say, the desktop) show up already
+ * applied on another (say, the phone) instead of resetting per-device.
+ * Guests get a per-device localStorage fallback, like everywhere else,
+ * since a guest account doesn't follow you to another device anyway.
+ */
+export function useWealthFilterSync() {
+  const user = useAuthStore((s) => s.user);
+  const syncFromRemote = useWealthFilterStore((s) => s.syncFromRemote);
+
+  useEffect(() => {
+    if (!user) {
+      syncFromRemote(null);
+      return;
+    }
+
+    if (isAnonymousUser(user)) {
+      syncFromRemote(readGuestWealthFilters(user.uid));
+      return;
+    }
+
+    const ref = doc(db, 'users', user.uid, 'meta', 'wealthFilters');
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        const data = snap.data();
+        syncFromRemote(
+          data
+            ? {
+                categories: Array.isArray(data.categories) ? data.categories : [],
+                types: Array.isArray(data.types) ? data.types : [],
+                currencies: Array.isArray(data.currencies) ? data.currencies : [],
+              }
+            : null
+        );
+      },
+      () => syncFromRemote(null)
+    );
+    return () => unsub();
+  }, [user, syncFromRemote]);
+}
+
+/** Save (or overwrite) the Wealth ▸ Assets filter selection. Guests persist
+ *  to a per-device localStorage key instead of Firestore (see
+ *  useWealthFilterSync above for why). */
+export async function saveWealthFilters(
+  uidOrUser: string | { uid: string; isAnonymous?: boolean },
+  value: WealthFilterSelection
+) {
+  const uid = typeof uidOrUser === 'string' ? uidOrUser : uidOrUser.uid;
+  const isGuest = typeof uidOrUser === 'object' && isAnonymousUser(uidOrUser);
+
+  if (isGuest) {
+    writeGuestWealthFilters(uid, value);
+    return;
+  }
+
+  const ref = doc(db, 'users', uid, 'meta', 'wealthFilters');
+  await setDoc(ref, value, { merge: true });
 }
 
 /**

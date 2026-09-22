@@ -34,6 +34,8 @@ import {
   Banknote,
   ArrowUpRight,
   Wallet,
+  Camera,
+  type LucideIcon,
 } from 'lucide-react';
 import {
   PieChart,
@@ -41,8 +43,14 @@ import {
   Cell,
   ResponsiveContainer,
   Tooltip,
+  AreaChart,
+  Area,
+  CartesianGrid,
+  XAxis,
+  YAxis,
 } from 'recharts';
 import { useAssetsStore } from '../store/assetsStore';
+import { useSnapshotsStore } from '../store/snapshotsStore';
 import { useLivePricesStore, resolvePreviousClose } from '../store/livePricesStore';
 import { formatDate, toIsoDate } from '../utils/date';
 import { goldPricePerGram22k } from '../utils/goldPrice';
@@ -52,12 +60,15 @@ import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useAuthStore } from '../store/authStore';
 import { useUiStore } from '../store/uiStore';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
-import { upsertDoc, removeDoc } from '../hooks/useFirestoreSync';
+import { upsertDoc, removeDoc, saveWealthFilters } from '../hooks/useFirestoreSync';
+import { useWealthFilterStore } from '../store/wealthFilterStore';
 import { exportToCsv } from '../utils/exportCsv';
 import Modal from '../components/Modal';
 import {
+  Badge,
   Button,
   Card,
+  CardHeader,
   EmptyState,
   IconButton,
   Input,
@@ -81,9 +92,10 @@ import CurrencySelect from '../components/CurrencySelect';
 import CustomSelect from '../components/CustomSelect';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { ACCOUNT_TYPES, resolveAccountIcon, type AccountType } from '../utils/accountVisuals';
-import type { Asset, AssetClass, Liability, LiabilityClass, Transaction } from '../types';
+import type { Asset, AssetClass, Liability, LiabilityClass, Snapshot, Transaction } from '../types';
 import {
   formatPreciseCurrency,
+  formatAxisAmount,
   formatPercentMagnitude,
   formatSignedCurrency,
   maskPreciseAmount,
@@ -104,6 +116,9 @@ import {
   WEIGHT_TRACKED_CLASSES,
   MARKET_SELECTABLE_CLASSES,
   RECURRING_ELIGIBLE_CLASSES,
+  COMMON_ASSET_TYPES,
+  TYPE_ICONS,
+  searchTypes,
   type CategoryDef,
 } from '../utils/taxonomy';
 import {
@@ -126,6 +141,7 @@ import { useModalBackClose } from '../hooks/useModalBackClose';
 type Tab = 'assets' | 'liabilities' | 'networth' | 'allocation';
 type SortKey = 'manual' | 'name' | 'qty' | 'avgCost' | 'perUnit' | 'invested' | 'value' | 'pnl' | 'alloc' | 'dayChange';
 type EntryType = 'asset' | 'liability';
+type NetWorthRange = '3M' | '6M' | '1Y' | 'ALL';
 
 /** Default manual-order tie-break for holdings that have never been
  *  explicitly reordered (same `order` value, typically 0/unset) — puts
@@ -182,27 +198,11 @@ function defaultAssetClassRank(a: Asset): number {
   return DEFAULT_ASSET_CLASS_ORDER[a.assetClass] ?? DEFAULT_ASSET_CLASS_ORDER_FALLBACK;
 }
 
-/** Persists the Assets tab's Category/Type/Currency filter selections to
- *  localStorage so they survive a page refresh — a filter only changes when
- *  the person actually changes it, never on reload. */
-function loadPersistedFilter(key: string): string[] {
-  try {
-    const raw = localStorage.getItem(key);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.filter((v) => typeof v === 'string') : [];
-  } catch {
-    return [];
-  }
-}
-
-function savePersistedFilter(key: string, value: string[]) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // localStorage unavailable (private mode, quota, etc.) — filter just
-    // won't survive a refresh, but the app keeps working.
-  }
-}
+/** Reads the Assets tab's Category/Type/Currency filter selection from
+ *  wealthFilterStore, which useWealthFilterSync (mounted at the app root)
+ *  keeps synced with users/{uid}/meta/wealthFilters — so a filter chosen on
+ *  one device shows up already applied on another, instead of resetting
+ *  per-device the way a plain localStorage-backed filter would. */
 
 /**
  * Renders a weight-tracked quantity (grams) safely. Rounds to 4 decimal
@@ -444,6 +444,7 @@ function AddWealthPage({
 
   const switchEntryType = (next: EntryType) => {
     if (next === entryType) return;
+    setQuery('');
     pushParams({ entry: next, step: 'category', cat: undefined, type: undefined });
   };
 
@@ -463,6 +464,20 @@ function AddWealthPage({
   const selectType = (value: string) => {
     pushParams({ type: value, step: 'details' });
   };
+
+  // Used by the Common section and by search results (both asset and
+  // liability): jump straight to Step 2 with a specific type already
+  // chosen, regardless of how many sibling types its category has.
+  const selectDirectType = (cat: CategoryDef<string>, value: string) => {
+    pushParams({ cat: cat.key, type: value, step: 'details' });
+  };
+
+  const [query, setQuery] = useState('');
+  const trimmedQuery = query.trim();
+  const assetSearchResults = useMemo(
+    () => (entryType === 'asset' && trimmedQuery ? searchTypes(ASSET_TAXONOMY, trimmedQuery) : []),
+    [entryType, trimmedQuery]
+  );
 
   // From the details form's "Back", return to the type tiles when the
   // category actually has a choice to make, otherwise back to Step 1.
@@ -504,51 +519,130 @@ function AddWealthPage({
   const nounPlural = entryType === 'asset' ? 'Assets' : 'Liabilities';
 
   return (
-    <div className="space-y-4">
-      <PageHeader
-        title={`Add ${noun.toLowerCase()}`}
-        description={`Step ${step === 'details' ? 2 : 1} of 2: ${
-          step === 'category'
-            ? `Select ${entryType} type`
-            : step === 'type'
-              ? category?.label ?? `Select ${entryType} type`
-              : (category?.types.find((t) => t.value === pickedType)?.label ?? 'Enter details')
-        }`}
-        onBack={onClose}
-        backLabel={`Back to ${nounPlural.toLowerCase()}`}
-      />
+    <div className="max-w-[720px] space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">{`Add ${noun}`}</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            {`Step ${step === 'details' ? 2 : 1} of 2: ${
+              step === 'category'
+                ? `Select ${entryType} type`
+                : step === 'type'
+                  ? category?.label ?? `Select ${entryType} type`
+                  : (category?.types.find((t) => t.value === pickedType)?.label ?? 'Enter details')
+            }`}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-ink shrink-0 mt-1.5 whitespace-nowrap"
+        >
+          <ArrowLeft size={14} /> Back to {nounPlural}
+        </button>
+      </div>
 
-      <SegmentedControl<'asset' | 'liability'>
-        value={entryType}
-        onChange={switchEntryType}
-        items={[
-          { key: 'asset', label: <span className="inline-flex items-center gap-1.5"><TrendingUp size={14} /> Asset</span> },
-          { key: 'liability', label: <span className="inline-flex items-center gap-1.5"><TrendingDown size={14} /> Liability</span> },
-        ]}
-      />
+      <div className="w-full flex items-stretch rounded-xl border border-line divide-x divide-line bg-slate-50 dark:bg-slate-800 overflow-hidden">
+        {(
+          [
+            { key: 'asset' as const, label: 'Asset', Icon: TrendingUp },
+            { key: 'liability' as const, label: 'Liability', Icon: TrendingDown },
+          ]
+        ).map(({ key, label, Icon }) => {
+          const active = entryType === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={active}
+              onClick={() => switchEntryType(key)}
+              className={`flex-1 h-11 text-sm font-medium inline-flex items-center justify-center gap-1.5 transition-colors ${
+                active ? 'bg-surface text-ink' : 'bg-slate-50 dark:bg-slate-800 text-slate-500 hover:text-ink'
+              }`}
+            >
+              <Icon size={14} /> {label}
+            </button>
+          );
+        })}
+      </div>
 
-      <div className="bg-surface rounded-2xl border border-line p-6">
-        {step === 'category' ? (
+      <div className="bg-surface rounded-xl border border-line p-4 sm:p-5">
+        {step === 'category' && entryType === 'asset' ? (
           <div className="space-y-4">
-            <h3 className="font-semibold text-ink">Select {noun} Type</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {taxonomy.map((cat) => {
-                const Icon = cat.icon;
-                return (
-                  <button
-                    key={cat.key}
-                    onClick={() => selectCategory(cat)}
-                    className="flex flex-col items-center justify-center gap-2 border border-line rounded-xl p-4 hover:border-brand-400 hover:bg-brand-50 transition-colors text-center"
-                  >
-                    <Icon size={22} className="text-slate-600" />
-                    <span className="font-medium text-ink text-sm">{cat.label}</span>
-                    {cat.types.length > 1 && (
-                      <span className="text-xs text-slate-600">{cat.types.length} types</span>
-                    )}
-                  </button>
-                );
-              })}
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <h3 className="text-sm font-semibold text-ink">Select Asset Type</h3>
+              <TypeSearchInput value={query} onChange={setQuery} placeholder="Search types" />
             </div>
+
+            {trimmedQuery ? (
+              assetSearchResults.length > 0 ? (
+                <TypeTileGrid>
+                  {assetSearchResults.map(({ type, category: cat }) => (
+                    <TypeTile
+                      key={type.value}
+                      label={type.label}
+                      Icon={TYPE_ICONS[type.value] ?? cat.icon}
+                      onClick={() => selectDirectType(cat, type.value)}
+                    />
+                  ))}
+                </TypeTileGrid>
+              ) : (
+                <NoTypeResults query={trimmedQuery} onClear={() => setQuery('')} />
+              )
+            ) : (
+              <>
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 tracking-wide uppercase mb-3">Common</p>
+                  <TypeTileGrid>
+                    {COMMON_ASSET_TYPES.map((value) => {
+                      const cat = ASSET_CLASS_TO_CATEGORY[value];
+                      const t = cat?.types.find((ty) => ty.value === value);
+                      if (!cat || !t) return null;
+                      return (
+                        <TypeTile
+                          key={value}
+                          label={t.label}
+                          Icon={TYPE_ICONS[value] ?? cat.icon}
+                          onClick={() => selectDirectType(cat, value)}
+                        />
+                      );
+                    })}
+                  </TypeTileGrid>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 tracking-wide uppercase mb-3">All Categories</p>
+                  <TypeTileGrid>
+                    {taxonomy.map((cat) => (
+                      <TypeTile
+                        key={cat.key}
+                        label={cat.label}
+                        subtitle={cat.types.length > 1 ? `${cat.types.length} types` : undefined}
+                        Icon={cat.icon}
+                        onClick={() => selectCategory(cat)}
+                      />
+                    ))}
+                  </TypeTileGrid>
+                </div>
+              </>
+            )}
+          </div>
+        ) : step === 'category' && entryType === 'liability' ? (
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-ink">Select Loan Type</h3>
+
+            <TypeTileGrid>
+              {LIABILITY_TAXONOMY.flatMap((cat) =>
+                cat.types.map((type) => (
+                  <TypeTile
+                    key={type.value}
+                    label={type.label}
+                    Icon={TYPE_ICONS[type.value] ?? cat.icon}
+                    tone="red"
+                    onClick={() => selectDirectType(cat, type.value)}
+                  />
+                ))
+              )}
+            </TypeTileGrid>
           </div>
         ) : step === 'type' && category ? (
           <div className="space-y-4">
@@ -559,20 +653,19 @@ function AddWealthPage({
               <ArrowLeft size={14} /> All categories
             </button>
             <h3 className="font-semibold text-ink">{category.label}</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <TypeTileGrid>
               {(category.groups
                 ? category.groups.map((g) => ({ value: g.defaultValue, label: g.label }))
                 : category.types
               ).map((t) => (
-                <button
+                <TypeTile
                   key={t.value}
+                  label={t.label}
+                  Icon={TYPE_ICONS[t.value] ?? category.icon}
                   onClick={() => selectType(t.value)}
-                  className="border border-line rounded-xl px-4 py-3.5 text-sm font-medium text-ink text-center hover:border-brand-400 hover:bg-brand-50 transition-colors"
-                >
-                  {t.label}
-                </button>
+                />
               ))}
-            </div>
+            </TypeTileGrid>
           </div>
         ) : entryType === 'asset' ? (
           <AssetDetailsForm
@@ -592,6 +685,106 @@ function AddWealthPage({
           />
         )}
       </div>
+    </div>
+  );
+}
+
+/** Search box used at the top of the asset/liability type-selection screens. Clears instantly via the trailing X once there's a query. */
+function TypeSearchInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <div className="relative w-full sm:w-64">
+      <Input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        leftIcon={<Search size={15} />}
+        placeholder={placeholder}
+        aria-label={placeholder}
+        className={value ? 'pr-8' : undefined}
+      />
+      {value && (
+        <button
+          type="button"
+          onClick={() => onChange('')}
+          aria-label="Clear search"
+          className="absolute inset-y-0 right-2 flex items-center text-slate-400 hover:text-slate-600"
+        >
+          <X size={14} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Responsive 3/2/1-column grid shared by every type-selection screen (Common, All Categories, search results, and the per-category subtype tiles). */
+function TypeTileGrid({ children }: { children: React.ReactNode }) {
+  return <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">{children}</div>;
+}
+
+/** One selectable icon + label (+ optional subtitle) tile — the basic unit of every type-selection screen. Keyboard accessible as a real <button>. `tone` picks the icon tile's color: brand green for assets, red for liabilities — matching how the rest of the app distinguishes the two. */
+function TypeTile({
+  label,
+  subtitle,
+  Icon,
+  tone = 'brand',
+  onClick,
+}: {
+  label: string;
+  subtitle?: string;
+  Icon: LucideIcon;
+  tone?: 'brand' | 'red';
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center gap-2.5 border border-line rounded-lg px-3 py-2.5 min-h-[44px] text-left bg-slate-50/70 dark:bg-slate-800/40 transition-colors focus-visible:outline-none focus-visible:ring-2 ${
+        tone === 'red'
+          ? 'hover:border-red-300 hover:bg-red-50 dark:hover:bg-red-950/20 focus-visible:ring-red-400'
+          : 'hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/30 focus-visible:ring-brand-400'
+      }`}
+    >
+      <span
+        className={`flex items-center justify-center w-7 h-7 rounded-md shrink-0 ${
+          tone === 'red'
+            ? 'bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-300'
+            : 'bg-brand-50 text-brand-700 dark:bg-brand-950/40 dark:text-brand-300'
+        }`}
+      >
+        <Icon size={15} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[13px] font-medium text-ink truncate leading-tight">{label}</span>
+        {subtitle && <span className="block text-[11px] text-slate-500 truncate leading-tight mt-0.5">{subtitle}</span>}
+      </span>
+    </button>
+  );
+}
+
+/** Empty-state shown when a type search returns nothing. */
+function NoTypeResults({ query, onClear }: { query: string; onClear: () => void }) {
+  return (
+    <div className="text-center py-10">
+      <p className="text-sm text-slate-500">
+        {query ? (
+          <>No types match "{query}".</>
+        ) : (
+          <>No types available.</>
+        )}
+      </p>
+      {query && (
+        <button onClick={onClear} className="mt-2 text-sm font-medium text-brand-600 hover:text-brand-700">
+          Clear search
+        </button>
+      )}
     </div>
   );
 }
@@ -819,24 +1012,40 @@ function AssetsTab({
   const [search, setSearch] = useState(() => searchParams.get('q') ?? '');
   const [sortKey, setSortKey] = useState<SortKey>('manual');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-  const [selectedCategories, setSelectedCategories] = useState<string[]>(() =>
-    loadPersistedFilter('aurafin.wealth.filter.categories')
-  );
-  const [selectedTypes, setSelectedTypes] = useState<string[]>(() =>
-    loadPersistedFilter('aurafin.wealth.filter.types')
-  );
-  const [selectedCurrencies, setSelectedCurrencies] = useState<string[]>(() =>
-    loadPersistedFilter('aurafin.wealth.filter.currencies')
-  );
-  useEffect(() => {
-    savePersistedFilter('aurafin.wealth.filter.categories', selectedCategories);
-  }, [selectedCategories]);
-  useEffect(() => {
-    savePersistedFilter('aurafin.wealth.filter.types', selectedTypes);
-  }, [selectedTypes]);
-  useEffect(() => {
-    savePersistedFilter('aurafin.wealth.filter.currencies', selectedCurrencies);
-  }, [selectedCurrencies]);
+  // Filter selection, synced across devices via wealthFilterStore /
+  // useWealthFilterSync (mounted at the app root, see App.tsx) instead of
+  // localStorage — so choosing a filter here shows up already applied the
+  // next time the account is opened on another device.
+  const selectedCategories = useWealthFilterStore((s) => s.categories);
+  const selectedTypes = useWealthFilterStore((s) => s.types);
+  const selectedCurrencies = useWealthFilterStore((s) => s.currencies);
+  const filtersLoaded = useWealthFilterStore((s) => s.loaded);
+  const setCategoriesInStore = useWealthFilterStore((s) => s.setCategories);
+  const setTypesInStore = useWealthFilterStore((s) => s.setTypes);
+  const setCurrenciesInStore = useWealthFilterStore((s) => s.setCurrencies);
+
+  // Wrapped so every change updates the store immediately (for a responsive
+  // UI) and also persists the full selection — but only once the synced
+  // value has actually loaded, so a change made in the brief window before
+  // that happens can't overwrite an already-saved selection with defaults.
+  const setSelectedCategories = (categories: string[]) => {
+    setCategoriesInStore(categories);
+    if (user && filtersLoaded) {
+      saveWealthFilters(user, { categories, types: selectedTypes, currencies: selectedCurrencies });
+    }
+  };
+  const setSelectedTypes = (types: string[]) => {
+    setTypesInStore(types);
+    if (user && filtersLoaded) {
+      saveWealthFilters(user, { categories: selectedCategories, types, currencies: selectedCurrencies });
+    }
+  };
+  const setSelectedCurrencies = (currencies: string[]) => {
+    setCurrenciesInStore(currencies);
+    if (user && filtersLoaded) {
+      saveWealthFilters(user, { categories: selectedCategories, types: selectedTypes, currencies });
+    }
+  };
   const [viewingAsset, setViewingAsset] = useState<Asset | null>(null);
   // Viewing an asset swaps the whole tab into a full detail page (like a
   // pushed screen), so the phone/PWA Back button should close it and land
@@ -1345,7 +1554,10 @@ function AssetsTab({
 
   useEffect(() => {
     const valid = new Set<string>(typeOptions.map((o) => o.value));
-    setSelectedTypes((prev) => prev.filter((t) => valid.has(t)));
+    const filtered = selectedTypes.filter((t) => valid.has(t));
+    if (filtered.length !== selectedTypes.length) {
+      setSelectedTypes(filtered);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategories.join(',')]);
 
@@ -5974,21 +6186,49 @@ function LiabilityDetailsForm({
 
   const [name, setName] = useState(initial?.name ?? '');
   const [liabilityClass, setLiabilityClass] = useState<LiabilityClass>(startClass);
+  const [lender, setLender] = useState(initial?.lender ?? '');
   const [outstanding, setOutstanding] = useState(initial?.outstanding?.toString() ?? '');
   const [emi, setEmi] = useState(initial?.emi?.toString() ?? '');
+  const [interestRate, setInterestRate] = useState(initial?.interestRate?.toString() ?? '');
+  const [startDate, setStartDate] = useState(initial?.startDate ?? '');
+  const [dueDate, setDueDate] = useState(initial?.dueDate ?? '');
   const [currency, setCurrency] = useState(initial?.currency ?? 'INR');
+  const [notes, setNotes] = useState(initial?.notes ?? '');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+
+  const isCreditCard = liabilityClass === 'credit_card';
 
   const submit = () => {
-    if (!name || !outstanding) return;
-    onSave({
-      id: initial?.id ?? crypto.randomUUID(),
-      name,
-      liabilityClass,
-      outstanding: Number(outstanding),
-      emi: emi ? Number(emi) : undefined,
-      currency,
-      updatedAt: Date.now(),
-    });
+    const nextErrors: Record<string, string> = {};
+    if (!name.trim()) nextErrors.name = 'Name is required.';
+    if (!outstanding || Number.isNaN(Number(outstanding))) nextErrors.outstanding = 'Enter a valid amount.';
+    else if (Number(outstanding) < 0) nextErrors.outstanding = 'Cannot be negative.';
+    if (interestRate && (Number.isNaN(Number(interestRate)) || Number(interestRate) < 0))
+      nextErrors.interestRate = 'Enter a valid rate.';
+    if (startDate && dueDate && dueDate < startDate) nextErrors.dueDate = 'Due date must be after start date.';
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0 || saving) return;
+
+    setSaving(true);
+    try {
+      onSave({
+        id: initial?.id ?? crypto.randomUUID(),
+        name,
+        liabilityClass,
+        outstanding: Number(outstanding),
+        emi: emi ? Number(emi) : undefined,
+        currency,
+        lender: lender || undefined,
+        interestRate: interestRate ? Number(interestRate) : undefined,
+        startDate: startDate || undefined,
+        dueDate: dueDate || undefined,
+        notes: notes || undefined,
+        updatedAt: Date.now(),
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -6005,9 +6245,10 @@ function LiabilityDetailsForm({
         <input
           value={name}
           onChange={(e) => setName(e.target.value.toUpperCase())}
-          className={`${inputClass}`}
+          className={`${inputClass} ${errors.name ? 'border-red-400' : ''}`}
           placeholder="e.g. Home Loan"
         />
+        {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
       </Field>
       {effectiveCategory && effectiveCategory.types.length > 1 ? (
         <Field label={`${effectiveCategory.label} Type`}>
@@ -6025,25 +6266,81 @@ function LiabilityDetailsForm({
           </p>
         </Field>
       )}
+      <Field label={isCreditCard ? 'Issuer' : 'Lender'}>
+        <input
+          value={lender}
+          onChange={(e) => setLender(e.target.value)}
+          className={inputClass}
+          placeholder={isCreditCard ? 'e.g. HDFC Bank' : 'e.g. SBI, or a person\'s name'}
+        />
+      </Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Outstanding">
-          <input type="number" value={outstanding} onChange={(e) => setOutstanding(e.target.value)} className={inputClass} placeholder="0" />
+        <Field label={isCreditCard ? 'Current Outstanding' : 'Outstanding Amount'}>
+          <input
+            type="number"
+            value={outstanding}
+            onChange={(e) => setOutstanding(e.target.value)}
+            className={`${inputClass} ${errors.outstanding ? 'border-red-400' : ''}`}
+            placeholder="0"
+          />
+          {errors.outstanding && <p className="text-xs text-red-500 mt-1">{errors.outstanding}</p>}
         </Field>
         <Field label="Currency">
           <CurrencySelect value={currency} onChange={setCurrency} className={inputClass} />
         </Field>
       </div>
-      <Field label="Monthly EMI (optional)">
-        <input type="number" value={emi} onChange={(e) => setEmi(e.target.value)} className={inputClass} placeholder="0" />
+      <div className="grid grid-cols-2 gap-3">
+        <Field label={isCreditCard ? 'Minimum Due (optional)' : 'Monthly EMI (optional)'}>
+          <input type="number" value={emi} onChange={(e) => setEmi(e.target.value)} className={inputClass} placeholder="0" />
+        </Field>
+        <Field label="Interest Rate % (optional)">
+          <input
+            type="number"
+            value={interestRate}
+            onChange={(e) => setInterestRate(e.target.value)}
+            className={`${inputClass} ${errors.interestRate ? 'border-red-400' : ''}`}
+            placeholder="0"
+          />
+          {errors.interestRate && <p className="text-xs text-red-500 mt-1">{errors.interestRate}</p>}
+        </Field>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Start Date (optional)">
+          <DateInput value={startDate} onChange={setStartDate} className={inputClass} />
+        </Field>
+        <Field label={isCreditCard ? 'Due Date (optional)' : 'Maturity / Due Date (optional)'}>
+          <DateInput value={dueDate} onChange={setDueDate} className={`${inputClass} ${errors.dueDate ? 'border-red-400' : ''}`} />
+          {errors.dueDate && <p className="text-xs text-red-500 mt-1">{errors.dueDate}</p>}
+        </Field>
+      </div>
+      <Field label="Notes (optional)">
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          className={`${inputClass} min-h-[72px] py-2`}
+          placeholder="Any additional details"
+        />
       </Field>
-      <button onClick={submit} className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white">
-        Save Liability
+      <button
+        onClick={submit}
+        disabled={saving}
+        className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white"
+      >
+        {saving ? 'Saving...' : 'Save Liability'}
       </button>
     </div>
   );
 }
 
+/** "2026-09" -> "Sep 2026" */
+function monthLabel(ym: string): string {
+  const [y, m] = ym.split('-').map(Number);
+  if (!y || !m) return ym;
+  return new Date(y, m - 1, 1).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+}
+
 function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
+  const user = useAuthStore((s) => s.user);
   const assets = useAssetsStore((s) => s.assets);
   const liabilities = useLiabilitiesStore((s) => s.liabilities);
   const privacyMode = useUiStore((s) => s.privacyMode);
@@ -6061,9 +6358,104 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   const totalLiabilities = liabilities.reduce((s, l) => s + l.outstanding, 0);
   const netWorth = totalAssets - totalLiabilities;
 
+  const snapshots = useSnapshotsStore((s) => s.snapshots);
+  const today = toIsoDate();
+  const todaysSnapshot = snapshots.find((s) => s.date === today);
+
+  const sortedAsc = useMemo(() => {
+    const sorted = [...snapshots].sort((a, b) => a.date.localeCompare(b.date));
+    // Collapse same-day duplicates down to the latest save, same as the
+    // Overview chart, so re-taking a snapshot mid-day never draws a
+    // misleading near-vertical jump or repeats an x-axis label.
+    const byDate = new Map<string, Snapshot>();
+    for (const s of sorted) byDate.set(s.date, s);
+    return [...byDate.values()];
+  }, [snapshots]);
+
+  const [range, setRange] = useState<NetWorthRange>('ALL');
+  const data = useMemo(() => {
+    if (range === 'ALL') return sortedAsc;
+    const months = range === '3M' ? 3 : range === '6M' ? 6 : 12;
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - months);
+    const iso = toIsoDate(cutoff);
+    return sortedAsc.filter((s) => s.date >= iso);
+  }, [sortedAsc, range]);
+
+  const historyDesc = useMemo(() => [...sortedAsc].reverse(), [sortedAsc]);
+
+  const first = data[0];
+  const last = data[data.length - 1];
+  const hasTrend = data.length >= 2;
+  const change = hasTrend ? last.netWorth - first.netWorth : 0;
+  const changePct = hasTrend && first.netWorth > 0 ? (change / first.netWorth) * 100 : 0;
+  const avgPerSnapshot = hasTrend ? change / (data.length - 1) : 0;
+
+  const bestMonth = useMemo(() => {
+    if (data.length < 2) return null;
+    const byMonth = new Map<string, number>();
+    for (const s of data) byMonth.set(s.date.slice(0, 7), s.netWorth);
+    const months = [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    let best: { month: string; delta: number } | null = null;
+    for (let i = 1; i < months.length; i++) {
+      const delta = months[i][1] - months[i - 1][1];
+      if (!best || delta > best.delta) best = { month: months[i][0], delta };
+    }
+    return best;
+  }, [data]);
+
+  const trackingSinceLabel = sortedAsc[0]
+    ? new Date(`${sortedAsc[0].date}T00:00:00`).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
+    : null;
+
+  const [savingSnapshot, setSavingSnapshot] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Snapshot | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const takeSnapshot = async () => {
+    if (!user || savingSnapshot) return;
+    setSavingSnapshot(true);
+    try {
+      const snap: Snapshot = {
+        id: todaysSnapshot?.id ?? crypto.randomUUID(),
+        date: today,
+        netWorth,
+        totalAssets,
+        totalLiabilities,
+      };
+      await upsertDoc(user, 'snapshots', snap);
+    } finally {
+      setSavingSnapshot(false);
+    }
+  };
+
+  const confirmDeleteSnapshot = async () => {
+    if (!user || !pendingDelete) return;
+    setDeleting(true);
+    try {
+      await removeDoc(user, 'snapshots', pendingDelete.id);
+      setPendingDelete(null);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
-      <PageHeader title="Net worth" description="Everything you own and owe, in one view." />
+      <PageHeader
+        title="Net worth"
+        description={
+          snapshots.length > 0
+            ? `${snapshots.length} snapshot${snapshots.length === 1 ? '' : 's'} · Tracking since ${trackingSinceLabel}`
+            : 'Everything you own and owe, in one view.'
+        }
+        actions={
+          <Button variant="primary" size="sm" leftIcon={<Camera size={15} />} loading={savingSnapshot} onClick={takeSnapshot}>
+            {todaysSnapshot ? 'Update Snapshot' : 'Take Snapshot'}
+          </Button>
+        }
+      />
 
       <TabNav tab={tab} setTab={setTab} />
 
@@ -6087,6 +6479,213 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
           loading={!wealthDataKnown}
         />
       </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-3 sm:gap-4">
+        <Card padding="lg">
+          <CardHeader
+            title="Net Worth History"
+            description="Values in ₹ INR"
+            actions={
+              <div className="flex items-center gap-3">
+                {last && (
+                  <div className="text-right hidden sm:block">
+                    <p className="text-xs text-muted">{formatDate(last.date)}</p>
+                    <p className="font-numeric text-sm font-semibold text-ink">
+                      {privacyMode ? '••••••' : formatPreciseCurrency(last.netWorth)}
+                    </p>
+                  </div>
+                )}
+                {sortedAsc.length >= 2 && (
+                  <SegmentedControl<NetWorthRange>
+                    size="sm"
+                    value={range}
+                    onChange={setRange}
+                    items={[
+                      { key: '3M', label: '3M' },
+                      { key: '6M', label: '6M' },
+                      { key: '1Y', label: '1Y' },
+                      { key: 'ALL', label: 'All' },
+                    ]}
+                  />
+                )}
+              </div>
+            }
+          />
+          {data.length === 0 ? (
+            <EmptyState
+              compact
+              icon={<Camera size={18} />}
+              title="No snapshots yet"
+              description="Take your first snapshot to start tracking net worth history."
+            />
+          ) : (
+            <div className="h-[260px] -ml-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid stroke={chart.grid} strokeDasharray="3 3" vertical={false} />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={(d: string) =>
+                      new Date(`${d}T00:00:00`).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
+                    }
+                    tick={chart.tick}
+                    axisLine={false}
+                    tickLine={false}
+                    minTickGap={28}
+                  />
+                  <YAxis
+                    tickFormatter={(v: number) => (privacyMode ? '' : formatAxisAmount(v))}
+                    tick={chart.tick}
+                    axisLine={false}
+                    tickLine={false}
+                    width={56}
+                    domain={data.length === 1 ? [(v: number) => v * 0.97, (v: number) => v * 1.03] : ['auto', 'auto']}
+                  />
+                  <Tooltip
+                    cursor={chart.tooltip.cursor}
+                    contentStyle={chart.tooltip.contentStyle}
+                    labelStyle={chart.tooltip.labelStyle}
+                    itemStyle={chart.tooltip.itemStyle}
+                    formatter={(v) => [
+                      privacyMode ? '••••••' : formatPreciseCurrency(Number(v)),
+                      'Net worth',
+                    ]}
+                    labelFormatter={(l) => formatDate(String(l ?? ''))}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="netWorth"
+                    stroke={change < 0 ? chart.negative : chart.primary}
+                    strokeWidth={2}
+                    fill={change < 0 ? chart.negativeSoft : chart.primarySoft}
+                    dot={{ r: 4, strokeWidth: 2, stroke: 'var(--color-surface)', fill: change < 0 ? chart.negative : chart.primary }}
+                    activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-surface)', fill: change < 0 ? chart.negative : chart.primary }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </Card>
+
+        <div className="grid grid-cols-3 lg:grid-cols-1 gap-3 sm:gap-4">
+          <StatCard
+            dense
+            label="Growth"
+            value={hasTrend ? formatSignedCurrency(change, 'INR', 0) : '—'}
+            tone={hasTrend ? (change >= 0 ? 'positive' : 'negative') : 'default'}
+            sublabel={hasTrend ? `${formatPercentMagnitude(changePct, 1)} overall` : 'Need more snapshots'}
+          />
+          <StatCard
+            dense
+            label="Best month"
+            value={bestMonth ? formatSignedCurrency(bestMonth.delta, 'INR', 0) : '—'}
+            tone={bestMonth ? (bestMonth.delta >= 0 ? 'positive' : 'negative') : 'default'}
+            sublabel={bestMonth ? monthLabel(bestMonth.month) : 'Need more snapshots'}
+          />
+          <StatCard
+            dense
+            label="Avg / snapshot"
+            value={hasTrend ? formatSignedCurrency(avgPerSnapshot, 'INR', 0) : '—'}
+            tone={hasTrend ? (avgPerSnapshot >= 0 ? 'positive' : 'negative') : 'default'}
+            sublabel={hasTrend ? 'per snapshot' : 'Need more snapshots'}
+          />
+        </div>
+      </div>
+
+      <Card padding="none">
+        <CardHeader
+          title="Snapshot history"
+          description={
+            historyDesc.length > 0
+              ? `${historyDesc.length} recorded snapshot${historyDesc.length === 1 ? '' : 's'}`
+              : 'Nothing recorded yet'
+          }
+          padded
+          divided={historyDesc.length > 0}
+        />
+        {historyDesc.length === 0 ? (
+          <EmptyState
+            icon={<Camera size={18} />}
+            title="No snapshots yet"
+            description="Take a snapshot any time to record today's net worth."
+          />
+        ) : (
+          <div className="divide-y divide-line-soft">
+            {historyDesc.map((snap, idx) => {
+              const expanded = expandedId === snap.id;
+              const isBaseline = idx === historyDesc.length - 1;
+              return (
+                <div key={snap.id}>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setExpandedId(expanded ? null : snap.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') setExpandedId(expanded ? null : snap.id);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 sm:px-5 py-3 hover:bg-surface-hover cursor-pointer transition-colors"
+                  >
+                    {expanded ? (
+                      <ChevronUp size={15} className="text-muted shrink-0" />
+                    ) : (
+                      <ChevronDown size={15} className="text-muted shrink-0" />
+                    )}
+                    <span
+                      className={`h-2 w-2 rounded-full shrink-0 ${snap.netWorth >= 0 ? 'bg-positive' : 'bg-negative'}`}
+                    />
+                    <span className="text-sm font-medium text-ink min-w-0 truncate">{formatDate(snap.date)}</span>
+                    {isBaseline && <Badge variant="neutral">Baseline</Badge>}
+                    <span className="ml-auto font-numeric text-sm font-semibold text-ink shrink-0">
+                      {maskPreciseAmount(snap.netWorth, 'INR', privacyMode)}
+                    </span>
+                    <IconButton
+                      label="Delete snapshot"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPendingDelete(snap);
+                      }}
+                      className="hover:!text-negative hover:!bg-negative-soft shrink-0"
+                    >
+                      <Trash2 size={14} />
+                    </IconButton>
+                  </div>
+                  {expanded && (
+                    <div className="px-4 sm:px-5 pb-3.5 -mt-0.5 grid grid-cols-2 gap-2.5 text-sm">
+                      <div className="rounded-lg bg-surface-muted px-3 py-2">
+                        <p className="text-xs text-muted">Assets</p>
+                        <p className="font-numeric font-medium text-ink">
+                          {maskPreciseAmount(snap.totalAssets, 'INR', privacyMode)}
+                        </p>
+                      </div>
+                      <div className="rounded-lg bg-surface-muted px-3 py-2">
+                        <p className="text-xs text-muted">Liabilities</p>
+                        <p className="font-numeric font-medium text-ink">
+                          {maskPreciseAmount(snap.totalLiabilities, 'INR', privacyMode)}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      <ConfirmDeleteModal
+        open={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={confirmDeleteSnapshot}
+        busy={deleting}
+        title="Delete this snapshot?"
+        description={
+          <>
+            This removes the <strong>{pendingDelete ? formatDate(pendingDelete.date) : ''}</strong> snapshot from your
+            net worth history. This can't be undone.
+          </>
+        }
+      />
     </div>
   );
 }

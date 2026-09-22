@@ -74,17 +74,24 @@ export default function TopHeader() {
     <>
       <div
         id="app-topbar"
-        className="sticky top-0 z-30 h-14 flex items-center justify-between gap-2 sm:gap-3 px-4 sm:px-6 md:px-8 border-b border-line bg-surface"
+        className="sticky top-0 z-30 h-14 grid grid-cols-[1fr_auto_1fr] md:flex items-center gap-2 sm:gap-3 px-4 sm:px-6 md:px-8 bg-page md:justify-between"
       >
-        {/* Mobile: brand + profile (desktop shows these in the Sidebar) */}
+        {/* Mobile: brand mark, left column */}
         <span className="md:hidden flex items-center gap-2 min-w-0">
           <AppLogo className="w-6 h-6 rounded-full" />
-          <span className="font-luxury text-base text-ink tracking-tight truncate">
+          <span className="font-brand text-[15px] text-ink truncate">
             Aurafin<span className="text-brand-600">.</span>
           </span>
+        </span>
+
+        {/* Mobile: profile switcher, centered in its own column so it isn't
+            crowded against the logo on one side while the action icons sit
+            far away on the other — matches the centered-title convention
+            most mobile app headers use. */}
+        <span className="md:hidden flex items-center justify-center gap-2 min-w-0">
           <ProfileSwitcher compact />
           {lockEnabled && (
-            <IconButton label="Lock Aurafin now" size="sm" onClick={lockNow} className="tap-scale">
+            <IconButton label="Lock Aurafin now" size="sm" onClick={lockNow} className="tap-scale shrink-0">
               <Lock size={15} />
             </IconButton>
           )}
@@ -163,8 +170,8 @@ export default function TopHeader() {
           </div>
         </div>
 
-        {/* Mobile toolbar */}
-        <div className="flex md:hidden items-center gap-0.5 shrink-0">
+        {/* Mobile toolbar, right column */}
+        <div className="flex md:hidden items-center gap-0.5 shrink-0 justify-self-end">
           <GlobalSearch />
 
           <IconButton label={privacyMode ? 'Show amounts' : 'Hide amounts'} onClick={togglePrivacy}>

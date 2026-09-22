@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Sparkles,
@@ -14,8 +14,9 @@ import { useAuthStore } from '../store/authStore';
 import { useAppLockStore } from '../store/appLockStore';
 import { upsertDoc } from '../hooks/useFirestoreSync';
 import { ASSET_TAXONOMY } from '../utils/taxonomy';
+import { setPendingImportFile } from '../utils/pendingImportFile';
 import Modal from '../components/Modal';
-import PinBoxInput from '../components/PinBoxInput';
+import PinBoxInput, { type PinBoxInputHandle } from '../components/PinBoxInput';
 
 const STEPS = ['welcome', 'profile', 'assets', 'secure'] as const;
 type StepKey = (typeof STEPS)[number];
@@ -70,7 +71,8 @@ export default function Onboarding() {
     navigate('/');
   };
 
-  const goImport = () => {
+  const goImport = (file: File) => {
+    setPendingImportFile(file);
     completeOnboarding();
     navigate('/import');
   };
@@ -331,11 +333,16 @@ function AssetsStep({
   onSkip: () => void;
   onSkipAll: () => void;
   onSave: () => void;
-  onImportBroker: () => void;
+  onImportBroker: (file: File) => void;
 }) {
   const toggle = (key: string) => {
     setSelected(selected.includes(key) ? selected.filter((k) => k !== key) : [...selected, key]);
   };
+
+  // Clicking "Import from Broker" opens the OS file picker immediately —
+  // no intermediate screen to click through first. The file is handed off
+  // to the /import page (see pendingImportFile) once one is chosen.
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <div>
@@ -350,7 +357,7 @@ function AssetsStep({
 
       <button
         type="button"
-        onClick={onImportBroker}
+        onClick={() => fileInputRef.current?.click()}
         className="w-full flex items-center gap-3 rounded-xl border border-dashed border-brand-300 dark:border-brand-700 bg-brand-50/60 dark:bg-brand-900/20 p-4 text-left hover:bg-brand-50 dark:hover:bg-brand-900/30"
       >
         <span className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center shrink-0">
@@ -366,6 +373,16 @@ function AssetsStep({
         </span>
         <ArrowRight size={16} className="text-brand-600 shrink-0" />
       </button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".csv,.xlsx,.xls"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onImportBroker(file);
+        }}
+      />
 
       <div className="flex items-center gap-3 my-5">
         <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
@@ -420,6 +437,19 @@ function SecureStep({
   const [pin, setPinInput] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [pinError, setPinError] = useState('');
+  const confirmPinRef = useRef<PinBoxInputHandle>(null);
+
+  // Jump to the Confirm PIN boxes once the 4-digit PIN is complete. Doing
+  // this in an effect (rather than focusing inline from PinBoxInput's own
+  // onChange) means it runs after the digit has actually committed to the
+  // DOM, so the focus call doesn't get lost mid re-render — calling it
+  // straight from the keystroke handler was landing before that commit and
+  // the last box kept focus instead.
+  useEffect(() => {
+    if (pin.length === 4) {
+      confirmPinRef.current?.focus();
+    }
+  }, [pin]);
 
   const savePin = () => {
     if (!/^\d{4}$/.test(pin)) {
@@ -473,7 +503,7 @@ function SecureStep({
             <label className="block text-xs text-muted mb-2 text-center">
               Confirm PIN
             </label>
-            <PinBoxInput value={confirmPin} onChange={setConfirmPin} />
+            <PinBoxInput ref={confirmPinRef} value={confirmPin} onChange={setConfirmPin} />
           </div>
           {pinError && <p className="text-xs text-red-500">{pinError}</p>}
           <button
