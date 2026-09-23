@@ -28,6 +28,7 @@ import { useLivePrices } from './hooks/useLivePrices';
 import { useLiveSipValues } from './hooks/useLiveSipValues';
 import { useLiveGoldPrice } from './hooks/useLiveGoldPrice';
 import { useWeeklyDigestScheduler } from './hooks/useWeeklyDigestScheduler';
+import { useScrollRestoration } from './hooks/useScrollRestoration';
 import Sidebar from './components/Sidebar';
 import TopHeader from './components/TopHeader';
 import BottomNav from './components/BottomNav';
@@ -64,6 +65,10 @@ function RouteFallback() {
 function AppShell() {
   const location = useLocation();
   const needsOnboarding = useAuthStore((s) => s.needsOnboarding);
+  // Keeps each page's scroll position across in-app navigation (sidebar,
+  // bottom nav, back button) — see the hook for why a hard refresh still
+  // resets to the top.
+  useScrollRestoration();
 
   // First-time sign-ups/sign-ins get the full-screen onboarding wizard with
   // none of the normal chrome (sidebar/topbar/bottom nav) — matches how

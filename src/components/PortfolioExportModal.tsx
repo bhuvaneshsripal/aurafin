@@ -1,16 +1,23 @@
 import { useState } from 'react';
-import { Download, FileText, Loader } from 'lucide-react';
+import { Download, Loader } from 'lucide-react';
 import { exportDomToPdf } from '../utils/exportPdf';
 import { toIsoDate } from '../utils/date';
 import Modal from './Modal';
+import { PortfolioPdfReport } from './PortfolioPdfReport';
 
 interface PortfolioExportModalProps {
   open: boolean;
   onClose: () => void;
-  reportElementId?: string;
 }
 
-export const PortfolioExportModal = ({ open, onClose, reportElementId = 'portfolio-pdf-report' }: PortfolioExportModalProps) => {
+const PREVIEW_ELEMENT_ID = 'portfolio-pdf-report-preview';
+// Fixed "page" width for the live preview, independent of the viewer's
+// screen size -- this is also the exact element html2canvas captures, so
+// keeping it fixed means the exported PDF looks the same on phone or
+// desktop, and matches what's shown here.
+const PREVIEW_PAGE_WIDTH = 900;
+
+export const PortfolioExportModal = ({ open, onClose }: PortfolioExportModalProps) => {
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
 
@@ -19,17 +26,13 @@ export const PortfolioExportModal = ({ open, onClose, reportElementId = 'portfol
     setExportError(null);
 
     try {
-      const reportElement = document.getElementById(reportElementId);
+      const reportElement = document.getElementById(PREVIEW_ELEMENT_ID);
       if (!reportElement) {
-        throw new Error('Report element not found. Please ensure the portfolio report is rendered.');
+        throw new Error("The preview isn't ready yet -- please wait a moment and try again.");
       }
 
       const filename = `Portfolio-Report-${toIsoDate()}`;
-      await exportDomToPdf(
-        reportElement,
-        filename,
-        'AuraFin Holdings - Portfolio Report'
-      );
+      await exportDomToPdf(reportElement, filename, 'AuraFin Holdings - Portfolio Report');
 
       // Close modal after successful export
       setTimeout(() => {
@@ -45,36 +48,36 @@ export const PortfolioExportModal = ({ open, onClose, reportElementId = 'portfol
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="Export Portfolio">
-      <div className="space-y-6">
-          <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
-            <p className="text-blue-800 text-sm">
-              Portfolio Report Generated Successfully</p>
-          </div>
+    <Modal open={open} onClose={onClose} title="Export Portfolio" contentPanel>
+      <div className="flex flex-col gap-4 h-full">
+        <p className="text-sm text-muted -mt-1">
+          This is exactly what your PDF will look like -- scroll through to check
+          it, including your sold investments and realized gains, then download.
+        </p>
 
         {exportError && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 shrink-0">
             <p className="text-red-800 text-sm">
               <span className="font-semibold">Error:</span> {exportError}
             </p>
           </div>
         )}
 
-        <div className="space-y-4">
-          <div className="border border-line rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <FileText size={20} className="text-brand-600 dark:text-brand-400 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <h3 className="font-semibold text-ink mb-1">PDF Report</h3>
-                <p className="text-sm text-muted">
-                  Comprehensive portfolio report with summary, asset breakdown, liabilities, and detailed listings.
-                </p>
-              </div>
+        {/* Live, scrollable preview of the exact DOM node that gets
+           captured for the PDF. Fixed inner width keeps the export
+           consistent regardless of the device previewing it. */}
+        <div className="flex-1 min-h-0 rounded-xl border border-line bg-slate-100 dark:bg-slate-800 overflow-auto">
+          <div className="p-4 sm:p-6">
+            <div
+              className="mx-auto shadow-lg rounded-lg overflow-hidden"
+              style={{ width: PREVIEW_PAGE_WIDTH, maxWidth: '100%' }}
+            >
+              <PortfolioPdfReport reportElementId={PREVIEW_ELEMENT_ID} />
             </div>
           </div>
         </div>
 
-        <div className="flex gap-3 pt-4 border-t border-line">
+        <div className="flex gap-3 pt-2 border-t border-line shrink-0">
           <button
             onClick={onClose}
             className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
@@ -95,14 +98,14 @@ export const PortfolioExportModal = ({ open, onClose, reportElementId = 'portfol
             ) : (
               <>
                 <Download size={16} />
-                Export as PDF
+                Download PDF
               </>
             )}
           </button>
         </div>
 
-        <p className="text-xs text-muted text-center">
-          Note: First-time export may take a moment to load required libraries.
+        <p className="text-xs text-muted text-center shrink-0">
+          First-time export may take a moment to load required libraries.
         </p>
       </div>
     </Modal>

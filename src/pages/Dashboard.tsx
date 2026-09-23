@@ -25,7 +25,6 @@ import { useUiStore } from '../store/uiStore';
 import { useSyncStatusStore } from '../store/syncStatusStore';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import GoldPriceCard from '../components/GoldPriceCard';
-import { PortfolioPdfReport } from '../components/PortfolioPdfReport';
 import { PortfolioExportModal } from '../components/PortfolioExportModal';
 import { formatDate, toIsoDate, toIsoMonth } from '../utils/date';
 import {
@@ -317,13 +316,8 @@ export default function Dashboard() {
 
       <GoldPriceCard />
 
-      {/* PDF Export Modal and Report */}
+      {/* PDF Export Modal — renders its own live preview of the report internally */}
       <PortfolioExportModal open={exportModalOpen} onClose={() => setExportModalOpen(false)} />
-
-      {/* Hidden report component - used only for PDF generation */}
-      <div style={{ display: 'none' }}>
-        <PortfolioPdfReport hideInPrint={false} />
-      </div>
     </div>
   );
 }

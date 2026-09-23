@@ -21,6 +21,7 @@ import {
   Link2Off,
   AlertTriangle,
   EyeOff,
+  Eye,
   MoreVertical,
   BarChart2,
   GripVertical,
@@ -32,7 +33,6 @@ import {
   Play,
   PlusCircle,
   Banknote,
-  ArrowUpRight,
   Wallet,
   Camera,
   type LucideIcon,
@@ -54,7 +54,7 @@ import { useSnapshotsStore } from '../store/snapshotsStore';
 import { useLivePricesStore, resolvePreviousClose } from '../store/livePricesStore';
 import { formatDate, toIsoDate } from '../utils/date';
 import { goldPricePerGram22k } from '../utils/goldPrice';
-import { computeHoldingPnl, computePortfolioPnl, isFullySold } from '../utils/investmentPnl';
+import { computeHoldingPnl, isFullySold } from '../utils/investmentPnl';
 import { useSyncStatusStore } from '../store/syncStatusStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useAuthStore } from '../store/authStore';
@@ -64,6 +64,8 @@ import { upsertDoc, removeDoc, saveWealthFilters } from '../hooks/useFirestoreSy
 import { useWealthFilterStore } from '../store/wealthFilterStore';
 import { exportToCsv } from '../utils/exportCsv';
 import Modal from '../components/Modal';
+import LoadingDots from '../components/LoadingDots';
+import { cn } from '../components/ui/cn';
 import {
   Badge,
   Button,
@@ -522,7 +524,7 @@ function AddWealthPage({
     <div className="max-w-[720px] space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight text-ink">{`Add ${noun}`}</h1>
+          <h1 className="text-2xl sm:text-[28px] font-bold tracking-tight text-ink">{`Add ${noun}`}</h1>
           <p className="text-sm text-slate-500 mt-1">
             {`Step ${step === 'details' ? 2 : 1} of 2: ${
               step === 'category'
@@ -545,7 +547,7 @@ function AddWealthPage({
       <div className="w-full flex items-stretch rounded-xl border border-line divide-x divide-line bg-slate-50 dark:bg-slate-800 overflow-hidden">
         {(
           [
-            { key: 'asset' as const, label: 'Asset', Icon: TrendingUp },
+            { key: 'asset' as const, label: 'Asset', Icon: Wallet },
             { key: 'liability' as const, label: 'Liability', Icon: TrendingDown },
           ]
         ).map(({ key, label, Icon }) => {
@@ -570,7 +572,7 @@ function AddWealthPage({
         {step === 'category' && entryType === 'asset' ? (
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-4 flex-wrap">
-              <h3 className="text-sm font-semibold text-ink">Select Asset Type</h3>
+              <h3 className="text-base sm:text-lg font-bold text-ink">Select Asset Type</h3>
               <TypeSearchInput value={query} onChange={setQuery} placeholder="Search types" />
             </div>
 
@@ -582,6 +584,7 @@ function AddWealthPage({
                       key={type.value}
                       label={type.label}
                       Icon={TYPE_ICONS[type.value] ?? cat.icon}
+                      accentKey={cat.key}
                       onClick={() => selectDirectType(cat, type.value)}
                     />
                   ))}
@@ -603,6 +606,7 @@ function AddWealthPage({
                           key={value}
                           label={t.label}
                           Icon={TYPE_ICONS[value] ?? cat.icon}
+                          accentKey={cat.key}
                           onClick={() => selectDirectType(cat, value)}
                         />
                       );
@@ -618,6 +622,7 @@ function AddWealthPage({
                         label={cat.label}
                         subtitle={cat.types.length > 1 ? `${cat.types.length} types` : undefined}
                         Icon={cat.icon}
+                        accentKey={cat.key}
                         onClick={() => selectCategory(cat)}
                       />
                     ))}
@@ -628,7 +633,7 @@ function AddWealthPage({
           </div>
         ) : step === 'category' && entryType === 'liability' ? (
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-ink">Select Loan Type</h3>
+            <h3 className="text-base sm:text-lg font-bold text-ink">Select Loan Type</h3>
 
             <TypeTileGrid>
               {LIABILITY_TAXONOMY.flatMap((cat) =>
@@ -662,6 +667,8 @@ function AddWealthPage({
                   key={t.value}
                   label={t.label}
                   Icon={TYPE_ICONS[t.value] ?? category.icon}
+                  accentKey={entryType === 'liability' ? undefined : category.key}
+                  tone={entryType === 'liability' ? 'red' : undefined}
                   onClick={() => selectType(t.value)}
                 />
               ))}
@@ -723,46 +730,53 @@ function TypeSearchInput({
   );
 }
 
-/** Responsive 3/2/1-column grid shared by every type-selection screen (Common, All Categories, search results, and the per-category subtype tiles). */
+/** Icon-tile accent per asset category — mirrors the reference design's per-category tint (blue for equity, teal for debt, gold for commodities, ...). Purely a picker-UI concern, kept separate from `CategoryDef.color` (used for allocation charts elsewhere) so this never touches chart colors. Liability tiles don't use this — they stay uniformly red/pink via `tone="red"`. */
+const CATEGORY_ACCENT: Record<string, { bg: string; text: string; hoverBorder: string; ring: string }> = {
+  equity: { bg: 'bg-accent-50 dark:bg-accent-900/40', text: 'text-accent-600 dark:text-accent-300', hoverBorder: 'hover:border-accent-300', ring: 'focus-visible:ring-accent-400' },
+  debt: { bg: 'bg-teal-50 dark:bg-teal-950/40', text: 'text-teal-600 dark:text-teal-300', hoverBorder: 'hover:border-teal-300', ring: 'focus-visible:ring-teal-400' },
+  real_estate: { bg: 'bg-orange-50 dark:bg-orange-900/40', text: 'text-orange-600 dark:text-orange-300', hoverBorder: 'hover:border-orange-300', ring: 'focus-visible:ring-orange-400' },
+  commodities: { bg: 'bg-gold-50 dark:bg-gold-900/40', text: 'text-gold-700 dark:text-gold-300', hoverBorder: 'hover:border-gold-300', ring: 'focus-visible:ring-gold-400' },
+  cash: { bg: 'bg-slate-100 dark:bg-slate-800/60', text: 'text-slate-600 dark:text-slate-300', hoverBorder: 'hover:border-slate-300', ring: 'focus-visible:ring-slate-400' },
+  crypto: { bg: 'bg-violet-50 dark:bg-violet-950/40', text: 'text-violet-600 dark:text-violet-300', hoverBorder: 'hover:border-violet-300', ring: 'focus-visible:ring-violet-400' },
+  alternatives: { bg: 'bg-purple-50 dark:bg-purple-950/40', text: 'text-purple-600 dark:text-purple-300', hoverBorder: 'hover:border-purple-300', ring: 'focus-visible:ring-purple-400' },
+  other: { bg: 'bg-slate-100 dark:bg-slate-800/60', text: 'text-slate-500 dark:text-slate-400', hoverBorder: 'hover:border-slate-300', ring: 'focus-visible:ring-slate-400' },
+};
+const DEFAULT_ACCENT = CATEGORY_ACCENT.other;
+const LIABILITY_ACCENT = { bg: 'bg-red-50 dark:bg-red-950/30', text: 'text-red-600 dark:text-red-300', hoverBorder: 'hover:border-red-300', ring: 'focus-visible:ring-red-400' };
+
+/** Responsive 2-column grid shared by every type-selection screen (Common, All Categories, search results, and the per-category subtype tiles) — matches the reference's compact 2-up layout at every width. */
 function TypeTileGrid({ children }: { children: React.ReactNode }) {
-  return <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">{children}</div>;
+  return <div className="grid grid-cols-2 gap-2.5">{children}</div>;
 }
 
-/** One selectable icon + label (+ optional subtitle) tile — the basic unit of every type-selection screen. Keyboard accessible as a real <button>. `tone` picks the icon tile's color: brand green for assets, red for liabilities — matching how the rest of the app distinguishes the two. */
+/** One selectable icon + label (+ optional subtitle) tile — the basic unit of every type-selection screen. Keyboard accessible as a real <button>. `accentKey` looks up a per-category tint (blue/teal/gold/...) from `CATEGORY_ACCENT`; `tone="red"` overrides that with the uniform red/pink treatment used for every liability tile. */
 function TypeTile({
   label,
   subtitle,
   Icon,
-  tone = 'brand',
+  tone,
+  accentKey,
   onClick,
 }: {
   label: string;
   subtitle?: string;
   Icon: LucideIcon;
-  tone?: 'brand' | 'red';
+  tone?: 'red';
+  accentKey?: string;
   onClick: () => void;
 }) {
+  const accent = tone === 'red' ? LIABILITY_ACCENT : (accentKey && CATEGORY_ACCENT[accentKey]) || DEFAULT_ACCENT;
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`flex items-center gap-2.5 border border-line rounded-lg px-3 py-2.5 min-h-[44px] text-left bg-slate-50/70 dark:bg-slate-800/40 transition-colors focus-visible:outline-none focus-visible:ring-2 ${
-        tone === 'red'
-          ? 'hover:border-red-300 hover:bg-red-50 dark:hover:bg-red-950/20 focus-visible:ring-red-400'
-          : 'hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/30 focus-visible:ring-brand-400'
-      }`}
+      className={`flex items-center gap-2.5 border border-line rounded-xl px-2.5 py-2.5 min-h-[56px] text-left bg-slate-50/80 dark:bg-slate-800/40 transition-all active:scale-[0.98] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 ${accent.hoverBorder} ${accent.ring}`}
     >
-      <span
-        className={`flex items-center justify-center w-7 h-7 rounded-md shrink-0 ${
-          tone === 'red'
-            ? 'bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-300'
-            : 'bg-brand-50 text-brand-700 dark:bg-brand-950/40 dark:text-brand-300'
-        }`}
-      >
-        <Icon size={15} />
+      <span className={`flex items-center justify-center w-8 h-8 rounded-lg shrink-0 ${accent.bg} ${accent.text}`}>
+        <Icon size={16} />
       </span>
       <span className="min-w-0">
-        <span className="block text-[13px] font-medium text-ink truncate leading-tight">{label}</span>
+        <span className="block text-[13px] font-medium text-ink leading-snug break-words">{label}</span>
         {subtitle && <span className="block text-[11px] text-slate-500 truncate leading-tight mt-0.5">{subtitle}</span>}
       </span>
     </button>
@@ -1005,11 +1019,13 @@ function AssetsTab({
     (a.assetClass === 'gold' && !!a.quantity && a.quantity > 0);
   const user = useAuthStore((s) => s.user);
   const privacyMode = useUiStore((s) => s.privacyMode);
+  const togglePrivacy = useUiStore((s) => s.togglePrivacy);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Asset | null>(null);
   useModalBackClose(modalOpen, () => setModalOpen(false));
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(() => searchParams.get('q') ?? '');
+  const isSearching = search.trim().length > 0;
   const [sortKey, setSortKey] = useState<SortKey>('manual');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   // Filter selection, synced across devices via wealthFilterStore /
@@ -1073,9 +1089,9 @@ function AssetsTab({
   // Setting it pre-paint lands directly on the right spot with no flash.
   useLayoutEffect(() => {
     if (viewingAsset) {
-      window.scrollTo({ top: 0 });
+      window.scrollTo({ top: 0, behavior: 'instant' });
     } else {
-      window.scrollTo({ top: listScrollPosRef.current });
+      window.scrollTo({ top: listScrollPosRef.current, behavior: 'instant' });
     }
   }, [viewingAsset]);
   const [holdingsMenuOpenId, setHoldingsMenuOpenId] = useState<string | null>(null);
@@ -1410,6 +1426,20 @@ function AssetsTab({
     setSortSheetOpen(false);
   };
 
+  // Mobile-only "Filter" sheet — on small screens the four filter dropdowns
+  // (Category/Type/Tags/Currency) shown inline on desktop would otherwise
+  // stack into a tall 2x2 grid above the list, eating most of the screen
+  // before you even see a holding. Below `sm` they collapse into a single
+  // compact button that opens this sheet with the same controls instead.
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  useBodyScrollLock(filterSheetOpen);
+  const activeFilterCount = selectedCategories.length + selectedTypes.length + selectedCurrencies.length;
+  const clearAllFilters = () => {
+    setSelectedCategories([]);
+    setSelectedTypes([]);
+    setSelectedCurrencies([]);
+  };
+
 
   const handleSave = async (asset: Asset) => {
     if (!user) return;
@@ -1521,14 +1551,6 @@ function AssetsTab({
     0
   );
   const total1dPercent = prev1dTotalValue > 0 ? (total1dAbs / prev1dTotalValue) * 100 : 0;
-
-  // Realized P&L + number of fully-sold positions — the same aggregate the
-  // Performance page shows, so the two screens can never disagree.
-  const realizedSummary = useMemo(() => {
-    const pnl = computePortfolioPnl(assets, 'INR', livePrices, sipValues, liveGoldPricePerGram);
-    return { realized: pnl.realizedPnl, sold: pnl.sold.length };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allAssets, activeProfileId, livePrices, sipValues, liveGoldPricePerGram]);
 
   const categoryOptions = ASSET_TAXONOMY.filter((cat) =>
     assets.some((a) => (ASSET_CLASS_TO_CATEGORY[a.assetClass] ?? cat).key === cat.key)
@@ -1732,32 +1754,117 @@ function AssetsTab({
         }
       />
 
-      <TabNav tab={tab} setTab={setTab} />
+      {/* Typing a search query hides the tabs, filter row, and the holdings
+          summary card so the list of matches gets the space — nothing here
+          affects what's actually being filtered, just what's shown above
+          the results while a query is active. */}
+      {!isSearching && (
+        <>
+          <TabNav tab={tab} setTab={setTab} />
 
-      <div className="grid grid-cols-2 sm:flex sm:items-end gap-2.5 sm:gap-3">
-        <FilterDropdown
-          label="Filter"
-          placeholder="Category"
-          options={categoryOptions}
-          selected={selectedCategories}
-          onChange={setSelectedCategories}
-        />
-        <FilterDropdown
-          label="Type"
-          placeholder="Type"
-          options={typeOptions}
-          selected={selectedTypes}
-          onChange={setSelectedTypes}
-        />
-        <FilterDropdown label="Tags" placeholder="Tag" options={[]} selected={[]} onChange={() => {}} />
-        <FilterDropdown
-          label="Currency"
-          placeholder="Currency"
-          options={currencyOptions}
-          selected={selectedCurrencies}
-          onChange={setSelectedCurrencies}
-        />
-      </div>
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            {/* Desktop/tablet: all four filters shown inline. */}
+            <div className="hidden sm:flex sm:items-end gap-3 flex-1">
+              <FilterDropdown
+                label="Filter"
+                placeholder="Category"
+                options={categoryOptions}
+                selected={selectedCategories}
+                onChange={setSelectedCategories}
+              />
+              <FilterDropdown
+                label="Type"
+                placeholder="Type"
+                options={typeOptions}
+                selected={selectedTypes}
+                onChange={setSelectedTypes}
+              />
+              <FilterDropdown label="Tags" placeholder="Tag" options={[]} selected={[]} onChange={() => {}} />
+              <FilterDropdown
+                label="Currency"
+                placeholder="Currency"
+                options={currencyOptions}
+                selected={selectedCurrencies}
+                onChange={setSelectedCurrencies}
+              />
+            </div>
+
+            {/* Mobile: a single compact button opens a bottom sheet with
+               the same filters, instead of stacking all four inline. */}
+            <button
+              type="button"
+              onClick={() => setFilterSheetOpen(true)}
+              className="sm:hidden inline-flex items-center gap-1.5 border border-line rounded-lg px-3.5 py-2 bg-surface text-sm font-medium text-ink hover:border-slate-300 transition-colors"
+            >
+              <ListFilter size={15} strokeWidth={2.25} />
+              Filter
+              {activeFilterCount > 0 && (
+                <span className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-brand-600 text-white text-[10px] font-semibold">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+          </div>
+        </>
+      )}
+
+      {filterSheetOpen && (
+        <div
+          className="animate-backdrop-in fixed inset-0 z-50 bg-slate-900/40 flex items-end sm:justify-center"
+          onClick={() => setFilterSheetOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="animate-sheet-in w-full sm:max-w-sm bg-surface rounded-t-2xl sm:rounded-2xl sm:mb-6 sm:shadow-2xl pb-[env(safe-area-inset-bottom)] max-h-[85vh] sm:max-h-[75vh] overflow-y-auto"
+          >
+            <div className="px-5 pt-5 pb-1 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-ink">Filters</h3>
+              {activeFilterCount > 0 && (
+                <button
+                  type="button"
+                  onClick={clearAllFilters}
+                  className="text-sm font-medium text-brand-700 dark:text-brand-400"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
+            <div className="px-5 pb-2 pt-3 space-y-4">
+              <FilterDropdown
+                label="Category"
+                placeholder="Category"
+                options={categoryOptions}
+                selected={selectedCategories}
+                onChange={setSelectedCategories}
+              />
+              <FilterDropdown
+                label="Type"
+                placeholder="Type"
+                options={typeOptions}
+                selected={selectedTypes}
+                onChange={setSelectedTypes}
+              />
+              <FilterDropdown label="Tags" placeholder="Tag" options={[]} selected={[]} onChange={() => {}} />
+              <FilterDropdown
+                label="Currency"
+                placeholder="Currency"
+                options={currencyOptions}
+                selected={selectedCurrencies}
+                onChange={setSelectedCurrencies}
+              />
+            </div>
+            <div className="px-5 pt-4 pb-5">
+              <button
+                type="button"
+                onClick={() => setFilterSheetOpen(false)}
+                className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3 rounded-xl transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <Card padding="none">
@@ -1780,58 +1887,192 @@ function AssetsTab({
         </Card>
       ) : (
         <div className="space-y-3">
-          {/* Portfolio KPIs. Realized P&L and the sold count come from the same
-              computePortfolioPnl the Performance page uses, so both agree. */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
-            <StatCard
-              dense
-              label="Current value"
-              loading={!totalsReady}
-              value={maskAmount(totalCurrentValue, 'INR', privacyMode, { fractionDigits: 0 })}
-              sublabel={`${rows.length} ${rows.length === 1 ? 'holding' : 'holdings'}`}
-              className="col-span-2 lg:col-span-1"
-            />
-            <StatCard
-              dense
-              label="Total invested"
-              loading={!totalsReady}
-              value={maskAmount(totalInvested, 'INR', privacyMode, { fractionDigits: 0 })}
-              sublabel="Cost basis"
-            />
-            <StatCard
-              dense
-              label="Overall P&L"
-              loading={!totalsReady}
-              tone={totalPnl >= 0 ? 'positive' : 'negative'}
-              value={privacyMode ? '••••••' : formatSignedCurrency(totalPnl, 'INR', 0)}
-              delta={!privacyMode ? { value: formatPercentMagnitude(totalPnlPercent), positive: totalPnl >= 0 } : undefined}
-              sublabel="Unrealised"
-            />
-            <StatCard
-              dense
-              label="1D returns"
-              loading={!totalsReady}
-              tone={!has1dData ? 'default' : total1dAbs >= 0 ? 'positive' : 'negative'}
-              value={!has1dData ? '—' : privacyMode ? '••••••' : formatSignedCurrency(total1dAbs, 'INR', 0)}
-              delta={has1dData && !privacyMode ? { value: formatPercentMagnitude(total1dPercent), positive: total1dAbs >= 0 } : undefined}
-              sublabel="vs. prev. close"
-            />
-            <Link to="/wealth/performance" className="group block min-w-0">
-              <StatCard
-                label="Realized P&L"
-                dense
-                loading={!totalsReady}
-                tone={realizedSummary.realized > 0 ? 'positive' : realizedSummary.realized < 0 ? 'negative' : 'default'}
-                value={privacyMode ? '••••••' : formatSignedCurrency(realizedSummary.realized, 'INR', 0)}
-                sublabel={
-                  <span className="inline-flex items-center gap-1 group-hover:text-primary-ink transition-colors">
-                    {realizedSummary.sold} sold · View performance <ArrowUpRight size={12} />
+          {/* Unified holdings summary card — the figures shown here all
+              derive from the same totals the old five-card KPI strip used
+              (current value, invested, overall P&L, 1D returns), just laid
+              out as one card. Realized P&L still lives on the linked
+              Performance page (chart icon, right). Hidden while a search
+              query is active, same as the tabs and filter row above. */}
+          {!isSearching && (
+          <Card padding="none" className="rounded-[26px] p-5 sm:p-6 border-line/70">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold tracking-wider text-muted uppercase">
+                  Holdings ({rows.length})
+                  <ChevronDown size={13} strokeWidth={2.5} />
+                </span>
+                <div className="mt-1.5 min-h-[36px] sm:min-h-[40px] flex items-center">
+                  {!totalsReady ? (
+                    <LoadingDots />
+                  ) : (
+                    <span className="font-numeric text-[28px] sm:text-[32px] font-bold tracking-tight text-ink break-words animate-value-in">
+                      {maskAmount(totalCurrentValue, 'INR', privacyMode, { fractionDigits: 2 })}
+                    </span>
+                  )}
+                </div>
+              </div>
+              {/* Below lg: icon-only circular buttons, unchanged. */}
+              <div className="flex lg:hidden items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={togglePrivacy}
+                  aria-label={privacyMode ? 'Show amounts' : 'Hide amounts'}
+                  className="h-9 w-9 rounded-full border border-line flex items-center justify-center text-muted hover:text-ink hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+                >
+                  {privacyMode ? <EyeOff size={16} strokeWidth={1.75} /> : <Eye size={16} strokeWidth={1.75} />}
+                </button>
+                <Link
+                  to="/wealth/performance"
+                  aria-label="View performance"
+                  className="h-9 w-9 rounded-full border border-line flex items-center justify-center text-muted hover:text-ink hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+                >
+                  <BarChart2 size={16} strokeWidth={1.75} />
+                </Link>
+                <IconButton
+                  label="More options"
+                  variant="ghost"
+                  className="h-9 w-9 rounded-full border border-line text-muted hover:text-ink hover:border-slate-300 dark:hover:border-slate-600"
+                  onClick={handleExport}
+                  disabled={assets.length === 0}
+                >
+                  <MoreVertical size={16} strokeWidth={1.75} />
+                </IconButton>
+              </div>
+              {/* lg and up: labelled "Analyse" pill first, then the two
+                  circular icon buttons — same actions, laptop layout. */}
+              <div className="hidden lg:flex items-center gap-2 shrink-0">
+                <Link
+                  to="/wealth/performance"
+                  className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full border border-line text-sm font-medium text-ink hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+                >
+                  <BarChart2 size={15} strokeWidth={1.75} />
+                  Analyse
+                </Link>
+                <button
+                  type="button"
+                  onClick={togglePrivacy}
+                  aria-label={privacyMode ? 'Show amounts' : 'Hide amounts'}
+                  className="h-9 w-9 rounded-full border border-line flex items-center justify-center text-muted hover:text-ink hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+                >
+                  {privacyMode ? <EyeOff size={16} strokeWidth={1.75} /> : <Eye size={16} strokeWidth={1.75} />}
+                </button>
+                <IconButton
+                  label="More options"
+                  variant="ghost"
+                  className="h-9 w-9 rounded-full border border-line text-muted hover:text-ink hover:border-slate-300 dark:hover:border-slate-600"
+                  onClick={handleExport}
+                  disabled={assets.length === 0}
+                >
+                  <MoreVertical size={16} strokeWidth={1.75} />
+                </IconButton>
+              </div>
+            </div>
+
+            <div className="my-4 sm:my-5 border-t border-dashed border-line" />
+
+            {/* Below lg: stacked rows, label left / value right. */}
+            <div className="lg:hidden space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[13px] sm:text-sm text-muted">1D returns</span>
+                {!totalsReady ? (
+                  <LoadingDots />
+                ) : (
+                  <span
+                    className={cn(
+                      'font-numeric text-sm sm:text-base font-semibold text-right',
+                      !has1dData ? 'text-ink' : total1dAbs >= 0 ? 'text-positive' : 'text-negative'
+                    )}
+                  >
+                    {!has1dData
+                      ? '—'
+                      : privacyMode
+                        ? '••••••'
+                        : `${formatSignedCurrency(total1dAbs, 'INR', 2)} (${formatPercentMagnitude(total1dPercent)})`}
                   </span>
-                }
-                className="h-full group-hover:border-slate-300 transition-colors"
-              />
-            </Link>
-          </div>
+                )}
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[13px] sm:text-sm text-muted">Total returns</span>
+                {!totalsReady ? (
+                  <LoadingDots />
+                ) : (
+                  <span
+                    className={cn(
+                      'font-numeric text-sm sm:text-base font-semibold text-right',
+                      totalPnl >= 0 ? 'text-positive' : 'text-negative'
+                    )}
+                  >
+                    {privacyMode
+                      ? '••••••'
+                      : `${formatSignedCurrency(totalPnl, 'INR', 2)} (${formatPercentMagnitude(totalPnlPercent)})`}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[13px] sm:text-sm text-muted">Invested</span>
+                {!totalsReady ? (
+                  <LoadingDots />
+                ) : (
+                  <span className="font-numeric text-sm sm:text-base font-semibold text-ink text-right">
+                    {maskAmount(totalInvested, 'INR', privacyMode, { fractionDigits: 2 })}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* lg and up: three columns — Invested value (left), 1D returns
+                (centre), Total returns (right) — label above value. */}
+            <div className="hidden lg:grid lg:grid-cols-3 lg:gap-6">
+              <div className="text-left">
+                <p className="text-sm text-muted">Invested value</p>
+                {!totalsReady ? (
+                  <LoadingDots className="mt-1.5" />
+                ) : (
+                  <p className="mt-1.5 font-numeric text-sm font-semibold text-ink">
+                    {maskAmount(totalInvested, 'INR', privacyMode, { fractionDigits: 2 })}
+                  </p>
+                )}
+              </div>
+              <div className="text-center">
+                <p className="text-sm text-muted">1D returns</p>
+                {!totalsReady ? (
+                  <LoadingDots className="mt-1.5 justify-center" />
+                ) : (
+                  <p
+                    className={cn(
+                      'mt-1.5 font-numeric text-sm font-semibold',
+                      !has1dData ? 'text-ink' : total1dAbs >= 0 ? 'text-positive' : 'text-negative'
+                    )}
+                  >
+                    {!has1dData
+                      ? '—'
+                      : privacyMode
+                        ? '••••••'
+                        : `${formatSignedCurrency(total1dAbs, 'INR', 2)} (${formatPercentMagnitude(total1dPercent)})`}
+                  </p>
+                )}
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-muted">Total returns</p>
+                {!totalsReady ? (
+                  <LoadingDots className="mt-1.5 justify-end" />
+                ) : (
+                  <p
+                    className={cn(
+                      'mt-1.5 font-numeric text-sm font-semibold',
+                      totalPnl >= 0 ? 'text-positive' : 'text-negative'
+                    )}
+                  >
+                    {privacyMode
+                      ? '••••••'
+                      : `${formatSignedCurrency(totalPnl, 'INR', 2)} (${formatPercentMagnitude(totalPnlPercent)})`}
+                  </p>
+                )}
+              </div>
+            </div>
+          </Card>
+          )}
+
 
           {/* Compact display toggle — cycles which figure is shown per row
               in the mobile list below (mirrors the three data columns of
