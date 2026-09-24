@@ -4814,6 +4814,17 @@ function AssetDetailsForm({
     if (!name.trim() && result.name) setName(result.name);
   };
 
+  // Lets someone dismiss the "no matches" / "search unreachable" dropdown
+  // and keep the ticker they already typed — e.g. a same-day IPO that
+  // hasn't been indexed by NSE/Yahoo yet. Without this, the dropdown just
+  // sits there looking stuck even though the typed value is already the
+  // real symbol being saved.
+  const useSymbolAsTyped = () => {
+    symbolTouched.current = false;
+    setSymbolSuggestions([]);
+    setSymbolSearchOpen(false);
+  };
+
   useEffect(() => {
     if (!isEquityLive) {
       setEquityLivePrice(null);
@@ -5366,16 +5377,25 @@ function AssetDetailsForm({
                 symbolSuggestions.length === 0 &&
                 symbol.trim() === symbolSearchedQuery &&
                 symbol.trim().length >= 3 && (
-                  <div className="absolute z-10 mt-1 w-full bg-surface border border-line rounded-lg shadow-lg px-3 py-2 text-sm">
+                  <div className="absolute z-10 mt-1 w-full bg-surface border border-line rounded-lg shadow-lg px-3 py-2 text-sm space-y-2">
                     {symbolSearchFailed ? (
-                      <span className="text-red-500">
+                      <span className="text-red-500 block">
                         Couldn't reach symbol search — check your connection, or enter the ticker directly.
                       </span>
                     ) : (
-                      <span className="text-slate-600">
-                        No matches for "{symbolSearchedQuery}". Try just the company name, e.g. "Google".
+                      <span className="text-slate-600 block">
+                        No matches for "{symbolSearchedQuery}". Try just the company name (e.g. "Google"), or it
+                        may be a very recent listing that hasn't been indexed yet.
                       </span>
                     )}
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={useSymbolAsTyped}
+                      className="text-brand-600 hover:text-brand-700 font-medium"
+                    >
+                      Use "{symbol.trim().toUpperCase()}" anyway
+                    </button>
                   </div>
                 )}
             </div>

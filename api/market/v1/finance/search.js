@@ -17,6 +17,17 @@ import { searchNseSymbol } from '../../../_lib/nse.js';
 // exchange) so the US suggestion list stays US-only.
 const US_EXCHANGES = new Set(['NMS', 'NYQ', 'NGM', 'NCM', 'ASE', 'PCX', 'BTS', 'PNK']);
 
+// Exchanges Yahoo tags Indian-listed equities/ETFs with (NSE and BSE),
+// kept as a secondary check. The primary, more reliable signal is the
+// symbol suffix Yahoo always puts on Indian listings (.NS for NSE, .BO
+// for BSE) — see isIndianSymbol below. Together these stop the Yahoo
+// fallback (used when NSE's own autocomplete is unreachable) from
+// surfacing unrelated foreign listings just because they share letters
+// with the query (e.g. searching "NSE" matching a Shenzhen/Hamburg/Paris
+// ticker).
+const IN_EXCHANGES = new Set(['NSI', 'BSE']);
+const isIndianSymbol = (symbol) => /\.(NS|BO)$/i.test(symbol ?? '');
+
 async function searchYahoo(q) {
   const upstream = await fetch(
     `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=8&newsCount=0`,
@@ -75,8 +86,14 @@ export default async function handler(req, res) {
 
   try {
     const quotes = (await searchYahoo(q)) ?? [];
+    const filtered = quotes.filter(
+      (r) =>
+        r.symbol &&
+        (r.quoteType === 'EQUITY' || r.quoteType === 'ETF') &&
+        (isIndianSymbol(r.symbol) || (r.exchange && IN_EXCHANGES.has(r.exchange)))
+    );
     res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=86400');
-    res.status(200).json({ quotes });
+    res.status(200).json({ quotes: filtered });
   } catch {
     res.status(502).json({ error: 'Could not reach NSE or Yahoo Finance' });
   }
