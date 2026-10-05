@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLivePricesStore, type SipLiveEntry } from '../store/livePricesStore';
 import { fetchFundNavHistory, computeSipLiveValue } from '../utils/mutualFunds';
@@ -21,7 +21,6 @@ export function useLiveSipValues() {
   const assets = useAssetsStore((s) => s.assets);
   const setSipValues = useLivePricesStore((s) => s.setSipValues);
   const setSipValuesAttempted = useLivePricesStore((s) => s.setSipValuesAttempted);
-  const fetching = useRef(false);
 
   const sipAssets = assets.filter(
     (a) => a.assetClass === 'sip' && a.symbol && /^\d+$/.test(a.symbol)
@@ -32,7 +31,7 @@ export function useLiveSipValues() {
   const lookupKey = sipAssets
     .map(
       (a) =>
-        `${a.symbol}|${a.sipAmount ?? ''}|${a.sipFrequency ?? ''}|${a.sipDay ?? ''}|${a.startDate ?? ''}|${a.investedValue ?? ''}|${a.sipPausedAt ?? ''}|${(a.sipPauseHistory ?? []).length}|${JSON.stringify(a.sipAmountSchedule ?? [])}|${JSON.stringify(a.sipTopUps ?? [])}`
+        `${a.symbol}|${a.sipAmount ?? ''}|${a.sipFrequency ?? ''}|${a.sipDay ?? ''}|${a.startDate ?? ''}|${a.investedValue ?? ''}|${a.sipPausedAt ?? ''}|${JSON.stringify(a.sipPauseHistory ?? [])}|${JSON.stringify(a.sipAmountSchedule ?? [])}|${JSON.stringify(a.sipTopUps ?? [])}`
     )
     .sort()
     .join(',');
@@ -40,36 +39,55 @@ export function useLiveSipValues() {
   useEffect(() => {
     if (!lookupKey) return;
 
+    // Each effect run owns its own `cancelled` flag + `running` guard.
+    // Previously one shared `fetching` ref was used: if a refresh was still
+    // in flight when the SIP changed (resume, Buy More, edit…), the refresh
+    // for the NEW data was skipped, and the old run then wrote values
+    // computed from the OLD data — so the screen kept showing pre-change
+    // numbers until the next poll. Now a changed SIP cancels the old run
+    // (its result is discarded) and immediately starts a fresh one.
+    let cancelled = false;
+    let running = false;
+
     const refresh = async () => {
-      if (fetching.current) return;
-      fetching.current = true;
+      if (running) return;
+      running = true;
       try {
+        // Read the latest assets at run time (not the render-time closure)
+        // so a poll tick never prices a SIP with stale fields.
+        const latest = useAssetsStore
+          .getState()
+          .assets.filter((a) => a.assetClass === 'sip' && a.symbol && /^\d+$/.test(a.symbol));
         const sipValues: Record<string, SipLiveEntry> = {};
         // Sequential with a small stagger — most of these resolve instantly
         // from the persisted cache anyway, but for the ones that do need a
         // real network call, firing them all at once is exactly the kind of
         // burst that trips a free API's rate limiting.
-        for (const asset of sipAssets) {
+        for (const asset of latest) {
+          if (cancelled) return;
           const installments = listSipInstallments(asset);
           if (installments.length === 0) continue;
           const nav = await fetchFundNavHistory(Number(asset.symbol), asset.startDate);
+          if (cancelled) return;
           if (!nav) continue;
           const { value, units } = computeSipLiveValue(installments, nav);
           sipValues[asset.symbol as string] = { value, units, latestNav: nav.latestNav };
           await new Promise((r) => setTimeout(r, 150));
         }
-        if (Object.keys(sipValues).length > 0) setSipValues(sipValues);
+        if (!cancelled && Object.keys(sipValues).length > 0) setSipValues(sipValues);
       } catch {
         // A failed refresh just leaves the last-known values in place.
       } finally {
-        fetching.current = false;
-        setSipValuesAttempted(true);
+        running = false;
+        if (!cancelled) setSipValuesAttempted(true);
       }
     };
 
     refresh();
     const id = setInterval(refresh, REFRESH_MS);
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, [lookupKey, setSipValues, setSipValuesAttempted]);
 }

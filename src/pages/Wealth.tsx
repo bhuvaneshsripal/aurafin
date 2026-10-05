@@ -845,12 +845,16 @@ function FilterDropdown({
   options,
   selected,
   onChange,
+  closeOnSelect = false,
 }: {
   label: string;
   placeholder: string;
   options: { value: string; label: string }[];
   selected: string[];
   onChange: (next: string[]) => void;
+  /** Close just this dropdown after an option is picked (the parent
+   *  filter sheet stays open). */
+  closeOnSelect?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useOutsideClose(() => setOpen(false));
@@ -858,6 +862,7 @@ function FilterDropdown({
   const toggleOption = (value: string) => {
     if (selected.includes(value)) onChange(selected.filter((v) => v !== value));
     else onChange([...selected, value]);
+    if (closeOnSelect) setOpen(false);
   };
 
   return (
@@ -1808,7 +1813,7 @@ function AssetsTab({
         </>
       )}
 
-      {filterSheetOpen && (
+      {filterSheetOpen && createPortal(
         <div
           className="animate-backdrop-in fixed inset-0 z-50 bg-slate-900/40 flex items-end sm:justify-center"
           onClick={() => setFilterSheetOpen(false)}
@@ -1831,6 +1836,7 @@ function AssetsTab({
             </div>
             <div className="px-5 pb-2 pt-3 space-y-4">
               <FilterDropdown
+                closeOnSelect
                 label="Category"
                 placeholder="Category"
                 options={categoryOptions}
@@ -1838,14 +1844,16 @@ function AssetsTab({
                 onChange={setSelectedCategories}
               />
               <FilterDropdown
+                closeOnSelect
                 label="Type"
                 placeholder="Type"
                 options={typeOptions}
                 selected={selectedTypes}
                 onChange={setSelectedTypes}
               />
-              <FilterDropdown label="Tags" placeholder="Tag" options={[]} selected={[]} onChange={() => {}} />
+              <FilterDropdown closeOnSelect label="Tags" placeholder="Tag" options={[]} selected={[]} onChange={() => {}} />
               <FilterDropdown
+                closeOnSelect
                 label="Currency"
                 placeholder="Currency"
                 options={currencyOptions}
@@ -1863,7 +1871,8 @@ function AssetsTab({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {filtered.length === 0 ? (
@@ -4689,6 +4698,18 @@ function AssetDetailsForm({
     setLiveValueError(false);
   };
 
+  // Pause/resume cycles, one-time top-ups and installment step-ups are managed
+  // from the detail screen's quick actions, not this form — but they still
+  // drive invested/Current Value, so every calculation below must include
+  // them. Without these, saving the form recomputed Current Value as if the
+  // SIP had never been paused/topped up and wrote that stale number back.
+  const sipExtras = {
+    sipPausedAt: initial?.sipPausedAt,
+    sipPauseHistory: initial?.sipPauseHistory,
+    sipAmountSchedule: initial?.sipAmountSchedule,
+    sipTopUps: initial?.sipTopUps,
+  };
+
   // Auto-calculate Current Value for SIPs: buy units at the NAV in effect
   // on each installment date, then price the total at the latest NAV. Falls
   // back to "invested so far" when no fund is linked yet or the fetch fails,
@@ -4714,9 +4735,10 @@ function AssetDetailsForm({
               sipAmount: amount,
               sipFrequency,
               sipDay: sipDay ? Number(sipDay) : undefined,
+              ...sipExtras,
               updatedAt: 0,
             }).totalInvested
-          : invested;
+          : invested + (sipExtras.sipTopUps ?? []).reduce((t, x) => t + (x.amount || 0), 0);
       setValue(elapsed ? String(elapsed) : '');
       return;
     }
@@ -4727,6 +4749,7 @@ function AssetDetailsForm({
       sipFrequency,
       sipDay: sipDay ? Number(sipDay) : undefined,
       investedValue: investedValue ? Number(investedValue) : undefined,
+      ...sipExtras,
     });
     if (installments.length === 0) {
       setValue(investedValue || '');
@@ -4901,6 +4924,7 @@ function AssetDetailsForm({
         sipAmount: sipAmount ? Number(sipAmount) : undefined,
         sipFrequency,
         sipDay: sipDay ? Number(sipDay) : undefined,
+        ...sipExtras,
         updatedAt: 0,
       })
     : undefined;
@@ -4941,6 +4965,7 @@ function AssetDetailsForm({
       : qty && avg && qty > 0 && avg > 0
         ? qty * avg
         : undefined;
+    const costBasis = sipProgress && sipProgress.totalInvested > 0 ? sipProgress.totalInvested : invested;
 
     onSave({
       id: initial?.id ?? crypto.randomUUID(),
@@ -4953,10 +4978,13 @@ function AssetDetailsForm({
       quantity: qty,
       avgCost: avg,
       investedValue: invested,
-      pnl: invested !== undefined ? Number(value) - invested : undefined,
+      // For a SIP, cost basis is the lump sum + every installment + top-ups
+      // (investedValue itself stays as just the initial lump sum, since the
+      // SIP math adds the rest on top of it).
+      pnl: costBasis !== undefined ? Number(value) - costBasis : undefined,
       pnlPercent:
-        invested !== undefined && invested > 0
-          ? ((Number(value) - invested) / invested) * 100
+        costBasis !== undefined && costBasis > 0
+          ? ((Number(value) - costBasis) / costBasis) * 100
           : undefined,
       institution: institution.trim() || undefined,
       geography: (geography || undefined) as Asset['geography'],
@@ -6615,7 +6643,16 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   const wealthDataKnown =
     assets.length > 0 || liabilities.length > 0 || (assetsServerConfirmed && liabilitiesServerConfirmed);
 
-  const totalAssets = assets.reduce((s, a) => s + a.value, 0);
+  // Use the live-resolved value (same as Dashboard / the holdings list), not
+  // the stored `asset.value` — which only changes on a full edit-and-save, so
+  // Buy More / Resume SIP wouldn't show up here.
+  const livePrices = useLivePricesStore((s) => s.prices);
+  const sipValues = useLivePricesStore((s) => s.sipValues);
+  const liveGoldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
+  const totalAssets = assets.reduce(
+    (s, a) => s + resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).value,
+    0
+  );
   const totalLiabilities = liabilities.reduce((s, l) => s + l.outstanding, 0);
   const netWorth = totalAssets - totalLiabilities;
 
@@ -6953,10 +6990,14 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
 
 function AllocationTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   const assets = useAssetsStore((s) => s.assets);
+  const livePrices = useLivePricesStore((s) => s.prices);
+  const sipValues = useLivePricesStore((s) => s.sipValues);
+  const liveGoldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
   const byClass: Record<string, number> = {};
   assets.forEach((a) => {
     if (a.excludeFromAllocation) return;
-    byClass[a.assetClass] = (byClass[a.assetClass] ?? 0) + a.value;
+    const { value } = resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram);
+    byClass[a.assetClass] = (byClass[a.assetClass] ?? 0) + value;
   });
   const data = Object.entries(byClass).map(([key, value]) => ({
     name: ASSET_CLASS_LABELS[key] ?? key,

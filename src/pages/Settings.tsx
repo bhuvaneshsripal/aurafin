@@ -8,7 +8,7 @@ import {
   sendPasswordResetEmail,
   EmailAuthProvider,
 } from 'firebase/auth';
-import { Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, X, Download, Upload, Mail, Bell } from 'lucide-react';
+import { RefreshCw, Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, X, Download, Upload, Mail, Bell } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
 import { useAppLockStore } from '../store/appLockStore';
@@ -40,6 +40,7 @@ import { useHouseholdProfilesStore, PROFILE_COLOURS } from '../store/householdPr
 import { useInstallPromptStore, triggerInstallPrompt } from '../store/installPromptStore';
 import type { HouseholdProfile } from '../types';
 import Modal from '../components/Modal';
+import { hardRefresh } from '../utils/hardRefresh';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useUrlTab } from '../hooks/useUrlTab';
 import CustomSelect from '../components/CustomSelect';
@@ -1088,8 +1089,29 @@ function NotificationsCard() {
 
 function PreferencesTab() {
   const [baseCurrency, setBaseCurrency] = useState('INR');
+  const [refreshing, setRefreshing] = useState(false);
   return (
     <>
+      <Card>
+        <h2 className="text-sm font-semibold text-ink mb-1">Refresh app</h2>
+        <p className="text-xs text-muted mb-4">
+          Seeing old values or an outdated version? Hard refresh clears the app's cached files and
+          saved prices, then reloads with the latest data. Your account and data are not affected.
+        </p>
+        <button
+          type="button"
+          disabled={refreshing}
+          onClick={() => {
+            setRefreshing(true);
+            void hardRefresh();
+          }}
+          className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white px-4 py-2 rounded-lg text-sm font-medium"
+        >
+          <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+          {refreshing ? 'Refreshing…' : 'Hard refresh'}
+        </button>
+      </Card>
+
       <Card>
         <div className="flex items-center gap-2 mb-1">
           <h2 className="text-sm font-semibold text-ink">Base Currency</h2>

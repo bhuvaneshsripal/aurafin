@@ -65,7 +65,8 @@ export function resolveAssetValues(
     (asset.quantity && asset.quantity > 0 ? asset.value / asset.quantity : undefined);
 
   const invested =
-    asset.assetClass === 'sip' && asset.sipAmount && asset.sipAmount > 0 && asset.startDate
+    asset.assetClass === 'sip' &&
+    ((asset.sipAmount && asset.sipAmount > 0 && asset.startDate) || (asset.sipTopUps?.length ?? 0) > 0)
       ? computeSipProgress(asset).totalInvested
       : (depositProgress?.invested ??
         asset.investedValue ??
@@ -233,6 +234,11 @@ export interface SipProgress {
 interface PauseRange {
   start: number;
   end: number;
+  /** Closed (already-resumed) windows are half-open [start, end): the
+   *  resume date is the day investing started again, so an installment
+   *  falling exactly on it must count. The currently-open pause runs
+   *  through `asOf`, inclusive. */
+  endInclusive: boolean;
 }
 
 /** Builds every paused window for a SIP: closed cycles from
@@ -245,16 +251,20 @@ function buildSipPauseRanges(
 ): PauseRange[] {
   const ranges: PauseRange[] = (sipPauseHistory ?? [])
     .filter((h) => h.pausedAt && h.resumedAt)
-    .map((h) => ({ start: new Date(h.pausedAt).getTime(), end: new Date(h.resumedAt).getTime() }));
+    .map((h) => ({
+      start: new Date(h.pausedAt).getTime(),
+      end: new Date(h.resumedAt).getTime(),
+      endInclusive: false,
+    }));
   if (sipPausedAt) {
-    ranges.push({ start: new Date(sipPausedAt).getTime(), end: asOf.getTime() });
+    ranges.push({ start: new Date(sipPausedAt).getTime(), end: asOf.getTime(), endInclusive: true });
   }
   return ranges;
 }
 
 function isWithinPauseRanges(isoDate: string, ranges: PauseRange[]): boolean {
   const t = new Date(isoDate).getTime();
-  return ranges.some((r) => t >= r.start && t <= r.end);
+  return ranges.some((r) => t >= r.start && (r.endInclusive ? t <= r.end : t < r.end));
 }
 
 /**
@@ -388,9 +398,25 @@ export function listSipInstallments(
     sipAmountSchedule,
     sipTopUps,
   } = asset;
-  if (!startDate || !sipAmount || sipAmount <= 0) return [];
-
   const points: SipInstallmentPoint[] = [];
+  const addTopUps = () => {
+    for (const t of sipTopUps ?? []) {
+      if (t.date && t.amount > 0) points.push({ date: t.date, amount: t.amount });
+    }
+    points.sort((a, b) => a.date.localeCompare(b.date));
+  };
+
+  // No regular schedule (or no start date) — one-time top-ups are still real
+  // purchases and must still be valued, otherwise "Buy More" silently does
+  // nothing to Current Value.
+  if (!startDate || !sipAmount || sipAmount <= 0) {
+    if (startDate && investedValue && investedValue > 0) {
+      points.push({ date: startDate, amount: investedValue });
+    }
+    addTopUps();
+    return points;
+  }
+
   if (investedValue && investedValue > 0) {
     points.push({ date: startDate, amount: investedValue });
   }
@@ -413,10 +439,6 @@ export function listSipInstallments(
     candidate = shiftMonths(candidate.getFullYear(), candidate.getMonth(), day, step);
   }
 
-  for (const t of sipTopUps ?? []) {
-    if (t.date && t.amount > 0) points.push({ date: t.date, amount: t.amount });
-  }
-
-  points.sort((a, b) => a.date.localeCompare(b.date));
+  addTopUps();
   return points;
 }
