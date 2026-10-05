@@ -1,7 +1,8 @@
-import { useEffect, Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 import { useAssetsStore } from './store/assetsStore';
+import { useLivePricesStore } from './store/livePricesStore';
 import { useLiabilitiesStore } from './store/liabilitiesStore';
 import { useGoalsStore } from './store/goalsStore';
 import { useTransactionsStore } from './store/transactionsStore';
@@ -228,7 +229,7 @@ function DataSync() {
       setTransactionsSynced(false);
       setGoalsSynced(false);
       forceMarkAllLoaded(ALL_USER_COLLECTIONS);
-    }, 2000);
+    }, 8000);
     return () => clearTimeout(timer);
   }, [setAssetsSynced, setLiabilitiesSynced, setTransactionsSynced, setGoalsSynced, forceMarkAllLoaded]);
 
@@ -264,10 +265,33 @@ function DataSync() {
 function AppReady({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const needsOnboarding = useAuthStore((s) => s.needsOnboarding);
-  const loadedCollections = useSyncStatusStore((s) => s.loadedCollections);
-  const initialDataLoaded = ALL_USER_COLLECTIONS.every((c) => loadedCollections[c]);
+  const confirmed = useSyncStatusStore((s) => s.serverConfirmedCollections);
+  const assets = useAssetsStore((s) => s.assets);
+  const pricesAttempted = useLivePricesStore((s) => s.pricesAttempted);
+  const sipValuesAttempted = useLivePricesStore((s) => s.sipValuesAttempted);
+  const goldAttempted = useLivePricesStore((s) => s.goldAttempted);
+  const [timedOut, setTimedOut] = useState(false);
 
-  if (!needsOnboarding && !initialDataLoaded && location.pathname !== '/import') {
+  // Safety net (offline / very slow network): after 8s show whatever we have
+  // rather than a blank screen forever.
+  useEffect(() => {
+    const t = setTimeout(() => setTimedOut(true), 8000);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Every collection must be confirmed by the SERVER (not just the local
+  // cache), so no stale/wrong number is ever painted and then corrected.
+  const serverDataReady = ALL_USER_COLLECTIONS.every((c) => confirmed[c]);
+
+  const hasEquity = assets.some((a) => a.symbol && a.quantity && a.quantity > 0);
+  const hasSip = assets.some((a) => a.assetClass === 'sip' && a.symbol && /^\d+$/.test(a.symbol));
+  const hasGold = assets.some((a) => a.assetClass === 'gold');
+  const liveReady =
+    (!hasEquity || pricesAttempted) && (!hasSip || sipValuesAttempted) && (!hasGold || goldAttempted);
+
+  const ready = serverDataReady && liveReady;
+
+  if (!needsOnboarding && !ready && !timedOut && location.pathname !== '/import') {
     return null;
   }
   return <>{children}</>;

@@ -2,8 +2,12 @@ import { useEffect, useRef } from 'react';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLivePricesStore } from '../store/livePricesStore';
 import { fetchLiveQuotes, type PriceLookup } from '../utils/marketPrices';
+import { isMarketOpen } from '../utils/marketHours';
 
-const REFRESH_MS = 10_000;
+/** Poll every second while the market is open (and the tab is visible);
+ *  prices can't change outside trading hours, so back off to once a minute. */
+const LIVE_REFRESH_MS = 1_000;
+const IDLE_REFRESH_MS = 60_000;
 
 /**
  * Polls Yahoo Finance for equity holdings with a symbol + quantity.
@@ -58,9 +62,29 @@ export function useLivePrices() {
       }
     };
 
-    refresh();
-    const id = setInterval(refresh, REFRESH_MS);
-    return () => clearInterval(id);
+    // Chained setTimeout (not setInterval): the next poll is scheduled only
+    // after the previous one finishes, so slow responses never pile up.
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const loop = async () => {
+      if (stopped) return;
+      if (!document.hidden) await refresh();
+      if (stopped) return;
+      timer = setTimeout(loop, isMarketOpen() ? LIVE_REFRESH_MS : IDLE_REFRESH_MS);
+    };
+    const onVisible = () => {
+      if (!document.hidden) {
+        clearTimeout(timer);
+        loop();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    loop();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lookupKey, setPrices, setPreviousCloses, setLoading, setPricesAttempted]);
 }

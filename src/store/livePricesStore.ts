@@ -31,6 +31,9 @@ interface LivePricesState {
   pricesAttempted: boolean;
   /** Same idea as `pricesAttempted`, for linked-SIP NAV values. */
   sipValuesAttempted: boolean;
+  /** True once the first live gold-rate fetch finished (success or failure) this session. */
+  goldAttempted: boolean;
+  setGoldAttempted: (attempted: boolean) => void;
   setPrices: (prices: Record<string, number>) => void;
   setPreviousCloses: (previousCloses: Record<string, number>) => void;
   setSipValues: (sipValues: Record<string, SipLiveEntry>) => void;
@@ -58,6 +61,8 @@ export const useLivePricesStore = create<LivePricesState>()(
       loading: false,
       pricesAttempted: false,
       sipValuesAttempted: false,
+      goldAttempted: false,
+      setGoldAttempted: (goldAttempted) => set({ goldAttempted }),
       setPrices: (prices) => set({ prices, lastUpdated: Date.now(), loading: false }),
       setPreviousCloses: (previousCloses) =>
         set((s) => ({ previousCloses: { ...s.previousCloses, ...previousCloses } })),

@@ -57,7 +57,7 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
   // Dashboard.tsx — otherwise Net balance briefly flashes ₹0 while
   // assets/liabilities are still loading.
   const accountsDataKnown =
-    assets.length > 0 || liabilities.length > 0 || (assetsServerConfirmed && liabilitiesServerConfirmed);
+    assetsServerConfirmed && liabilitiesServerConfirmed;
 
   const assetAccounts: AccountRow[] = assets
     .filter((a) => a.assetClass === 'cash')

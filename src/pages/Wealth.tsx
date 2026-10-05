@@ -1721,7 +1721,7 @@ function AssetsTab({
         meta={
           <p className="flex items-center gap-1.5 text-xs text-muted">
             <span className="h-1.5 w-1.5 rounded-full bg-brand-500 animate-pulse" />
-            Live prices update every 60 seconds
+            Live prices update every second during market hours
           </p>
         }
         actions={

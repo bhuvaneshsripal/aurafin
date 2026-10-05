@@ -34,6 +34,9 @@ interface SyncStatusState {
   transactionsServerConfirmed: boolean;
   goalsServerConfirmed: boolean;
   loadedCollections: Record<string, boolean>;
+  /** Collections whose data has been confirmed by the server (not cache). */
+  serverConfirmedCollections: Record<string, boolean>;
+  markCollectionServerConfirmed: (collectionName: string) => void;
   setAssetsSynced: (fromCache: boolean) => void;
   setLiabilitiesSynced: (fromCache: boolean) => void;
   setTransactionsSynced: (fromCache: boolean) => void;
@@ -59,6 +62,13 @@ export const useSyncStatusStore = create<SyncStatusState>((set) => ({
   transactionsServerConfirmed: false,
   goalsServerConfirmed: false,
   loadedCollections: {},
+  serverConfirmedCollections: {},
+  markCollectionServerConfirmed: (collectionName) =>
+    set((s) =>
+      s.serverConfirmedCollections[collectionName]
+        ? s
+        : { serverConfirmedCollections: { ...s.serverConfirmedCollections, [collectionName]: true } }
+    ),
   setAssetsSynced: (fromCache) =>
     set((s) => ({ assetsServerConfirmed: s.assetsServerConfirmed || !fromCache })),
   setLiabilitiesSynced: (fromCache) =>
@@ -79,6 +89,10 @@ export const useSyncStatusStore = create<SyncStatusState>((set) => ({
         ...s.loadedCollections,
         ...Object.fromEntries(collectionNames.map((c) => [c, true])),
       },
+      serverConfirmedCollections: {
+        ...s.serverConfirmedCollections,
+        ...Object.fromEntries(collectionNames.map((c) => [c, true])),
+      },
     })),
   reset: () =>
     set({
@@ -87,5 +101,6 @@ export const useSyncStatusStore = create<SyncStatusState>((set) => ({
       transactionsServerConfirmed: false,
       goalsServerConfirmed: false,
       loadedCollections: {},
+      serverConfirmedCollections: {},
     }),
 }));

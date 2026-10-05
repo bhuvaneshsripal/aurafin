@@ -73,7 +73,7 @@ function HealthCheck() {
   // etc.) off a temporarily-empty assets/liabilities list can flash a
   // scarier-than-real "Critical" status for a moment on a slow connection.
   const wealthDataKnown =
-    assets.length > 0 || liabilities.length > 0 || (assetsServerConfirmed && liabilitiesServerConfirmed);
+    assetsServerConfirmed && liabilitiesServerConfirmed;
 
   const [age, setAge] = useState('');
   const [income, setIncome] = useState('');
@@ -569,7 +569,7 @@ function GoalsTab() {
   const assetsServerConfirmed = useSyncStatusStore((s) => s.assetsServerConfirmed);
   const liabilitiesServerConfirmed = useSyncStatusStore((s) => s.liabilitiesServerConfirmed);
   const wealthDataKnown =
-    allAssets.length > 0 || allLiabilities.length > 0 || (assetsServerConfirmed && liabilitiesServerConfirmed);
+    assetsServerConfirmed && liabilitiesServerConfirmed;
 
   const handleDelete = async (id: string) => {
     if (!user) return;

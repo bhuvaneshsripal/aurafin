@@ -19,6 +19,7 @@ export function useLiveGoldPrice() {
   const setGoldPrice = useLivePricesStore((s) => s.setGoldPrice);
   const setGoldPriceLoading = useLivePricesStore((s) => s.setGoldPriceLoading);
   const setGoldPriceError = useLivePricesStore((s) => s.setGoldPriceError);
+  const setGoldAttempted = useLivePricesStore((s) => s.setGoldAttempted);
   // Calibration % (import duty + GST + dealer margin) applied on top of the
   // raw global-spot-derived rate — see goldSettingsStore.ts. Applying it once
   // here, before it ever hits the store, means every screen that reads
@@ -40,10 +41,11 @@ export function useLiveGoldPrice() {
         setGoldPriceLoading(false);
       }
       fetching.current = false;
+      setGoldAttempted(true);
     };
 
     refresh();
     const id = setInterval(refresh, REFRESH_MS);
     return () => clearInterval(id);
-  }, [setGoldPrice, setGoldPriceLoading, setGoldPriceError, premiumPercent]);
+  }, [setGoldPrice, setGoldPriceLoading, setGoldPriceError, setGoldAttempted, premiumPercent]);
 }

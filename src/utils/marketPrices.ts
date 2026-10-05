@@ -168,7 +168,7 @@ export async function fetchLiveQuotes(lookups: PriceLookup[]): Promise<Map<strin
   const entries = [...unique.values()];
 
   // Yahoo has no batch endpoint — fetch in small parallel groups.
-  const batchSize = 5;
+  const batchSize = 10;
   for (let i = 0; i < entries.length; i += batchSize) {
     const batch = entries.slice(i, i + batchSize);
     await Promise.all(

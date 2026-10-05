@@ -38,7 +38,7 @@ export default function TransactionsTab() {
   // Same "already known, or server-confirmed empty" reasoning as
   // Dashboard.tsx — otherwise this briefly flashes "0 in · 0 out" while
   // transactions are still loading, most visible on a slower connection.
-  const cashflowDataKnown = allTransactions.length > 0 || transactionsServerConfirmed;
+  const cashflowDataKnown = transactionsServerConfirmed;
   const transactions = activeProfileId
     ? allTransactions.filter((t) => t.profileId === activeProfileId)
     : allTransactions;

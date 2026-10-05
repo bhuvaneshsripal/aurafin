@@ -29,7 +29,7 @@ export default function InsightsTab() {
   // Same "already known, or server-confirmed empty" reasoning as
   // Dashboard.tsx — otherwise Income/Spent briefly flash ₹0 while
   // transactions are still loading.
-  const cashflowDataKnown = transactions.length > 0 || transactionsServerConfirmed;
+  const cashflowDataKnown = transactionsServerConfirmed;
   const [month, setMonth] = useState(() => toIsoMonth());
 
   const monthTx = transactions.filter((t) => t.date.startsWith(month));

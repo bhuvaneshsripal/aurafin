@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { ChevronDown } from 'lucide-react';
 import Card from './Card';
 import LoadingDots from '../LoadingDots';
 import { cn } from './cn';
@@ -15,17 +16,33 @@ export interface StatCardProps {
   loading?: boolean;
   /** Phones: smaller padding/value and no sublabel, so a strip of KPIs stays short. */
   dense?: boolean;
+  /** When set, a small arrow next to the label calls this on click. The
+   *  parent swaps the card's values in place (no separate panel). */
+  onToggle?: () => void;
+  /** Arrow state for `onToggle` (points up when true). */
+  toggled?: boolean;
   className?: string;
 }
 
 const tones = { default: 'text-ink', positive: 'text-positive', negative: 'text-negative' };
 
 /** KPI tile. Values are never truncated — long ₹ figures wrap instead of being cut off. */
-export default function StatCard({ label, value, tone = 'default', delta, sublabel, icon, loading, dense, className }: StatCardProps) {
+export default function StatCard({ label, value, tone = 'default', delta, sublabel, icon, loading, dense, onToggle, toggled, className }: StatCardProps) {
   return (
     <Card padding="md" className={cn(dense && '!p-3 sm:!p-5', className)}>
       <div className="flex items-center justify-between gap-2">
         <span className="text-[13px] font-medium text-muted">{label}</span>
+        {onToggle && (
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-pressed={!!toggled}
+            aria-label={toggled ? 'Show current values' : 'Include sold investments'}
+            className="ml-auto -mr-1 p-1 rounded-md text-faint hover:text-ink hover:bg-surface-hover transition-colors"
+          >
+            <ChevronDown size={16} className={cn('transition-transform', toggled && 'rotate-180')} />
+          </button>
+        )}
         {icon && <span className="text-faint shrink-0">{icon}</span>}
       </div>
       <div className="mt-2 min-h-[28px] flex items-baseline gap-2">

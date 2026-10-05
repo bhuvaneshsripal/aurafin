@@ -91,6 +91,7 @@ export function useFirestoreCollectionSync<T extends { id: string }>(
 ) {
   const user = useAuthStore((s) => s.user);
   const markCollectionLoaded = useSyncStatusStore((s) => s.markCollectionLoaded);
+  const markCollectionServerConfirmed = useSyncStatusStore((s) => s.markCollectionServerConfirmed);
 
   // Depend on `uid`/`anonymous` rather than the `user` object itself.
   // Firebase can hand `onAuthStateChanged` a fresh User object for the same
@@ -114,6 +115,7 @@ export function useFirestoreCollectionSync<T extends { id: string }>(
       setLocal(items);
       onSyncChange?.(false);
       markCollectionLoaded(collectionName);
+      markCollectionServerConfirmed(collectionName);
       return;
     }
 
@@ -124,9 +126,12 @@ export function useFirestoreCollectionSync<T extends { id: string }>(
       setLocal(items);
       onSyncChange?.(snap.metadata.fromCache);
       markCollectionLoaded(collectionName);
+      // Only the server's answer counts as "correct" — a cache-only snapshot
+      // may be stale right after a refresh.
+      if (!snap.metadata.fromCache) markCollectionServerConfirmed(collectionName);
     });
     return () => unsub();
-  }, [uid, anonymous, collectionName, setLocal, onSyncChange, markCollectionLoaded]);
+  }, [uid, anonymous, collectionName, setLocal, onSyncChange, markCollectionLoaded, markCollectionServerConfirmed]);
 }
 
 /** Merges `incoming` on top of `existing`, but treats any key in `incoming`

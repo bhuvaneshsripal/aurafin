@@ -1,56 +1,6 @@
-// Live equity price endpoint. Tries NSE India's own API first (more
-// reliable for NSE-listed stocks, no API key needed), and falls back
-// to Yahoo Finance's chart endpoint if NSE fails (rate-limited,
-// blocked, or the symbol isn't NSE-listed, e.g. BSE-only tickers).
-//
-// Response shape is normalized to { symbol, price, currency, source }
-// regardless of which upstream answered, so the frontend never needs
-// to know which one it was.
-import { fetchNseQuote } from '../../_lib/nse.js';
-
-// US tickers (AAPL, TSLA, GOOGL, ...) are used as-is on Yahoo — no
-// exchange suffix needed, unlike NSE/BSE symbols which need .NS/.BO.
-async function fetchYahooQuote(yahooSymbol) {
-  const upstream = await fetch(
-    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=1d`,
-    { headers: { 'User-Agent': 'Mozilla/5.0' } }
-  );
-  if (!upstream.ok) return null;
-  const data = await upstream.json();
-  const meta = data?.chart?.result?.[0]?.meta;
-  const price = meta?.regularMarketPrice ?? meta?.previousClose;
-  if (typeof price !== 'number' || !Number.isFinite(price)) return null;
-  const previousClose = meta?.previousClose ?? meta?.chartPreviousClose;
-  return {
-    price,
-    currency: meta?.currency,
-    previousClose: typeof previousClose === 'number' && Number.isFinite(previousClose) ? previousClose : undefined,
-  };
-}
-
-// Was: always forced ".NS" onto Indian symbols before asking Yahoo, so a
-// BSE-only stock (no NSE listing) either came back empty — silently
-// dropping that holding out of every portfolio total, including 1D
-// returns — or, worse, coincidentally matched an unrelated NSE symbol and
-// returned a wrong price/previousClose for it. Now: try NSE first (the
-// common case), and if that doesn't yield a usable quote, retry the same
-// bare symbol suffixed ".BO" before giving up.
-async function fetchYahooFallback(rawSymbol, market) {
-  if (market === 'US') {
-    const quote = await fetchYahooQuote(rawSymbol);
-    return quote ? { ...quote, currency: quote.currency ?? 'USD' } : null;
-  }
-
-  const bare = rawSymbol.replace(/\.(NS|BO)$/i, '');
-  const alreadySuffixed = /\.(NS|BO)$/i.test(rawSymbol);
-
-  const candidates = alreadySuffixed ? [rawSymbol] : [`${bare}.NS`, `${bare}.BO`];
-  for (const candidate of candidates) {
-    const quote = await fetchYahooQuote(candidate);
-    if (quote) return { ...quote, currency: quote.currency ?? 'INR' };
-  }
-  return null;
-}
+// Live equity price endpoint. All routing logic (NSE / BSE / Yahoo / US)
+// lives in api/_lib/quote.js, shared with the Vite dev middleware.
+import { resolveQuote } from '../../_lib/quote.js';
 
 export default async function handler(req, res) {
   const symbol = String(req.query.symbol ?? '').trim().toUpperCase();
@@ -58,49 +8,23 @@ export default async function handler(req, res) {
     res.status(400).json({ error: 'Missing symbol' });
     return;
   }
-
-  // 'IN' (default) = NSE, falling back to BSE/Yahoo. 'US' = skip NSE
-  // entirely and go straight to the US market via Yahoo, since a US
-  // ticker like AAPL isn't an NSE symbol and would just fail there (or
-  // worse, coincidentally collide with an unrelated NSE symbol).
   const market = String(req.query.market ?? 'IN').trim().toUpperCase() === 'US' ? 'US' : 'IN';
 
-  // Symbol may arrive with a Yahoo-style suffix (.NS/.BO) from older
-  // cached data — NSE's API wants the bare symbol.
-  const bareSymbol = symbol.replace(/\.(NS|BO)$/i, '');
-
-  if (market === 'IN') {
-    try {
-      const quote = await fetchNseQuote(bareSymbol);
-      res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60');
-      res.status(200).json({
-        symbol: bareSymbol,
-        price: quote.price,
-        previousClose: quote.previousClose,
-        currency: quote.currency,
-        source: 'nse',
-      });
-      return;
-    } catch {
-      // fall through to Yahoo below
-    }
-  }
-
   try {
-    const quote = await fetchYahooFallback(symbol, market);
+    const quote = await resolveQuote(symbol, market);
     if (!quote) {
-      res
-        .status(502)
-        .json({ error: `Could not get a live price from ${market === 'US' ? 'the US market' : 'NSE or Yahoo'}` });
+      res.status(502).json({ error: `Could not get a live price for ${symbol}` });
       return;
     }
-    res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60');
+    // 1s edge cache: every viewer polling each second shares one upstream
+    // call per symbol instead of hammering NSE/BSE/Yahoo.
+    res.setHeader('Cache-Control', 's-maxage=1, stale-while-revalidate=2');
     res.status(200).json({
-      symbol: bareSymbol,
+      symbol: symbol.replace(/\.(NS|BO)$/i, ''),
       price: quote.price,
       previousClose: quote.previousClose,
       currency: quote.currency,
-      source: 'yahoo',
+      source: quote.source,
     });
   } catch {
     res.status(502).json({ error: 'Could not reach the live price source' });

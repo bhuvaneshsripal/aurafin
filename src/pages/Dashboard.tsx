@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { isFullySold, computeHoldingPnl, isInvestmentHolding } from '../utils/investmentPnl';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, FileText, Wallet, Receipt, Target, TrendingUp } from 'lucide-react';
 import {
@@ -101,25 +102,27 @@ export default function Dashboard() {
   // corrects it silently if anything actually changed.
   const liveEquityAssets = allAssets.filter((a) => a.symbol && a.quantity && a.quantity > 0);
   const hasLivePriced = liveEquityAssets.length > 0;
-  const pricesCached =
-    hasLivePriced && liveEquityAssets.every((a) => livePrices[a.symbol!.toUpperCase()] !== undefined);
   const sipLinkedAssets = allAssets.filter(
     (a) => a.assetClass === 'sip' && a.symbol && /^\d+$/.test(a.symbol)
   );
   const hasSipLinked = sipLinkedAssets.length > 0;
-  const sipCached = hasSipLinked && sipLinkedAssets.every((a) => sipValues[a.symbol!.trim()] !== undefined);
   const netWorthReady =
     assetsServerConfirmed &&
     liabilitiesServerConfirmed &&
-    (!hasLivePriced || pricesAttempted || pricesCached) &&
-    (!hasSipLinked || sipValuesAttempted || sipCached);
+    (!hasLivePriced || pricesAttempted) &&
+    (!hasSipLinked || sipValuesAttempted);
 
   const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
 
   // "All / Household" (activeProfileId === null) shows everything, unfiltered —
   // this keeps single-profile accounts working exactly as before. Switching to
   // a specific member only shows what's tagged to them.
-  const assets = activeProfileId ? allAssets.filter((a) => a.profileId === activeProfileId) : allAssets;
+  // Fully sold-out holdings are no longer part of the portfolio (the Wealth
+  // page hides them too), so they must not count toward Net worth /
+  // Profit-loss here — otherwise the Dashboard disagrees with Wealth.
+  const assets = (activeProfileId ? allAssets.filter((a) => a.profileId === activeProfileId) : allAssets).filter(
+    (a) => !isFullySold(a)
+  );
   const liabilities = activeProfileId
     ? allLiabilities.filter((l) => l.profileId === activeProfileId)
     : allLiabilities;
@@ -139,8 +142,32 @@ export default function Dashboard() {
     (s, a) => s + (resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).invested ?? a.value),
     0
   );
-  const netWorthPnl = totalAssets - investedAssetsTotal;
-  const netWorthPnlPercent = investedAssetsTotal > 0 ? (netWorthPnl / investedAssetsTotal) * 100 : 0;
+  // Lifetime view (revealed by the arrow on the Net worth card): money
+  // already taken out by selling — fully or partly — and the entire amount
+  // ever invested, i.e. what's still invested plus the cost of what was sold.
+  const profileAssets = activeProfileId ? allAssets.filter((a) => a.profileId === activeProfileId) : allAssets;
+  let soldAmount = 0;
+  let costOfSold = 0;
+  let realizedPnl = 0;
+  for (const a of profileAssets) {
+    if (!isInvestmentHolding(a)) continue;
+    const r = resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram);
+    const h = computeHoldingPnl(a, r.currentPrice, r.isLive);
+    soldAmount += h.totalSaleProceeds;
+    costOfSold += h.totalCostOfSold;
+    realizedPnl += h.realizedPnl;
+  }
+  const entireInvested = investedAssetsTotal + costOfSold;
+  // Arrow on the Net worth card flips the strip to a lifetime view in place:
+  // Total invested becomes the entire amount ever invested (incl. sold), and
+  // Profit / loss becomes total return (unrealised + realised) on that.
+  const [includeSold, setIncludeSold] = useState(false);
+  const investedShown = includeSold ? entireInvested : investedAssetsTotal;
+  // Lifetime net worth = what you hold now plus the proceeds already taken out
+  // by selling, so Net worth − Total invested always equals Profit / loss.
+  const netWorthShown = includeSold ? netWorth + soldAmount : netWorth;
+  const netWorthPnl = totalAssets - investedAssetsTotal + (includeSold ? realizedPnl : 0);
+  const netWorthPnlPercent = investedShown > 0 ? (netWorthPnl / investedShown) * 100 : 0;
 
   const thisMonth = toIsoMonth();
   const monthIncome = transactions
@@ -160,15 +187,16 @@ export default function Dashboard() {
   // rather than "haven't loaded yet". That distinction matters most on a
   // slow mobile connection, where the loading window is long enough to see.
   const wealthDataKnown =
-    allAssets.length > 0 || allLiabilities.length > 0 || (assetsServerConfirmed && liabilitiesServerConfirmed);
-  const cashflowDataKnown = allTransactions.length > 0 || transactionsServerConfirmed;
-  const goalsDataKnown = allGoals.length > 0 || goalsServerConfirmed;
+    assetsServerConfirmed && liabilitiesServerConfirmed;
+  const cashflowDataKnown = transactionsServerConfirmed;
+  const goalsDataKnown = goalsServerConfirmed;
   const hasWealth = assets.length > 0 || liabilities.length > 0;
 
 
   // ---- Derived for the new visual sections (all read-only views of the
   // ---- same numbers computed above; nothing here changes a calculation).
   const money = (v: number) => maskAmount(v, 'INR', privacyMode, { fractionDigits: 0 });
+  const preciseMoney = (v: number) => maskAmount(v, 'INR', privacyMode, { fractionDigits: 0 });
   const signedMoney = (v: number) => (privacyMode ? '••••••' : formatSignedCurrency(v, 'INR', 0));
   const ready = wealthDataKnown && (!hasWealth || netWorthReady);
 
@@ -229,7 +257,7 @@ export default function Dashboard() {
         meta={
           <p className="flex items-center gap-1.5 text-xs text-muted">
             <span className="h-1.5 w-1.5 rounded-full bg-brand-500 animate-pulse" />
-            Live prices update every 60 seconds
+            Live prices update every second during market hours
           </p>
         }
         actions={
@@ -245,28 +273,30 @@ export default function Dashboard() {
           dense
           label="Net worth"
           loading={!ready}
-          value={money(hasWealth ? netWorth : 0)}
-          sublabel={hasWealth ? 'Assets minus liabilities' : <Link to="/wealth" className="text-primary-ink font-medium hover:underline">Add your first asset</Link>}
+          value={money(hasWealth ? netWorthShown : 0)}
+          onToggle={hasWealth ? () => setIncludeSold((v) => !v) : undefined}
+          toggled={includeSold}
+          sublabel={hasWealth ? (includeSold ? `Incl. ${preciseMoney(soldAmount)} sold so far` : 'Assets minus liabilities') : <Link to="/wealth" className="text-primary-ink font-medium hover:underline">Add your first asset</Link>}
         />
         <StatCard
           dense
           label="Total invested"
           loading={!wealthDataKnown}
-          value={money(hasWealth ? investedAssetsTotal : 0)}
-          sublabel="Cost basis"
+          value={money(hasWealth ? investedShown : 0)}
+          sublabel={includeSold ? 'Incl. sold investments' : 'Cost basis'}
         />
         <StatCard
           dense
           label="Profit / loss"
           loading={!ready}
-          tone={!hasWealth || investedAssetsTotal <= 0 ? 'default' : netWorthPnl >= 0 ? 'positive' : 'negative'}
+          tone={!hasWealth || investedShown <= 0 ? 'default' : netWorthPnl >= 0 ? 'positive' : 'negative'}
           value={hasWealth ? signedMoney(netWorthPnl) : money(0)}
           delta={
-            hasWealth && investedAssetsTotal > 0 && !privacyMode
+            hasWealth && investedShown > 0 && !privacyMode
               ? { value: formatPercentMagnitude(netWorthPnlPercent), positive: netWorthPnl >= 0 }
               : undefined
           }
-          sublabel="vs. invested"
+          sublabel={includeSold ? 'total return incl. sold' : 'vs. invested'}
         />
       </div>
 

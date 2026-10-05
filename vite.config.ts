@@ -3,7 +3,9 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
-import { fetchNseQuote, searchNseSymbol } from './api/_lib/nse.js'
+import { searchNseSymbol } from './api/_lib/nse.js'
+// @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
+import { resolveQuote } from './api/_lib/quote.js'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
 import { fetchLiveGoldPricePerGram24k } from './api/_lib/gold.js'
 
@@ -25,60 +27,23 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
 
     if (url.pathname.startsWith('/api/market/chart/')) {
       const raw = decodeURIComponent(url.pathname.split('/').pop() ?? '').toUpperCase()
-      const bareSymbol = raw.replace(/\.(NS|BO)$/i, '')
-      // 'IN' (default) = NSE, falling back to BSE/Yahoo. 'US' = skip NSE
-      // entirely — a US ticker like AAPL isn't an NSE symbol.
       const market = (url.searchParams.get('market') ?? 'IN').toUpperCase() === 'US' ? 'US' : 'IN'
-
-      if (market === 'IN') {
-        try {
-          const quote = await fetchNseQuote(bareSymbol)
-          send(200, {
-            symbol: bareSymbol,
-            price: quote.price,
-            previousClose: quote.previousClose,
-            currency: quote.currency,
-            source: 'nse',
-          })
-          return
-        } catch (err) {
-          // fall through to Yahoo, but log why NSE didn't answer — this is
-          // almost always the real cause of a "couldn't reach" error in the
-          // UI (NSE blocking the request, DNS/firewall, etc.) and is
-          // otherwise invisible since the UI only sees the final failure.
-          console.error(`[dev/market] NSE quote for ${bareSymbol} failed:`, err instanceof Error ? err.message : err)
-        }
-      }
-
       try {
-        const yahooSymbol =
-          market === 'US' ? raw : /\.(NS|BO)$/i.test(raw) ? raw : `${raw}.NS`
-        const upstream = await fetch(
-          `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=1d`,
-          { headers: { 'User-Agent': 'Mozilla/5.0' } }
-        )
-        if (!upstream.ok) {
-          console.error(`[dev/market] Yahoo chart for ${yahooSymbol} failed: HTTP ${upstream.status}`)
-        }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const data = (await upstream.json()) as any
-        const meta = data?.chart?.result?.[0]?.meta
-        const price = meta?.regularMarketPrice ?? meta?.previousClose
-        if (typeof price !== 'number') {
-          console.error(`[dev/market] Yahoo chart for ${yahooSymbol} had no price in response:`, JSON.stringify(data).slice(0, 300))
-          send(502, { error: `Could not get a live price from ${market === 'US' ? 'the US market' : 'NSE or Yahoo'}` })
+        const quote = await resolveQuote(raw, market)
+        if (!quote) {
+          console.error(`[dev/market] no live price for ${raw}`)
+          send(502, { error: `Could not get a live price for ${raw}` })
           return
         }
-        const previousClose = meta?.previousClose ?? meta?.chartPreviousClose
         send(200, {
-          symbol: bareSymbol,
-          price,
-          previousClose: typeof previousClose === 'number' ? previousClose : undefined,
-          currency: meta?.currency ?? (market === 'US' ? 'USD' : 'INR'),
-          source: 'yahoo',
+          symbol: raw.replace(/\.(NS|BO)$/i, ''),
+          price: quote.price,
+          previousClose: quote.previousClose,
+          currency: quote.currency,
+          source: quote.source,
         })
       } catch (err) {
-        console.error(`[dev/market] Could not reach Yahoo for ${bareSymbol}:`, err instanceof Error ? err.message : err)
+        console.error(`[dev/market] ${raw} failed:`, err instanceof Error ? err.message : err)
         send(502, { error: 'Could not reach the live price source' })
       }
       return
