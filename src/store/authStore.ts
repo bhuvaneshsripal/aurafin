@@ -135,7 +135,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     //    only clears the "verifying" flag - nothing the person sees changes;
     //  - if we don't, this is what lets a genuinely-logged-out visitor reach
     //    the Login screen instead of staring at a spinner indefinitely.
-    const fallbackDelay = cachedUser ? 12000 : 2500;
+    const fallbackDelay = cachedUser ? 6000 : 2500;
     setTimeout(() => {
       if (!resolved) set({ loading: false, verifying: false });
     }, fallbackDelay);

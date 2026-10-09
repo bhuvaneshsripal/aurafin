@@ -121,9 +121,17 @@ export function useFirestoreCollectionSync<T extends { id: string }>(
 
     // For regular users, sync with Firestore
     const colRef = collection(db, 'users', uid, collectionName);
+    let first = true;
     const unsub = onSnapshot(colRef, { includeMetadataChanges: true }, (snap) => {
-      const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as T);
-      setLocal(items);
+      // Metadata-only snapshots (cache -> server confirmation with identical
+      // data) carry no document changes; skip rebuilding the array so every
+      // subscribed screen doesn't re-render for nothing.
+      const dataChanged = first || snap.docChanges().length > 0;
+      first = false;
+      if (dataChanged) {
+        const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as T);
+        setLocal(items);
+      }
       onSyncChange?.(snap.metadata.fromCache);
       markCollectionLoaded(collectionName);
       // Only the server's answer counts as "correct" — a cache-only snapshot

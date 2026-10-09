@@ -44,6 +44,7 @@ const groups: { label: string; links: NavLinkDef[] }[] = [
     label: 'Tools',
     links: [
       { to: '/import', label: 'Import', icon: FileUp },
+      { to: '/valuation', label: 'Valuation', icon: LineChart },
       { to: '/calculators', label: 'Calculators', icon: Calculator },
     ],
   },

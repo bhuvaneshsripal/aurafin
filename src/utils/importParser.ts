@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import type { Asset, AssetClass } from '../types';
 
 export interface ParsedRow {
@@ -474,6 +473,7 @@ function aggregateTransactionRows(rows: Record<string, unknown>[], keys: TxnKeys
  *     the value is computed as Qty x Price.
  */
 export async function parseSpreadsheetFile(file: File): Promise<ParsedRow[]> {
+  const XLSX = await import('xlsx');
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: 'array' });
 

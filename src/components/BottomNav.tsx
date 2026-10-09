@@ -33,6 +33,7 @@ const moreLinks: MoreLink[] = [
   { to: '/wealth/performance', label: 'Performance', icon: LineChart },
   { to: '/essentials', label: 'Essentials', icon: Target },
   { to: '/import', label: 'Import', icon: FileUp },
+  { to: '/valuation', label: 'Valuation', icon: LineChart },
   { to: '/calculators', label: 'Calculators', icon: Calculator },
   { to: '/settings', label: 'Settings', icon: Settings },
   { to: '/install', label: 'Install App', icon: Smartphone },

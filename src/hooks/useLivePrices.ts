@@ -4,9 +4,9 @@ import { useLivePricesStore } from '../store/livePricesStore';
 import { fetchLiveQuotes, type PriceLookup } from '../utils/marketPrices';
 import { isMarketOpen } from '../utils/marketHours';
 
-/** Poll every second while the market is open (and the tab is visible);
+/** Poll every 5s while the market is open (and the tab is visible);
  *  prices can't change outside trading hours, so back off to once a minute. */
-const LIVE_REFRESH_MS = 1_000;
+const LIVE_REFRESH_MS = 5_000;
 const IDLE_REFRESH_MS = 60_000;
 
 /**
@@ -49,7 +49,14 @@ export function useLivePrices() {
           if (quote.previousClose !== undefined) previousCloses[symbol] = quote.previousClose;
         });
         if (Object.keys(prices).length > 0) {
-          setPrices(prices);
+          // Skip the store write (and the app-wide re-render it triggers)
+          // when nothing actually moved since the last poll.
+          const prev = useLivePricesStore.getState().prices;
+          const changed =
+            Object.keys(prices).length !== Object.keys(prev).length ||
+            Object.entries(prices).some(([k, v]) => prev[k] !== v);
+          if (changed) setPrices(prices);
+          else setLoading(false);
           if (Object.keys(previousCloses).length > 0) setPreviousCloses(previousCloses);
         } else {
           setLoading(false);

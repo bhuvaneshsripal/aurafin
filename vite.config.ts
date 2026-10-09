@@ -8,6 +8,8 @@ import { searchNseSymbol } from './api/_lib/nse.js'
 import { resolveQuote } from './api/_lib/quote.js'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
 import { fetchLiveGoldPricePerGram24k } from './api/_lib/gold.js'
+// @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
+import { fetchFundamentals } from './api/_lib/fundamentals.js'
 
 // Local-dev/preview stand-in for the api/market/* serverless functions.
 // A plain URL-rewrite proxy (like /api/mf below) can't work for NSE,
@@ -45,6 +47,21 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
       } catch (err) {
         console.error(`[dev/market] ${raw} failed:`, err instanceof Error ? err.message : err)
         send(502, { error: 'Could not reach the live price source' })
+      }
+      return
+    }
+
+    if (url.pathname === '/api/market/valuation') {
+      const symbol = (url.searchParams.get('symbol') ?? '').trim()
+      const exchange = (url.searchParams.get('exchange') ?? 'NSE').toUpperCase() === 'BSE' ? 'BSE' : 'NSE'
+      if (!symbol) { send(400, { error: 'Missing symbol' }); return }
+      try {
+        const data = await fetchFundamentals(symbol, exchange, 10)
+        if (!data) { send(404, { error: `No fundamentals found for ${symbol}` }); return }
+        send(200, data)
+      } catch (err) {
+        console.error(`[dev/valuation] ${symbol} failed:`, err instanceof Error ? err.message : err)
+        send(502, { error: 'Could not reach the fundamentals source' })
       }
       return
     }
@@ -175,6 +192,8 @@ export default defineConfig({
         // Pre-cache the built app shell so opening the installed app is instant,
         // even offline. Firebase/auth calls always go to the network.
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+        globIgnores: ['**/xlsx-*.js'],
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: '/index.html',
         // Without these, a tab left open across a redeploy keeps its old
         // service worker (and its old cached chunk list) until every tab is
@@ -259,6 +278,8 @@ export default defineConfig({
           if (id.includes('node_modules')) {
             if (id.includes('recharts') || id.includes('d3-')) return 'charts';
             if (id.includes('firebase')) return 'firebase';
+            if (id.includes('xlsx')) return 'xlsx';
+            if (id.includes('framer-motion')) return 'motion';
             if (id.includes('react-dom') || id.includes('react-router') || id.includes('/react/') || id.includes('zustand')) {
               return 'vendor';
             }

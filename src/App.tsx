@@ -2,7 +2,6 @@ import { useEffect, useState, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 import { useAssetsStore } from './store/assetsStore';
-import { useLivePricesStore } from './store/livePricesStore';
 import { useLiabilitiesStore } from './store/liabilitiesStore';
 import { useGoalsStore } from './store/goalsStore';
 import { useTransactionsStore } from './store/transactionsStore';
@@ -41,12 +40,17 @@ import Login from './pages/Login';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 import type { Asset, Liability, Goal, Transaction, Snapshot, BudgetItem, FinancialProfile, HouseholdProfile } from './types';
 
-const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'));
+const dashboardImport = () => import('./pages/Dashboard');
+const Dashboard = lazyWithRetry(dashboardImport);
+// Start downloading the default route's code right away, in parallel with
+// auth + Firestore, instead of only after they finish.
+void dashboardImport();
 const Wealth = lazyWithRetry(() => import('./pages/Wealth'));
 const InvestmentPnL = lazyWithRetry(() => import('./pages/InvestmentPnL'));
 const Essentials = lazyWithRetry(() => import('./pages/Essentials'));
 const Transactions = lazyWithRetry(() => import('./pages/Transactions'));
 const Import = lazyWithRetry(() => import('./pages/Import'));
+const Valuation = lazyWithRetry(() => import('./pages/Valuation'));
 const Calculators = lazyWithRetry(() => import('./pages/Calculators'));
 const Settings = lazyWithRetry(() => import('./pages/Settings'));
 const WhatsNew = lazyWithRetry(() => import('./pages/WhatsNew'));
@@ -111,6 +115,7 @@ function AppShell() {
                   <Route path="/essentials" element={<Essentials />} />
                   <Route path="/transactions" element={<Transactions />} />
                   <Route path="/import" element={<Import />} />
+                  <Route path="/valuation" element={<Valuation />} />
                   <Route path="/calculators" element={<Calculators />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/whats-new" element={<WhatsNew />} />
@@ -229,7 +234,7 @@ function DataSync() {
       setTransactionsSynced(false);
       setGoalsSynced(false);
       forceMarkAllLoaded(ALL_USER_COLLECTIONS);
-    }, 8000);
+    }, 3000);
     return () => clearTimeout(timer);
   }, [setAssetsSynced, setLiabilitiesSynced, setTransactionsSynced, setGoalsSynced, forceMarkAllLoaded]);
 
@@ -265,33 +270,23 @@ function DataSync() {
 function AppReady({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const needsOnboarding = useAuthStore((s) => s.needsOnboarding);
-  const confirmed = useSyncStatusStore((s) => s.serverConfirmedCollections);
-  const assets = useAssetsStore((s) => s.assets);
-  const pricesAttempted = useLivePricesStore((s) => s.pricesAttempted);
-  const sipValuesAttempted = useLivePricesStore((s) => s.sipValuesAttempted);
-  const goldAttempted = useLivePricesStore((s) => s.goldAttempted);
+  const loaded = useSyncStatusStore((s) => s.loadedCollections);
   const [timedOut, setTimedOut] = useState(false);
 
-  // Safety net (offline / very slow network): after 8s show whatever we have
-  // rather than a blank screen forever.
+  // Safety net (offline / very slow network): after 2.5s show whatever we
+  // have rather than a loading screen for minutes.
   useEffect(() => {
-    const t = setTimeout(() => setTimedOut(true), 8000);
+    const t = setTimeout(() => setTimedOut(true), 2500);
     return () => clearTimeout(t);
   }, []);
 
-  // Every collection must be confirmed by the SERVER (not just the local
-  // cache), so no stale/wrong number is ever painted and then corrected.
-  const serverDataReady = ALL_USER_COLLECTIONS.every((c) => confirmed[c]);
+  // Cache-first: the first snapshot (from IndexedDB cache OR server) is
+  // enough to render. Pages already show skeletons for headline numbers
+  // until the server confirms (see Dashboard's *DataKnown flags), and live
+  // prices fill in afterwards, so there is no reason to block the whole app.
+  const dataReady = ALL_USER_COLLECTIONS.every((c) => loaded[c]);
 
-  const hasEquity = assets.some((a) => a.symbol && a.quantity && a.quantity > 0);
-  const hasSip = assets.some((a) => a.assetClass === 'sip' && a.symbol && /^\d+$/.test(a.symbol));
-  const hasGold = assets.some((a) => a.assetClass === 'gold');
-  const liveReady =
-    (!hasEquity || pricesAttempted) && (!hasSip || sipValuesAttempted) && (!hasGold || goldAttempted);
-
-  const ready = serverDataReady && liveReady;
-
-  if (!needsOnboarding && !ready && !timedOut && location.pathname !== '/import') {
+  if (!needsOnboarding && !dataReady && !timedOut && location.pathname !== '/import') {
     return null;
   }
   return <>{children}</>;

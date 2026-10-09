@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 
 function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -14,8 +13,9 @@ function triggerDownload(blob: Blob, filename: string) {
 /**
  * Exports an array of flat objects to a downloaded CSV file.
  */
-export function exportToCsv(filename: string, rows: Record<string, unknown>[]) {
+export async function exportToCsv(filename: string, rows: Record<string, unknown>[]) {
   if (rows.length === 0) return;
+  const XLSX = await import('xlsx');
   const worksheet = XLSX.utils.json_to_sheet(rows);
   const csv = XLSX.utils.sheet_to_csv(worksheet);
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -25,8 +25,9 @@ export function exportToCsv(filename: string, rows: Record<string, unknown>[]) {
 /**
  * Exports an array of flat objects to a downloaded Excel (.xlsx) file.
  */
-export function exportToXlsx(filename: string, rows: Record<string, unknown>[], sheetName = 'Sheet1') {
+export async function exportToXlsx(filename: string, rows: Record<string, unknown>[], sheetName = 'Sheet1') {
   if (rows.length === 0) return;
+  const XLSX = await import('xlsx');
   const worksheet = XLSX.utils.json_to_sheet(rows);
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
