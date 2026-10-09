@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Search, Loader2, ChevronDown, History, X } from 'lucide-react';
 import { Card, CardHeader, PageHeader, Button, Input, cn } from '../components/ui';
 import { searchStockSymbols, type StockSearchResult } from '../utils/marketPrices';
@@ -170,6 +171,7 @@ export default function Valuation() {
   );
 
   // Until a stock is searched (or a lookup is running / failed), show nothing but the search box.
+  const searchActive = historyOpen || suggestions.length > 0;
   const started = loading || data !== null || error !== null;
   const years = Math.round(num(f.years)) || 5;
   const maxBar = Math.max(num(f.price) || 0, result.levels.find((l) => l.key === 'X/2')?.target || 0);
@@ -179,7 +181,17 @@ export default function Valuation() {
     <div>
       <PageHeader title="X/2 · X/3 valuation" />
 
-      <Card className="mb-4 relative overflow-visible">
+      {searchActive && createPortal(
+        <div
+          aria-hidden="true"
+          onMouseDown={() => { setSuggestions([]); setHistoryOpen(false); }}
+          onTouchStart={() => { setSuggestions([]); setHistoryOpen(false); }}
+          className="animate-backdrop-in fixed inset-0 z-[45] bg-slate-900/40"
+        />,
+        document.body,
+      )}
+
+      <Card className={cn('mb-4 relative overflow-visible', searchActive && 'z-[46]')}>
         <div className="flex flex-col sm:flex-row gap-2">
           <div ref={boxRef} className="relative flex-1 min-w-0">
             <Input
@@ -302,9 +314,6 @@ export default function Valuation() {
             </Card>
           ) : (
             <>
-              {result.warnings.map((w) => (
-                <div key={w} className="rounded-xl border border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-[13px]">{w}</div>
-              ))}
               {result.adequate && (
                 <Card>
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
