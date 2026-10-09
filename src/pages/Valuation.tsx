@@ -46,7 +46,6 @@ export default function Valuation() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<FundamentalsResponse | null>(null);
 
-  const [name, setName] = useState('');
   const [history, setHistory] = useState<HistoryItem[]>(readHistory);
   const [f, setF] = useState({ price: '', eps: '', growth: '', pe: '', years: '5', lookback: '10', exc: '0', dil: '0', req: '15', fy: '' });
   const [src, setSrc] = useState<Record<string, Src>>({});
@@ -115,7 +114,6 @@ export default function Valuation() {
       const d = await fetchFundamentals(symbol, ex);
       if (id !== reqId.current) return;
       setData(d);
-      setName(d.name ?? d.symbol);
       setHistory((prev) => {
         const next = [{ symbol: d.symbol, name: d.name ?? d.symbol, exchange: ex }, ...prev.filter((h) => !(h.symbol === d.symbol && h.exchange === ex))].slice(0, HISTORY_MAX);
         writeHistory(next);
@@ -257,8 +255,8 @@ export default function Valuation() {
         )}
       </Card>
 
-      {started && <div className="grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
-        <div className="space-y-4 min-w-0 order-2 lg:order-none">
+      {started && <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="space-y-4 min-w-0 order-2">
           <Card>
             <CardHeader title="Assumptions" description="Every field is editable and the results update instantly." />
             <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-3">
@@ -286,7 +284,7 @@ export default function Valuation() {
           </Card>
         </div>
 
-        <div className="space-y-4 min-w-0 order-1 lg:order-none">
+        <div className="space-y-4 min-w-0 order-1">
           {loading && <Card><div className="flex items-center gap-2 text-sm text-muted"><Loader2 size={16} className="animate-spin" />Loading fundamentals…</div></Card>}
 
           {result.errors.length > 0 && !data && !edited ? (
