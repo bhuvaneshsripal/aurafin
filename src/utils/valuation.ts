@@ -129,7 +129,6 @@ export function computeValuation(i: ValuationInput): ValuationResult {
   if (!i.manualEps && !override && i.growthPct < 0) warnings.push('Negative growth is assumed, so projected EPS falls each year.');
   if (i.lowestPe < 6) warnings.push('Lowest P/E is very low (below 6). It may reflect peak earnings, distress or bad data.');
   if (i.weakPe) warnings.push('The lowest P/E is flagged as based on unusually weak earnings, so X may be unreliable.');
-  if (currentPe !== null && i.lowestPe > currentPe) warnings.push(`Lowest historical P/E (${i.lowestPe.toFixed(1)}) is above today's P/E (${currentPe.toFixed(1)}). Re-check the data; a historical low should not exceed the current value within the same window.`);
   let lowConfidence = false;
   if (i.peReadings !== undefined && (i.peReadings < 12 || (i.peSpanYears ?? 0) < 2)) {
     lowConfidence = true;
