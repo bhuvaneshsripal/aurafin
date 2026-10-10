@@ -10,17 +10,18 @@ import {
   Smartphone,
   X,
   LineChart,
+  Gem,
+  Wallet,
+  Scale,
 } from 'lucide-react';
-import WealthIcon from './icons/WealthIcon';
-import MoneyIcon from './icons/MoneyIcon';
 import QuickAddMenu from './QuickAddMenu';
 import { useUiStore } from '../store/uiStore';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 const primaryLinks = [
   { to: '/', label: 'Overview', icon: LayoutDashboard },
-  { to: '/wealth', label: 'Wealth', icon: WealthIcon },
-  { to: '/transactions', label: 'Money', icon: MoneyIcon },
+  { to: '/wealth', label: 'Wealth', icon: Gem },
+  { to: '/transactions', label: 'Money', icon: Wallet },
 ];
 
 interface MoreLink {
@@ -33,7 +34,7 @@ const moreLinks: MoreLink[] = [
   { to: '/wealth/performance', label: 'Performance', icon: LineChart },
   { to: '/essentials', label: 'Essentials', icon: Target },
   { to: '/import', label: 'Import', icon: FileUp },
-  { to: '/valuation', label: 'Valuation', icon: LineChart },
+  { to: '/valuation', label: 'Valuation', icon: Scale },
   { to: '/calculators', label: 'Calculators', icon: Calculator },
   { to: '/settings', label: 'Settings', icon: Settings },
   { to: '/install', label: 'Install App', icon: Smartphone },

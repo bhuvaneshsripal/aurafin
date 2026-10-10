@@ -444,15 +444,16 @@ interface AssetsStepEnhancedProps {
 }
 
 const AssetsStepEnhanced = memo((props: AssetsStepEnhancedProps) => {
+  const { selectedAssetTypes, setSelectedAssetTypes } = props;
   const toggle = useCallback(
     (key: string) => {
-      props.setSelectedAssetTypes(
-        props.selectedAssetTypes.includes(key)
-          ? props.selectedAssetTypes.filter((k) => k !== key)
-          : [...props.selectedAssetTypes, key]
+      setSelectedAssetTypes(
+        selectedAssetTypes.includes(key)
+          ? selectedAssetTypes.filter((k) => k !== key)
+          : [...selectedAssetTypes, key]
       );
     },
-    [props.selectedAssetTypes, props.setSelectedAssetTypes]
+    [selectedAssetTypes, setSelectedAssetTypes]
   );
 
   const totalAssetValue = useMemo(

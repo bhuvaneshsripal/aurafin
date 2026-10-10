@@ -73,10 +73,10 @@ export default function LockScreen() {
     [shake, submitPin]
   );
 
-  const pressBackspace = () => {
+  const pressBackspace = useCallback(() => {
     if (shake) return;
     setPinInput((p) => p.slice(0, -1));
-  };
+  }, [shake]);
 
   // Whenever the screen (re)locks — including auto-lock after returning from
   // the background, not just the initial mount — make sure the box starts
@@ -102,7 +102,7 @@ export default function LockScreen() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [locked, pressDigit, submitPin]);
+  }, [locked, pressDigit, pressBackspace, submitPin]);
 
   if (!shouldRender) return null;
 

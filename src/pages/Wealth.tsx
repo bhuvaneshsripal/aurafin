@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import { Suspense, useState, useEffect, useLayoutEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -51,6 +51,7 @@ import {
 } from 'recharts';
 import { useAssetsStore } from '../store/assetsStore';
 import { useSnapshotsStore } from '../store/snapshotsStore';
+import SplitAmount from '../components/SplitAmount';
 import { useLivePricesStore, resolvePreviousClose } from '../store/livePricesStore';
 import { formatDate, toIsoDate } from '../utils/date';
 import { goldPricePerGram22k } from '../utils/goldPrice';
@@ -138,16 +139,18 @@ import {
 import { fetchLivePrices, fetchFxRate, searchStockSymbols, type StockSearchResult } from '../utils/marketPrices';
 import { useDayChangeResetWindow, useMarketSessionProgress, useIsMarketOpen } from '../utils/marketHours';
 import { useUrlTab } from '../hooks/useUrlTab';
+import { lazyWithRetry } from '../utils/lazyWithRetry';
+const AnalyticsContent = lazyWithRetry(() => import('./Analytics'));
 import { useModalBackClose } from '../hooks/useModalBackClose';
 
-type Tab = 'assets' | 'liabilities' | 'networth' | 'allocation';
+type Tab = 'assets' | 'liabilities' | 'networth' | 'allocation' | 'analytics';
 type SortKey = 'manual' | 'name' | 'qty' | 'avgCost' | 'perUnit' | 'invested' | 'value' | 'pnl' | 'alloc' | 'dayChange';
 type EntryType = 'asset' | 'liability';
 type NetWorthRange = '3M' | '6M' | '1Y' | 'ALL';
 
 /** Default manual-order tie-break for holdings that have never been
  *  explicitly reordered (same `order` value, typically 0/unset) — puts
- *  Stock, Gold, SIP, FD, RD and Cash in that fixed order — this rank is
+ *  Stock, ETF, SIP, Commodities, FD/RD and Cash & Savings in that fixed order (anything else follows) — this rank is
  *  consulted first, so holdings always group by asset class in this order
  *  regardless of any stored drag `order`. Within a class, the stored
  *  `order` (set by dragging or the row menu) decides relative position, so
@@ -155,13 +158,28 @@ type NetWorthRange = '3M' | '6M' | '1Y' | 'ALL';
  *  class, it just can no longer jump into a different class's block. */
 const DEFAULT_ASSET_CLASS_ORDER: Partial<Record<AssetClass, number>> = {
   stock: 0,
-  gold: 1,
+  etf: 1,
   sip: 2,
-  fixed_deposit: 3,
+  gold: 3,
+  silver: 3,
+  platinum: 3,
+  other_commodity: 3,
+  fixed_deposit: 4,
   recurring_deposit: 4,
   cash: 5,
 };
 const DEFAULT_ASSET_CLASS_ORDER_FALLBACK = 6;
+
+/** Holdings table order: asset-class rank first; within a class, anything
+ *  never manually ordered (e.g. a newly added holding) comes first, newest
+ *  on top, followed by manually ordered ones in their saved order. */
+function compareAssetsDefault(a: Asset, b: Asset): number {
+  return (
+    defaultAssetClassRank(a) - defaultAssetClassRank(b) ||
+    (a.order ?? -1) - (b.order ?? -1) ||
+    b.updatedAt - a.updatedAt
+  );
+}
 
 /** Common Indian/US brokers for the "Held in account" dropdown on Stock/ETF
  *  holdings — stored in the same `institution` field the Bank/Institution
@@ -324,7 +342,7 @@ export default function Wealth() {
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [tab, setTab] = useUrlTab<Tab>(['assets', 'liabilities', 'networth', 'allocation'], 'assets');
+  const [tab, setTab] = useUrlTab<Tab>(['assets', 'liabilities', 'networth', 'allocation', 'analytics'], 'assets');
   const [startCategoryKey, setStartCategoryKey] = useState<string | undefined>();
 
   const addFlow: EntryType | null =
@@ -399,6 +417,7 @@ export default function Wealth() {
       )}
       {tab === 'networth' && <NetWorthTab tab={tab} setTab={setTab} />}
       {tab === 'allocation' && <AllocationTab tab={tab} setTab={setTab} />}
+      {tab === 'analytics' && <AnalyticsTab tab={tab} setTab={setTab} />}
     </div>
   );
 }
@@ -442,12 +461,12 @@ function AddWealthPage({
     setSearchParams(next);
   };
 
-  const resetToCategory = () => pushParams({ step: 'category', cat: undefined, type: undefined });
+  const resetToCategory = () => pushParams({ step: 'category', cat: undefined, type: undefined, via: undefined });
 
   const switchEntryType = (next: EntryType) => {
     if (next === entryType) return;
     setQuery('');
-    pushParams({ entry: next, step: 'category', cat: undefined, type: undefined });
+    pushParams({ entry: next, step: 'category', cat: undefined, type: undefined, via: undefined });
   };
 
   // Step 1 picks a broad category (Equity, Commodities, ...). If it only has
@@ -457,21 +476,21 @@ function AddWealthPage({
   // one tile per raw type) before moving on to Step 2.
   const selectCategory = (cat: CategoryDef<string>) => {
     if (cat.types.length <= 1) {
-      pushParams({ cat: cat.key, type: cat.types[0]?.value, step: 'details' });
+      pushParams({ cat: cat.key, type: cat.types[0]?.value, step: 'details', via: undefined });
     } else {
-      pushParams({ cat: cat.key, type: undefined, step: 'type' });
+      pushParams({ cat: cat.key, type: undefined, step: 'type', via: undefined });
     }
   };
 
   const selectType = (value: string) => {
-    pushParams({ type: value, step: 'details' });
+    pushParams({ type: value, step: 'details', via: undefined });
   };
 
   // Used by the Common section and by search results (both asset and
   // liability): jump straight to Step 2 with a specific type already
   // chosen, regardless of how many sibling types its category has.
   const selectDirectType = (cat: CategoryDef<string>, value: string) => {
-    pushParams({ cat: cat.key, type: value, step: 'details' });
+    pushParams({ cat: cat.key, type: value, step: 'details', via: 'direct' });
   };
 
   const [query, setQuery] = useState('');
@@ -483,8 +502,10 @@ function AddWealthPage({
 
   // From the details form's "Back", return to the type tiles when the
   // category actually has a choice to make, otherwise back to Step 1.
+  // Picked from the Common list / search ("via=direct")? Then Back returns
+  // to that same first screen, not to the category's type tiles.
   const backFromDetails = () => {
-    if (category && category.types.length > 1) {
+    if (searchParams.get('via') !== 'direct' && category && category.types.length > 1) {
       pushParams({ step: 'type', type: undefined });
     } else {
       resetToCategory();
@@ -833,6 +854,7 @@ function TabNav({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
         { key: 'liabilities', label: 'Liabilities' },
         { key: 'networth', label: 'Net worth' },
         { key: 'allocation', label: 'Allocation' },
+        { key: 'analytics', label: 'Analytics' },
       ]}
       className="-mx-4 px-4 sm:mx-0 sm:px-0"
     />
@@ -1251,7 +1273,7 @@ function AssetsTab({
     if (!user) return;
     setSortKey('manual');
     const ordered = [...assets].sort(
-      (a, b) => defaultAssetClassRank(a) - defaultAssetClassRank(b) || (a.order ?? 0) - (b.order ?? 0) || a.updatedAt - b.updatedAt
+      compareAssetsDefault
     );
     const idx = ordered.findIndex((a) => a.id === id);
     const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
@@ -1295,7 +1317,7 @@ function AssetsTab({
       dragRef.current.dragging = true;
       if (sortKey !== 'manual') setSortKey('manual');
       const orderedIds = [...assets]
-        .sort((a, b) => defaultAssetClassRank(a) - defaultAssetClassRank(b) || (a.order ?? 0) - (b.order ?? 0) || a.updatedAt - b.updatedAt)
+        .sort(compareAssetsDefault)
         .map((x) => x.id);
       setManualDragIds(orderedIds);
       setDraggingId(id);
@@ -1496,7 +1518,7 @@ function AssetsTab({
       const matchesCurrency = selectedCurrencies.length === 0 || selectedCurrencies.includes(a.currency);
       return matchesSearch && matchesCategory && matchesType && matchesCurrency;
     })
-    .sort((a, b) => defaultAssetClassRank(a) - defaultAssetClassRank(b) || (a.order ?? 0) - (b.order ?? 0) || a.updatedAt - b.updatedAt);
+    .sort(compareAssetsDefault);
 
   // Allocation % is based on money put in (cost basis), not current
   // market value — so a holding's slice of the pie stays put day to day
@@ -1915,7 +1937,7 @@ function AssetsTab({
                     <LoadingDots />
                   ) : (
                     <span className="font-numeric text-[28px] sm:text-[32px] font-bold tracking-tight text-ink break-words animate-value-in">
-                      {maskAmount(totalCurrentValue, 'INR', privacyMode, { fractionDigits: 2 })}
+                      <SplitAmount text={maskAmount(totalCurrentValue, 'INR', privacyMode, { fractionDigits: 2 })} />
                     </span>
                   )}
                 </div>
@@ -6984,6 +7006,18 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
           </>
         }
       />
+    </div>
+  );
+}
+
+function AnalyticsTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
+  return (
+    <div className="space-y-4">
+      <PageHeader title="Analytics" description="Rebalancing, risk, capital-gains tax, projections and upcoming events." />
+      <TabNav tab={tab} setTab={setTab} />
+      <Suspense fallback={null}>
+        <AnalyticsContent />
+      </Suspense>
     </div>
   );
 }

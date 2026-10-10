@@ -8,11 +8,12 @@ import {
   Smartphone,
   Lock,
   LineChart,
+  Gem,
+  Wallet,
+  Scale,
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react';
-import WealthIcon from './icons/WealthIcon';
-import MoneyIcon from './icons/MoneyIcon';
 import { useAppLockStore } from '../store/appLockStore';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
@@ -29,14 +30,14 @@ const groups: { label: string; links: NavLinkDef[] }[] = [
     label: 'Portfolio',
     links: [
       { to: '/', label: 'Overview', icon: LayoutDashboard },
-      { to: '/wealth', label: 'Wealth', icon: WealthIcon, end: true },
+      { to: '/wealth', label: 'Wealth', icon: Gem, end: true },
       { to: '/wealth/performance', label: 'Performance', icon: LineChart },
     ],
   },
   {
     label: 'Money & planning',
     links: [
-      { to: '/transactions', label: 'Money', icon: MoneyIcon },
+      { to: '/transactions', label: 'Money', icon: Wallet },
       { to: '/essentials', label: 'Essentials', icon: Target },
     ],
   },
@@ -44,7 +45,7 @@ const groups: { label: string; links: NavLinkDef[] }[] = [
     label: 'Tools',
     links: [
       { to: '/import', label: 'Import', icon: FileUp },
-      { to: '/valuation', label: 'Valuation', icon: LineChart },
+      { to: '/valuation', label: 'Valuation', icon: Scale },
       { to: '/calculators', label: 'Calculators', icon: Calculator },
     ],
   },

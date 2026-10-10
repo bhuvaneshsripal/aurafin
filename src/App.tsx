@@ -115,6 +115,7 @@ function AppShell() {
                   <Route path="/essentials" element={<Essentials />} />
                   <Route path="/transactions" element={<Transactions />} />
                   <Route path="/import" element={<Import />} />
+                  <Route path="/analytics" element={<Navigate to="/wealth?tab=analytics" replace />} />
                   <Route path="/valuation" element={<Valuation />} />
                   <Route path="/calculators" element={<Calculators />} />
                   <Route path="/settings" element={<Settings />} />

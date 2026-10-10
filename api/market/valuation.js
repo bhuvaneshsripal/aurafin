@@ -10,7 +10,7 @@ export default async function handler(req, res) {
     if (!data) { res.status(404).json({ error: `No fundamentals found for ${symbol}` }); return; }
     res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=3600');
     res.status(200).json(data);
-  } catch (err) {
+  } catch {
     res.status(502).json({ error: 'Could not reach the fundamentals source' });
   }
 }

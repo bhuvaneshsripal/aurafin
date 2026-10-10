@@ -14,6 +14,11 @@ const MARKET_OPEN_MINUTE = 15;
 const MARKET_CLOSE_HOUR = 15;
 const MARKET_CLOSE_MINUTE = 30;
 
+/** Weekday exchange holidays (IST dates, "YYYY-MM-DD") on which NSE/BSE are
+ *  closed — add them from the official NSE holiday list each year. Weekends
+ *  are handled automatically and don't need to be listed. */
+export const MARKET_HOLIDAYS = new Set<string>([]);
+
 /** Current wall-clock time in India (Asia/Kolkata), regardless of the
  *  device's own timezone. */
 function getIstTimeOfDay(now: Date = new Date()): { hour: number; minute: number } {
@@ -52,9 +57,16 @@ function getIstDateInfo(now: Date = new Date()): { dateKey: string; isoWeekday: 
  *  window where "1D returns" / day-change figures should reset to 0. */
 export function isDayChangeResetWindow(now: Date = new Date()): boolean {
   const { hour, minute } = getIstTimeOfDay(now);
+  const { dateKey, isoWeekday } = getIstDateInfo(now);
   const minutesSinceMidnight = hour * 60 + minute;
-  const resetStart = RESET_HOUR * 60 + RESET_MINUTE;
   const marketOpen = MARKET_OPEN_HOUR * 60 + MARKET_OPEN_MINUTE;
+  // No session today (weekend or listed exchange holiday): nothing has
+  // traded, so "1D returns" is flat all day instead of replaying the last
+  // session's change.
+  if (isoWeekday > 5 || MARKET_HOLIDAYS.has(dateKey)) return true;
+  // Monday before the open: the last session was Friday, which is stale.
+  if (isoWeekday === 1 && minutesSinceMidnight < marketOpen) return true;
+  const resetStart = RESET_HOUR * 60 + RESET_MINUTE;
   return minutesSinceMidnight >= resetStart && minutesSinceMidnight < marketOpen;
 }
 
@@ -79,7 +91,7 @@ export function useDayChangeResetWindow(): boolean {
 export function isMarketOpen(now: Date = new Date()): boolean {
   const { hour, minute } = getIstTimeOfDay(now);
   const { isoWeekday } = getIstDateInfo(now);
-  if (isoWeekday > 5) return false; // Saturday (6) or Sunday (7)
+  if (isoWeekday > 5 || MARKET_HOLIDAYS.has(getIstDateInfo(now).dateKey)) return false; // weekend or listed holiday
   const minutesSinceMidnight = hour * 60 + minute;
   const marketOpen = MARKET_OPEN_HOUR * 60 + MARKET_OPEN_MINUTE;
   const marketClose = MARKET_CLOSE_HOUR * 60 + MARKET_CLOSE_MINUTE;

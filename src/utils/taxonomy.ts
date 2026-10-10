@@ -60,7 +60,6 @@ export const ASSET_TAXONOMY: CategoryDef<AssetClass>[] = [
       { value: 'hybrid_mutual_fund', label: 'Hybrid Mutual Fund', keywords: ['mf', 'fund'] },
       { value: 'sip', label: 'SIP', keywords: ['mutual fund', 'fund', 'systematic'] },
       { value: 'international_equity', label: 'International Equity', keywords: ['stock', 'foreign', 'us stock'] },
-      { value: 'ipo_pre_ipo', label: 'IPO / Pre-IPO', keywords: ['stock'] },
       { value: 'esop_rsu', label: 'ESOPs / RSUs', keywords: ['stock', 'employee'] },
       { value: 'equity_other', label: 'Other Equity', keywords: ['stock'] },
     ],
@@ -199,6 +198,15 @@ ASSET_TAXONOMY.forEach((cat) => {
     ASSET_CLASS_TO_CATEGORY[t.value] = cat;
   });
 });
+
+// 'ipo_pre_ipo' is no longer offered in the Add Asset pickers, but assets
+// already saved with it must keep their label, colour and category.
+{
+  const equity = ASSET_TAXONOMY.find((c) => c.key === 'equity')!;
+  ASSET_CLASS_LABELS.ipo_pre_ipo = 'IPO / Pre-IPO';
+  ASSET_CLASS_COLORS.ipo_pre_ipo = equity.color;
+  ASSET_CLASS_TO_CATEGORY.ipo_pre_ipo = equity;
+}
 
 export const LIABILITY_CLASS_LABELS: Record<string, string> = {};
 export const LIABILITY_CLASS_TO_CATEGORY: Record<string, CategoryDef<LiabilityClass>> = {};
