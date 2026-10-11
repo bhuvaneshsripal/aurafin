@@ -31,6 +31,7 @@ const AUTO_LOCK_MS = 60_000;
 // back to Login (from which they can prove who they are with Google/email
 // instead of guessing the PIN forever).
 const MAX_PIN_ATTEMPTS = 3;
+const LOW_NETWORK_MESSAGE = 'Low network connectivity. Please check your internet and try again.';
 
 // authStore's `user` can be either a full Firebase `User` or the trimmed
 // `CachedUser` snapshot it hydrates from localStorage before Firebase
@@ -147,6 +148,8 @@ export const useAppLockStore = create<AppLockState & { _storedPin: string | null
       enabled,
       pinLoaded: true,
       failedAttempts: 0,
+      // A "low network" message no longer applies once the PIN has loaded.
+      pinAttemptError: null,
       // Only derive `locked` from the remote state the very first time it
       // loads (matches what the old localStorage-backed init() used to do).
       // Once loaded, later remote updates (e.g. another device changing the
@@ -202,7 +205,17 @@ export const useAppLockStore = create<AppLockState & { _storedPin: string | null
 
   unlock: (pin: string) => {
     const { _storedPin, failedAttempts } = get();
-    if (_storedPin && pin === _storedPin) {
+
+    // The real PIN lives in Firestore. If it hasn't loaded yet (slow/no
+    // network), we can't tell whether the entry is right or wrong — so say
+    // that, instead of calling it an incorrect PIN, and don't count it
+    // toward the 3-attempt sign-out.
+    if (!_storedPin) {
+      set({ pinAttemptError: LOW_NETWORK_MESSAGE });
+      return false;
+    }
+
+    if (pin === _storedPin) {
       sessionStorage.setItem(SESSION_UNLOCKED_KEY, 'true');
       set({ locked: false, pinAttemptError: null, failedAttempts: 0 });
       return true;

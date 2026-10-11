@@ -28,6 +28,7 @@ import { useLivePrices } from './hooks/useLivePrices';
 import { useLiveSipValues } from './hooks/useLiveSipValues';
 import { useLiveGoldPrice } from './hooks/useLiveGoldPrice';
 import { useWeeklyDigestScheduler } from './hooks/useWeeklyDigestScheduler';
+import { useDailyHardRefresh } from './hooks/useDailyHardRefresh';
 import { useScrollRestoration } from './hooks/useScrollRestoration';
 import Sidebar from './components/Sidebar';
 import TopHeader from './components/TopHeader';
@@ -74,6 +75,8 @@ function AppShell() {
   // bottom nav, back button) — see the hook for why a hard refresh still
   // resets to the top.
   useScrollRestoration();
+  // Auto hard-refresh every day at 5:00 a.m.
+  useDailyHardRefresh();
 
   // First-time sign-ups/sign-ins get the full-screen onboarding wizard with
   // none of the normal chrome (sidebar/topbar/bottom nav) — matches how

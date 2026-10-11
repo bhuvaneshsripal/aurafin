@@ -39,6 +39,12 @@ export default function LockScreen() {
         setPinInput('');
         return;
       }
+      // PIN couldn't be verified (network) — the store set a message; just
+      // clear the dots without the red "wrong" shake.
+      if (!useAppLockStore.getState()._storedPin) {
+        window.setTimeout(() => setPinInput(''), 300);
+        return;
+      }
       // Wrong PIN: shake with the 4 dots still filled (so the person can see
       // *what* they typed was rejected), then clear once the shake finishes.
       if ('vibrate' in navigator) {
