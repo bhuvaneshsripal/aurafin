@@ -59,6 +59,31 @@ export type LiabilityClass =
   | 'line_of_credit'
   | 'other_liability';
 
+export type IpoStage = 'applied' | 'allotted' | 'listed' | 'not_allotted' | 'pre_ipo';
+export type IpoCategory = 'retail' | 'shni' | 'bhni' | 'employee' | 'shareholder';
+
+/** IPO / Pre-IPO lifecycle details attached to an Asset. Dates are ISO strings. */
+export interface IpoDetails {
+  stage: IpoStage;
+  board?: 'mainboard' | 'sme';
+  category?: IpoCategory;
+  priceBandLow?: number;
+  priceBandHigh?: number;
+  lotSize?: number;
+  lotsApplied?: number;
+  issuePrice?: number;
+  sharesAllotted?: number;
+  /** Grey-market premium per share (user's estimate). */
+  gmp?: number;
+  listingPrice?: number;
+  currentPrice?: number;
+  openDate?: string;
+  closeDate?: string;
+  allotmentDate?: string;
+  listingDate?: string;
+  lockInEnd?: string;
+}
+
 export interface Asset {
   id: string;
   name: string;
@@ -67,6 +92,8 @@ export interface Asset {
   currency: string;
   notes?: string;
   updatedAt: number;
+  /** IPO / Pre-IPO lifecycle details (IPO tracker). */
+  ipo?: IpoDetails;
   /** NSE/BSE trading symbol (e.g. RELIANCE, TCS) for live price lookup. */
   symbol?: string;
   /**
