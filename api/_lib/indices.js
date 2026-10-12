@@ -53,31 +53,41 @@ export function fetchIndices() {
 }
 
 async function fetchIndicesUncached() {
+  // NSE's own feed is the fastest source for the NSE indices (Yahoo lags it by
+  // a minute or more), so ask NSE first — one call covers every NSE index —
+  // and only fall back to Yahoo for what it didn't return. Sensex is BSE-only,
+  // so it comes from Yahoo; both run in parallel.
+  const wantsNse = INDICES.some((idx) => idx.nse);
+  const nsePromise = wantsNse ? fetchNseAllIndices().catch(() => []) : Promise.resolve([]);
+
+  const yahooFirst = INDICES.map((idx) => !idx.nse);
   const results = await Promise.all(
-    INDICES.map(async (idx) => {
-      for (const sym of idx.yahoo) {
-        const q = await yahooQuote(sym);
-        if (q) return q;
-      }
-      return null;
+    INDICES.map(async (idx, i) => (yahooFirst[i] ? yahooBySymbols(idx.yahoo) : null))
+  );
+
+  const all = await nsePromise;
+  INDICES.forEach((idx, i) => {
+    if (results[i] || !idx.nse) return;
+    const row = all.find((r) => String(r?.index ?? '').toUpperCase() === idx.nse);
+    const price = num(row?.last);
+    if (price !== undefined) results[i] = { price, previousClose: num(row?.previousClose) };
+  });
+
+  // Anything NSE didn't return: fall back to Yahoo.
+  await Promise.all(
+    INDICES.map(async (idx, i) => {
+      if (!results[i]) results[i] = await yahooBySymbols(idx.yahoo);
     })
   );
 
-  // One NSE call covers every still-missing NSE index.
-  if (INDICES.some((idx, i) => !results[i] && idx.nse)) {
-    try {
-      const all = await fetchNseAllIndices();
-      INDICES.forEach((idx, i) => {
-        if (results[i] || !idx.nse) return;
-        const row = all.find((r) => String(r?.index ?? '').toUpperCase() === idx.nse);
-        const price = num(row?.last);
-        if (price !== undefined) results[i] = { price, previousClose: num(row?.previousClose) };
-      });
-    } catch {
-      /* NSE unavailable — leave those indices out */
-    }
-  }
-
   const out = INDICES.flatMap((idx, i) => (results[i] ? [{ key: idx.key, name: idx.name, ...results[i] }] : []));
   return out.length ? out : null;
+}
+
+async function yahooBySymbols(symbols) {
+  for (const sym of symbols ?? []) {
+    const q = await yahooQuote(sym);
+    if (q) return q;
+  }
+  return null;
 }

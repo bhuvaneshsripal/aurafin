@@ -21,7 +21,7 @@ const ORDER = [
 
 async function loadIndices(): Promise<IndexQuote[] | null> {
   try {
-    const res = await fetch('/api/market/indices');
+    const res = await fetch('/api/market/indices', { cache: 'no-store' });
     if (!res.ok) return null;
     const json = await res.json();
     return Array.isArray(json?.indices) ? json.indices : null;
@@ -34,7 +34,7 @@ const fmt = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2,
 
 /** One-line index strip: NAME  level  ±change (±pct%). Polled every second
  *  during market hours (30s otherwise) while the tab is visible. */
-export default function MarketTicker() {
+function useIndexQuotes() {
   const [quotes, setQuotes] = useState<IndexQuote[] | null | undefined>(undefined); // undefined = loading
 
   useEffect(() => {
@@ -63,8 +63,11 @@ export default function MarketTicker() {
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, []);
+  return quotes;
+}
 
-  const items = ORDER.map(({ key, name }) => {
+function renderItems(quotes: IndexQuote[] | null | undefined) {
+  return ORDER.map(({ key, name }) => {
     const q = Array.isArray(quotes) ? quotes.find((x) => x.key === key) : undefined;
     if (Array.isArray(quotes) && !q) return null; // index unavailable — skip rather than show a dash
     const change = q?.previousClose !== undefined ? q.price - q.previousClose : undefined;
@@ -91,6 +94,12 @@ export default function MarketTicker() {
       </div>
     );
   });
+}
+
+/** Desktop: static strip in the top bar. */
+export default function MarketTicker() {
+  const quotes = useIndexQuotes();
+  const items = renderItems(quotes);
 
   // Static strip, always the full "NAME  level  ±points (±pct%)", spread evenly.
   // On narrower headers the text and gaps step down so all three still fit.
@@ -98,6 +107,27 @@ export default function MarketTicker() {
     <div className="@container flex-1 min-w-0 h-5" aria-label="Market indices">
       <div className="h-5 overflow-hidden flex items-center justify-between gap-x-4 whitespace-nowrap text-[13px] @max-[900px]:text-xs @max-[780px]:text-[11px] leading-5">
         {items}
+      </div>
+    </div>
+  );
+}
+
+/** Mobile: a thin bar under the top bar where the indices glide right-to-left
+ *  continuously (pauses while touched; plain scrollable row if the user prefers reduced motion). */
+export function MarketTickerMarquee({ className }: { className?: string }) {
+  const quotes = useIndexQuotes();
+  const row = 'flex items-center gap-x-8 pr-8 whitespace-nowrap shrink-0';
+  return (
+    <div
+      className={cn('ticker-scroll overflow-hidden h-9 flex items-center text-[12.5px] bg-surface border-b border-line', className)}
+      aria-label="Market indices"
+    >
+      <div
+        className="ticker-track flex w-max active:[animation-play-state:paused]"
+        style={{ animationDuration: '22s' }}
+      >
+        <div className={row}>{renderItems(quotes)}</div>
+        <div className={row} aria-hidden="true">{renderItems(quotes)}</div>
       </div>
     </div>
   );

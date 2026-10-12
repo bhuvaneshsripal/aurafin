@@ -8,7 +8,7 @@ import {
   sendPasswordResetEmail,
   EmailAuthProvider,
 } from 'firebase/auth';
-import { RefreshCw, Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, X, Download, Upload, Mail, Bell } from 'lucide-react';
+import { RefreshCw, Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, X, Download, Upload, Mail, Bell, FileText } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
 import { useAppLockStore } from '../store/appLockStore';
@@ -47,6 +47,7 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useUrlTab } from '../hooks/useUrlTab';
 import CustomSelect from '../components/CustomSelect';
 import { PageHeader } from '../components/ui';
+import { PortfolioExportModal } from '../components/PortfolioExportModal';
 
 type Tab = 'account' | 'preferences' | 'profiles' | 'data';
 
@@ -1564,6 +1565,7 @@ function DataTab() {
   const profiles = useHouseholdProfilesStore((s) => s.profiles);
 
   const [pendingRestore, setPendingRestore] = useState<AurafinBackup | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
   const [restoreError, setRestoreError] = useState('');
   const [restoreStatus, setRestoreStatus] = useState<'idle' | 'restoring' | 'done'>('idle');
 
@@ -1637,6 +1639,21 @@ function DataTab() {
 
   return (
     <>
+      <Card>
+        <h2 className="text-sm font-semibold text-ink mb-1">Report</h2>
+        <p className="text-xs text-muted mb-4">
+          Preview and download a PDF report of your portfolio holdings.
+        </p>
+        <button
+          onClick={() => setReportOpen(true)}
+          className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors bg-brand-600 hover:bg-brand-700 text-white"
+        >
+          <FileText size={16} />
+          Export report
+        </button>
+      </Card>
+      <PortfolioExportModal open={reportOpen} onClose={() => setReportOpen(false)} />
+
       <Card>
         <h2 className="text-sm font-semibold text-ink mb-1">Backup</h2>
         <p className="text-xs text-muted mb-4">

@@ -72,7 +72,21 @@ async function yahooRow(symbol) {
   }
 }
 
-export async function fetchIndianIndices() {
+// Shared between callers inside one second (the table polls every couple of seconds per tab).
+let cachedIndian = null; // { at, promise }
+export function fetchIndianIndices() {
+  const now = Date.now();
+  if (cachedIndian && now - cachedIndian.at < 1000) return cachedIndian.promise;
+  const promise = fetchIndianIndicesUncached();
+  cachedIndian = { at: now, promise };
+  promise.then(
+    (r) => { if (!r && cachedIndian?.promise === promise) cachedIndian = null; },
+    () => { if (cachedIndian?.promise === promise) cachedIndian = null; }
+  );
+  return promise;
+}
+
+async function fetchIndianIndicesUncached() {
   // NSE: one call, then pick rows by name.
   let nseRows = [];
   if (INDIAN_INDICES.some((i) => i.nse)) {

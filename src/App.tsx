@@ -33,6 +33,7 @@ import { useScrollRestoration } from './hooks/useScrollRestoration';
 import Sidebar from './components/Sidebar';
 import TopHeader from './components/TopHeader';
 import BottomNav from './components/BottomNav';
+import SwipeTabs from './components/SwipeTabs';
 import PrivacyFab from './components/PrivacyFab';
 import LockScreen from './components/LockScreen';
 import InstallPromptModal from './components/InstallPromptModal';
@@ -136,6 +137,7 @@ function AppShell() {
         </main>
       </div>
       <BottomNav />
+      <SwipeTabs />
       <PrivacyFab />
       <InstallPromptModal />
     </div>

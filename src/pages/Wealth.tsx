@@ -1762,12 +1762,6 @@ function AssetsTab({
       <PageHeader
         title="Assets"
         description={`${assets.length} ${assets.length === 1 ? 'asset' : 'assets'} · unlimited`}
-        meta={
-          <p className="flex items-center gap-1.5 text-xs text-muted">
-            <span className="h-1.5 w-1.5 rounded-full bg-brand-500 animate-pulse" />
-            Live prices update every second during market hours
-          </p>
-        }
         actions={
           <>
             <div className="relative flex-1 min-w-[140px] sm:flex-none sm:w-56">

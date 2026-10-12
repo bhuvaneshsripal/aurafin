@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Moon, Sun, Globe, Eye, EyeOff, Bell, ChevronDown, MoreVertical, Settings as SettingsIcon, Lock, LogOut } from 'lucide-react';
+import { Moon, Sun, Globe, Eye, EyeOff, Bell, ChevronDown, MoreVertical, Settings as SettingsIcon, Lock, LogOut, FileText } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
 import { useUiStore } from '../store/uiStore';
@@ -10,8 +10,9 @@ import QuickAddMenu from './QuickAddMenu';
 import ProfileSwitcher from './ProfileSwitcher';
 import AppLogo from './AppLogo';
 import GlobalSearch from './GlobalSearch';
-import MarketTicker from './MarketTicker';
+import MarketTicker, { MarketTickerMarquee } from './MarketTicker';
 import { Button, IconButton } from './ui';
+import { PortfolioExportModal } from './PortfolioExportModal';
 
 const menuPanel =
   'animate-menu-in absolute right-0 mt-2 bg-surface border border-line rounded-xl shadow-lg overflow-hidden z-30';
@@ -33,6 +34,7 @@ export default function TopHeader() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
   // Fades a full-screen overlay in first, then flips the real auth state —
@@ -225,6 +227,17 @@ export default function TopHeader() {
                   <SettingsIcon size={16} className="text-muted shrink-0" />
                 </button>
 
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    setReportOpen(true);
+                  }}
+                  className={menuItem}
+                >
+                  <FileText size={17} className="text-muted" />
+                  Export report
+                </button>
+
                 <button onClick={toggleTheme} className={menuItem}>
                   {theme === 'dark' ? <Sun size={17} className="text-muted" /> : <Moon size={17} className="text-muted" />}
                   {theme === 'dark' ? 'Light mode' : 'Dark mode'}
@@ -253,6 +266,11 @@ export default function TopHeader() {
           </div>
         </div>
       </div>
+
+      {/* Mobile only: scrolling index strip pinned just under the top bar. */}
+      <MarketTickerMarquee className="md:hidden sticky top-14 z-20" />
+
+      <PortfolioExportModal open={reportOpen} onClose={() => setReportOpen(false)} />
 
       <Modal open={confirmOpen} onClose={() => setConfirmOpen(false)} title="Log out of Aurafin?">
         <p className="text-sm text-muted mb-6">

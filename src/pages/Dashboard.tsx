@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { isFullySold, computeHoldingPnl, isInvestmentHolding } from '../utils/investmentPnl';
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, FileText, Wallet, Receipt, Target, TrendingUp } from 'lucide-react';
+import { ArrowUpRight, Wallet, Receipt, Target, TrendingUp } from 'lucide-react';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -26,11 +26,9 @@ import { useUiStore } from '../store/uiStore';
 import { useSyncStatusStore } from '../store/syncStatusStore';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import GoldPriceCard from '../components/GoldPriceCard';
-import { PortfolioExportModal } from '../components/PortfolioExportModal';
 import { formatDate, toIsoDate, toIsoMonth } from '../utils/date';
 import {
   Badge,
-  Button,
   Card,
   CardHeader,
   EmptyState,
@@ -76,7 +74,6 @@ const INVESTMENT_CLASSES = new Set([
 ]);
 
 export default function Dashboard() {
-  const [exportModalOpen, setExportModalOpen] = useState(false);
   const allAssets = useAssetsStore((s) => s.assets);
   const allLiabilities = useLiabilitiesStore((s) => s.liabilities);
   const allTransactions = useTransactionsStore((s) => s.transactions);
@@ -254,17 +251,6 @@ export default function Dashboard() {
     <div className="space-y-5">
       <PageHeader
         title="Overview"
-        meta={
-          <p className="flex items-center gap-1.5 text-xs text-muted">
-            <span className="h-1.5 w-1.5 rounded-full bg-brand-500 animate-pulse" />
-            Live prices update every second during market hours
-          </p>
-        }
-        actions={
-          <Button variant="secondary" leftIcon={<FileText size={15} />} onClick={() => setExportModalOpen(true)}>
-            Export report
-          </Button>
-        }
       />
 
       {/* KPI strip */}
@@ -347,7 +333,6 @@ export default function Dashboard() {
       <GoldPriceCard />
 
       {/* PDF Export Modal — renders its own live preview of the report internally */}
-      <PortfolioExportModal open={exportModalOpen} onClose={() => setExportModalOpen(false)} />
     </div>
   );
 }

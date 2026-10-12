@@ -27,8 +27,8 @@ const ENDPOINT: Record<IndicesVariant, string> = {
   global: '/api/market/global-indices',
 };
 const POLL_MS = 30_000;
-// Indian indices refresh every few seconds while the market is open.
-const LIVE_POLL_MS = 5_000;
+// Indian indices refresh every 2 seconds while the market is open.
+const LIVE_POLL_MS = 2_000;
 
 const fmt = (n: number | undefined) =>
   n === undefined ? '—' : n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -63,7 +63,7 @@ export default function IndicesTable({ variant }: { variant: IndicesVariant }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(ENDPOINT[variant]);
+      const res = await fetch(ENDPOINT[variant], { cache: 'no-store' });
       if (!res.ok) throw new Error(String(res.status));
       const json = await res.json();
       if (!Array.isArray(json?.indices)) throw new Error('bad payload');

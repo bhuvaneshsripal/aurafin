@@ -720,6 +720,34 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   animation: page-in var(--dur-fast) ease-out;
 }
 
+/* Swiping between bottom-nav tabs: the new page slides in from the side you swiped toward. */
+@keyframes page-swipe-next {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes page-swipe-prev {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+html[data-swipe='next'] .animate-page-in {
+  animation: page-swipe-next 240ms ease-out;
+}
+html[data-swipe='prev'] .animate-page-in {
+  animation: page-swipe-prev 240ms ease-out;
+}
+
 /* A headline figure swapping from skeleton to value. */
 @keyframes value-in {
   from {
@@ -759,6 +787,9 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 
 /* Respect the OS "reduce motion" setting. */
 @media (prefers-reduced-motion: reduce) {
+  html[data-swipe] .animate-page-in {
+    animation: none;
+  }
   .animate-shake,
   .animate-page-in,
   .animate-value-in,
