@@ -580,3 +580,36 @@ export async function deleteAllUserData(uid: string) {
     }
   }
 }
+
+/** Valuation page "Recent searches", stored per account so the list follows
+ *  the person across devices (desktop ↔ phone) instead of living only in one
+ *  browser's localStorage. Guests stay device-local. */
+export interface ValuationHistoryItem {
+  symbol: string;
+  name: string;
+  exchange: 'NSE' | 'BSE';
+}
+
+export function subscribeValuationHistory(
+  user: { uid: string; isAnonymous?: boolean },
+  onChange: (items: ValuationHistoryItem[] | null) => void
+): () => void {
+  if (isAnonymousUser(user)) return () => {};
+  const ref = doc(db, 'users', user.uid, 'meta', 'valuationHistory');
+  return onSnapshot(
+    ref,
+    (snap) => {
+      const items = snap.data()?.items;
+      onChange(Array.isArray(items) ? items : snap.exists() ? [] : null);
+    },
+    () => onChange(null)
+  );
+}
+
+export async function saveValuationHistory(
+  user: { uid: string; isAnonymous?: boolean },
+  items: ValuationHistoryItem[]
+) {
+  if (isAnonymousUser(user)) return;
+  await setDoc(doc(db, 'users', user.uid, 'meta', 'valuationHistory'), { items }, { merge: false });
+}

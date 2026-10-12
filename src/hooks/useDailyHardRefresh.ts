@@ -2,10 +2,10 @@ import { useEffect } from 'react';
 import { hardRefresh } from '../utils/hardRefresh';
 
 const LAST_REFRESH_KEY = 'aurafin-last-auto-hard-refresh';
-const REFRESH_HOUR = 5; // 5:00 a.m. device-local time
+const REFRESH_HOUR = 6; // 6:00 a.m. device-local time
 const CHECK_INTERVAL_MS = 30_000;
 
-/** The most recent 5:00 a.m. (local) that is <= now. */
+/** The most recent 6:00 a.m. (local) that is <= now. */
 function latestRefreshSlot(now: Date): number {
   const slot = new Date(now);
   slot.setHours(REFRESH_HOUR, 0, 0, 0);
@@ -32,8 +32,8 @@ function writeLast(ts: number) {
 }
 
 /**
- * Runs a hard refresh once every day at 5:00 a.m. (device local time).
- * If the app was closed/asleep at 5 a.m., it refreshes the next time it is
+ * Runs a hard refresh once every day at 6:00 a.m. (device local time).
+ * If the app was closed/asleep at 6 a.m., it refreshes the next time it is
  * opened or brought to the foreground. Skipped while offline (a hard refresh
  * clears the service worker + caches and would leave a blank page), and
  * retried automatically once the connection is back.
@@ -50,7 +50,7 @@ export function useDailyHardRefresh() {
         writeLast(now.getTime());
         return;
       }
-      if (last >= slot) return; // already refreshed since the last 5 a.m.
+      if (last >= slot) return; // already refreshed since the last 6 a.m.
       if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
 
       writeLast(now.getTime()); // set before reloading to avoid a loop

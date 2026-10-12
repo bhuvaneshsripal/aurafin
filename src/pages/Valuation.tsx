@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { Search, Loader2, ChevronDown, History, X } from 'lucide-react';
 import { Card, CardHeader, PageHeader, Button, Input, cn } from '../components/ui';
 import { searchStockSymbols, type StockSearchResult } from '../utils/marketPrices';
+import { useAuthStore } from '../store/authStore';
+import { subscribeValuationHistory, saveValuationHistory } from '../hooks/useFirestoreSync';
 import {
   computeValuation, epsCagr, fetchFundamentals, inr, signedPct,
   type FundamentalsResponse,
@@ -48,6 +50,32 @@ export default function Valuation() {
   const [data, setData] = useState<FundamentalsResponse | null>(null);
 
   const [history, setHistory] = useState<HistoryItem[]>(readHistory);
+  const user = useAuthStore((st) => st.user);
+  const userRef = useRef(user);
+  userRef.current = user;
+
+  // Save locally and to the account, so history shows on every device.
+  const persistHistory = (h: HistoryItem[]) => {
+    writeHistory(h);
+    const u = userRef.current;
+    if (u) saveValuationHistory(u, h).catch(() => { /* offline — local copy still saved */ });
+  };
+
+  // Pull the account's history (other devices) and keep it live.
+  useEffect(() => {
+    if (!user) return;
+    return subscribeValuationHistory(user, (remote) => {
+      if (remote === null) {
+        // Nothing saved in the account yet: upload this device's history.
+        const local = readHistory();
+        if (local.length) saveValuationHistory(user, local).catch(() => {});
+        return;
+      }
+      const clean = remote.filter((h) => h && typeof h.symbol === 'string').slice(0, HISTORY_MAX);
+      setHistory(clean);
+      writeHistory(clean);
+    });
+  }, [user]);
   const [f, setF] = useState({ price: '', eps: '', growth: '', pe: '', years: '5', lookback: '10', exc: '0', dil: '0', req: '15', fy: '' });
   const [src, setSrc] = useState<Record<string, Src>>({});
   const [cyclical, setCyclical] = useState(false);
@@ -117,7 +145,7 @@ export default function Valuation() {
       setData(d);
       setHistory((prev) => {
         const next = [{ symbol: d.symbol, name: d.name ?? d.symbol, exchange: ex }, ...prev.filter((h) => !(h.symbol === d.symbol && h.exchange === ex))].slice(0, HISTORY_MAX);
-        writeHistory(next);
+        persistHistory(next);
         return next;
       });
       pickedRef.current = d.symbol;
@@ -129,6 +157,10 @@ export default function Valuation() {
       if (d.growth.next5y !== null) { g = d.growth.next5y; note = 'Analyst 5-year EPS growth estimate (Yahoo Finance)'; }
       else if (d.growth.nextYear !== null) { g = d.growth.nextYear; note = 'Analyst next-year EPS growth estimate (Yahoo Finance); no 5-year estimate available'; }
       else if (cagr !== null) { g = cagr; note = `EPS CAGR over ${hist.length - 1} reported years (historical, not a forecast)`; }
+      else if (d.forwardEps && d.forwardEps > 0 && d.ttmEps && d.ttmEps > 0) {
+        g = (d.forwardEps / d.ttmEps - 1) * 100;
+        note = 'Growth implied by forward EPS vs trailing EPS (Yahoo Finance); no analyst growth or EPS history available yet';
+      }
       else note = 'No analyst or historical growth available. Enter your own assumption.';
       // A raw 3-4 year EPS CAGR from a tiny base can be 50%+; compounding that for 5 years wildly
       // inflates X. Cap the auto-filled value at 25% (you can still type any number).
@@ -184,8 +216,7 @@ export default function Valuation() {
       {searchActive && createPortal(
         <div
           aria-hidden="true"
-          onMouseDown={() => { setSuggestions([]); setHistoryOpen(false); }}
-          onTouchStart={() => { setSuggestions([]); setHistoryOpen(false); }}
+          onClick={() => { setSuggestions([]); setHistoryOpen(false); }}
           className="animate-backdrop-in fixed inset-0 z-[45] bg-slate-900/40"
         />,
         document.body,
@@ -197,7 +228,7 @@ export default function Valuation() {
             <Input
               leftIcon={searching ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
               ref={inputRef}
-              placeholder="Search company or ticker, e.g. TCS"
+              placeholder="Search"
               value={query}
               onChange={(e) => { pickedRef.current = null; setHistoryOpen(false); setQuery(e.target.value.toUpperCase()); }}
               onFocus={() => setHistoryOpen(true)}
@@ -226,7 +257,7 @@ export default function Valuation() {
               <div className="absolute z-20 left-0 right-0 mt-1 overflow-hidden rounded-xl border border-line bg-surface shadow-lg">
                 <div className="flex items-center justify-between px-3 pt-2 pb-1 text-xs text-muted">
                   <span className="flex items-center gap-1"><History size={13} />Recent searches</span>
-                  <button type="button" onClick={() => { setHistory([]); writeHistory([]); setHistoryOpen(false); }} className="px-1 py-1 hover:text-ink">Clear all</button>
+                  <button type="button" onClick={() => { setHistory([]); persistHistory([]); setHistoryOpen(false); }} className="px-1 py-1 hover:text-ink">Clear all</button>
                 </div>
                 <ul>
                   {history.map((h) => (

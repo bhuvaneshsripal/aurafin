@@ -52,6 +52,23 @@ async function monthlyCloses(sym, years) {
   return (r?.timestamp ?? []).map((t, i) => ({ date: new Date(t * 1000).toISOString().slice(0, 10), close: closes[i] })).filter((x) => x.close > 0);
 }
 
+// Newly listed shares have no annual EPS history and no P/E series on Yahoo,
+// so the usual derivation returns nothing. Fall back to: the lowest daily
+// close since listing ÷ the current trailing EPS. It is an approximation
+// (labelled as such in `method`), but far better than an empty field.
+async function listingLowPe(sym, ttmEps) {
+  if (!(ttmEps > 0)) return null;
+  const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=10y`, { headers: { 'User-Agent': UA } });
+  if (!res.ok) return null;
+  const r = (await res.json())?.chart?.result?.[0];
+  const closes = r?.indicators?.quote?.[0]?.close ?? [];
+  const pts = (r?.timestamp ?? [])
+    .map((t, i) => ({ date: new Date(t * 1000).toISOString().slice(0, 10), value: closes[i] / ttmEps }))
+    .filter((x) => Number.isFinite(x.value) && x.value > 0 && x.value < 1000);
+  const out = summarisePe(pts, 'lowest close since listing ÷ trailing EPS (limited history)');
+  return out;
+}
+
 // P/E per month = month-end price ÷ the latest annual EPS already published at that time
 // (fiscal year end + 90 days reporting lag). Only positive EPS counts.
 function derivePeSeries(prices, annualEps) {
@@ -91,7 +108,8 @@ export async function fetchFundamentals(rawSymbol, exchange = 'NSE', lookbackYea
     const derived = derivePeSeries(prices, ts.annualDilutedEPS ?? []);
     // Use whichever series covers the longer span (more points on ties).
     const a = summarisePe(yahooPe, 'yahoo-trailing-pe'), b = summarisePe(derived, 'price-history ÷ annual EPS');
-    const lowestPe = a && b ? (b.spanYears > a.spanYears || (b.spanYears === a.spanYears && b.points > a.points) ? b : a) : (a ?? b);
+    let lowestPe = a && b ? (b.spanYears > a.spanYears || (b.spanYears === a.spanYears && b.points > a.points) ? b : a) : (a ?? b);
+    if (!lowestPe) { try { lowestPe = await listingLowPe(sym, ttmEps); } catch { /* leave empty */ } }
     const priceHistoryYears = prices.length ? Math.max(0, (new Date(prices[prices.length - 1].date).getTime() - new Date(prices[0].date).getTime()) / (365.25 * 86400000)) : null;
     const trend = sum.earningsTrend?.trend ?? [];
     const g = (period) => { const v = raw(trend.find((t) => t.period === period)?.growth); return v === null ? null : v * 100; };

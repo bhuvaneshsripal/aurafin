@@ -18,6 +18,8 @@ import { useNotificationPreferencesStore, type NotificationChannelKey } from '..
 import PinBoxInput, { type PinBoxInputHandle } from '../components/PinBoxInput';
 import { auth } from '../firebase/config';
 import CurrencySelect from '../components/CurrencySelect';
+import { fetchFxRate } from '../utils/marketPrices';
+import { CURRENCY_SYMBOLS } from '../utils/currency';
 import { loadImageFromFile } from '../utils/imageResize';
 import { formatDateTime } from '../utils/date';
 import AvatarCropModal from '../components/AvatarCropModal';
@@ -1087,6 +1089,61 @@ function NotificationsCard() {
   );
 }
 
+/** Live "1 USD = ₹X" line for the selected base currency (INR -> INR vs USD). */
+function FxVsDollar({ currency }: { currency: string }) {
+  // Against USD itself there is nothing to compare, so show USD vs INR.
+  const quote = currency === 'USD' ? 'INR' : currency;
+  const [rate, setRate] = useState<number | null | undefined>(undefined); // undefined = loading
+  const [asOf, setAsOf] = useState<Date | null>(null);
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    setRate(undefined);
+    fetchFxRate('USD', quote).then((r) => {
+      if (cancelled) return;
+      setRate(r);
+      setAsOf(r ? new Date() : null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [quote, tick]);
+
+  const sym = CURRENCY_SYMBOLS[quote] ?? quote;
+  const fmt = (n: number, d: number) => n.toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+  return (
+    <div className="mt-4 rounded-lg border border-line bg-surface-hover/40 px-4 py-3 flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-xs text-muted">Exchange rate vs US Dollar</p>
+        {rate === undefined ? (
+          <p className="text-sm text-muted">Fetching live rate…</p>
+        ) : rate === null ? (
+          <p className="text-sm text-negative">Couldn't fetch the live rate. Try again.</p>
+        ) : (
+          <>
+            <p className="text-lg font-semibold text-ink">
+              1 USD = {sym}{fmt(rate, 2)}
+            </p>
+            <p className="text-xs text-muted">
+              {sym}1 = ${fmt(1 / rate, 4)}
+              {asOf && <> · updated {asOf.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</>}
+            </p>
+          </>
+        )}
+      </div>
+      <button
+        onClick={() => setTick((t) => t + 1)}
+        aria-label="Refresh exchange rate"
+        className="shrink-0 p-2 rounded-lg border border-line hover:bg-surface-hover text-ink-2"
+      >
+        <RefreshCw size={15} className={rate === undefined ? 'animate-spin' : ''} />
+      </button>
+    </div>
+  );
+}
+
 function PreferencesTab() {
   const [baseCurrency, setBaseCurrency] = useState('INR');
   const [refreshing, setRefreshing] = useState(false);
@@ -1125,6 +1182,7 @@ function PreferencesTab() {
           onChange={setBaseCurrency}
           className="w-full sm:w-64 border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
         />
+        <FxVsDollar currency={baseCurrency} />
       </Card>
       <GoldRateCard />
       <DisplaySizeCard />

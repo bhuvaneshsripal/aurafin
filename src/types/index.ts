@@ -345,6 +345,28 @@ export interface Transaction {
   note?: string;
   /** Which household profile this transaction belongs to. */
   profileId?: string;
+  /** Holding this income came from (set for dividends logged from a holding). */
+  assetId?: string;
+  /** Extra detail for dividend income. `amount` above is the NET credited. */
+  dividend?: DividendDetails;
+}
+
+export type DividendKind = 'interim' | 'final' | 'special';
+
+export interface DividendDetails {
+  kind: DividendKind;
+  /** Amount before tax. */
+  gross: number;
+  /** Tax deducted at source (0 if none). */
+  tds: number;
+  /** Dividend per share/unit, when entered that way. */
+  perShare?: number;
+  /** Units held when the dividend was recorded. */
+  qty?: number;
+  /** Ex-dividend date (YYYY-MM-DD). */
+  exDate?: string;
+  /** Cash account the net amount was credited to, so a delete can reverse it. */
+  accountId?: string;
 }
 
 /** A household member (e.g. "Dad", "Mom", "Kid") whose assets, liabilities,

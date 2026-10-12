@@ -104,12 +104,35 @@ async function searchNseSymbol(query) {
   // the frontend already expects from the old Yahoo search, so the client
   // doesn't need to know which upstream answered.
   return {
-    quotes: symbols.map((s) => ({
-      symbol: s.symbol,
-      quoteType: 'EQUITY',
-      exchDisp: 'NSE',
-    })),
+    quotes: symbols
+      // Autocomplete also returns indices/derivatives; keep tradable equities/ETFs.
+      .filter((s) => s?.symbol && (!s.result_type || s.result_type === 'symbol') && (!s.result_sub_type || /equity|etf|sme/i.test(s.result_sub_type)))
+      .map((s) => ({
+        symbol: s.symbol,
+        name: s.symbol_info || s.symbol,
+        quoteType: 'EQUITY',
+        exchDisp: 'NSE',
+      })),
   };
 }
 
-export { fetchNseQuote, searchNseSymbol, invalidateNseCookie };
+/** Every NSE index in one call: [{ index: 'NIFTY 50', last, previousClose, ... }]. */
+async function fetchNseAllIndices() {
+  const cookie = await getNseCookie();
+  const res = await fetch('https://www.nseindia.com/api/allIndices', {
+    headers: {
+      ...BROWSER_HEADERS,
+      Accept: 'application/json',
+      Referer: 'https://www.nseindia.com/market-data/live-market-indices',
+      Cookie: cookie,
+    },
+  });
+  if (!res.ok) {
+    invalidateNseCookie();
+    throw new Error(`NSE allIndices request failed: ${res.status}`);
+  }
+  const data = await res.json();
+  return Array.isArray(data?.data) ? data.data : [];
+}
+
+export { fetchNseQuote, searchNseSymbol, invalidateNseCookie, fetchNseAllIndices };

@@ -10,7 +10,7 @@
 // For the US market: NSE has no US listings at all, so we skip it
 // entirely and go straight to Yahoo, which is what actually knows
 // "Google" -> GOOGL/GOOG.
-import { searchNseSymbol } from '../../../_lib/nse.js';
+import { searchIndia } from '../../../_lib/indiaSearch.js';
 
 // Exchanges Yahoo tags US-listed equities/ETFs with. Filters out
 // incidental non-US matches (e.g. a cross-listed ADR on another
@@ -71,29 +71,9 @@ export default async function handler(req, res) {
   }
 
   try {
-    const result = await searchNseSymbol(q);
-    if (result.quotes.length > 0) {
-      res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=86400');
-      // NSE's autocomplete gives us a symbol but no company name.
-      res.status(200).json({ quotes: result.quotes.map((r) => ({ ...r, name: r.symbol })) });
-      return;
-    }
-    // NSE handshake worked but found nothing — still worth trying Yahoo
-    // in case it's a BSE-only or non-NSE name.
-  } catch {
-    // NSE handshake/search failed outright — fall through to Yahoo below
-  }
-
-  try {
-    const quotes = (await searchYahoo(q)) ?? [];
-    const filtered = quotes.filter(
-      (r) =>
-        r.symbol &&
-        (r.quoteType === 'EQUITY' || r.quoteType === 'ETF') &&
-        (isIndianSymbol(r.symbol) || (r.exchange && IN_EXCHANGES.has(r.exchange)))
-    );
-    res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=86400');
-    res.status(200).json({ quotes: filtered });
+    const result = await searchIndia(q);
+    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=3600');
+    res.status(200).json(result);
   } catch {
     res.status(502).json({ error: 'Could not reach NSE or Yahoo Finance' });
   }

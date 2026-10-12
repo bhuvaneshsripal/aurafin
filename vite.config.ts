@@ -3,13 +3,17 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
-import { searchNseSymbol } from './api/_lib/nse.js'
+import { searchIndia } from './api/_lib/indiaSearch.js'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
 import { resolveQuote } from './api/_lib/quote.js'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
 import { fetchLiveGoldPricePerGram24k } from './api/_lib/gold.js'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
 import { fetchFundamentals } from './api/_lib/fundamentals.js'
+// @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
+import { fetchIndices } from './api/_lib/indices.js'
+// @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
+import { fetchGlobalIndices } from './api/_lib/globalIndices.js'
 
 // Local-dev/preview stand-in for the api/market/* serverless functions.
 // A plain URL-rewrite proxy (like /api/mf below) can't work for NSE,
@@ -66,6 +70,30 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
       return
     }
 
+    if (url.pathname === '/api/market/global-indices') {
+      try {
+        const indices = await fetchGlobalIndices()
+        if (!indices) { send(502, { error: 'Could not fetch global indices' }); return }
+        send(200, { indices, asOf: Date.now() })
+      } catch (err) {
+        console.error('[dev/global-indices] failed:', err instanceof Error ? err.message : err)
+        send(502, { error: 'Could not reach the index data source' })
+      }
+      return
+    }
+
+    if (url.pathname === '/api/market/indices') {
+      try {
+        const indices = await fetchIndices()
+        if (!indices) { send(502, { error: 'Could not fetch index levels' }); return }
+        send(200, { indices })
+      } catch (err) {
+        console.error('[dev/indices] failed:', err instanceof Error ? err.message : err)
+        send(502, { error: 'Could not reach the index data source' })
+      }
+      return
+    }
+
     if (url.pathname === '/api/market/fx') {
       const from = (url.searchParams.get('from') ?? 'USD').toUpperCase()
       const to = (url.searchParams.get('to') ?? 'INR').toUpperCase()
@@ -99,27 +127,15 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
       }
 
       try {
-        const result = await searchNseSymbol(q)
-        if (result.quotes.length > 0) {
-          send(200, result)
+        if (url.searchParams.get('market')?.toUpperCase() === 'US') {
+          const upstream = await fetch(
+            `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=8&newsCount=0`,
+            { headers: { 'User-Agent': 'Mozilla/5.0' } }
+          )
+          send(200, await upstream.json())
           return
         }
-      } catch (err) {
-        // fall through to Yahoo — logged so a "couldn't reach symbol
-        // search" error in the UI can actually be diagnosed from the
-        // terminal instead of just failing silently.
-        console.error(`[dev/market] NSE search for "${q}" failed:`, err instanceof Error ? err.message : err)
-      }
-
-      try {
-        const upstream = await fetch(
-          `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=5&newsCount=0`,
-          { headers: { 'User-Agent': 'Mozilla/5.0' } }
-        )
-        if (!upstream.ok) {
-          console.error(`[dev/market] Yahoo search for "${q}" failed: HTTP ${upstream.status}`)
-        }
-        send(200, await upstream.json())
+        send(200, await searchIndia(q))
       } catch (err) {
         console.error(`[dev/market] Could not reach NSE or Yahoo Finance for "${q}":`, err instanceof Error ? err.message : err)
         send(502, { error: 'Could not reach NSE or Yahoo Finance' })

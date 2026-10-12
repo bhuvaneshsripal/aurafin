@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Moon, Sun, Eye, EyeOff, Bell, ChevronDown, MoreVertical, Settings as SettingsIcon, Lock, LogOut } from 'lucide-react';
+import { Moon, Sun, Globe, Eye, EyeOff, Bell, ChevronDown, MoreVertical, Settings as SettingsIcon, Lock, LogOut } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
 import { useUiStore } from '../store/uiStore';
@@ -10,6 +10,8 @@ import QuickAddMenu from './QuickAddMenu';
 import ProfileSwitcher from './ProfileSwitcher';
 import AppLogo from './AppLogo';
 import GlobalSearch from './GlobalSearch';
+import MarketTicker from './MarketTicker';
+import GlobalIndicesModal from './GlobalIndicesModal';
 import { Button, IconButton } from './ui';
 
 const menuPanel =
@@ -17,7 +19,7 @@ const menuPanel =
 const menuItem =
   'w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium text-ink-2 hover:bg-surface-hover text-left';
 
-/** The sticky 56px top bar. Desktop: search · add · privacy/theme/notifications · account.
+/** The sticky 56px top bar. Desktop: search icon · add · privacy/theme/notifications · account.
  *  Mobile: brand + profile on the left, search / privacy / overflow menu on the right. */
 export default function TopHeader() {
   const user = useAuthStore((s) => s.user);
@@ -31,6 +33,7 @@ export default function TopHeader() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [globalOpen, setGlobalOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
   // Fades a full-screen overlay in first, then flips the real auth state —
@@ -89,7 +92,7 @@ export default function TopHeader() {
     <>
       <div
         id="app-topbar"
-        className="sticky top-0 z-30 h-14 grid grid-cols-[auto_1fr] md:flex items-center gap-2 sm:gap-3 px-4 sm:px-6 md:px-8 bg-white border-b border-line md:justify-between"
+        className="sticky top-0 z-30 h-14 grid grid-cols-[auto_1fr] md:flex items-center gap-2 sm:gap-3 px-4 sm:px-6 md:px-8 bg-surface border-b border-line md:justify-between"
       >
         {/* Mobile: brand mark + profile switcher together, left-aligned */}
         <span className="md:hidden flex items-center gap-2 min-w-0">
@@ -106,11 +109,18 @@ export default function TopHeader() {
         </span>
 
         {/* Desktop */}
-        <div className="hidden md:flex flex-1 items-center min-w-0">
-          <GlobalSearch variant="bar" />
+        {/* Market indices, then the globe button (opens the global indices table). */}
+        <div className="hidden md:flex flex-1 items-center gap-3 min-w-0">
+          <MarketTicker />
+          <IconButton label="Global indices" onClick={() => setGlobalOpen(true)} className="shrink-0 border border-line bg-surface-muted">
+            <Globe size={18} />
+          </IconButton>
         </div>
 
         <div className="hidden md:flex items-center gap-1.5 shrink-0">
+          {/* Search icon sits just before the green Add button; clicking opens the search box. */}
+          <GlobalSearch />
+
           <div className="shrink-0 mr-1">
             <QuickAddMenu />
           </div>
@@ -240,6 +250,8 @@ export default function TopHeader() {
           </div>
         </div>
       </div>
+
+      <GlobalIndicesModal open={globalOpen} onClose={() => setGlobalOpen(false)} />
 
       <Modal open={confirmOpen} onClose={() => setConfirmOpen(false)} title="Log out of Aurafin?">
         <p className="text-sm text-muted mb-6">

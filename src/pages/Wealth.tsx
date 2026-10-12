@@ -56,6 +56,8 @@ import { useLivePricesStore, resolvePreviousClose } from '../store/livePricesSto
 import { formatDate, toIsoDate } from '../utils/date';
 import { goldPricePerGram22k } from '../utils/goldPrice';
 import { computeHoldingPnl, isFullySold } from '../utils/investmentPnl';
+import { fifoMatch, summariseFy, financialYearOf, taxGroupOf, TAX_RULES } from '../utils/capitalGains';
+import { useAnalyticsSettingsStore } from '../store/analyticsSettingsStore';
 import { useSyncStatusStore } from '../store/syncStatusStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useAuthStore } from '../store/authStore';
@@ -95,7 +97,8 @@ import CurrencySelect from '../components/CurrencySelect';
 import CustomSelect from '../components/CustomSelect';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { ACCOUNT_TYPES, resolveAccountIcon, type AccountType } from '../utils/accountVisuals';
-import type { Asset, AssetClass, Liability, LiabilityClass, Snapshot, Transaction } from '../types';
+import type { Asset, AssetClass, DividendKind, Liability, LiabilityClass, Snapshot, Transaction } from '../types';
+import { useTransactionsStore } from '../store/transactionsStore';
 import {
   formatPreciseCurrency,
   formatAxisAmount,
@@ -1246,6 +1249,24 @@ function AssetsTab({
     }
   };
 
+  // Removes a dividend entry and, if its net amount was credited to a cash
+  // account, takes that amount back out so balances stay truthful.
+  const handleDeleteDividend = async (t: Transaction) => {
+    if (!user) return;
+    try {
+      const acct = t.dividend?.accountId
+        ? allAssets.find((a) => a.id === t.dividend!.accountId)
+        : undefined;
+      if (acct) {
+        await upsertDoc(user, 'assets', { ...acct, value: (acct.value ?? 0) - t.amount, updatedAt: Date.now() });
+      }
+      await removeDoc(user, 'transactions', t.id);
+    } catch (err) {
+      console.error('Failed to delete dividend', err);
+      alert('Could not delete this dividend. Please check your connection and try again.');
+    }
+  };
+
   const handleDuplicate = async (a: Asset) => {
     console.log('[DEBUG] handleDuplicate called for', a.id, a.name, 'user:', user?.uid);
     if (!user) {
@@ -1705,6 +1726,7 @@ function AssetsTab({
       // hide perfectly good accounts whenever a specific profile is active.
       accounts: allAssets.filter((a) => a.assetClass === 'cash'),
       onLogTransaction: handleLogTransaction,
+      onDeleteDividend: handleDeleteDividend,
     };
     return isHoldingStyle ? <HoldingDetailView {...detailProps} /> : <AssetDetailPage {...detailProps} />;
   }
@@ -3097,6 +3119,7 @@ function HoldingDetailView({
   onQuickUpdate,
   accounts,
   onLogTransaction,
+  onDeleteDividend,
 }: {
   asset: Asset;
   onBack: () => void;
@@ -3106,6 +3129,7 @@ function HoldingDetailView({
   /** Bank/cash/wallet accounts (assetClass 'cash') a Sell or Dividend can be credited into. */
   accounts: Asset[];
   onLogTransaction: (t: Transaction) => void | Promise<void>;
+  onDeleteDividend?: (t: Transaction) => void | Promise<void>;
 }) {
   const livePrices = useLivePricesStore((s) => s.prices);
   const sipValues = useLivePricesStore((s) => s.sipValues);
@@ -3114,6 +3138,20 @@ function HoldingDetailView({
   const privacyMode = useUiStore((s) => s.privacyMode);
   const dayChangeResetActive = useDayChangeResetWindow();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const allTransactions = useTransactionsStore((s) => s.transactions);
+  const dividends = useMemo(
+    () =>
+      allTransactions
+        .filter(
+          (t) =>
+            t.type === 'income' &&
+            t.category === 'Dividend' &&
+            (t.assetId === asset.id || (!t.assetId && t.note === `Dividend from ${asset.name}`))
+        )
+        .sort((a, b) => b.date.localeCompare(a.date)),
+    [allTransactions, asset.id, asset.name]
+  );
+  const [dividendToDelete, setDividendToDelete] = useState<Transaction | null>(null);
   // "+" menu (Buy / Sell / Dividend) shown in the header, before the Edit
   // button. `txMode` drives which form the modal below shows; the menu
   // itself just picks it and closes.
@@ -3226,6 +3264,7 @@ function HoldingDetailView({
 
       <BuySellDividendModal
         mode={txMode}
+        currentPrice={currentPrice}
         asset={asset}
         accounts={accounts}
         onClose={() => setTxMode(null)}
@@ -3480,6 +3519,93 @@ function HoldingDetailView({
         </div>
       )}
 
+      {dividends.length > 0 && (() => {
+        const grossOf = (t: Transaction) => t.dividend?.gross ?? t.amount;
+        const totalNet = dividends.reduce((n, t) => n + t.amount, 0);
+        const yearAgo = new Date();
+        yearAgo.setFullYear(yearAgo.getFullYear() - 1);
+        const cutoff = toIsoDate(yearAgo);
+        const ttmGross = dividends.filter((t) => t.date >= cutoff).reduce((n, t) => n + grossOf(t), 0);
+        const costBasis = asset.investedValue ?? 0;
+        const ttmYield = costBasis > 0 ? (ttmGross / costBasis) * 100 : undefined;
+        return (
+          <div className="bg-surface rounded-2xl border border-line p-5">
+            <h3 className="font-bold text-ink mb-3">Dividends</h3>
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <div>
+                <p className="text-xs text-muted">Total received</p>
+                <p className="text-sm font-semibold text-emerald-600">{formatPreciseCurrency(totalNet, asset.currency)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted">Last 12 months</p>
+                <p className="text-sm font-semibold text-ink">{formatPreciseCurrency(ttmGross, asset.currency)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted">Yield on cost</p>
+                <p className="text-sm font-semibold text-ink">{ttmYield !== undefined ? `${ttmYield.toFixed(2)}%` : '—'}</p>
+              </div>
+            </div>
+            <div className="divide-y divide-line">
+              {dividends.map((t) => (
+                <div key={t.id} className="flex items-center justify-between py-3 first:pt-0 last:pb-0 gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-ink">
+                      {formatDate(t.date)}
+                      {t.dividend && <span className="ml-2 text-xs font-medium text-muted capitalize">{t.dividend.kind}</span>}
+                    </p>
+                    <p className="text-xs text-slate-600 mt-0.5 truncate">
+                      {t.dividend?.perShare !== undefined
+                        ? `${formatPreciseCurrency(t.dividend.perShare, asset.currency)} × ${t.dividend.qty}`
+                        : 'Total amount'}
+                      {t.dividend && t.dividend.tds > 0 ? ` · TDS ${formatPreciseCurrency(t.dividend.tds, asset.currency)}` : ''}
+                      {t.dividend?.exDate ? ` · Ex ${formatDate(t.dividend.exDate)}` : ''}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <p className="text-sm font-semibold text-emerald-600">+{formatPreciseCurrency(t.amount, asset.currency)}</p>
+                    {onDeleteDividend && (
+                      <button
+                        type="button"
+                        onClick={() => setDividendToDelete(t)}
+                        title="Delete dividend"
+                        className="h-7 w-7 flex items-center justify-center rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      <Modal open={dividendToDelete !== null} onClose={() => setDividendToDelete(null)} title="Delete this dividend?">
+        <p className="text-sm text-muted mb-6">
+          {dividendToDelete?.dividend?.accountId
+            ? 'The amount credited to your account will be taken back out.'
+            : 'This only removes the record.'}
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setDividendToDelete(null)}
+            className="flex-1 border border-line text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-surface-hover"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={async () => {
+              if (dividendToDelete) await onDeleteDividend?.(dividendToDelete);
+              setDividendToDelete(null);
+            }}
+            className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg text-sm font-medium"
+          >
+            Delete
+          </button>
+        </div>
+      </Modal>
+
       <p className="text-xs text-slate-600 text-center px-4">
         {category?.label ?? ASSET_CLASS_LABELS[asset.assetClass]}
       </p>
@@ -3505,6 +3631,7 @@ function HoldingDetailView({
  */
 function BuySellDividendModal({
   mode,
+  currentPrice,
   asset,
   accounts,
   onClose,
@@ -3512,6 +3639,8 @@ function BuySellDividendModal({
   onLogTransaction,
 }: {
   mode: 'buy' | 'sell' | 'dividend' | null;
+  /** Live market price per unit, used to prefill the sell price. */
+  currentPrice?: number;
   asset: Asset;
   accounts: Asset[];
   onClose: () => void;
@@ -3528,6 +3657,17 @@ function BuySellDividendModal({
   const [qty, setQty] = useState('');
   const [price, setPrice] = useState('');
   const [amount, setAmount] = useState('');
+  // Sell-only extras.
+  const [sellFees, setSellFees] = useState('');
+  const [sellNote, setSellNote] = useState('');
+  const slabRate = useAnalyticsSettingsStore((st) => st.slabRate);
+  // Dividend-only extras.
+  const [divEntry, setDivEntry] = useState<'total' | 'perShare'>(currentQty > 0 ? 'perShare' : 'total');
+  const [divPerShare, setDivPerShare] = useState('');
+  const [divKind, setDivKind] = useState<DividendKind>('interim');
+  const [tdsPct, setTdsPct] = useState('0');
+  const [exDate, setExDate] = useState('');
+  const [divNote, setDivNote] = useState('');
   const [date, setDate] = useState(() => toIsoDate());
   // '' = "No cash account (position only)" — crediting proceeds/dividends to
   // a bank account is opt-in, since some people track buys/sells purely at
@@ -3551,6 +3691,15 @@ function BuySellDividendModal({
       setQty('');
       setPrice('');
       setAmount('');
+      setSellFees('');
+      setSellNote('');
+      if (mode === 'sell' && currentPrice) setPrice(String(Math.round(currentPrice * 100) / 100));
+      setDivEntry(currentQty > 0 ? 'perShare' : 'total');
+      setDivPerShare('');
+      setDivKind('interim');
+      setTdsPct('0');
+      setExDate('');
+      setDivNote('');
       setDate(toIsoDate());
       setAccountId('');
       setError('');
@@ -3656,12 +3805,70 @@ function BuySellDividendModal({
     }
   };
 
+  // Live sell preview: proceeds, realised P&L vs average cost, and an
+  // estimated capital-gains tax using FIFO lot matching (same engine as the
+  // Tax report). Tax is incremental: FY tax with this sale minus without.
+  const sellQtyNum = Number(qty) || 0;
+  const sellPriceNum = Number(price) || 0;
+  const sellFeesNum = Math.max(0, Number(sellFees) || 0);
+  const sellPreview = useMemo(() => {
+    if (mode !== 'sell' || sellQtyNum <= 0 || sellPriceNum <= 0 || sellQtyNum > currentQty + 0.0001) return null;
+    const gross = sellQtyNum * sellPriceNum;
+    const net = gross - sellFeesNum;
+    const { avgBuyCost } = computeHoldingPnl(asset, undefined, false);
+    const costOfSold = sellQtyNum * avgBuyCost;
+    const pnl = net - costOfSold;
+    const hypothetical: Asset = {
+      ...asset,
+      saleLots: [
+        ...(asset.saleLots ?? []),
+        { id: '__preview__', date, quantity: sellQtyNum, price: sellPriceNum, costBasis: avgBuyCost, fees: sellFeesNum },
+      ],
+    };
+    const fy = financialYearOf(date);
+    const group = taxGroupOf(asset.assetClass);
+    const sliceFor = (a: Asset) =>
+      fifoMatch(computeHoldingPnl(a, undefined, false)).realised.filter((x) => x.fy === fy);
+    const before = sliceFor(asset);
+    const after = sliceFor(hypothetical);
+    const tax = summariseFy(fy, after, slabRate).totalTax - summariseFy(fy, before, slabRate).totalTax;
+    const added = after.length - before.length;
+    // The new sale's slices are the ones present only in `after`; since both
+    // lists are chronological, compare aggregate qty by term instead.
+    const termQty = (list: typeof after, t: 'short' | 'long') =>
+      list.filter((x) => x.term === t).reduce((n, x) => n + x.qty, 0);
+    const shortQty = termQty(after, 'short') - termQty(before, 'short');
+    const longQty = termQty(after, 'long') - termQty(before, 'long');
+    const rule = TAX_RULES[group];
+    return {
+      gross,
+      net,
+      pnl,
+      pnlPct: costOfSold > 0 ? (pnl / costOfSold) * 100 : undefined,
+      tax: added > 0 ? Math.max(0, tax) : 0,
+      shortQty: Math.max(0, shortQty),
+      longQty: Math.max(0, longQty),
+      slab: rule.stcgRate === null && shortQty > 0.0001,
+      taxable: group !== 'slab',
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, sellQtyNum, sellPriceNum, sellFeesNum, date, asset, currentQty, slabRate]);
+
   const submitSell = async () => {
     const qtyNum = Number(qty);
     const priceNum = Number(price);
+    const feesNum = sellFeesNum;
     const account = accounts.find((a) => a.id === accountId);
     if (!qtyNum || qtyNum <= 0 || !priceNum || priceNum <= 0) {
       setError('Enter a valid quantity and price.');
+      return;
+    }
+    if (feesNum >= qtyNum * priceNum) {
+      setError('Charges cannot be more than the sale value.');
+      return;
+    }
+    if (date > toIsoDate()) {
+      setError('Sale date cannot be in the future.');
       return;
     }
     if (qtyNum > currentQty + 0.0001) {
@@ -3683,7 +3890,7 @@ function BuySellDividendModal({
       // the moving weighted-average cost basis *as of right now* (see
       // src/utils/investmentPnl.ts), which stays fixed forever afterward
       // even if later buys change the holding's current average.
-      const proceeds = qtyNum * priceNum;
+      const proceeds = qtyNum * priceNum - feesNum;
       const { avgBuyCost } = computeHoldingPnl(asset, undefined, false);
       const saleLots = [
         ...(asset.saleLots ?? []),
@@ -3693,7 +3900,9 @@ function BuySellDividendModal({
           quantity: qtyNum,
           price: priceNum,
           costBasis: avgBuyCost,
-          accountId: account?.id,
+          // Firestore rejects undefined, so only include optional fields when set.
+          ...(feesNum > 0 ? { fees: feesNum } : {}),
+          ...(account ? { accountId: account.id } : {}),
         },
       ];
       // Recompute the holding's live-facing summary fields (quantity/avg
@@ -3720,16 +3929,18 @@ function BuySellDividendModal({
       if (account) {
         await onQuickUpdate({ ...account, value: (account.value ?? 0) + proceeds, updatedAt: Date.now() });
       }
-      await onLogTransaction({
+      const saleTx: Transaction = {
         id: crypto.randomUUID(),
         type: 'income',
         category: 'Investments',
         amount: proceeds,
         currency: asset.currency,
         date,
-        note: `Sold ${qtyNum} ${unitLabel} of ${asset.name}`,
-        profileId: asset.profileId,
-      });
+        note: sellNote.trim() || `Sold ${qtyNum} ${unitLabel} of ${asset.name}`,
+        assetId: asset.id,
+      };
+      if (asset.profileId) saleTx.profileId = asset.profileId;
+      await onLogTransaction(saleTx);
       onClose();
     } catch (err) {
       console.error('Sell failed', err);
@@ -3739,11 +3950,27 @@ function BuySellDividendModal({
     }
   };
 
+  // Live dividend maths — shared by the summary box and the submit handler.
+  const divGross =
+    divEntry === 'perShare' ? (Number(divPerShare) || 0) * currentQty : Number(amount) || 0;
+  const divTdsRate = Math.min(100, Math.max(0, Number(tdsPct) || 0));
+  const divTds = Math.round(divGross * divTdsRate) / 100;
+  const divNet = Math.round((divGross - divTds) * 100) / 100;
+  const divInvested = asset.investedValue ?? 0;
+  const divYieldOnCost = divInvested > 0 ? (divGross / divInvested) * 100 : undefined;
+
   const submitDividend = async () => {
-    const amountNum = Number(amount);
     const account = accounts.find((a) => a.id === accountId);
-    if (!amountNum || amountNum <= 0) {
-      setError('Enter a valid amount.');
+    if (!divGross || divGross <= 0) {
+      setError(divEntry === 'perShare' ? 'Enter the dividend per share.' : 'Enter a valid amount.');
+      return;
+    }
+    if (divNet <= 0) {
+      setError('TDS cannot be 100% of the dividend.');
+      return;
+    }
+    if (exDate && exDate > date) {
+      setError('Ex-date cannot be after the payment date.');
       return;
     }
     if (accountId && !account) {
@@ -3754,18 +3981,29 @@ function BuySellDividendModal({
     setError('');
     try {
       if (account) {
-        await onQuickUpdate({ ...account, value: (account.value ?? 0) + amountNum, updatedAt: Date.now() });
+        await onQuickUpdate({ ...account, value: (account.value ?? 0) + divNet, updatedAt: Date.now() });
       }
-      await onLogTransaction({
+      // Firestore rejects `undefined`, so only add optional fields that exist.
+      const details: NonNullable<Transaction['dividend']> = { kind: divKind, gross: divGross, tds: divTds };
+      if (divEntry === 'perShare') {
+        details.perShare = Number(divPerShare);
+        details.qty = currentQty;
+      }
+      if (exDate) details.exDate = exDate;
+      if (account) details.accountId = account.id;
+      const tx: Transaction = {
         id: crypto.randomUUID(),
         type: 'income',
         category: 'Dividend',
-        amount: amountNum,
+        amount: divNet,
         currency: asset.currency,
         date,
-        note: `Dividend from ${asset.name}`,
-        profileId: asset.profileId,
-      });
+        note: divNote.trim() || `Dividend from ${asset.name}`,
+        assetId: asset.id,
+        dividend: details,
+      };
+      if (asset.profileId) tx.profileId = asset.profileId;
+      await onLogTransaction(tx);
       onClose();
     } catch (err) {
       console.error('Dividend failed', err);
@@ -3801,24 +4039,207 @@ function BuySellDividendModal({
                 Quantity to sell ({unitLabel}) — you hold {currentQty}
               </label>
               <input type="number" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="e.g. 5" className={inputClass} autoFocus />
+              <div className="mt-2 flex gap-2">
+                {[25, 50, 75, 100].map((pct) => (
+                  <button
+                    key={pct}
+                    type="button"
+                    onClick={() => setQty(String(Math.round(currentQty * pct * 1e4 / 100) / 1e4))}
+                    className="px-2.5 py-1 rounded-full text-xs font-medium border border-line text-slate-600 dark:text-slate-300 hover:bg-surface-hover"
+                  >
+                    {pct === 100 ? 'Sell all' : `${pct}%`}
+                  </button>
+                ))}
+              </div>
             </div>
             <div>
-              <label className="text-xs font-medium text-muted">Sell price per {isWeightTracked ? 'gram' : 'unit'}</label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-muted">Sell price per {isWeightTracked ? 'gram' : 'unit'}</label>
+                {currentPrice !== undefined && (
+                  <button
+                    type="button"
+                    onClick={() => setPrice(String(Math.round(currentPrice * 100) / 100))}
+                    className="text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline"
+                  >
+                    Use market price ({formatPreciseCurrency(currentPrice, asset.currency)})
+                  </button>
+                )}
+              </div>
               <input type="number" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="e.g. 160" className={inputClass} />
             </div>
+            <div>
+              <label className="text-xs font-medium text-muted">Brokerage &amp; charges (optional)</label>
+              <input type="number" inputMode="decimal" min={0} value={sellFees} onChange={(e) => setSellFees(e.target.value)} placeholder="e.g. 20" className={inputClass} />
+            </div>
+
+            {sellPreview && (
+              <div className="rounded-lg border border-line bg-slate-50 dark:bg-slate-800/40 p-3 space-y-1.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted">Sale value</span>
+                  <span className="font-medium text-ink">{formatPreciseCurrency(sellPreview.gross, asset.currency)}</span>
+                </div>
+                {sellFeesNum > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted">Charges</span>
+                    <span className="font-medium text-red-500">−{formatPreciseCurrency(sellFeesNum, asset.currency)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between border-t border-line pt-1.5">
+                  <span className="font-semibold text-ink">Net proceeds</span>
+                  <span className="font-semibold text-ink">{formatPreciseCurrency(sellPreview.net, asset.currency)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted">Realised P&amp;L (vs avg cost)</span>
+                  <span className={`font-semibold ${sellPreview.pnl >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                    {formatSignedCurrency(sellPreview.pnl, asset.currency)}
+                    {sellPreview.pnlPct !== undefined ? ` (${formatPercentMagnitude(sellPreview.pnlPct)})` : ''}
+                  </span>
+                </div>
+                {sellPreview.taxable && (
+                  <div className="border-t border-line pt-1.5 space-y-1">
+                    <p className="text-xs text-muted">
+                      Tax lots (FIFO):{' '}
+                      {sellPreview.shortQty > 0 && `${+sellPreview.shortQty.toFixed(4)} short-term`}
+                      {sellPreview.shortQty > 0 && sellPreview.longQty > 0 && ' · '}
+                      {sellPreview.longQty > 0 && `${+sellPreview.longQty.toFixed(4)} long-term`}
+                    </p>
+                    <div className="flex justify-between">
+                      <span className="text-muted">Est. capital-gains tax</span>
+                      <span className="font-medium text-ink">
+                        {sellPreview.tax > 0 ? formatPreciseCurrency(sellPreview.tax, asset.currency) : 'Nil'}
+                      </span>
+                    </div>
+                    {sellPreview.slab && (
+                      <p className="text-xs text-muted">Short-term part is taxed at your slab rate ({slabRate}%).</p>
+                    )}
+                    <p className="text-[11px] text-muted">
+                      Estimate only — includes this financial year's other sales and the LTCG exemption, not your full tax position.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
 
         {mode === 'dividend' && (
-          <div>
-            <label className="text-xs font-medium text-muted">Dividend amount</label>
-            <input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 250" className={inputClass} autoFocus />
-          </div>
+          <>
+            <div className="flex gap-1 p-1 rounded-lg bg-slate-100 dark:bg-slate-800/60">
+              {([
+                ['perShare', 'Per share'],
+                ['total', 'Total amount'],
+              ] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  disabled={key === 'perShare' && currentQty <= 0}
+                  onClick={() => setDivEntry(key)}
+                  className={cn(
+                    'flex-1 py-1.5 text-xs font-medium rounded-md transition-colors disabled:opacity-40',
+                    divEntry === key ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink'
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {divEntry === 'perShare' ? (
+              <div>
+                <label className="text-xs font-medium text-muted">
+                  Dividend per share — you hold {currentQty}
+                </label>
+                <input type="number" inputMode="decimal" value={divPerShare} onChange={(e) => setDivPerShare(e.target.value)} placeholder="e.g. 2.5" className={inputClass} autoFocus />
+              </div>
+            ) : (
+              <div>
+                <label className="text-xs font-medium text-muted">Dividend amount (before tax)</label>
+                <input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 250" className={inputClass} autoFocus />
+              </div>
+            )}
+
+            <div>
+              <label className="text-xs font-medium text-muted">Type</label>
+              <div className="mt-1 flex gap-2">
+                {(['interim', 'final', 'special'] as const).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setDivKind(k)}
+                    className={cn(
+                      'px-3 py-1.5 rounded-full text-xs font-medium border capitalize transition-colors',
+                      divKind === k
+                        ? 'bg-brand-600 border-brand-600 text-white'
+                        : 'border-line text-slate-600 dark:text-slate-300 hover:bg-surface-hover'
+                    )}
+                  >
+                    {k}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-muted">TDS deducted (%)</label>
+              <div className="mt-1 flex items-center gap-2">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  max={100}
+                  value={tdsPct}
+                  onChange={(e) => setTdsPct(e.target.value)}
+                  className={`${inputClasses} w-24`}
+                />
+                {['0', '10', '20'].map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setTdsPct(v)}
+                    className={cn(
+                      'px-2.5 py-1.5 rounded-full text-xs font-medium border transition-colors',
+                      tdsPct === v
+                        ? 'bg-brand-50 border-brand-600 text-brand-700 dark:bg-brand-950/40 dark:text-brand-400'
+                        : 'border-line text-slate-600 dark:text-slate-300 hover:bg-surface-hover'
+                    )}
+                  >
+                    {v === '0' ? 'None' : `${v}%`}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {divGross > 0 && (
+              <div className="rounded-lg border border-line bg-slate-50 dark:bg-slate-800/40 p-3 space-y-1.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted">Gross dividend</span>
+                  <span className="font-medium text-ink">{formatPreciseCurrency(divGross, asset.currency)}</span>
+                </div>
+                {divTds > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted">TDS ({divTdsRate}%)</span>
+                    <span className="font-medium text-red-500">−{formatPreciseCurrency(divTds, asset.currency)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between border-t border-line pt-1.5">
+                  <span className="font-semibold text-ink">Net received</span>
+                  <span className="font-semibold text-emerald-600">{formatPreciseCurrency(divNet, asset.currency)}</span>
+                </div>
+                {divYieldOnCost !== undefined && (
+                  <p className="text-xs text-muted pt-0.5">
+                    Adds {divYieldOnCost.toFixed(2)}% yield on your invested cost.
+                  </p>
+                )}
+              </div>
+            )}
+          </>
         )}
 
         {(mode === 'sell' || mode === 'dividend') && (
           <div>
-            <label className="text-xs font-medium text-muted">Credited to (optional)</label>
+            <label className="text-xs font-medium text-muted">
+              {mode === 'dividend' ? 'Credit net amount to (optional)' : 'Credit net proceeds to (optional)'}
+            </label>
             {newAccountOpen ? (
               <div className="mt-1 border border-line rounded-lg p-3 space-y-2.5 bg-slate-50 dark:bg-slate-800/40">
                 <div className="flex items-center justify-between">
@@ -3920,10 +4341,37 @@ function BuySellDividendModal({
           </div>
         )}
 
-        <div>
-          <label className="text-xs font-medium text-muted">Date</label>
-          <DateInput value={date} onChange={(v) => setDate(v)} className={inputClass} />
-        </div>
+        {mode === 'dividend' ? (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-muted">Ex-date (optional)</label>
+              <DateInput value={exDate} onChange={(v) => setExDate(v)} className={inputClass} />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted">Payment date</label>
+              <DateInput value={date} onChange={(v) => setDate(v)} className={inputClass} />
+            </div>
+          </div>
+        ) : (
+          <div>
+            <label className="text-xs font-medium text-muted">Date</label>
+            <DateInput value={date} onChange={(v) => setDate(v)} className={inputClass} />
+          </div>
+        )}
+
+        {mode === 'sell' && (
+          <div>
+            <label className="text-xs font-medium text-muted">Note (optional)</label>
+            <input type="text" value={sellNote} onChange={(e) => setSellNote(e.target.value)} placeholder={`Sold ${asset.name}`} className={inputClass} />
+          </div>
+        )}
+
+        {mode === 'dividend' && (
+          <div>
+            <label className="text-xs font-medium text-muted">Note (optional)</label>
+            <input type="text" value={divNote} onChange={(e) => setDivNote(e.target.value)} placeholder={`Dividend from ${asset.name}`} className={inputClass} />
+          </div>
+        )}
 
         {error && <p className="text-xs text-red-600">{error}</p>}
 
