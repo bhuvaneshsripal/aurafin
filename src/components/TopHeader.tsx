@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Moon, Sun, Globe, Eye, EyeOff, Bell, ChevronDown, MoreVertical, Settings as SettingsIcon, Lock, LogOut } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
@@ -11,7 +11,6 @@ import ProfileSwitcher from './ProfileSwitcher';
 import AppLogo from './AppLogo';
 import GlobalSearch from './GlobalSearch';
 import MarketTicker from './MarketTicker';
-import GlobalIndicesModal from './GlobalIndicesModal';
 import { Button, IconButton } from './ui';
 
 const menuPanel =
@@ -28,12 +27,12 @@ export default function TopHeader() {
   const lockEnabled = useAppLockStore((s) => s.enabled);
   const lockNow = useAppLockStore((s) => s.lockNow);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [globalOpen, setGlobalOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
   // Fades a full-screen overlay in first, then flips the real auth state —
@@ -109,10 +108,14 @@ export default function TopHeader() {
         </span>
 
         {/* Desktop */}
-        {/* Market indices, then the globe button (opens the global indices table). */}
+        {/* Market indices, then the globe button (opens the All Indices page). */}
         <div className="hidden md:flex flex-1 items-center gap-3 min-w-0">
           <MarketTicker />
-          <IconButton label="Global indices" onClick={() => setGlobalOpen(true)} className="shrink-0 border border-line bg-surface-muted">
+          <IconButton
+            label="All indices"
+            onClick={() => navigate('/indices')}
+            className={`shrink-0 border border-line ${location.pathname === '/indices' ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/15' : 'bg-surface-muted'}`}
+          >
             <Globe size={18} />
           </IconButton>
         </div>
@@ -250,8 +253,6 @@ export default function TopHeader() {
           </div>
         </div>
       </div>
-
-      <GlobalIndicesModal open={globalOpen} onClose={() => setGlobalOpen(false)} />
 
       <Modal open={confirmOpen} onClose={() => setConfirmOpen(false)} title="Log out of Aurafin?">
         <p className="text-sm text-muted mb-6">

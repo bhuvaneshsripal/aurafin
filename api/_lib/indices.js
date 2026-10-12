@@ -36,8 +36,23 @@ async function yahooQuote(symbol) {
   }
 }
 
+// The top bar polls once a second per open tab; share one upstream fetch
+// between all callers inside that window instead of hammering Yahoo/NSE.
+const CACHE_MS = 1000;
+let cached = null; // { at, promise }
+
 /** Returns the indices that could be fetched (in display order), or null if none could. */
-export async function fetchIndices() {
+export function fetchIndices() {
+  const now = Date.now();
+  if (cached && now - cached.at < CACHE_MS) return cached.promise;
+  const promise = fetchIndicesUncached();
+  cached = { at: now, promise };
+  // Don't keep a failed/empty result around for the whole window.
+  promise.then((r) => { if (!r && cached?.promise === promise) cached = null; }, () => { if (cached?.promise === promise) cached = null; });
+  return promise;
+}
+
+async function fetchIndicesUncached() {
   const results = await Promise.all(
     INDICES.map(async (idx) => {
       for (const sym of idx.yahoo) {

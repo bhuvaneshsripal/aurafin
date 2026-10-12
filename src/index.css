@@ -837,3 +837,21 @@ textarea[aria-invalid="true"]:focus {
   border-color: var(--color-red-400);
   box-shadow: 0 0 0 3px rgb(209 56 47 / 0.15);
 }
+
+/* Top-bar market ticker: loops left when the indices don't all fit. */
+@keyframes ticker-scroll {
+  to {
+    transform: translateX(-50%);
+  }
+}
+.ticker-track {
+  animation: ticker-scroll linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ticker-scroll {
+    overflow-x: auto;
+  }
+  .ticker-track {
+    animation: none;
+  }
+}

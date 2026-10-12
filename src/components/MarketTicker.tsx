@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { cn } from './ui/cn';
+import { isMarketOpen } from '../utils/marketHours';
 
 interface IndexQuote {
   key: string;
@@ -8,13 +9,14 @@ interface IndexQuote {
   previousClose?: number;
 }
 
-const POLL_MS = 30_000;
+const LIVE_MS = 1_000; // market open: refresh every second
+const IDLE_MS = 30_000; // market closed: nothing moves, so poll lazily
+
+
 const ORDER = [
   { key: 'nifty', name: 'NIFTY' },
   { key: 'sensex', name: 'SENSEX' },
   { key: 'banknifty', name: 'BANKNIFTY' },
-  { key: 'midcpnifty', name: 'MIDCPNIFTY' },
-  { key: 'finnifty', name: 'FINNIFTY' },
 ];
 
 async function loadIndices(): Promise<IndexQuote[] | null> {
@@ -30,65 +32,73 @@ async function loadIndices(): Promise<IndexQuote[] | null> {
 
 const fmt = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-/** One-line index strip: NAME  level  ±change (±pct%). Polled every 30s
- *  while the tab is visible; overflow fades out at the right edge. */
+/** One-line index strip: NAME  level  ±change (±pct%). Polled every second
+ *  during market hours (30s otherwise) while the tab is visible. */
 export default function MarketTicker() {
   const [quotes, setQuotes] = useState<IndexQuote[] | null | undefined>(undefined); // undefined = loading
 
   useEffect(() => {
     let cancelled = false;
-    const run = async () => {
-      if (document.visibilityState === 'hidden') return;
-      const q = await loadIndices();
-      // Keep showing the last good values if a refresh fails.
-      if (!cancelled) setQuotes((prev) => q ?? (Array.isArray(prev) ? prev : null));
+    let timer: number | undefined;
+    // Chained timeouts (not setInterval) so a slow response never overlaps the next request.
+    const tick = async () => {
+      if (document.visibilityState !== 'hidden') {
+        const q = await loadIndices();
+        // Keep showing the last good values if a refresh fails.
+        if (!cancelled) setQuotes((prev) => q ?? (Array.isArray(prev) ? prev : null));
+      }
+      if (!cancelled) timer = window.setTimeout(tick, isMarketOpen() ? LIVE_MS : IDLE_MS);
     };
-    run();
-    const id = window.setInterval(run, POLL_MS);
-    const onVisible = () => document.visibilityState === 'visible' && run();
+    tick();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        window.clearTimeout(timer);
+        tick();
+      }
+    };
     document.addEventListener('visibilitychange', onVisible);
     return () => {
       cancelled = true;
-      window.clearInterval(id);
+      window.clearTimeout(timer);
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, []);
 
-  return (
-    <div
-      // flex-wrap + a one-line height: any index that doesn't fit wraps onto a
-      // clipped second line, so each one shows completely or not at all
-      // (never cut off mid-number).
-      className="flex flex-wrap content-start gap-x-8 h-5 flex-1 min-w-0 overflow-hidden whitespace-nowrap text-[13px] leading-5"
-      aria-label="Market indices"
-    >
-      {ORDER.map(({ key, name }) => {
-        const q = Array.isArray(quotes) ? quotes.find((x) => x.key === key) : undefined;
-        if (Array.isArray(quotes) && !q) return null; // index unavailable — skip rather than show a dash
-        const change = q?.previousClose !== undefined ? q.price - q.previousClose : undefined;
-        const pct = change !== undefined && q?.previousClose ? (change / q.previousClose) * 100 : undefined;
-        const up = (change ?? 0) >= 0;
-        return (
-          <div key={key} className="flex items-baseline gap-2 h-5 shrink-0">
-            <span className="font-semibold text-ink-2">{name}</span>
-            {q ? (
-              <>
-                <span className="text-ink-2 tabular-nums">{fmt(q.price)}</span>
-                {change !== undefined && pct !== undefined && (
-                  <span className={cn('font-medium tabular-nums', up ? 'text-positive' : 'text-negative')}>
-                    {up ? '+' : '-'}
-                    {fmt(Math.abs(change))} ({Math.abs(pct).toFixed(2)}%)
-                  </span>
-                )}
-              </>
-            ) : (
-              <span className={cn(quotes === undefined ? 'text-faint animate-pulse' : 'text-muted')}>
-                {quotes === undefined ? 'Loading…' : '—'}
+  const items = ORDER.map(({ key, name }) => {
+    const q = Array.isArray(quotes) ? quotes.find((x) => x.key === key) : undefined;
+    if (Array.isArray(quotes) && !q) return null; // index unavailable — skip rather than show a dash
+    const change = q?.previousClose !== undefined ? q.price - q.previousClose : undefined;
+    const pct = change !== undefined && q?.previousClose ? (change / q.previousClose) * 100 : undefined;
+    const up = (change ?? 0) >= 0;
+    return (
+      <div key={key} className="flex items-baseline gap-1.5 @min-[900px]:gap-2 h-5 shrink-0">
+        <span className="font-semibold text-ink-2">{name}</span>
+        {q ? (
+          <>
+            <span className="text-ink-2 tabular-nums">{fmt(q.price)}</span>
+            {change !== undefined && pct !== undefined && (
+              <span className={cn('font-medium tabular-nums', up ? 'text-positive' : 'text-negative')}>
+                {up ? '+' : '-'}
+                {fmt(Math.abs(change))} ({Math.abs(pct).toFixed(2)}%)
               </span>
             )}
-          </div>
-        );
-      })}
+          </>
+        ) : (
+          <span className={cn(quotes === undefined ? 'text-faint animate-pulse' : 'text-muted')}>
+            {quotes === undefined ? 'Loading…' : '—'}
+          </span>
+        )}
+      </div>
+    );
+  });
+
+  // Static strip, always the full "NAME  level  ±points (±pct%)", spread evenly.
+  // On narrower headers the text and gaps step down so all three still fit.
+  return (
+    <div className="@container flex-1 min-w-0 h-5" aria-label="Market indices">
+      <div className="h-5 overflow-hidden flex items-center justify-between gap-x-4 whitespace-nowrap text-[13px] @max-[900px]:text-xs @max-[780px]:text-[11px] leading-5">
+        {items}
+      </div>
     </div>
   );
 }

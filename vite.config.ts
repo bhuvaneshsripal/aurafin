@@ -14,6 +14,8 @@ import { fetchFundamentals } from './api/_lib/fundamentals.js'
 import { fetchIndices } from './api/_lib/indices.js'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
 import { fetchGlobalIndices } from './api/_lib/globalIndices.js'
+// @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
+import { fetchIndianIndices } from './api/_lib/indianIndices.js'
 
 // Local-dev/preview stand-in for the api/market/* serverless functions.
 // A plain URL-rewrite proxy (like /api/mf below) can't work for NSE,
@@ -66,6 +68,18 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
       } catch (err) {
         console.error(`[dev/valuation] ${symbol} failed:`, err instanceof Error ? err.message : err)
         send(502, { error: 'Could not reach the fundamentals source' })
+      }
+      return
+    }
+
+    if (url.pathname === '/api/market/indian-indices') {
+      try {
+        const indices = await fetchIndianIndices()
+        if (!indices) { send(502, { error: 'Could not fetch Indian indices' }); return }
+        send(200, { indices, asOf: Date.now() })
+      } catch (err) {
+        console.error('[dev/indian-indices] failed:', err instanceof Error ? err.message : err)
+        send(502, { error: 'Could not reach the index data source' })
       }
       return
     }
