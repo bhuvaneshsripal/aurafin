@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import Modal from './Modal';
+import CountryFlag from './CountryFlag';
 import { cn } from './ui/cn';
 
 interface Row {
@@ -12,11 +13,30 @@ interface Row {
   high?: number;
   low?: number;
   open?: number;
+  updatedAt?: number;
 }
 
 const POLL_MS = 30_000;
 const fmt = (n: number | undefined) =>
   n === undefined ? '—' : n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** "12 Oct, 11:59 AM" in India time, like the reference table. */
+function stamp(ms: number | undefined) {
+  if (!ms) return '';
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    })
+      .formatToParts(new Date(ms))
+      .map((x) => [x.type, x.value])
+  );
+  return `${p.day} ${p.month}, ${p.hour}:${p.minute} ${String(p.dayPeriod).toUpperCase()}`;
+}
 
 const th = 'px-4 py-3 text-right font-medium text-muted whitespace-nowrap';
 const td = 'px-4 py-4 text-right tabular-nums text-ink-2 whitespace-nowrap';
@@ -110,10 +130,11 @@ export default function GlobalIndicesModal({ open, onClose }: { open: boolean; o
                   <tr key={r.key} className="hover:bg-surface-hover/60">
                     <td className="px-4 py-4 text-left">
                       <div className="flex items-center gap-3">
-                        <span className="h-8 w-8 shrink-0 rounded-lg border border-line bg-surface-muted text-[11px] font-semibold text-muted flex items-center justify-center">
-                          {r.region}
-                        </span>
-                        <span className="font-medium text-ink whitespace-nowrap">{r.name}</span>
+                        <CountryFlag code={r.region} />
+                        <div className="leading-tight">
+                          <p className="font-medium text-ink whitespace-nowrap">{r.name}</p>
+                          <p className="text-xs text-muted whitespace-nowrap mt-0.5">{stamp(r.updatedAt)}</p>
+                        </div>
                       </div>
                     </td>
                     <td className={cn(td, 'font-medium text-ink')}>{fmt(r.price)}</td>
@@ -132,6 +153,11 @@ export default function GlobalIndicesModal({ open, onClose }: { open: boolean; o
           </tbody>
         </table>
       </div>
+
+      <p className="mt-4 text-xs text-muted leading-relaxed">
+        Index levels come from Yahoo Finance and may be delayed. Futures and some overseas indices are indicative and can
+        differ from the exchange's official prices. The time under each name is when that index last traded (IST).
+      </p>
     </Modal>
   );
 }

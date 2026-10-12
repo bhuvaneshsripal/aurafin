@@ -5,18 +5,15 @@
 // To change which indices are shown, edit this list — `symbol` is the
 // Yahoo Finance ticker, `region` is the short code shown beside the name.
 export const GLOBAL_INDICES = [
-  { key: 'gspc', name: 'S&P 500', region: 'US', symbol: '^GSPC' },
-  { key: 'dji', name: 'Dow Jones', region: 'US', symbol: '^DJI' },
-  { key: 'ixic', name: 'Nasdaq Composite', region: 'US', symbol: '^IXIC' },
-  { key: 'ftse', name: 'FTSE 100', region: 'UK', symbol: '^FTSE' },
-  { key: 'gdaxi', name: 'DAX', region: 'DE', symbol: '^GDAXI' },
-  { key: 'fchi', name: 'CAC 40', region: 'FR', symbol: '^FCHI' },
-  { key: 'n225', name: 'Nikkei 225', region: 'JP', symbol: '^N225' },
-  { key: 'hsi', name: 'Hang Seng', region: 'HK', symbol: '^HSI' },
-  { key: 'sse', name: 'Shanghai Composite', region: 'CN', symbol: '000001.SS' },
-  { key: 'ks11', name: 'KOSPI', region: 'KR', symbol: '^KS11' },
-  { key: 'axjo', name: 'S&P/ASX 200', region: 'AU', symbol: '^AXJO' },
-  { key: 'sti', name: 'Straits Times', region: 'SG', symbol: '^STI' },
+  { key: 'dow', name: 'Dow', region: 'US', symbol: '^DJI' },
+  { key: 'dowfut', name: 'Dow Futures', region: 'US', symbol: 'YM=F' },
+  { key: 'sp', name: 'S&P', region: 'US', symbol: '^GSPC' },
+  { key: 'nikkei', name: 'NIKKEI', region: 'JP', symbol: '^N225' },
+  { key: 'hangseng', name: 'HANG SENG', region: 'HK', symbol: '^HSI' },
+  { key: 'dax', name: 'DAX', region: 'DE', symbol: '^GDAXI' },
+  { key: 'cac', name: 'CAC', region: 'FR', symbol: '^FCHI' },
+  { key: 'kospi', name: 'KOSPI', region: 'KR', symbol: '^KS11' },
+  { key: 'ftse', name: 'FTSE 100', region: 'GB', symbol: '^FTSE' },
 ];
 
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
@@ -42,6 +39,8 @@ async function fetchOne({ key, name, region, symbol }) {
       high: num(meta?.regularMarketDayHigh),
       low: num(meta?.regularMarketDayLow),
       open: opens.find((v) => num(v) !== undefined),
+      // When this quote was last traded (epoch ms) — shown under the name.
+      updatedAt: num(meta?.regularMarketTime) !== undefined ? meta.regularMarketTime * 1000 : undefined,
     };
   } catch {
     return null;
