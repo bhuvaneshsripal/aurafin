@@ -225,6 +225,7 @@ export default defineConfig({
         globIgnores: ['**/xlsx-*.js'],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api\//],
         // Without these, a tab left open across a redeploy keeps its old
         // service worker (and its old cached chunk list) until every tab is
         // fully closed — so clicking into a lazy-loaded route like Wealth
@@ -240,8 +241,10 @@ export default defineConfig({
             handler: 'NetworkFirst',
             options: {
               cacheName: 'market-data',
-              expiration: { maxEntries: 50, maxAgeSeconds: 5 * 60 },
-              networkTimeoutSeconds: 5,
+              // Fresh when online; on a weak/no connection fall back to the
+              // last saved response (up to 7 days) instead of showing nothing.
+              expiration: { maxEntries: 50, maxAgeSeconds: 7 * 24 * 60 * 60 },
+              networkTimeoutSeconds: 3,
             },
           },
           {
@@ -249,8 +252,8 @@ export default defineConfig({
             handler: 'NetworkFirst',
             options: {
               cacheName: 'mf-data',
-              expiration: { maxEntries: 50, maxAgeSeconds: 5 * 60 },
-              networkTimeoutSeconds: 5,
+              expiration: { maxEntries: 50, maxAgeSeconds: 7 * 24 * 60 * 60 },
+              networkTimeoutSeconds: 3,
             },
           },
           {

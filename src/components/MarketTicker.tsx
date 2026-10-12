@@ -34,8 +34,21 @@ const fmt = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2,
 
 /** One-line index strip: NAME  level  ±change (±pct%). Polled every second
  *  during market hours (30s otherwise) while the tab is visible. */
+const CACHE_KEY = 'aurafin.tickerQuotes';
+
+/** Last good quotes from the previous visit, so a refresh shows numbers straight away. */
+function readCachedQuotes(): IndexQuote[] | undefined {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) && parsed.length ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function useIndexQuotes() {
-  const [quotes, setQuotes] = useState<IndexQuote[] | null | undefined>(undefined); // undefined = loading
+  const [quotes, setQuotes] = useState<IndexQuote[] | null | undefined>(readCachedQuotes); // undefined = loading
 
   useEffect(() => {
     let cancelled = false;
@@ -46,6 +59,13 @@ function useIndexQuotes() {
         const q = await loadIndices();
         // Keep showing the last good values if a refresh fails.
         if (!cancelled) setQuotes((prev) => q ?? (Array.isArray(prev) ? prev : null));
+        if (q) {
+          try {
+            localStorage.setItem(CACHE_KEY, JSON.stringify(q));
+          } catch {
+            /* storage unavailable — fine, just no instant paint next time */
+          }
+        }
       }
       if (!cancelled) timer = window.setTimeout(tick, isMarketOpen() ? LIVE_MS : IDLE_MS);
     };
@@ -88,7 +108,7 @@ function renderItems(quotes: IndexQuote[] | null | undefined) {
           </>
         ) : (
           <span className={cn(quotes === undefined ? 'text-faint animate-pulse' : 'text-muted')}>
-            {quotes === undefined ? 'Loading…' : '—'}
+            {quotes === undefined ? '…' : '—'}
           </span>
         )}
       </div>

@@ -10,6 +10,7 @@ import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useSnapshotsStore } from '../store/snapshotsStore';
 import { toIsoDate } from '../utils/date';
+import { readBackup, writeBackup } from '../utils/dataBackup';
 import type { Snapshot } from '../types';
 
 /** Every subcollection kept under users/{uid} that DataSync listens to.
@@ -122,7 +123,27 @@ export function useFirestoreCollectionSync<T extends { id: string }>(
     // For regular users, sync with Firestore
     const colRef = collection(db, 'users', uid, collectionName);
     let first = true;
+
+    // Show the last-known data right away (before Firestore answers, and
+    // even if the network never does). It is replaced by real data the
+    // moment a snapshot arrives; it does NOT count as server-confirmed.
+    const backup = readBackup<T>(uid, collectionName);
+    if (backup && backup.length > 0) {
+      setLocal(backup);
+      markCollectionLoaded(collectionName);
+    }
+
     const unsub = onSnapshot(colRef, { includeMetadataChanges: true }, (snap) => {
+      // An empty answer that came only from the local cache, while we hold
+      // a saved copy with data, is a cache miss rather than "you deleted
+      // everything" — keep showing the saved data. A genuinely empty
+      // collection arrives from the server (fromCache === false).
+      if (snap.metadata.fromCache && snap.empty && backup && backup.length > 0) {
+        first = false;
+        onSyncChange?.(true);
+        markCollectionLoaded(collectionName);
+        return;
+      }
       // Metadata-only snapshots (cache -> server confirmation with identical
       // data) carry no document changes; skip rebuilding the array so every
       // subscribed screen doesn't re-render for nothing.
@@ -131,6 +152,7 @@ export function useFirestoreCollectionSync<T extends { id: string }>(
       if (dataChanged) {
         const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as T);
         setLocal(items);
+        writeBackup(uid, collectionName, items);
       }
       onSyncChange?.(snap.metadata.fromCache);
       markCollectionLoaded(collectionName);

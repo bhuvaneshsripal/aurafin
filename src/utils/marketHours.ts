@@ -98,6 +98,35 @@ export function isMarketOpen(now: Date = new Date()): boolean {
   return minutesSinceMidnight >= marketOpen && minutesSinceMidnight < marketClose;
 }
 
+/** Date of the most recent NSE/BSE session that has started, formatted like
+ *  "Fri, 09 Oct 2026". During or after today's session that is today;
+ *  before the open, on weekends and on listed holidays it walks back to the
+ *  previous trading day. Used for the "Market closed · <date>" label. */
+export function getLastSessionLabel(now: Date = new Date()): string {
+  const { hour, minute } = getIstTimeOfDay(now);
+  const { dateKey, isoWeekday } = getIstDateInfo(now);
+  const tradingToday = isoWeekday <= 5 && !MARKET_HOLIDAYS.has(dateKey);
+  const started = hour * 60 + minute >= MARKET_OPEN_HOUR * 60 + MARKET_OPEN_MINUTE;
+  const [y, m, d] = dateKey.split('-').map(Number);
+  const day = new Date(Date.UTC(y, m - 1, d, 12));
+  if (!(tradingToday && started)) {
+    do {
+      day.setUTCDate(day.getUTCDate() - 1);
+    } while (
+      day.getUTCDay() === 0 ||
+      day.getUTCDay() === 6 ||
+      MARKET_HOLIDAYS.has(day.toISOString().slice(0, 10))
+    );
+  }
+  return new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'UTC',
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(day);
+}
+
 /** Reactive version of isMarketOpen — re-checks every 30s so the sparkline
  *  appears right at 9:15 AM IST without needing another render to trigger
  *  it. */

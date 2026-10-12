@@ -53,8 +53,13 @@ export function useDailyHardRefresh() {
       if (last >= slot) return; // already refreshed since the last 6 a.m.
       if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
 
+      const previous = last;
       writeLast(now.getTime()); // set before reloading to avoid a loop
-      void hardRefresh();
+      void hardRefresh().then((done) => {
+        // Network was too weak to refresh safely: keep the old cached app
+        // and try again later instead of marking today's refresh as done.
+        if (!done && previous !== null) writeLast(previous);
+      });
     };
 
     check();

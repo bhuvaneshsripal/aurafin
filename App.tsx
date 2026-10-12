@@ -1,0 +1,355 @@
+import { useEffect, useState, Suspense } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { useAuthStore } from './store/authStore';
+import { useAssetsStore } from './store/assetsStore';
+import { useLiabilitiesStore } from './store/liabilitiesStore';
+import { useGoalsStore } from './store/goalsStore';
+import { useTransactionsStore } from './store/transactionsStore';
+import { useSnapshotsStore } from './store/snapshotsStore';
+import { useBudgetStore } from './store/budgetStore';
+import { useFinancialProfileStore } from './store/financialProfileStore';
+import { useSyncStatusStore } from './store/syncStatusStore';
+import { useHouseholdProfilesStore } from './store/householdProfilesStore';
+import { useUiStore } from './store/uiStore';
+import { useAppLockStore } from './store/appLockStore';
+import { useDisplaySettingsStore } from './store/displaySettingsStore';
+import { useNotificationPreferencesStore } from './store/notificationPreferencesStore';
+import { useInstallPromptStore } from './store/installPromptStore';
+import {
+  useFirestoreCollectionSync,
+  useAvatarSync,
+  useAppLockSync,
+  useWealthFilterSync,
+  useAutoNetWorthHistory,
+  assignOrphanDataToProfile,
+  ALL_USER_COLLECTIONS,
+} from './hooks/useFirestoreSync';
+import { useLivePrices } from './hooks/useLivePrices';
+import { useLiveSipValues } from './hooks/useLiveSipValues';
+import { useLiveGoldPrice } from './hooks/useLiveGoldPrice';
+import { useWeeklyDigestScheduler } from './hooks/useWeeklyDigestScheduler';
+import { useDailyHardRefresh } from './hooks/useDailyHardRefresh';
+import { useScrollRestoration } from './hooks/useScrollRestoration';
+import Sidebar from './components/Sidebar';
+import TopHeader from './components/TopHeader';
+import BottomNav from './components/BottomNav';
+import SwipeTabs from './components/SwipeTabs';
+import PrivacyFab from './components/PrivacyFab';
+import LockScreen from './components/LockScreen';
+import InstallPromptModal from './components/InstallPromptModal';
+import ErrorBoundary from './components/ErrorBoundary';
+import Login from './pages/Login';
+import { lazyWithRetry } from './utils/lazyWithRetry';
+import type { Asset, Liability, Goal, Transaction, Snapshot, BudgetItem, FinancialProfile, HouseholdProfile } from './types';
+
+const dashboardImport = () => import('./pages/Dashboard');
+const Dashboard = lazyWithRetry(dashboardImport);
+// Start downloading the default route's code right away, in parallel with
+// auth + Firestore, instead of only after they finish.
+void dashboardImport();
+const wealthImport = () => import('./pages/Wealth');
+const Wealth = lazyWithRetry(wealthImport);
+const transactionsImport = () => import('./pages/Transactions');
+const InvestmentPnL = lazyWithRetry(() => import('./pages/InvestmentPnL'));
+const Essentials = lazyWithRetry(() => import('./pages/Essentials'));
+const Transactions = lazyWithRetry(transactionsImport);
+// Warm the other bottom-nav tabs once the browser is idle, so swiping to
+// them never waits on a network fetch (which showed as a blank flash).
+if (typeof window !== 'undefined') {
+  const warm = () => {
+    void wealthImport();
+    void transactionsImport();
+  };
+  if ('requestIdleCallback' in window) window.requestIdleCallback(warm, { timeout: 3000 });
+  else window.setTimeout(warm, 1500);
+}
+const Import = lazyWithRetry(() => import('./pages/Import'));
+const Valuation = lazyWithRetry(() => import('./pages/Valuation'));
+const Calculators = lazyWithRetry(() => import('./pages/Calculators'));
+const Settings = lazyWithRetry(() => import('./pages/Settings'));
+const Indices = lazyWithRetry(() => import('./pages/Indices'));
+const WhatsNew = lazyWithRetry(() => import('./pages/WhatsNew'));
+const InstallApp = lazyWithRetry(() => import('./pages/InstallApp'));
+const Feedback = lazyWithRetry(() => import('./pages/Feedback'));
+const Onboarding = lazyWithRetry(() => import('./pages/Onboarding'));
+
+// No branded spinner while a lazy-loaded route chunk or the initial data
+// gate is still resolving — the body background already matches the app's
+// theme (see index.css), so rendering nothing here just leaves the themed
+// background visible, the same blank-then-appear feel as a plain page
+// load, instead of flashing a custom loading widget on every refresh.
+function RouteFallback() {
+  return null;
+}
+
+function AppShell() {
+  const location = useLocation();
+  const needsOnboarding = useAuthStore((s) => s.needsOnboarding);
+  // Keeps each page's scroll position across in-app navigation (sidebar,
+  // bottom nav, back button) — see the hook for why a hard refresh still
+  // resets to the top.
+  useScrollRestoration();
+  // Auto hard-refresh every day at 5:00 a.m.
+  useDailyHardRefresh();
+
+  // First-time sign-ups/sign-ins get the full-screen onboarding wizard with
+  // none of the normal chrome (sidebar/topbar/bottom nav) — matches how
+  // Login is rendered outside the shell. Any route they try to hit while
+  // onboarding is pending bounces back to /onboarding — except /import,
+  // which the wizard's "Import from Broker" step links to directly. That
+  // link fires completeOnboarding() and navigate('/import') together, and
+  // checking location.pathname here (rather than only needsOnboarding)
+  // means /import renders immediately and reliably even if the onboarding
+  // flag hasn't finished propagating yet, instead of racing back to
+  // /onboarding and bouncing on to the Dashboard.
+  if (needsOnboarding && location.pathname !== '/import') {
+    return (
+      <ErrorBoundary key="onboarding">
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
+            <Route path="/onboarding" element={<Onboarding />} />
+            <Route path="*" element={<Navigate to="/onboarding" replace />} />
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  return (
+    <div className="flex min-h-screen bg-page">
+      <LockScreen />
+      <Sidebar />
+      <div className="flex-1 flex flex-col min-w-0 app-scale">
+        <TopHeader />
+        <main className="flex-1 w-full max-w-[1240px] mx-auto px-4 pt-5 pb-36 sm:px-6 sm:pt-6 sm:pb-36 md:px-8 md:pt-7 md:pb-10">
+          <ErrorBoundary key={location.pathname}>
+            <Suspense fallback={<RouteFallback />}>
+              <div key={location.pathname} className="animate-page-in" data-page>
+                <Routes>
+                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/wealth" element={<Wealth />} />
+                  <Route path="/wealth/performance" element={<InvestmentPnL />} />
+                  <Route path="/essentials" element={<Essentials />} />
+                  <Route path="/transactions" element={<Transactions />} />
+                  <Route path="/import" element={<Import />} />
+                  <Route path="/analytics" element={<Navigate to="/wealth?tab=analytics" replace />} />
+                  <Route path="/valuation" element={<Valuation />} />
+                  <Route path="/calculators" element={<Calculators />} />
+                  <Route path="/indices" element={<Indices />} />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="/whats-new" element={<WhatsNew />} />
+                  <Route path="/install" element={<InstallApp />} />
+                  <Route path="/feedback" element={<Feedback />} />
+                  <Route path="/onboarding" element={<Navigate to="/" replace />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </div>
+            </Suspense>
+          </ErrorBoundary>
+        </main>
+      </div>
+      <BottomNav />
+      <SwipeTabs />
+      <PrivacyFab />
+      <InstallPromptModal />
+    </div>
+  );
+}
+
+function InstallPromptListener() {
+  const setDeferredPrompt = useInstallPromptStore((s) => s.setDeferredPrompt);
+  const setInstalled = useInstallPromptStore((s) => s.setInstalled);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    const onInstalled = () => setInstalled(true);
+    window.addEventListener('beforeinstallprompt', handler);
+    window.addEventListener('appinstalled', onInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler);
+      window.removeEventListener('appinstalled', onInstalled);
+    };
+  }, [setDeferredPrompt, setInstalled]);
+
+  return null;
+}
+
+function LivePriceSync() {
+  useLivePrices();
+  useLiveSipValues();
+  useLiveGoldPrice();
+  return null;
+}
+
+function WeeklyDigestSync() {
+  useWeeklyDigestScheduler();
+  return null;
+}
+
+function DataSync() {
+  const setAssets = useAssetsStore((s) => s.setAssets);
+  const setLiabilities = useLiabilitiesStore((s) => s.setLiabilities);
+  const setGoals = useGoalsStore((s) => s.setGoals);
+  const setTransactions = useTransactionsStore((s) => s.setTransactions);
+  const setSnapshots = useSnapshotsStore((s) => s.setSnapshots);
+  const setBudgetItems = useBudgetStore((s) => s.setItems);
+  const setFinancialProfile = useFinancialProfileStore((s) => s.setItems);
+  const setHouseholdProfiles = useHouseholdProfilesStore((s) => s.setProfiles);
+  const setAssetsSynced = useSyncStatusStore((s) => s.setAssetsSynced);
+  const setLiabilitiesSynced = useSyncStatusStore((s) => s.setLiabilitiesSynced);
+  const setTransactionsSynced = useSyncStatusStore((s) => s.setTransactionsSynced);
+  const setGoalsSynced = useSyncStatusStore((s) => s.setGoalsSynced);
+
+  useFirestoreCollectionSync<Asset>('assets', setAssets, setAssetsSynced);
+  useFirestoreCollectionSync<Liability>('liabilities', setLiabilities, setLiabilitiesSynced);
+  useFirestoreCollectionSync<Goal>('goals', setGoals, setGoalsSynced);
+  useFirestoreCollectionSync<Transaction>('transactions', setTransactions, setTransactionsSynced);
+  useFirestoreCollectionSync<Snapshot>('snapshots', setSnapshots);
+  useFirestoreCollectionSync<BudgetItem>('budgets', setBudgetItems);
+  useFirestoreCollectionSync<FinancialProfile>('financialProfile', setFinancialProfile);
+  useFirestoreCollectionSync<HouseholdProfile>('profiles', setHouseholdProfiles);
+  useAvatarSync();
+  useAppLockSync();
+  useWealthFilterSync();
+  // Auto-records today's net worth as real history whenever assets/
+  // liabilities change — see useAutoNetWorthHistory for why this needs to
+  // be mounted after the sync-status flags it waits on are wired up above.
+  useAutoNetWorthHistory();
+
+  // One-time backfill: data created before household profiles existed has
+  // no profileId. While there's exactly one profile, "whose data is this"
+  // is unambiguous, so quietly tag any orphaned records with it. This stops
+  // being safe (and stops running) the moment a second profile is added.
+  const user = useAuthStore((s) => s.user);
+  const profiles = useHouseholdProfilesStore((s) => s.profiles);
+  const assets = useAssetsStore((s) => s.assets);
+  const liabilities = useLiabilitiesStore((s) => s.liabilities);
+  const goals = useGoalsStore((s) => s.goals);
+  const transactions = useTransactionsStore((s) => s.transactions);
+
+  useEffect(() => {
+    if (!user || profiles.length !== 1) return;
+    const soleProfileId = profiles[0].id;
+    assignOrphanDataToProfile(user.uid, 'assets', assets, soleProfileId);
+    assignOrphanDataToProfile(user.uid, 'liabilities', liabilities, soleProfileId);
+    assignOrphanDataToProfile(user.uid, 'goals', goals, soleProfileId);
+    assignOrphanDataToProfile(user.uid, 'transactions', transactions, soleProfileId);
+  }, [user, profiles, assets, liabilities, goals, transactions]);
+
+  // Offline-safe fallback: if the server never confirms (no connection),
+  // don't leave headline figures in a skeleton state forever — show
+  // whatever the cache has after a few seconds. Also force every
+  // collection's "initial load" flag on, so a genuinely unreachable
+  // Firestore (no persisted cache available at all, e.g. a first-ever
+  // visit with no network) doesn't leave the whole app stuck behind the
+  // full-screen loading gate in App() below forever.
+  const forceMarkAllLoaded = useSyncStatusStore((s) => s.forceMarkAllLoaded);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setAssetsSynced(false);
+      setLiabilitiesSynced(false);
+      setTransactionsSynced(false);
+      setGoalsSynced(false);
+      forceMarkAllLoaded(ALL_USER_COLLECTIONS);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [setAssetsSynced, setLiabilitiesSynced, setTransactionsSynced, setGoalsSynced, forceMarkAllLoaded]);
+
+  return null;
+}
+
+/**
+ * Gates rendering of the real app behind two async things finishing:
+ * Firebase confirming who's signed in (handled above in App by `loading`),
+ * and — this component's job — every Firestore collection DataSync
+ * subscribes to having delivered its first snapshot. Without this second
+ * gate, `<AppShell />` would mount immediately after auth resolves while
+ * every store (assets, goals, transactions, ...) was still sitting at its
+ * initial `[]`, so every page briefly rendered its real "you have no
+ * data yet" empty state before the first snapshot arrived and replaced it
+ * — indistinguishable, for that flash, from an account that's genuinely
+ * empty.
+ *
+ * `needsOnboarding` skips the gate: a brand-new account has no data to
+ * wait for, and the onboarding wizard doesn't render anything
+ * data-dependent, so making it wait here would just be a pointless delay.
+ *
+ * `/import` is also exempted, for the same reason AppShell special-cases
+ * it: the wizard's "Import from Broker" step fires completeOnboarding()
+ * and navigate('/import') together, so needsOnboarding can flip to false
+ * a render before the first Firestore snapshot lands for a brand-new
+ * account. Without this exemption, this gate would return null right
+ * then — unmounting AppShell (and the router state it's about to act on)
+ * until data finishes loading — and once it remounts, the person has
+ * often already bailed out to the default route, landing on the
+ * Dashboard instead of the import screen they actually clicked into.
+ */
+function AppReady({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  const needsOnboarding = useAuthStore((s) => s.needsOnboarding);
+  const loaded = useSyncStatusStore((s) => s.loadedCollections);
+  const [timedOut, setTimedOut] = useState(false);
+
+  // Safety net (offline / very slow network): after 2.5s show whatever we
+  // have rather than a loading screen for minutes.
+  useEffect(() => {
+    const t = setTimeout(() => setTimedOut(true), 2500);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Cache-first: the first snapshot (from IndexedDB cache OR server) is
+  // enough to render. Pages already show skeletons for headline numbers
+  // until the server confirms (see Dashboard's *DataKnown flags), and live
+  // prices fill in afterwards, so there is no reason to block the whole app.
+  const dataReady = ALL_USER_COLLECTIONS.every((c) => loaded[c]);
+
+  if (!needsOnboarding && !dataReady && !timedOut && location.pathname !== '/import') {
+    return null;
+  }
+  return <>{children}</>;
+}
+
+export default function App() {
+  const { user, loading, init } = useAuthStore();
+  const initTheme = useUiStore((s) => s.initTheme);
+  const initPrivacy = useUiStore((s) => s.initPrivacy);
+  const initSidebar = useUiStore((s) => s.initSidebar);
+  const initLock = useAppLockStore((s) => s.init);
+  const initDisplaySettings = useDisplaySettingsStore((s) => s.init);
+  const initNotificationPrefs = useNotificationPreferencesStore((s) => s.init);
+
+  useEffect(() => {
+    init();
+    initTheme();
+    initPrivacy();
+    initSidebar();
+    initLock();
+    initDisplaySettings();
+    initNotificationPrefs();
+  }, [init, initTheme, initPrivacy, initSidebar, initLock, initDisplaySettings, initNotificationPrefs]);
+
+  if (loading) {
+    return null;
+  }
+
+  if (!user) {
+    return <Login />;
+  }
+
+  return (
+    <BrowserRouter>
+      {/* DataSync mounts unconditionally so its Firestore listeners start
+          right away — it's what AppReady above is waiting to hear from. */}
+      <DataSync />
+      <LivePriceSync />
+      <WeeklyDigestSync />
+      <InstallPromptListener />
+      <AppReady>
+        <AppShell />
+      </AppReady>
+    </BrowserRouter>
+  );
+}

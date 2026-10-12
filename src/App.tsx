@@ -47,10 +47,22 @@ const Dashboard = lazyWithRetry(dashboardImport);
 // Start downloading the default route's code right away, in parallel with
 // auth + Firestore, instead of only after they finish.
 void dashboardImport();
-const Wealth = lazyWithRetry(() => import('./pages/Wealth'));
+const wealthImport = () => import('./pages/Wealth');
+const Wealth = lazyWithRetry(wealthImport);
+const transactionsImport = () => import('./pages/Transactions');
 const InvestmentPnL = lazyWithRetry(() => import('./pages/InvestmentPnL'));
 const Essentials = lazyWithRetry(() => import('./pages/Essentials'));
-const Transactions = lazyWithRetry(() => import('./pages/Transactions'));
+const Transactions = lazyWithRetry(transactionsImport);
+// Warm the other bottom-nav tabs once the browser is idle, so swiping to
+// them never waits on a network fetch (which showed as a blank flash).
+if (typeof window !== 'undefined') {
+  const warm = () => {
+    void wealthImport();
+    void transactionsImport();
+  };
+  if ('requestIdleCallback' in window) window.requestIdleCallback(warm, { timeout: 3000 });
+  else window.setTimeout(warm, 1500);
+}
 const Import = lazyWithRetry(() => import('./pages/Import'));
 const Valuation = lazyWithRetry(() => import('./pages/Valuation'));
 const Calculators = lazyWithRetry(() => import('./pages/Calculators'));
@@ -112,7 +124,7 @@ function AppShell() {
         <main className="flex-1 w-full max-w-[1240px] mx-auto px-4 pt-5 pb-36 sm:px-6 sm:pt-6 sm:pb-36 md:px-8 md:pt-7 md:pb-10">
           <ErrorBoundary key={location.pathname}>
             <Suspense fallback={<RouteFallback />}>
-              <div key={location.pathname} className="animate-page-in">
+              <div key={location.pathname} className="animate-page-in" data-page>
                 <Routes>
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/wealth" element={<Wealth />} />

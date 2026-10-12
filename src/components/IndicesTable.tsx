@@ -3,7 +3,7 @@ import { RefreshCw } from 'lucide-react';
 import CountryFlag from './CountryFlag';
 import IndexIcon from './IndexIcon';
 import { cn } from './ui/cn';
-import { isMarketOpen } from '../utils/marketHours';
+import { isMarketOpen, getLastSessionLabel, useIsMarketOpen } from '../utils/marketHours';
 
 export type IndicesVariant = 'indian' | 'global';
 
@@ -57,8 +57,26 @@ const td = 'px-4 py-4 text-right tabular-nums text-ink-2 whitespace-nowrap';
 /** Index table: Index name · Last traded · Day change · High · Low · Open · Prev. Close. */
 export default function IndicesTable({ variant }: { variant: IndicesVariant }) {
   const [rows, setRows] = useState<Row[] | null | undefined>(undefined); // undefined = loading
-  const [asOf, setAsOf] = useState<Date | null>(null);
   const [loading, setLoading] = useState(false);
+  const indianOpen = useIsMarketOpen();
+
+  // Status line: "Live" while trading, else the date the market last closed.
+  // Indian indices follow NSE hours; global indices span many exchanges, so
+  // they count as live while their quotes are fresh (< 15 min old).
+  let status: { live: boolean; text: string } | null = null;
+  if (variant === 'indian') {
+    status = indianOpen
+      ? { live: true, text: 'Live' }
+      : { live: false, text: `Market closed · ${getLastSessionLabel()}` };
+  } else if (Array.isArray(rows) && rows.length) {
+    const latest = Math.max(0, ...rows.map((r) => r.updatedAt ?? 0));
+    if (latest) {
+      status =
+        Date.now() - latest < 15 * 60_000
+          ? { live: true, text: 'Live' }
+          : { live: false, text: `Market closed · ${stamp(latest).split(',')[0]}` };
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -68,7 +86,6 @@ export default function IndicesTable({ variant }: { variant: IndicesVariant }) {
       const json = await res.json();
       if (!Array.isArray(json?.indices)) throw new Error('bad payload');
       setRows(json.indices);
-      setAsOf(new Date());
     } catch {
       // Keep the last good table on a failed refresh.
       setRows((prev) => (Array.isArray(prev) ? prev : null));
@@ -79,7 +96,6 @@ export default function IndicesTable({ variant }: { variant: IndicesVariant }) {
 
   useEffect(() => {
     setRows(undefined);
-    setAsOf(null);
     load();
     let timer: number;
     const schedule = () => {
@@ -95,10 +111,14 @@ export default function IndicesTable({ variant }: { variant: IndicesVariant }) {
   return (
     <div>
       <div className="flex items-center justify-between gap-3 px-4 sm:px-5 pt-4">
-        <p className="text-xs text-muted">
-          {asOf
-            ? `Updated ${asOf.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} · ${variant === 'indian' && isMarketOpen() ? 'live' : 'refreshes every 30s'}`
-            : 'Live index levels'}
+        <p className="text-xs text-muted inline-flex items-center gap-1.5">
+          {status?.live && (
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-60 animate-ping" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            </span>
+          )}
+          {status ? status.text : 'Live index levels'}
         </p>
         <button
           onClick={load}

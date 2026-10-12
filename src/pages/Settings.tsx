@@ -8,7 +8,7 @@ import {
   sendPasswordResetEmail,
   EmailAuthProvider,
 } from 'firebase/auth';
-import { RefreshCw, Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, X, Download, Upload, Mail, Bell, FileText } from 'lucide-react';
+import { RefreshCw, Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, X, Download, Upload, Mail, Bell, FileText, MoreVertical } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
 import { useAppLockStore } from '../store/appLockStore';
@@ -1566,6 +1566,7 @@ function DataTab() {
 
   const [pendingRestore, setPendingRestore] = useState<AurafinBackup | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
+  const [reportMenuOpen, setReportMenuOpen] = useState(false);
   const [restoreError, setRestoreError] = useState('');
   const [restoreStatus, setRestoreStatus] = useState<'idle' | 'restoring' | 'done'>('idle');
 
@@ -1640,13 +1641,54 @@ function DataTab() {
   return (
     <>
       <Card>
-        <h2 className="text-sm font-semibold text-ink mb-1">Report</h2>
-        <p className="text-xs text-muted mb-4">
-          Preview and download a PDF report of your portfolio holdings.
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-ink mb-1">Report</h2>
+            <p className="text-xs text-muted">
+              Preview and download a PDF report of your portfolio holdings.
+            </p>
+          </div>
+
+          {/* Mobile: the action lives in a 3-dot menu. */}
+          <div className="relative shrink-0 sm:hidden">
+            <button
+              type="button"
+              aria-label="Report options"
+              aria-haspopup="menu"
+              aria-expanded={reportMenuOpen}
+              onClick={() => setReportMenuOpen((o) => !o)}
+              className="h-8 w-8 flex items-center justify-center rounded-lg border border-line hover:bg-surface-hover text-ink-2"
+            >
+              <MoreVertical size={16} />
+            </button>
+            {reportMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setReportMenuOpen(false)} />
+                <div
+                  role="menu"
+                  className="absolute right-0 top-full mt-1 z-40 min-w-[11rem] rounded-xl border border-line bg-surface shadow-lg py-1"
+                >
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setReportMenuOpen(false);
+                      setReportOpen(true);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-ink hover:bg-surface-hover text-left"
+                  >
+                    <FileText size={16} className="text-muted" />
+                    Export report
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Desktop / tablet: the regular button. */}
         <button
           onClick={() => setReportOpen(true)}
-          className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors bg-brand-600 hover:bg-brand-700 text-white"
+          className="hidden sm:inline-flex mt-4 items-center justify-center gap-2 h-9 px-4 text-sm font-medium rounded-lg transition-colors bg-brand-600 hover:bg-brand-700 text-white"
         >
           <FileText size={16} />
           Export report

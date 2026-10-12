@@ -22,7 +22,10 @@ export function lazyWithRetry<T extends ComponentType<unknown>>(
       return module;
     } catch (error) {
       const alreadyReloaded = sessionStorage.getItem(RELOADED_KEY) === 'true';
-      if (!alreadyReloaded) {
+      // Offline/weak network: a reload can't fetch anything new and would just
+      // risk an empty page, so surface the error (with a Reload button) instead.
+      const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+      if (!alreadyReloaded && !offline) {
         sessionStorage.setItem(RELOADED_KEY, 'true');
         window.location.reload();
         // Never resolves — the reload takes over before this would render.
