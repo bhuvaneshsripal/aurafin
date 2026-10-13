@@ -60,8 +60,10 @@ if (typeof window !== 'undefined') {
     void wealthImport();
     void transactionsImport();
   };
-  if ('requestIdleCallback' in window) window.requestIdleCallback(warm, { timeout: 3000 });
-  else window.setTimeout(warm, 1500);
+  const idle = (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number })
+    .requestIdleCallback;
+  if (idle) idle.call(window, warm, { timeout: 3000 });
+  else setTimeout(warm, 1500);
 }
 const Import = lazyWithRetry(() => import('./pages/Import'));
 const Valuation = lazyWithRetry(() => import('./pages/Valuation'));
@@ -249,10 +251,17 @@ function DataSync() {
   const forceMarkAllLoaded = useSyncStatusStore((s) => s.forceMarkAllLoaded);
   useEffect(() => {
     const timer = setTimeout(() => {
-      setAssetsSynced(false);
-      setLiabilitiesSynced(false);
-      setTransactionsSynced(false);
-      setGoalsSynced(false);
+      // Only treat a collection as "known" if it actually holds data. An
+      // empty store after 3s on a weak/no connection usually means "not
+      // loaded yet", not "you have nothing" -- confirming it here is what
+      // made the app claim "No assets yet" / show Rs 0 offline. Empty ones
+      // stay as skeletons until the server really answers.
+      if (useAssetsStore.getState().assets.length > 0) setAssetsSynced(false);
+      if (useLiabilitiesStore.getState().liabilities.length > 0) setLiabilitiesSynced(false);
+      if (useTransactionsStore.getState().transactions.length > 0) setTransactionsSynced(false);
+      if (useGoalsStore.getState().goals.length > 0) setGoalsSynced(false);
+      // Unblock the app's loading gate regardless (it only needs "something
+      // to render", not confirmed data).
       forceMarkAllLoaded(ALL_USER_COLLECTIONS);
     }, 3000);
     return () => clearTimeout(timer);

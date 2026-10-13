@@ -1649,8 +1649,8 @@ function DataTab() {
             </p>
           </div>
 
-          {/* Mobile: the action lives in a 3-dot menu. */}
-          <div className="relative shrink-0 sm:hidden">
+          {/* The action lives in a 3-dot menu on every screen size. */}
+          <div className="relative shrink-0">
             <button
               type="button"
               aria-label="Report options"
@@ -1684,15 +1684,6 @@ function DataTab() {
             )}
           </div>
         </div>
-
-        {/* Desktop / tablet: the regular button. */}
-        <button
-          onClick={() => setReportOpen(true)}
-          className="hidden sm:inline-flex mt-4 items-center justify-center gap-2 h-9 px-4 text-sm font-medium rounded-lg transition-colors bg-brand-600 hover:bg-brand-700 text-white"
-        >
-          <FileText size={16} />
-          Export report
-        </button>
       </Card>
       <PortfolioExportModal open={reportOpen} onClose={() => setReportOpen(false)} />
 

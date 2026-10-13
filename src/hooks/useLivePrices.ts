@@ -31,6 +31,11 @@ export function useLivePrices() {
   useEffect(() => {
     if (!lookupKey) return;
 
+    // Set when this effect run is torn down (symbols changed / unmounted):
+    // an in-flight response from the old symbol set must not be applied.
+    let stopped = false;
+    let generation = 0;
+
     const refresh = async () => {
       if (fetching.current) return;
       fetching.current = true;
@@ -42,6 +47,7 @@ export function useLivePrices() {
           name: a.name,
         }));
         const quoteMap = await fetchLiveQuotes(lookups);
+        if (stopped) return;
         const prices: Record<string, number> = {};
         const previousCloses: Record<string, number> = {};
         quoteMap.forEach((quote, symbol) => {
@@ -71,12 +77,14 @@ export function useLivePrices() {
 
     // Chained setTimeout (not setInterval): the next poll is scheduled only
     // after the previous one finishes, so slow responses never pile up.
-    let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
     const loop = async () => {
       if (stopped) return;
+      // Only the newest loop run may schedule the next one, so becoming
+      // visible mid-request can't leave two poll chains running.
+      const myGeneration = ++generation;
       if (!document.hidden) await refresh();
-      if (stopped) return;
+      if (stopped || myGeneration !== generation) return;
       timer = setTimeout(loop, isMarketOpen() ? LIVE_REFRESH_MS : IDLE_REFRESH_MS);
     };
     const onVisible = () => {

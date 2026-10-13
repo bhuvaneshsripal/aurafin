@@ -2,7 +2,7 @@
  * PDF Export utility for portfolio reports
  * Uses html2canvas and jspdf to generate PDF files
  */
-import { formatDate, formatDateTime } from './date';
+import { formatDateTime } from './date';
 
 /**
  * html2canvas@1.4.1 can't parse CSS `oklch()` colors, and Tailwind v4's
@@ -81,6 +81,88 @@ function buildColorOverrideCss(): string {
     `;
 }
 
+/** Fixed layout width the report is rendered at before capture. Using one
+ *  width (rather than whatever the preview happens to be on this device)
+ *  keeps wide tables and charts from being squeezed or clipped on phones. */
+const CAPTURE_WIDTH_PX = 900;
+
+const PAGE_W_MM = 210;
+const PAGE_H_MM = 297;
+const MARGIN_TOP_MM = 10;
+const MARGIN_BOTTOM_MM = 14; // leaves room for the page-number footer
+
+interface Atom {
+  el: Element;
+  top: number;
+  bottom: number;
+}
+
+const isHeading = (el: Element | undefined) => !!el && /^H[1-6]$/.test(el.tagName);
+
+/**
+ * Splits the report into "atoms" -- blocks that must never be cut in half
+ * (a card, a chart, a table row, a heading...). Anything taller than
+ * `atomMax` is opened up and its children are examined instead, which is
+ * how a long table ends up as individual rows.
+ */
+function collectAtoms(root: HTMLElement, atomMax: number): Atom[] {
+  const rootTop = root.getBoundingClientRect().top;
+  const atoms: Atom[] = [];
+  const walk = (parent: Element) => {
+    for (const child of Array.from(parent.children)) {
+      if (child.tagName === 'STYLE' || child.tagName === 'SCRIPT') continue;
+      const r = child.getBoundingClientRect();
+      if (r.height < 1) continue;
+      const unbreakable = child.tagName === 'TR' || child.children.length === 0 || r.height <= atomMax;
+      if (unbreakable) {
+        atoms.push({ el: child, top: r.top - rootTop, bottom: r.bottom - rootTop });
+      } else {
+        walk(child);
+      }
+    }
+  };
+  walk(root);
+  return atoms;
+}
+
+/** Y positions (CSS px) where a page may safely end. */
+function allowedBreaks(atoms: Atom[]): number[] {
+  const breaks: number[] = [];
+  atoms.forEach((a, i) => {
+    const prev = atoms[i - 1]?.el;
+    const prev2 = atoms[i - 2]?.el;
+    // Never leave a heading (or a table's header row) stranded at the
+    // bottom of a page, and keep a table's total row with the rows above.
+    if (isHeading(prev)) return;
+    if (prev?.tagName === 'THEAD') return;
+    if (prev?.tagName === 'P' && isHeading(prev2)) return;
+    if (a.el.tagName === 'TFOOT') return;
+    // Not valid if another atom (e.g. the card beside this one) straddles it.
+    const y = a.top;
+    if (atoms.some((o) => o.top < y - 0.5 && o.bottom > y + 0.5)) return;
+    breaks.push(y);
+  });
+  return Array.from(new Set(breaks.map((y) => Math.round(y * 100) / 100))).sort((x, y) => x - y);
+}
+
+/** Chooses where each page starts/ends so no block is ever cut through. */
+function planPages(totalHeight: number, pageHeight: number, breaks: number[]): Array<[number, number]> {
+  const pages: Array<[number, number]> = [];
+  let start = 0;
+  while (totalHeight - start > pageHeight + 0.5) {
+    const limit = start + pageHeight;
+    let end = -1;
+    for (const y of breaks) {
+      if (y > start + pageHeight * 0.2 && y <= limit + 0.5) end = y;
+    }
+    if (end < 0) end = limit; // a single block taller than a page: hard cut
+    pages.push([start, end]);
+    start = end;
+  }
+  pages.push([start, totalHeight]);
+  return pages;
+}
+
 export async function exportDomToPdf(
   element: HTMLElement,
   filename: string,
@@ -88,7 +170,7 @@ export async function exportDomToPdf(
 ): Promise<void> {
   // The clone needs to actually be laid out by the browser (correct
   // widths, wrapped text, rendered charts) before html2canvas can
-  // rasterize it — a detached node cloneNode() alone produces has no
+  // rasterize it -- a detached node cloneNode() alone produces has no
   // layout at all. It's positioned off-screen (not display:none /
   // visibility:hidden, both of which would skip layout) so it never
   // flashes on screen, and is always removed again in `finally`.
@@ -96,71 +178,117 @@ export async function exportDomToPdf(
   host.style.position = 'fixed';
   host.style.top = '0';
   host.style.left = '-99999px';
-  host.style.width = `${element.offsetWidth || element.scrollWidth || 1024}px`;
+  host.style.width = `${CAPTURE_WIDTH_PX}px`;
   host.style.zIndex = '-1';
   host.style.pointerEvents = 'none';
 
   try {
     const clonedElement = element.cloneNode(true) as HTMLElement;
+    clonedElement.removeAttribute('id');
+    clonedElement.style.width = `${CAPTURE_WIDTH_PX}px`;
+    clonedElement.style.maxWidth = 'none';
 
     // Convert Tailwind's oklch()-based default color palette to hex
     // equivalents html2canvas can actually parse (see module docs above).
     const style = document.createElement('style');
-    style.textContent = buildColorOverrideCss();
+    style.textContent =
+      buildColorOverrideCss() +
+      `
+      /* Show wide tables in full instead of clipping them to a scroll box,
+         and never clip chart labels at the edge of their SVG. */
+      .overflow-x-auto, .overflow-auto, .overflow-hidden { overflow: visible !important; }
+      svg { overflow: visible !important; }
+      table { width: 100% !important; }
+    `;
     clonedElement.prepend(style);
 
     host.appendChild(clonedElement);
     document.body.appendChild(host);
 
+    // Charts keep the pixel size they had in the on-screen preview; let
+    // them stretch to the fixed capture width instead.
+    clonedElement.querySelectorAll<SVGSVGElement>('svg.recharts-surface').forEach((svg) => {
+      const w = Number(svg.getAttribute('width'));
+      const h = Number(svg.getAttribute('height'));
+      if (w > 0 && h > 0) {
+        if (!svg.getAttribute('viewBox')) svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+        svg.setAttribute('width', '100%');
+        svg.removeAttribute('height');
+        svg.style.height = 'auto';
+      }
+    });
+    clonedElement.querySelectorAll<HTMLElement>('.recharts-wrapper, .recharts-responsive-container').forEach((el) => {
+      el.style.width = '100%';
+    });
+
     // Let the browser lay out/paint the attached clone (fonts, charts,
     // wrapped text) before capturing it.
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+    const rootWidth = clonedElement.getBoundingClientRect().width || CAPTURE_WIDTH_PX;
+    const rootHeight = clonedElement.getBoundingClientRect().height;
+
+    // How many CSS px of the report fit on one PDF page's printable area.
+    const mmPerPx = PAGE_W_MM / rootWidth;
+    const pageContentHeightPx = (PAGE_H_MM - MARGIN_TOP_MM - MARGIN_BOTTOM_MM) / mmPerPx;
+
+    const atoms = collectAtoms(clonedElement, pageContentHeightPx * 0.4);
+    const pages = planPages(rootHeight, pageContentHeightPx, allowedBreaks(atoms));
 
     // Dynamically import the required libraries
     const html2canvas = (await import('html2canvas')).default;
     const jsPDF = (await import('jspdf')).jsPDF;
 
-    // Create a canvas from the DOM element
+    // Keep the bitmap under browsers' canvas size limits for long reports.
+    const scale = Math.max(1, Math.min(2, 30000 / rootHeight));
     const canvas = await html2canvas(clonedElement, {
-      scale: 2,
+      scale,
       logging: false,
       useCORS: true,
       allowTaint: true,
       backgroundColor: '#ffffff',
-      // Disable problematic features that might use oklch
+      width: rootWidth,
+      height: rootHeight,
+      windowWidth: CAPTURE_WIDTH_PX,
       imageTimeout: 0,
     });
 
-    const imgWidth = 210; // A4 width in mm
-    const pageHeight = 297; // A4 height in mm
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    let heightLeft = imgHeight;
-
     const pdf = new jsPDF('p', 'mm', 'a4');
-    let position = 0;
+    if (title) pdf.setProperties({ title });
+    const pxToCanvas = canvas.width / rootWidth;
 
-    // Add title page if provided
-    if (title) {
-      pdf.setFontSize(24);
-      pdf.text(title, pdf.internal.pageSize.getWidth() / 2, 40, { align: 'center' });
-      pdf.setFontSize(10);
-      pdf.text(`Generated on ${formatDate(new Date())}`, pdf.internal.pageSize.getWidth() / 2, 50, {
-        align: 'center',
-      });
-      pdf.addPage();
-      position = 0;
-    }
+    pages.forEach(([startPx, endPx], index) => {
+      if (index > 0) pdf.addPage();
 
-    // Add image pages
-    const imgData = canvas.toDataURL('image/png');
-    while (heightLeft > 0) {
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-      position = heightLeft;
-      if (heightLeft > 0) {
-        pdf.addPage();
-      }
-    }
+      const sliceHeightCanvas = Math.max(1, Math.round((endPx - startPx) * pxToCanvas));
+      const slice = document.createElement('canvas');
+      slice.width = canvas.width;
+      slice.height = sliceHeightCanvas;
+      const ctx = slice.getContext('2d');
+      if (!ctx) throw new Error('Could not prepare a PDF page.');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, slice.width, slice.height);
+      ctx.drawImage(
+        canvas,
+        0, Math.round(startPx * pxToCanvas), canvas.width, sliceHeightCanvas,
+        0, 0, slice.width, sliceHeightCanvas
+      );
+
+      pdf.addImage(
+        slice.toDataURL('image/jpeg', 0.95),
+        'JPEG',
+        0,
+        MARGIN_TOP_MM,
+        PAGE_W_MM,
+        (endPx - startPx) * mmPerPx
+      );
+
+      // Footer: page x of y
+      pdf.setFontSize(8);
+      pdf.setTextColor(120, 120, 120);
+      pdf.text(title ?? 'AuraFin Holdings', 12, PAGE_H_MM - 7);
+      pdf.text(`Page ${index + 1} of ${pages.length}`, PAGE_W_MM - 12, PAGE_H_MM - 7, { align: 'right' });
+    });
 
     // Download the PDF
     pdf.save(filename.endsWith('.pdf') ? filename : `${filename}.pdf`);

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { cn } from './ui/cn';
 import { isMarketOpen } from '../utils/marketHours';
 
@@ -21,7 +21,12 @@ const ORDER = [
 
 async function loadIndices(): Promise<IndexQuote[] | null> {
   try {
-    const res = await fetch('/api/market/indices', { cache: 'no-store' });
+    // Abort a hung request so one slow response can't freeze the updates.
+    const ctrl = new AbortController();
+    const abort = window.setTimeout(() => ctrl.abort(), 4000);
+    const res = await fetch(`/api/market/indices?_=${Date.now()}`, { cache: 'no-store', signal: ctrl.signal }).finally(() =>
+      window.clearTimeout(abort)
+    );
     if (!res.ok) return null;
     const json = await res.json();
     return Array.isArray(json?.indices) ? json.indices : null;
@@ -53,12 +58,19 @@ function useIndexQuotes() {
   useEffect(() => {
     let cancelled = false;
     let timer: number | undefined;
+    // Generation token: restarting the loop (tab becomes visible again) bumps
+    // it, so a request still in flight from the previous chain can't also
+    // schedule its own next tick -- otherwise every tab switch could leave an
+    // extra poller running forever.
+    let generation = 0;
     // Chained timeouts (not setInterval) so a slow response never overlaps the next request.
     const tick = async () => {
+      const myGeneration = ++generation;
+      const startedAt = Date.now();
       if (document.visibilityState !== 'hidden') {
         const q = await loadIndices();
         // Keep showing the last good values if a refresh fails.
-        if (!cancelled) setQuotes((prev) => q ?? (Array.isArray(prev) ? prev : null));
+        if (!cancelled && myGeneration === generation) setQuotes((prev) => q ?? (Array.isArray(prev) ? prev : null));
         if (q) {
           try {
             localStorage.setItem(CACHE_KEY, JSON.stringify(q));
@@ -67,7 +79,12 @@ function useIndexQuotes() {
           }
         }
       }
-      if (!cancelled) timer = window.setTimeout(tick, isMarketOpen() ? LIVE_MS : IDLE_MS);
+      // Count the interval from when the request started (not finished), so
+      // a 400ms response still gives a true one-second cadence.
+      const interval = isMarketOpen() ? LIVE_MS : IDLE_MS;
+      if (!cancelled && myGeneration === generation) {
+        timer = window.setTimeout(tick, Math.max(0, interval - (Date.now() - startedAt)));
+      }
     };
     tick();
     const onVisible = () => {
@@ -86,6 +103,27 @@ function useIndexQuotes() {
   return quotes;
 }
 
+/** Price that briefly flashes green/red whenever the number changes, so a
+ *  live update is visible without watching the digits. */
+function LivePrice({ value }: { value: number }) {
+  const prev = useRef(value);
+  const [flash, setFlash] = useState<{ dir: 'up' | 'down'; n: number } | null>(null);
+  useEffect(() => {
+    if (value !== prev.current) {
+      setFlash((f) => ({ dir: value > prev.current ? 'up' : 'down', n: (f?.n ?? 0) + 1 }));
+      prev.current = value;
+    }
+  }, [value]);
+  return (
+    <span
+      key={flash?.n ?? 0}
+      className={cn('text-ink-2 tabular-nums rounded px-0.5', flash && (flash.dir === 'up' ? 'ticker-flash-up' : 'ticker-flash-down'))}
+    >
+      {fmt(value)}
+    </span>
+  );
+}
+
 function renderItems(quotes: IndexQuote[] | null | undefined) {
   return ORDER.map(({ key, name }) => {
     const q = Array.isArray(quotes) ? quotes.find((x) => x.key === key) : undefined;
@@ -98,7 +136,7 @@ function renderItems(quotes: IndexQuote[] | null | undefined) {
         <span className="font-semibold text-ink-2">{name}</span>
         {q ? (
           <>
-            <span className="text-ink-2 tabular-nums">{fmt(q.price)}</span>
+            <LivePrice value={q.price} />
             {change !== undefined && pct !== undefined && (
               <span className={cn('font-medium tabular-nums', up ? 'text-positive' : 'text-negative')}>
                 {up ? '+' : '-'}

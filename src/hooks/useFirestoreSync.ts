@@ -131,6 +131,12 @@ export function useFirestoreCollectionSync<T extends { id: string }>(
     if (backup && backup.length > 0) {
       setLocal(backup);
       markCollectionLoaded(collectionName);
+      // Pages hold back headline numbers (and show "no assets yet") until a
+      // collection is "known". Real saved data is known data -- without
+      // this, offline the screen would sit on a skeleton or, worse, fall
+      // through to the empty state instead of showing what you last saw.
+      onSyncChange?.(false);
+      markCollectionServerConfirmed(collectionName);
     }
 
     const unsub = onSnapshot(colRef, { includeMetadataChanges: true }, (snap) => {
@@ -140,8 +146,9 @@ export function useFirestoreCollectionSync<T extends { id: string }>(
       // collection arrives from the server (fromCache === false).
       if (snap.metadata.fromCache && snap.empty && backup && backup.length > 0) {
         first = false;
-        onSyncChange?.(true);
+        onSyncChange?.(false);
         markCollectionLoaded(collectionName);
+        markCollectionServerConfirmed(collectionName);
         return;
       }
       // Metadata-only snapshots (cache -> server confirmation with identical
@@ -154,11 +161,15 @@ export function useFirestoreCollectionSync<T extends { id: string }>(
         setLocal(items);
         writeBackup(uid, collectionName, items);
       }
-      onSyncChange?.(snap.metadata.fromCache);
+      // A server answer is always trusted. A cache-only answer is trusted
+      // when it actually contains data (that is what makes offline show your
+      // last-seen numbers); a cache-only *empty* answer is not, because it
+      // may just mean "nothing cached yet" -- showing "no assets" for that
+      // would be wrong.
+      const trusted = !snap.metadata.fromCache || !snap.empty;
+      onSyncChange?.(!trusted);
       markCollectionLoaded(collectionName);
-      // Only the server's answer counts as "correct" — a cache-only snapshot
-      // may be stale right after a refresh.
-      if (!snap.metadata.fromCache) markCollectionServerConfirmed(collectionName);
+      if (trusted) markCollectionServerConfirmed(collectionName);
     });
     return () => unsub();
   }, [uid, anonymous, collectionName, setLocal, onSyncChange, markCollectionLoaded, markCollectionServerConfirmed]);

@@ -237,6 +237,13 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
+            // The top-bar ticker polls once a second. It must always hit the
+            // network (the app keeps its own last-quote copy for offline),
+            // otherwise the worker adds latency / can hand back an old quote.
+            urlPattern: ({ url }) => url.pathname === '/api/market/indices',
+            handler: 'NetworkOnly',
+          },
+          {
             urlPattern: ({ url }) => url.pathname.startsWith('/api/market'),
             handler: 'NetworkFirst',
             options: {

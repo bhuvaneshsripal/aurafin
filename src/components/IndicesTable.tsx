@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import CountryFlag from './CountryFlag';
 import IndexIcon from './IndexIcon';
@@ -78,19 +78,29 @@ export default function IndicesTable({ variant }: { variant: IndicesVariant }) {
     }
   }
 
+  // Only the most recent request may write results: an older, slower response
+  // (or one that finishes after unmount/variant change) must not overwrite
+  // newer data.
+  const requestSeq = useRef(0);
+
+  const invalidateRequests = useCallback(() => {
+    requestSeq.current++;
+  }, []);
+
   const load = useCallback(async () => {
+    const seq = ++requestSeq.current;
     setLoading(true);
     try {
       const res = await fetch(ENDPOINT[variant], { cache: 'no-store' });
       if (!res.ok) throw new Error(String(res.status));
       const json = await res.json();
       if (!Array.isArray(json?.indices)) throw new Error('bad payload');
-      setRows(json.indices);
+      if (seq === requestSeq.current) setRows(json.indices);
     } catch {
       // Keep the last good table on a failed refresh.
-      setRows((prev) => (Array.isArray(prev) ? prev : null));
+      if (seq === requestSeq.current) setRows((prev) => (Array.isArray(prev) ? prev : null));
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) setLoading(false);
     }
   }, [variant]);
 
@@ -98,15 +108,22 @@ export default function IndicesTable({ variant }: { variant: IndicesVariant }) {
     setRows(undefined);
     load();
     let timer: number;
+    let stopped = false;
     const schedule = () => {
       timer = window.setTimeout(async () => {
         if (document.visibilityState === 'visible') await load();
-        schedule();
+        // If the component unmounted (or variant changed) while the request
+        // was in flight, don't start a new timer chain that nothing can stop.
+        if (!stopped) schedule();
       }, variant === 'indian' && isMarketOpen() ? LIVE_POLL_MS : POLL_MS);
     };
     schedule();
-    return () => window.clearTimeout(timer);
-  }, [load]);
+    return () => {
+      stopped = true;
+      invalidateRequests(); // drop any in-flight response
+      window.clearTimeout(timer);
+    };
+  }, [load, variant, invalidateRequests]);
 
   return (
     <div>
