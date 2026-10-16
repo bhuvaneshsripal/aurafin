@@ -1775,7 +1775,7 @@ function AssetsTab({
             </div>
             <Button
               variant="secondary"
-              className="hidden md:inline-flex"
+              className="max-md:!hidden"
               leftIcon={<BarChart2 size={15} />}
               onClick={() => setTab('allocation')}
             >
@@ -2259,15 +2259,11 @@ function AssetsTab({
                         </>
                       ) : (
                         <>
-                          <div
-                            className={`text-sm font-semibold animate-value-in ${
-                              (r.pnl ?? r.value - invested) >= 0 ? 'text-emerald-600' : 'text-red-500'
-                            }`}
-                          >
-                            {maskPreciseAmount(r.value, a.currency, privacyMode)}
+                          <div className="text-sm font-semibold text-ink font-numeric animate-value-in">
+                            {maskAmount(r.value, a.currency, privacyMode)}
                           </div>
-                          <div className="text-[11px] mt-0.5 text-slate-600">
-                            ({maskPreciseAmount(invested, a.currency, privacyMode)})
+                          <div className="text-[11px] mt-0.5 text-muted font-numeric">
+                            {maskAmount(invested, a.currency, privacyMode)}
                           </div>
                         </>
                       )}

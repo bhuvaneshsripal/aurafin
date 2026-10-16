@@ -204,6 +204,10 @@ export default function TopHeader() {
             {privacyMode ? <EyeOff size={18} /> : <Eye size={18} />}
           </IconButton>
 
+          <div className="mx-1 shrink-0">
+            <QuickAddMenu variant="icon" />
+          </div>
+
           <div className="relative" ref={mobileMenuRef}>
             <IconButton label="Menu" onClick={() => setMobileMenuOpen((o) => !o)}>
               <MoreVertical size={18} />

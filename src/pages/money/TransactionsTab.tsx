@@ -543,8 +543,8 @@ export default function TransactionsTab() {
             </button>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex gap-1 p-1 rounded-lg bg-slate-100 dark:bg-slate-800/60">
+        <div className="flex items-center gap-2 sm:flex-wrap">
+          <div className="flex gap-1 p-1 rounded-lg bg-slate-100 dark:bg-slate-800/60 shrink-0">
             {(['all', 'income', 'expense'] as const).map((k) => (
               <button
                 key={k}
@@ -562,14 +562,16 @@ export default function TransactionsTab() {
           <CustomSelect
             value={categoryFilter}
             onChange={setCategoryFilter}
-            className={`${inputClasses} w-44`}
+            className={`${inputClasses} min-w-0 flex-1 sm:w-44 sm:flex-none`}
             options={[
-              { value: '', label: 'All categories' },
+              { value: '', label: 'Category' },
               ...categoryCounts.map(([k, v]) => ({ value: k, label: `${v.name} (${v.count})` })),
             ]}
           />
           <Button
             variant="secondary"
+            className="shrink-0 max-sm:!px-2.5"
+            aria-label="Change sort order"
             onClick={() => {
               if (sortKey === 'date' && sortDesc) {
                 setSortDesc(false);
@@ -585,7 +587,7 @@ export default function TransactionsTab() {
             }}
             leftIcon={<ArrowUpDown size={15} />}
           >
-            {sortKey === 'date' ? 'Date' : 'Amount'} {sortDesc ? '↓' : '↑'}
+            <span className="max-sm:sr-only">{sortKey === 'date' ? 'Date' : 'Amount'}</span> {sortDesc ? '↓' : '↑'}
           </Button>
         </div>
       </div>
