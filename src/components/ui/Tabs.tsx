@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { cn } from './cn';
 
 export interface TabItem<T extends string = string> {
@@ -19,40 +19,8 @@ export function Tabs<T extends string>({
   onChange: (key: T) => void;
   className?: string;
 }) {
-  const scroller = useRef<HTMLDivElement>(null);
-  const [moreRight, setMoreRight] = useState(false);
-
-  // Fade the right edge while more tabs are hidden off-screen, and keep the
-  // selected tab visible, so a clipped label never looks like a layout bug.
-  useEffect(() => {
-    const el = scroller.current;
-    if (!el) return;
-    const update = () => setMoreRight(el.scrollWidth - el.clientWidth - el.scrollLeft > 4);
-    update();
-    el.addEventListener('scroll', update, { passive: true });
-    window.addEventListener('resize', update);
-    return () => {
-      el.removeEventListener('scroll', update);
-      window.removeEventListener('resize', update);
-    };
-  }, [items.length]);
-
-  useEffect(() => {
-    scroller.current
-      ?.querySelector<HTMLElement>('[aria-selected="true"]')
-      ?.scrollIntoView({ block: 'nearest', inline: 'center' });
-  }, [value]);
-
   return (
-    <div
-      ref={scroller}
-      className={cn('border-b border-line overflow-x-auto no-scrollbar', className)}
-      style={
-        moreRight
-          ? { maskImage: 'linear-gradient(to right, #000 calc(100% - 32px), transparent)', WebkitMaskImage: 'linear-gradient(to right, #000 calc(100% - 32px), transparent)' }
-          : undefined
-      }
-    >
+    <div className={cn('border-b border-line overflow-x-auto no-scrollbar', className)}>
       <div role="tablist" className="flex gap-1 min-w-max">
         {items.map((t) => {
           const active = t.key === value;

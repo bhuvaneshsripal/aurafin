@@ -14,6 +14,8 @@ import {
   Wallet,
   Scale,
 } from 'lucide-react';
+import QuickAddMenu from './QuickAddMenu';
+import { useUiStore } from '../store/uiStore';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 const primaryLinks = [
@@ -42,10 +44,20 @@ export default function BottomNav() {
   const [moreOpen, setMoreOpen] = useState(false);
   const location = useLocation();
   const isMoreActive = moreLinks.some((l) => l.to === location.pathname);
+  const hideFab = useUiStore((s) => s.hideFab);
   useBodyScrollLock(moreOpen);
 
   return (
     <>
+      {/* Floating quick-add action button, sits just above the bottom nav.
+          Hidden when a page's own bottom toolbar (e.g. bulk-selection
+          actions on Wealth) is occupying the same corner. */}
+      {!hideFab && (
+        <div className="md:hidden fixed right-4 z-40" style={{ bottom: 'calc(56px + env(safe-area-inset-bottom) + 12px)' }}>
+          <QuickAddMenu variant="fab" />
+        </div>
+      )}
+
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface border-t border-line pb-[env(safe-area-inset-bottom)]">
         <div className="grid grid-cols-4 h-14">
           {primaryLinks.map(({ to, label, icon: Icon }) => (

@@ -25,7 +25,7 @@ import { toIsoDate } from '../utils/date';
 
 type QuickAction = 'expense' | 'income' | 'transfer' | 'asset' | 'liability' | 'snapshot' | null;
 
-export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'desktop' | 'fab' | 'icon' }) {
+export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'desktop' | 'fab' }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [active, setActive] = useState<QuickAction>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -78,12 +78,10 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
           className={
             isFab
               ? `fab-button${menuOpen ? ' fab-open' : ''} tap-scale relative z-30 flex items-center justify-center text-white h-14 w-14`
-              : variant === 'icon'
-                ? 'tap-scale h-9 w-9 shrink-0 flex items-center justify-center rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-colors'
-                : buttonClasses('primary', 'md', 'pl-3 pr-3')
+              : buttonClasses('primary', 'md', 'pl-3 pr-3')
           }
         >
-          {isFab ? <Plus size={24} className="fab-icon" /> : variant === 'icon' ? <Plus size={20} /> : (
+          {isFab ? <Plus size={24} className="fab-icon" /> : (
             <>
               <Plus size={16} /> Add <ChevronDown size={15} className="opacity-80" />
             </>

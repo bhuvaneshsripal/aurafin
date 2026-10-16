@@ -257,7 +257,6 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         <StatCard
           dense
-          className="col-span-2 lg:col-span-1"
           label="Net worth"
           loading={!ready}
           value={money(hasWealth ? netWorthShown : 0)}

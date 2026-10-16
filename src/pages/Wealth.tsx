@@ -23,6 +23,7 @@ import {
   EyeOff,
   Eye,
   MoreVertical,
+  RotateCcw,
   BarChart2,
   GripVertical,
   ListFilter,
@@ -829,21 +830,37 @@ function NoTypeResults({ query, onClear }: { query: string; onClear: () => void 
 
 function useOutsideClose(onClose: () => void) {
   const ref = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
-    // Uses 'click' rather than 'mousedown'. On mobile, a tap synthesizes
-    // mousedown before click — if we close (and unmount) the menu on
-    // mousedown, the browser can lose the element it was about to fire the
-    // real 'click' on, so the tapped item's own action (Edit/Duplicate/
-    // Move/Delete) never runs and the menu just appears to close on its
-    // own. Listening on 'click' instead means the item's own onClick
-    // (attached further down the same bubble path) always gets to run
-    // first, and this handler only ever sees genuinely-outside taps.
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    // Listen for 'pointerdown' in the CAPTURE phase on the document. The
+    // earlier 'click' listener never fired when the tap landed on something
+    // that calls stopPropagation() (React stops the native event before it
+    // reaches document), on a scroll gesture, or on a row whose long-press
+    // drag logic swallows the click — so the menu stayed open. Capture-phase
+    // pointerdown always runs first, regardless of what the target does.
+    // Taps inside the menu itself, or on any "..." trigger button
+    // (data-menu-trigger, which toggles the menu on its own), are ignored.
+    const handler = (e: Event) => {
+      const el = ref.current;
+      if (!el) return; // menu not open
+      const target = e.target as Element | null;
+      if (target && el.contains(target)) return;
+      if (target && target.closest?.('[data-menu-trigger]')) return;
+      onCloseRef.current();
     };
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
-  }, [onClose]);
+    // The menu is position:fixed, so it would drift away from its row when
+    // the page scrolls — close it instead.
+    const scrollHandler = () => {
+      if (ref.current) onCloseRef.current();
+    };
+    document.addEventListener('pointerdown', handler, true);
+    window.addEventListener('scroll', scrollHandler, true);
+    return () => {
+      document.removeEventListener('pointerdown', handler, true);
+      window.removeEventListener('scroll', scrollHandler, true);
+    };
+  }, []);
   return ref;
 }
 
@@ -1147,6 +1164,7 @@ function AssetsTab({
   } | null>(null);
   const holdingsMenuRef = useOutsideClose(() => {
     setHoldingsMenuOpenId(null);
+    setHoldingsMenuAnchor(null);
     // Reuse the same "swallow the very next row click" pattern already used
     // after a drag-reorder: closing the menu shouldn't also let that same
     // tap fall through and open whatever row happens to be underneath it.
@@ -1154,10 +1172,12 @@ function AssetsTab({
     // the row's own "open this asset" click — it doesn't block a tap on a
     // *different* row's "..." button, so switching straight from one row's
     // menu to another still works in a single click.
+    // The closing tap's own click fires after pointerup, so keep the
+    // suppression alive briefly rather than clearing it on the next tick.
     suppressRowClickRef.current = true;
     setTimeout(() => {
       suppressRowClickRef.current = false;
-    }, 0);
+    }, 350);
   });
 
   // Decide, at the moment the menu is opened, whether there's enough room
@@ -1292,20 +1312,33 @@ function AssetsTab({
    *  index as its order the first time it's moved. */
   const handleMove = async (id: string, direction: 'up' | 'down') => {
     if (!user) return;
-    setSortKey('manual');
-    const ordered = [...assets].sort(
-      compareAssetsDefault
-    );
-    const idx = ordered.findIndex((a) => a.id === id);
+    // Move relative to what's on screen right now — including when a sort
+    // (Current, Invested, Returns, ...) is active — not relative to the
+    // stored manual order. The visible arrangement becomes the new manual
+    // order, with the chosen holding shifted one step from where it's shown.
+    const ids = displayRows.map((r) => r.asset.id);
+    const idx = ids.indexOf(id);
     const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-    if (idx === -1 || swapIdx < 0 || swapIdx >= ordered.length) return;
-    const current = ordered[idx];
-    const neighbor = ordered[swapIdx];
-    const currentOrder = current.order ?? idx;
-    const neighborOrder = neighbor.order ?? swapIdx;
+    if (idx === -1 || swapIdx < 0 || swapIdx >= ids.length) return;
+    [ids[idx], ids[swapIdx]] = [ids[swapIdx], ids[idx]];
+    setSortKey('manual');
+    // Rows may be filtered (category/type), so only the visible holdings
+    // trade places: they reuse the slots they already occupy in the full
+    // stored order, in the new on-screen sequence. Hidden holdings keep
+    // their position.
+    const full = [...assets].sort(compareAssetsDefault).map((x) => x.id);
+    const slots = ids.map((x) => full.indexOf(x)).sort((m, n) => m - n);
+    const finalIds = [...full];
+    ids.forEach((x, i) => {
+      finalIds[slots[i]] = x;
+    });
     try {
-      await upsertDoc(user, 'assets', { ...current, order: neighborOrder });
-      await upsertDoc(user, 'assets', { ...neighbor, order: currentOrder });
+      for (let i = 0; i < finalIds.length; i++) {
+        const asset = assets.find((x) => x.id === finalIds[i]);
+        if (asset && asset.order !== i) {
+          await upsertDoc(user, 'assets', { ...asset, order: i });
+        }
+      }
     } catch (err) {
       console.error('Failed to reorder assets', err);
     }
@@ -1418,6 +1451,14 @@ function AssetsTab({
     dragRef.current = null;
     setDraggingId(null);
     setManualDragIds(null);
+  };
+
+  // Sorting (column headers / Sort sheet) is only a temporary view: it is
+  // never saved, so a refresh always brings back the saved manual order.
+  // This returns to that saved order without refreshing.
+  const resetOrder = () => {
+    setSortKey('manual');
+    setSortDir('desc');
   };
 
   const toggleSort = (key: SortKey) => {
@@ -1775,7 +1816,7 @@ function AssetsTab({
             </div>
             <Button
               variant="secondary"
-              className="max-md:!hidden"
+              className="hidden md:inline-flex"
               leftIcon={<BarChart2 size={15} />}
               onClick={() => setTab('allocation')}
             >
@@ -2133,6 +2174,15 @@ function AssetsTab({
               <span className="text-sm font-semibold text-ink">Sort</span>
               <ListFilter size={15} strokeWidth={2.25} className="text-ink" />
             </button>
+            {sortKey !== 'manual' && (
+              <button
+                type="button"
+                onClick={resetOrder}
+                className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full border border-line text-xs font-medium text-ink"
+              >
+                <RotateCcw size={12} strokeWidth={2.25} /> Reset order
+              </button>
+            )}
             <div
               role="button"
               tabIndex={0}
@@ -2259,17 +2309,22 @@ function AssetsTab({
                         </>
                       ) : (
                         <>
-                          <div className="text-sm font-semibold text-ink font-numeric animate-value-in">
-                            {maskAmount(r.value, a.currency, privacyMode)}
+                          <div
+                            className={`text-sm font-semibold animate-value-in ${
+                              (r.pnl ?? r.value - invested) >= 0 ? 'text-emerald-600' : 'text-red-500'
+                            }`}
+                          >
+                            {maskPreciseAmount(r.value, a.currency, privacyMode)}
                           </div>
-                          <div className="text-[11px] mt-0.5 text-muted font-numeric">
-                            {maskAmount(invested, a.currency, privacyMode)}
+                          <div className="text-[11px] mt-0.5 text-slate-600">
+                            ({maskPreciseAmount(invested, a.currency, privacyMode)})
                           </div>
                         </>
                       )}
                     </div>
                     <div className="relative shrink-0">
                       <button
+                        data-menu-trigger
                         onClick={(e) => {
                           e.stopPropagation();
                           openHoldingsMenu(a.id, e.currentTarget);
@@ -2288,6 +2343,17 @@ function AssetsTab({
           {/* Per-holding table (sm and up). Column headers are clickable and
               sort the rows (click again to flip direction). Rows still
               support press-and-drag manual ordering + click-through. */}
+          {sortKey !== 'manual' && (
+            <div className="hidden sm:flex justify-end">
+              <button
+                type="button"
+                onClick={resetOrder}
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-line text-xs font-medium text-ink hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+              >
+                <RotateCcw size={13} strokeWidth={2.25} /> Reset order
+              </button>
+            </div>
+          )}
           <Card padding="none" className="hidden sm:block overflow-hidden">
             <TableContainer>
               <Table className="min-w-[1020px]">
@@ -2440,7 +2506,7 @@ function AssetsTab({
                           )}
                         </Td>
                         <td className="px-2 py-3 relative">
-                          <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                          <div data-menu-trigger className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                             <IconButton
                               label="Row actions"
                               onClick={(e) => {
