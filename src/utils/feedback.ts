@@ -20,9 +20,10 @@ export async function sendFeedback(params: {
   fromEmail: string;
 }) {
   if (!isFeedbackConfigured()) {
-    throw new Error(
-      'Feedback isn\u2019t set up yet. Add VITE_EMAILJS_FEEDBACK_TEMPLATE_ID to your .env file \u2014 see .env.example.'
+    console.error(
+      'Feedback is not configured: set VITE_EMAILJS_FEEDBACK_TEMPLATE_ID (plus the EmailJS service ID and public key) in .env \u2014 see .env.example.'
     );
+    throw new Error('Feedback can\u2019t be sent right now. Please try again later.');
   }
   const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
     method: 'POST',
