@@ -7,7 +7,7 @@ import {
   FileUp,
   Calculator,
   Settings,
-  Smartphone,
+  MessageSquare,
   X,
   LineChart,
   Gem,
@@ -31,6 +31,9 @@ interface MoreLink {
   icon: typeof LayoutDashboard;
 }
 
+/** Shown in the More sheet as a disabled tile until the feature ships. */
+const COMING_SOON_LABEL = 'Coming soon';
+
 const moreLinks: MoreLink[] = [
   { to: '/wealth/performance', label: 'Performance', icon: LineChart },
   { to: '/essentials', label: 'Essentials', icon: Target },
@@ -38,7 +41,6 @@ const moreLinks: MoreLink[] = [
   { to: '/valuation', label: 'Valuation', icon: Scale },
   { to: '/calculators', label: 'Calculators', icon: Calculator },
   { to: '/settings', label: 'Settings', icon: Settings },
-  { to: '/install', label: 'Install App', icon: Smartphone },
 ];
 
 const NON_TEXT_INPUT_TYPES = new Set(['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color', 'file', 'hidden']);
@@ -198,6 +200,16 @@ export default function BottomNav() {
                   {label}
                 </NavLink>
               ))}
+              <div
+                aria-disabled="true"
+                className="relative flex flex-col items-center justify-center gap-2 rounded-xl border border-line bg-surface px-2 py-4 text-xs font-medium text-center text-slate-500 opacity-70 cursor-not-allowed select-none"
+              >
+                <MessageSquare size={20} strokeWidth={1.75} />
+                Feedback
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                  {COMING_SOON_LABEL}
+                </span>
+              </div>
             </div>
             <div className="px-5 pb-6 pt-2 text-center text-xs text-muted">
               Developed by Bhuvanesh S ·{' '}

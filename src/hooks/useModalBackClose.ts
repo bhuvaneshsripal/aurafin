@@ -94,7 +94,11 @@ export function useModalBackClose(isOpen: boolean, onClose: () => void) {
           pendingCollapse = null;
           if (guardStack.length === 0 && entryPushed) {
             entryPushed = false;
-            window.history.back();
+            // Only step back if we're still sitting on our guard entry. If the
+            // modal closed because the person navigated (e.g. tapped a link in
+            // the More sheet), the current entry is the new page — going back
+            // here would bounce them straight back to where they came from.
+            if (window.history.state?.__modalGuard) window.history.back();
           }
         }, 0);
       }
