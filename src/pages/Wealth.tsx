@@ -147,6 +147,7 @@ import { useUrlTab } from '../hooks/useUrlTab';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 const AnalyticsContent = lazyWithRetry(() => import('./Analytics'));
 import { useModalBackClose } from '../hooks/useModalBackClose';
+import { toast } from '../store/toastStore';
 
 type Tab = 'assets' | 'liabilities' | 'networth' | 'allocation' | 'analytics';
 type SortKey = 'manual' | 'name' | 'qty' | 'avgCost' | 'perUnit' | 'invested' | 'value' | 'pnl' | 'alloc' | 'dayChange';
@@ -534,7 +535,7 @@ function AddWealthPage({
       onClose();
     } catch (err) {
       console.error('Failed to save asset', err);
-      alert('Could not save this asset. Please check your connection and try again.');
+      toast.error('Could not save this asset. Please check your connection and try again.');
     }
   };
 
@@ -549,7 +550,7 @@ function AddWealthPage({
       onClose();
     } catch (err) {
       console.error('Failed to save liability', err);
-      alert('Could not save this liability. Please check your connection and try again.');
+      toast.error('Could not save this liability. Please check your connection and try again.');
     }
   };
 
@@ -1264,14 +1265,14 @@ function AssetsTab({
 
   const handleDelete = async (id: string) => {
     if (!user) {
-      alert('You need to be signed in to delete an asset. Please reload the app and try again.');
+      toast.error('You need to be signed in to delete an asset. Please reload the app and try again.');
       return;
     }
     try {
       await removeDoc(user, 'assets', id);
     } catch (err) {
       console.error('Failed to delete asset', err);
-      alert('Could not delete this asset. Please check your connection and try again.');
+      toast.error('Could not delete this asset. Please check your connection and try again.');
     }
   };
 
@@ -1281,14 +1282,14 @@ function AssetsTab({
   // screen, not the edit modal.
   const handleQuickUpdate = async (asset: Asset) => {
     if (!user) {
-      alert('You need to be signed in to update this SIP. Please reload the app and try again.');
+      toast.error('You need to be signed in to update this SIP. Please reload the app and try again.');
       return;
     }
     try {
       await upsertDoc(user, 'assets', asset);
     } catch (err) {
       console.error('Failed to update SIP', err);
-      alert('Could not save this change. Please check your connection and try again.');
+      toast.error('Could not save this change. Please check your connection and try again.');
     }
   };
 
@@ -1301,7 +1302,7 @@ function AssetsTab({
       await upsertDoc(user, 'transactions', t.profileId ? t : { ...t, profileId: activeProfileId ?? undefined });
     } catch (err) {
       console.error('Failed to log transaction', err);
-      alert('The holding was updated, but logging the transaction failed. Please check your connection.');
+      toast.error('The holding was updated, but logging the transaction failed. Please check your connection.');
     }
   };
 
@@ -1319,14 +1320,13 @@ function AssetsTab({
       await removeDoc(user, 'transactions', t.id);
     } catch (err) {
       console.error('Failed to delete dividend', err);
-      alert('Could not delete this dividend. Please check your connection and try again.');
+      toast.error('Could not delete this dividend. Please check your connection and try again.');
     }
   };
 
   const handleDuplicate = async (a: Asset) => {
-    console.log('[DEBUG] handleDuplicate called for', a.id, a.name, 'user:', user?.uid);
     if (!user) {
-      alert('You need to be signed in to duplicate an asset. Please reload the app and try again.');
+      toast.error('You need to be signed in to duplicate an asset. Please reload the app and try again.');
       return;
     }
     try {
@@ -1336,10 +1336,9 @@ function AssetsTab({
         name: `${a.name} (Copy)`,
         updatedAt: Date.now(),
       });
-      console.log('[DEBUG] handleDuplicate finished writing to Firestore');
     } catch (err) {
       console.error('Failed to duplicate asset', err);
-      alert('Could not duplicate this asset. Please check your connection and try again.');
+      toast.error('Could not duplicate this asset. Please check your connection and try again.');
     }
   };
 
@@ -1573,7 +1572,7 @@ function AssetsTab({
       setModalOpen(false);
     } catch (err) {
       console.error('Failed to save asset', err);
-      alert('Could not save this asset. Please check your connection and try again.');
+      toast.error('Could not save this asset. Please check your connection and try again.');
     }
   };
 
@@ -1753,18 +1752,7 @@ function AssetsTab({
         .filter((r): r is (typeof sortedRows)[number] => !!r))
     : sortedRows;
 
-  // TEMP DEBUG — remove once we've confirmed where the chain breaks. Logs
-  // every time modalOpen actually changes, and prints a stack trace when it
-  // flips back to false so we can see exactly what caused it.
-  useEffect(() => {
-    console.log('[DEBUG] modalOpen changed to', modalOpen);
-    if (modalOpen === false) {
-      console.trace('[DEBUG] modalOpen became false — trace');
-    }
-  }, [modalOpen]);
-
   const openEdit = (a: Asset) => {
-    console.log('[DEBUG] openEdit called for', a.id, a.name);
     setEditing(a);
     setModalOpen(true);
   };
@@ -6918,7 +6906,7 @@ function LiabilitiesTab({
       setModalOpen(false);
     } catch (err) {
       console.error('Failed to save liability', err);
-      alert('Could not save this liability. Please check your connection and try again.');
+      toast.error('Could not save this liability. Please check your connection and try again.');
     }
   };
 

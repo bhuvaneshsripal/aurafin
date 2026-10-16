@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
+import { useModalBackClose } from '../hooks/useModalBackClose';
 
 interface ModalProps {
   open: boolean;
@@ -137,6 +138,10 @@ export default function Modal({
   // especially jarring for contentPanel since its blurred backdrop visibly
   // shifts as the assets list behind it scrolls.
   useBodyScrollLock(open);
+  // Phone/PWA Back (and iOS edge-swipe back) closes the open modal instead of
+  // leaving the page underneath it. Every variant gets this, so call sites
+  // don't need to wire it up themselves.
+  useModalBackClose(open, onClose);
 
   if (!open) return null;
 

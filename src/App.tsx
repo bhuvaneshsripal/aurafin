@@ -35,6 +35,7 @@ import TopHeader from './components/TopHeader';
 import BottomNav from './components/BottomNav';
 import SwipeTabs from './components/SwipeTabs';
 import PrivacyFab from './components/PrivacyFab';
+import Toaster from './components/Toaster';
 import LockScreen from './components/LockScreen';
 import InstallPromptModal from './components/InstallPromptModal';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -91,7 +92,7 @@ function AppShell() {
   // bottom nav, back button) — see the hook for why a hard refresh still
   // resets to the top.
   useScrollRestoration();
-  // Auto hard-refresh every day at 5:00 a.m.
+  // Auto hard-refresh every day at 6:00 a.m.
   useDailyHardRefresh();
 
   // First-time sign-ups/sign-ins get the full-screen onboarding wizard with
@@ -152,6 +153,7 @@ function AppShell() {
       </div>
       <BottomNav />
       <SwipeTabs />
+      <Toaster />
       <PrivacyFab />
       <InstallPromptModal />
     </div>

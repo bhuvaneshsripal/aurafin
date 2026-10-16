@@ -4,6 +4,24 @@ import { hardRefresh } from '../utils/hardRefresh';
 const LAST_REFRESH_KEY = 'aurafin-last-auto-hard-refresh';
 const REFRESH_HOUR = 6; // 6:00 a.m. device-local time
 const CHECK_INTERVAL_MS = 30_000;
+/** Don't reload while the person is actively using the app. */
+const IDLE_BEFORE_REFRESH_MS = 2 * 60_000;
+const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'touchstart', 'scroll'] as const;
+
+let lastActivity = Date.now();
+const markActive = () => {
+  lastActivity = Date.now();
+};
+
+/** True while the app is in front of the person and they've touched it recently. */
+function userIsBusy(): boolean {
+  if (document.visibilityState === 'visible' && Date.now() - lastActivity < IDLE_BEFORE_REFRESH_MS) {
+    return true;
+  }
+  // A focused text field means someone is mid-sentence; never reload under them.
+  const el = document.activeElement;
+  return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement;
+}
 
 /** The most recent 6:00 a.m. (local) that is <= now. */
 function latestRefreshSlot(now: Date): number {
@@ -34,7 +52,9 @@ function writeLast(ts: number) {
 /**
  * Runs a hard refresh once every day at 6:00 a.m. (device local time).
  * If the app was closed/asleep at 6 a.m., it refreshes the next time it is
- * opened or brought to the foreground. Skipped while offline (a hard refresh
+ * opened or brought to the foreground. If the person is actively using the
+ * app at that moment, it waits until they've been idle for a couple of
+ * minutes (or switched away), so an in-progress form is never reloaded. Skipped while offline (a hard refresh
  * clears the service worker + caches and would leave a blank page), and
  * retried automatically once the connection is back.
  */
@@ -52,6 +72,7 @@ export function useDailyHardRefresh() {
       }
       if (last >= slot) return; // already refreshed since the last 6 a.m.
       if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+      if (userIsBusy()) return; // try again on the next check, once they're idle
 
       const previous = last;
       writeLast(now.getTime()); // set before reloading to avoid a loop
@@ -69,10 +90,12 @@ export function useDailyHardRefresh() {
     };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('online', check);
+    ACTIVITY_EVENTS.forEach((evt) => window.addEventListener(evt, markActive, { passive: true }));
     return () => {
       window.clearInterval(id);
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('online', check);
+      ACTIVITY_EVENTS.forEach((evt) => window.removeEventListener(evt, markActive));
     };
   }, []);
 }

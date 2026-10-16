@@ -1,22 +1,34 @@
 import { useEffect } from 'react';
 
 /**
- * Locks the page behind from scrolling while `active` is true — used by
- * every full-screen/backdrop overlay (modals, the quick-add menu, the
- * bottom-nav "More" sheet, global search, install prompt, etc.) so that
- * touch/wheel scrolling over the dimmed backdrop doesn't scroll the page
- * underneath it. Restores whatever inline `overflow` value was already on
- * `<body>` on close/unmount rather than assuming it was empty, so nested or
- * sequential overlays compose correctly instead of one clobbering another's
- * cleanup.
+ * Number of overlays currently asking for the page behind to stay still.
+ * Shared across every caller so overlays can open and close in any order.
+ */
+let lockCount = 0;
+let overflowBeforeLock = '';
+
+/**
+ * Locks page scrolling while `active` is true. Used by every overlay (modals,
+ * the quick-add menu, the bottom-nav sheet, search, etc.).
+ *
+ * Overlays are reference-counted: the original `overflow` value is captured
+ * once, when the first overlay opens, and restored only when the last one
+ * closes. Restoring per-overlay broke when two overlays were open and closed
+ * out of order (e.g. a modal opened on top of the More sheet), because the
+ * first one to close would restore a stale value and the page could stay
+ * locked with no way to scroll.
  */
 export function useBodyScrollLock(active: boolean) {
   useEffect(() => {
     if (!active) return;
-    const previousOverflow = document.body.style.overflow;
+
+    if (lockCount === 0) overflowBeforeLock = document.body.style.overflow;
+    lockCount += 1;
     document.body.style.overflow = 'hidden';
+
     return () => {
-      document.body.style.overflow = previousOverflow;
+      lockCount = Math.max(0, lockCount - 1);
+      if (lockCount === 0) document.body.style.overflow = overflowBeforeLock;
     };
   }, [active]);
 }

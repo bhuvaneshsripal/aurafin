@@ -157,13 +157,24 @@ export default function Dashboard() {
   // Profit / loss and return come from the same engine as the Performance
   // page so both screens always show identical numbers.
   const portfolioPnl = computePortfolioPnl(profileAssets, 'INR', livePrices, sipValues, liveGoldPricePerGram);
-  const investedShown = includeSold ? portfolioPnl.lifetimeCapitalDeployed : portfolioPnl.totalInvested;
+  // Cash & Savings is part of Net worth but the P&L engine (rightly) gives it
+  // no cost basis. Count it at face value (cost = value, zero P&L) so Total
+  // invested reconciles with Net worth. Same scoping as above: ₹ only.
+  const cashBasis = profileAssets.reduce(
+    (s, a) =>
+      a.assetClass === 'cash' && a.currency === 'INR'
+        ? s + resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).value
+        : s,
+    0
+  );
+  const investedShown =
+    (includeSold ? portfolioPnl.lifetimeCapitalDeployed : portfolioPnl.totalInvested) + cashBasis;
   // Lifetime net worth = what you hold now plus the proceeds already taken out
   // by selling, so Net worth − Total invested always equals Profit / loss.
   const netWorthShown = includeSold ? netWorth + soldAmount : netWorth;
   const netWorthPnl = includeSold ? portfolioPnl.totalPnl : portfolioPnl.unrealizedPnl;
-  const netWorthPnlPercent =
-    (includeSold ? portfolioPnl.totalReturnPercent : portfolioPnl.unrealizedPnlPercent) ?? 0;
+  // Percent is measured against the Total invested shown on this card.
+  const netWorthPnlPercent = investedShown > 0 ? (netWorthPnl / investedShown) * 100 : 0;
 
   const thisMonth = toIsoMonth();
   const monthIncome = transactions
