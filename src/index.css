@@ -895,3 +895,36 @@ textarea[aria-invalid="true"]:focus {
 @media (prefers-reduced-motion: reduce) {
   .ticker-flash-up, .ticker-flash-down { animation: none; }
 }
+
+
+/* ---- Installed-app (standalone) feel ----------------------------------
+   Only applies once the app is added to the home screen, so normal browser
+   behaviour (pull-to-refresh, text selection) is untouched in a tab. */
+@media (display-mode: standalone) {
+  html,
+  body {
+    /* No rubber-band bounce / accidental pull-to-refresh while scrolling. */
+    overscroll-behavior-y: none;
+  }
+  body {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  input,
+  textarea,
+  [contenteditable='true'] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+}
+
+/* Smoother scrolling / fewer repaints on touch devices. */
+@media (pointer: coarse) {
+  html {
+    scroll-behavior: auto;
+  }
+  body {
+    -webkit-overflow-scrolling: touch;
+  }
+}

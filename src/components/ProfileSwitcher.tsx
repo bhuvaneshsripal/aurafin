@@ -2,6 +2,8 @@ import { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, ChevronDown, ChevronsUpDown, Layers, Settings } from 'lucide-react';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
+import { useAuthStore } from '../store/authStore';
+import { useAvatarStore } from '../store/avatarStore';
 
 /**
  * Household profile selector. `compact` is the small mobile-header trigger;
@@ -13,6 +15,8 @@ export default function ProfileSwitcher({ compact = false }: { compact?: boolean
   const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
   const setActiveProfileId = useHouseholdProfilesStore((s) => s.setActiveProfileId);
   const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
+  const avatarUrl = useAvatarStore((s) => s.dataUrl) ?? user?.photoURL ?? null;
 
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -28,6 +32,11 @@ export default function ProfileSwitcher({ compact = false }: { compact?: boolean
   const activeProfile = profiles.find((p) => p.id === activeProfileId) ?? null;
   const activeLabel = activeProfile ? activeProfile.name : 'All profiles';
   const activeColour = activeProfile ? activeProfile.colour : '#9a9a94';
+  // The account photo belongs to the account owner's own profile (the
+  // default one, or the oldest when none is flagged); other household
+  // members keep their coloured initial.
+  const ownerProfile = profiles.find((p) => p.isDefault) ?? profiles[0];
+  const showPhoto = !!avatarUrl && !!activeProfile && activeProfile.id === ownerProfile?.id;
 
   // Only worth showing once there's actually more than one profile to
   // switch between — otherwise it's just an inert label.
@@ -115,12 +124,21 @@ export default function ProfileSwitcher({ compact = false }: { compact?: boolean
         aria-expanded={open}
         className="sb-chip w-full h-10 flex items-center gap-2.5 px-2.5 rounded-lg border border-line bg-surface text-sm font-medium text-ink hover:bg-surface-hover transition-colors"
       >
-        <span
-          className="h-5 w-5 rounded-md shrink-0 flex items-center justify-center text-[11px] font-semibold text-white"
-          style={{ backgroundColor: activeColour }}
-        >
-          {activeProfile ? activeProfile.name.charAt(0).toUpperCase() : <Layers size={12} />}
-        </span>
+        {showPhoto ? (
+          <img
+            src={avatarUrl!}
+            alt=""
+            className="keep-round h-6 w-6 rounded-full object-cover shrink-0"
+            referrerPolicy="no-referrer"
+          />
+        ) : (
+          <span
+            className="h-5 w-5 rounded-md shrink-0 flex items-center justify-center text-[11px] font-semibold text-white"
+            style={{ backgroundColor: activeColour }}
+          >
+            {activeProfile ? activeProfile.name.charAt(0).toUpperCase() : <Layers size={12} />}
+          </span>
+        )}
         <span className="sb-label truncate flex-1 text-left">{activeLabel}</span>
         <ChevronsUpDown size={14} className="sb-label text-muted shrink-0" />
       </button>

@@ -67,6 +67,7 @@ import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import { upsertDoc, removeDoc, saveWealthFilters } from '../hooks/useFirestoreSync';
 import { useWealthFilterStore } from '../store/wealthFilterStore';
 import { exportToCsv } from '../utils/exportCsv';
+import { findMergeTarget, findDuplicateGroups, mergeHoldings } from '../utils/mergeHoldings';
 import Modal from '../components/Modal';
 import LoadingDots from '../components/LoadingDots';
 import { cn } from '../components/ui/cn';
@@ -516,10 +517,20 @@ function AddWealthPage({
     }
   };
 
+  const existingAssets = useAssetsStore((s) => s.assets);
   const handleSaveAsset = async (asset: Asset) => {
     if (!user) return;
     try {
-      await upsertDoc(user, 'assets', asset.profileId ? asset : { ...asset, profileId: activeProfileId ?? undefined });
+      const toSave = asset.profileId ? asset : { ...asset, profileId: activeProfileId ?? undefined };
+      // Buying a stock that's already held (e.g. adding more on a dip)
+      // merges into that holding — new buy lot added, average cost
+      // re-weighted — instead of creating a second row, like Zerodha/Groww.
+      const target = findMergeTarget(toSave, existingAssets);
+      if (target) {
+        await upsertDoc(user, 'assets', mergeHoldings(target, [toSave]));
+      } else {
+        await upsertDoc(user, 'assets', toSave);
+      }
       onClose();
     } catch (err) {
       console.error('Failed to save asset', err);
@@ -1202,6 +1213,31 @@ function AssetsTab({
   };
 
   const [confirmDeleteAsset, setConfirmDeleteAsset] = useState<Asset | null>(null);
+
+  // Rows that are really the same stock (same symbol/class/currency) are
+  // merged automatically into a single holding with a weighted-average
+  // cost, like a broker's one position per stock. Runs whenever duplicates
+  // show up (new buy, import, older data); each set of duplicates is only
+  // attempted once so a failed write can't loop.
+  const duplicateGroups = useMemo(() => findDuplicateGroups(assets), [assets]);
+  const attemptedMergeRef = useRef<string>('');
+  useEffect(() => {
+    if (!user || duplicateGroups.length === 0) return;
+    const signature = duplicateGroups.map((g) => g.map((a) => a.id).sort().join('+')).sort().join('|');
+    if (attemptedMergeRef.current === signature) return;
+    attemptedMergeRef.current = signature;
+    (async () => {
+      try {
+        for (const group of duplicateGroups) {
+          const [primary, ...rest] = [...group].sort(compareAssetsDefault);
+          await upsertDoc(user, 'assets', mergeHoldings(primary, rest));
+          for (const r of rest) await removeDoc(user, 'assets', r.id);
+        }
+      } catch (err) {
+        console.error('Failed to merge duplicate holdings', err);
+      }
+    })();
+  }, [duplicateGroups, user]);
 
   // Clicking "Wealth" in the sidebar/bottom nav while already on this page
   // re-navigates to the same route — React Router doesn't unmount/remount
@@ -4835,7 +4871,11 @@ function AssetDetailsForm({
     { id: string; date?: string; quantity: string; price: string }[]
   >(() => {
     if (initial?.shareLots?.length) {
-      return initial.shareLots.map((l) => ({
+      // Oldest purchase first, so "Purchase 1" is always the earliest buy
+      // (stable sort keeps undated rows in their saved order).
+      return [...initial.shareLots]
+        .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
+        .map((l) => ({
         id: l.id,
         date: l.date,
         quantity: l.quantity?.toString() ?? '',

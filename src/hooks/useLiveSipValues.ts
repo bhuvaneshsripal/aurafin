@@ -84,7 +84,9 @@ export function useLiveSipValues() {
     };
 
     refresh();
-    const id = setInterval(refresh, REFRESH_MS);
+    const id = setInterval(() => {
+      if (!document.hidden) refresh();
+    }, REFRESH_MS);
     return () => {
       cancelled = true;
       clearInterval(id);

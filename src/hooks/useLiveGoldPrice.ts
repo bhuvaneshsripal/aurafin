@@ -45,7 +45,17 @@ export function useLiveGoldPrice() {
     };
 
     refresh();
-    const id = setInterval(refresh, REFRESH_MS);
-    return () => clearInterval(id);
+    const id = setInterval(() => {
+      if (!document.hidden) refresh();
+    }, REFRESH_MS);
+    // Catch up immediately when the app comes back to the foreground.
+    const onVisible = () => {
+      if (!document.hidden) refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [setGoldPrice, setGoldPriceLoading, setGoldPriceError, setGoldAttempted, premiumPercent]);
 }

@@ -202,20 +202,31 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'favicon-32.png', 'favicon-16.png'],
+      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'favicon-32.png', 'favicon-16.png', 'maskable-512.png'],
       manifest: {
         name: 'Aurafin · Net Worth Tracker',
         short_name: 'Aurafin',
         description: 'Your whole financial picture, in one place.',
         theme_color: '#247a4d',
         background_color: '#f7f7f5',
+        id: '/',
         display: 'standalone',
+        display_override: ['standalone', 'minimal-ui'],
+        orientation: 'portrait',
+        categories: ['finance', 'productivity'],
         start_url: '/',
         scope: '/',
         icons: [
-          { src: '/favicon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/favicon-512.png', sizes: '512x512', type: 'image/png' },
-          { src: '/favicon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: '/favicon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/favicon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          // Dedicated maskable icon with safe-zone padding so Android's
+          // round/squircle masks don't crop the logo.
+          { src: '/maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+        shortcuts: [
+          { name: 'Wealth', url: '/wealth', icons: [{ src: '/favicon-192.png', sizes: '192x192' }] },
+          { name: 'Performance', url: '/wealth/performance', icons: [{ src: '/favicon-192.png', sizes: '192x192' }] },
+          { name: 'Money', url: '/transactions', icons: [{ src: '/favicon-192.png', sizes: '192x192' }] },
         ],
       },
       workbox: {

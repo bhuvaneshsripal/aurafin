@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { isFullySold, computeHoldingPnl, isInvestmentHolding } from '../utils/investmentPnl';
+import { isFullySold, computeHoldingPnl, isInvestmentHolding, computePortfolioPnl } from '../utils/investmentPnl';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, Wallet, Receipt, Target, TrendingUp } from 'lucide-react';
 import {
@@ -135,36 +135,35 @@ export default function Dashboard() {
   const totalLiabilities = liabilities.reduce((s, l) => s + l.outstanding, 0);
   const netWorth = totalAssets - totalLiabilities;
 
-  const investedAssetsTotal = assets.reduce(
-    (s, a) => s + (resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).invested ?? a.value),
-    0
-  );
   // Lifetime view (revealed by the arrow on the Net worth card): money
   // already taken out by selling — fully or partly — and the entire amount
   // ever invested, i.e. what's still invested plus the cost of what was sold.
   const profileAssets = activeProfileId ? allAssets.filter((a) => a.profileId === activeProfileId) : allAssets;
   let soldAmount = 0;
-  let costOfSold = 0;
-  let realizedPnl = 0;
   for (const a of profileAssets) {
-    if (!isInvestmentHolding(a)) continue;
+    // Same scoping as the Investments → Profit & Loss page: one currency
+    // at a time (this card is shown in ₹, so a $ sale must not be added in
+    // as if it were rupees) and only holdings with a recorded buy history.
+    if (!isInvestmentHolding(a) || a.currency !== 'INR') continue;
     const r = resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram);
     const h = computeHoldingPnl(a, r.currentPrice, r.isLive);
+    if (h.totalBoughtQty <= 0) continue;
     soldAmount += h.totalSaleProceeds;
-    costOfSold += h.totalCostOfSold;
-    realizedPnl += h.realizedPnl;
   }
-  const entireInvested = investedAssetsTotal + costOfSold;
   // Arrow on the Net worth card flips the strip to a lifetime view in place:
   // Total invested becomes the entire amount ever invested (incl. sold), and
   // Profit / loss becomes total return (unrealised + realised) on that.
   const [includeSold, setIncludeSold] = useState(false);
-  const investedShown = includeSold ? entireInvested : investedAssetsTotal;
+  // Profit / loss and return come from the same engine as the Performance
+  // page so both screens always show identical numbers.
+  const portfolioPnl = computePortfolioPnl(profileAssets, 'INR', livePrices, sipValues, liveGoldPricePerGram);
+  const investedShown = includeSold ? portfolioPnl.lifetimeCapitalDeployed : portfolioPnl.totalInvested;
   // Lifetime net worth = what you hold now plus the proceeds already taken out
   // by selling, so Net worth − Total invested always equals Profit / loss.
   const netWorthShown = includeSold ? netWorth + soldAmount : netWorth;
-  const netWorthPnl = totalAssets - investedAssetsTotal + (includeSold ? realizedPnl : 0);
-  const netWorthPnlPercent = investedShown > 0 ? (netWorthPnl / investedShown) * 100 : 0;
+  const netWorthPnl = includeSold ? portfolioPnl.totalPnl : portfolioPnl.unrealizedPnl;
+  const netWorthPnlPercent =
+    (includeSold ? portfolioPnl.totalReturnPercent : portfolioPnl.unrealizedPnlPercent) ?? 0;
 
   const thisMonth = toIsoMonth();
   const monthIncome = transactions

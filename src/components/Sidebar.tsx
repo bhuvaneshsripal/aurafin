@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -5,7 +6,7 @@ import {
   Settings,
   FileUp,
   Calculator,
-  Smartphone,
+  MessageSquare,
   Lock,
   LineChart,
   Gem,
@@ -21,6 +22,7 @@ import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import { useUiStore } from '../store/uiStore';
 import ProfileSwitcher from './ProfileSwitcher';
 import AppLogo from './AppLogo';
+import FeedbackModal from './FeedbackModal';
 
 type NavLinkDef = { to: string; label: string; icon: typeof LayoutDashboard; end?: boolean };
 
@@ -53,7 +55,6 @@ const groups: { label: string; links: NavLinkDef[] }[] = [
 
 const accountLinks: NavLinkDef[] = [
   { to: '/settings', label: 'Settings', icon: Settings },
-  { to: '/install', label: 'Install app', icon: Smartphone },
 ];
 
 function NavItem({ to, label, icon: Icon, end }: NavLinkDef) {
@@ -108,6 +109,7 @@ export default function Sidebar() {
   const hasProfiles = useHouseholdProfilesStore((s) => s.profiles.length > 0);
   const collapsed = useUiStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   return (
     <aside
@@ -159,6 +161,15 @@ export default function Sidebar() {
           {accountLinks.map((link) => (
             <NavItem key={link.to} {...link} />
           ))}
+          <button
+            type="button"
+            onClick={() => setFeedbackOpen(true)}
+            title="Feedback"
+            className="sb-item flex w-full items-center gap-2.5 h-9 px-2.5 rounded-lg text-[14px] font-medium text-slate-600 hover:bg-surface-hover hover:text-ink transition-colors"
+          >
+            <MessageSquare size={18} strokeWidth={1.75} className="shrink-0" />
+            <span className="sb-label truncate">Feedback</span>
+          </button>
         </nav>
 
         <button
@@ -184,6 +195,7 @@ export default function Sidebar() {
           </a>
         </p>
       </div>
+      <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </aside>
   );
 }
