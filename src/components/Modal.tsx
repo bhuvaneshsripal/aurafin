@@ -75,14 +75,37 @@ function ContentPanel({
   children: ReactNode;
 }) {
   const [top, setTop] = useState(0);
+  // On phones, pin the real top bar to the screen while the panel is open
+  // (see html[data-panel-open] in index.css) so it is always visible above
+  // the panel, even if the page behind had been scrolled.
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    const topbar = document.getElementById('app-topbar');
+    if (topbar) root.style.setProperty('--topbar-h', `${topbar.getBoundingClientRect().height}px`);
+    root.setAttribute('data-panel-open', '');
+    return () => {
+      root.removeAttribute('data-panel-open');
+      root.style.removeProperty('--topbar-h');
+    };
+  }, []);
   useLayoutEffect(() => {
     const measure = () => {
       const topbar = document.getElementById('app-topbar');
-      setTop(topbar ? topbar.getBoundingClientRect().bottom : 0);
+      const vvTop = window.visualViewport?.offsetTop ?? 0;
+      // Bar height (+ however far the on-screen keyboard has panned the
+      // visual viewport), so the panel always starts right under the top bar.
+      setTop(topbar ? topbar.getBoundingClientRect().height + vvTop : vvTop);
     };
     measure();
     window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    const vv = window.visualViewport;
+    vv?.addEventListener('resize', measure);
+    vv?.addEventListener('scroll', measure);
+    return () => {
+      window.removeEventListener('resize', measure);
+      vv?.removeEventListener('resize', measure);
+      vv?.removeEventListener('scroll', measure);
+    };
   }, []);
 
   return (
@@ -92,7 +115,7 @@ function ContentPanel({
          the panel below reveals a softened version of the page instead of
          sharp content (e.g. asset rows) peeking through. */}
       <div
-        className="fixed left-0 right-0 md:left-[var(--sb-w)] bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-40 bg-slate-900/30 pointer-events-none"
+        className="fixed left-0 right-0 md:left-[var(--sb-w)] bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-40 bg-slate-900/30 backdrop-blur-[3px] pointer-events-none"
         style={{ top }}
       />
       <div

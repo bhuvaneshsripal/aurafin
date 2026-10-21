@@ -797,11 +797,33 @@ html[data-swipe='prev'] .animate-page-in {
   animation-delay: 0.3s;
 }
 
+
+/* Opening a holding: the detail page slides in from the right; closing it
+   slides back out and the list eases back in from the left. */
+@keyframes detail-in {
+  from { opacity: 0; transform: translate3d(28px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes detail-out {
+  from { opacity: 1; transform: translate3d(0, 0, 0); }
+  to { opacity: 0; transform: translate3d(28px, 0, 0); }
+}
+@keyframes list-return {
+  from { opacity: 0; transform: translate3d(-16px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+.animate-detail-in { animation: detail-in 220ms var(--ease-out) both; }
+.animate-detail-out { animation: detail-out 200ms ease-in both; pointer-events: none; }
+.animate-list-return { animation: list-return 220ms var(--ease-out) both; }
+
 /* Respect the OS "reduce motion" setting. */
 @media (prefers-reduced-motion: reduce) {
   html[data-swipe] .animate-page-in {
     animation: none;
   }
+  .animate-detail-in,
+  .animate-detail-out,
+  .animate-list-return,
   .animate-shake,
   .animate-page-in,
   .animate-value-in,
@@ -938,5 +960,27 @@ textarea[aria-invalid="true"]:focus {
   }
   body {
     -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Keep the sticky top bar on screen when the on-screen keyboard pans the
+   visual viewport (set by useVisualViewportOffset in App). */
+html[data-vv-pan] #app-topbar {
+  transform: translate3d(0, var(--vv-top, 0px), 0);
+}
+
+/* Phones: while a content panel (e.g. Edit Asset) is open, keep the top bar
+   fixed at the very top of the screen and reserve its space in the page so
+   nothing shifts behind the panel. */
+@media (max-width: 767px) {
+  html[data-panel-open] #app-topbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    transform: none;
+  }
+  html[data-panel-open] .app-scale {
+    padding-top: var(--topbar-h, 0px);
   }
 }

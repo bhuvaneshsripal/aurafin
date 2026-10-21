@@ -16,31 +16,62 @@ function normSymbol(symbol: string): string {
   return symbol.trim().toUpperCase().replace(/\.(NS|BO)$/, '');
 }
 
-/** Identity of a holding. Undefined when it can't be matched safely
- *  (no symbol, or not a unit-tracked class like stocks/ETFs). */
-export function holdingKey(a: Asset): string | undefined {
-  if (!isUnitTracked(a) || !a.symbol?.trim()) return undefined;
-  return [a.profileId ?? '', a.assetClass, a.currency, a.market ?? 'IN', normSymbol(a.symbol)].join('|');
+/** Company name reduced to its essence: "YES BANK LIMITED" -> "YESBANK". */
+function normName(name: string): string {
+  return name
+    .toUpperCase()
+    .replace(/\b(LIMITED|LTD|CORPORATION|CORP|INC)\b\.?/g, '')
+    .replace(/[^A-Z0-9]/g, '');
+}
+
+/** Identity keys of a holding. Two rows are the same stock when they share any
+ *  key: the trading symbol, the ISIN, or the company name (so "YESBANK" and
+ *  "YES BANK LIMITED" merge even if one row's symbol differs or is missing).
+ *  Empty when it can't be matched safely (not a unit-tracked class). */
+export function holdingKeys(a: Asset): string[] {
+  if (!isUnitTracked(a)) return [];
+  const scope = [a.profileId ?? '', a.currency, a.market ?? 'IN'].join('|');
+  const keys: string[] = [];
+  if (a.symbol?.trim()) keys.push(`${scope}|S|${normSymbol(a.symbol)}`);
+  if (a.isin?.trim()) keys.push(`${scope}|I|${a.isin.trim().toUpperCase()}`);
+  const n = normName(a.name ?? '');
+  if (n.length >= 3) keys.push(`${scope}|S|${n}`); // name doubles as a symbol-like key
+  return keys;
 }
 
 /** Finds the existing, still-held holding that `incoming` should merge into. */
 export function findMergeTarget(incoming: Asset, existing: Asset[]): Asset | undefined {
-  const key = holdingKey(incoming);
-  if (!key) return undefined;
-  return existing.find((a) => a.id !== incoming.id && holdingKey(a) === key && !isFullySold(a));
+  const keys = new Set(holdingKeys(incoming));
+  if (keys.size === 0) return undefined;
+  return existing.find((a) => a.id !== incoming.id && !isFullySold(a) && holdingKeys(a).some((k) => keys.has(k)));
 }
 
 /** Groups of 2+ currently-held rows that are really the same stock. */
 export function findDuplicateGroups(assets: Asset[]): Asset[][] {
-  const map = new Map<string, Asset[]>();
-  for (const a of assets) {
-    const key = holdingKey(a);
-    if (!key || isFullySold(a)) continue;
-    const list = map.get(key) ?? [];
-    list.push(a);
-    map.set(key, list);
+  const held = assets.filter((a) => !isFullySold(a) && holdingKeys(a).length > 0);
+  const parent = new Map<string, string>();
+  const find = (x: string): string => {
+    while (parent.get(x) !== x) {
+      parent.set(x, parent.get(parent.get(x)!)!);
+      x = parent.get(x)!;
+    }
+    return x;
+  };
+  for (const a of held) parent.set(a.id, a.id);
+  const owner = new Map<string, string>(); // key -> first asset id seen
+  for (const a of held) {
+    for (const k of holdingKeys(a)) {
+      const o = owner.get(k);
+      if (o === undefined) owner.set(k, a.id);
+      else parent.set(find(a.id), find(o));
+    }
   }
-  return [...map.values()].filter((g) => g.length > 1);
+  const groups = new Map<string, Asset[]>();
+  for (const a of held) {
+    const r = find(a.id);
+    groups.set(r, [...(groups.get(r) ?? []), a]);
+  }
+  return [...groups.values()].filter((g) => g.length > 1);
 }
 
 /** Buy lots of an asset; legacy single-entry holdings become one lot. */
@@ -79,6 +110,8 @@ export function mergeHoldings(primary: Asset, others: Asset[]): Asset {
 
   const merged: Asset = {
     ...primary,
+    symbol: primary.symbol || others.find((o) => o.symbol)?.symbol,
+    isin: primary.isin || others.find((o) => o.isin)?.isin,
     shareLots,
     saleLots: saleLots.length > 0 ? saleLots : undefined,
     // Fallback for holdings without a live price; live prices recompute it.
@@ -87,6 +120,8 @@ export function mergeHoldings(primary: Asset, others: Asset[]): Asset {
     updatedAt: Date.now(),
   };
   if (merged.saleLots === undefined) delete merged.saleLots;
+  if (!merged.symbol) delete merged.symbol;
+  if (!merged.isin) delete merged.isin;
   if (!merged.notes) delete merged.notes;
 
   const { remainingQty, avgBuyCost, investedValue } = computeHoldingPnl(merged, undefined, false);

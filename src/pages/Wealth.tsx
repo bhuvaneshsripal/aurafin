@@ -145,6 +145,7 @@ import {
 import { fetchLivePrices, fetchFxRate, searchStockSymbols, type StockSearchResult } from '../utils/marketPrices';
 import { useDayChangeResetWindow, useMarketSessionProgress, useIsMarketOpen } from '../utils/marketHours';
 import { useUrlTab } from '../hooks/useUrlTab';
+import CompanyLogo from '../components/CompanyLogo';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 const AnalyticsContent = lazyWithRetry(() => import('./Analytics'));
 import { useModalBackClose } from '../hooks/useModalBackClose';
@@ -1127,7 +1128,23 @@ function AssetsTab({
   // pushed screen), so the phone/PWA Back button should close it and land
   // back on the list — not skip past it to whatever page was open before
   // Wealth. Same guard-history-entry trick already used for the modals below.
-  useModalBackClose(!!viewingAsset, () => setViewingAsset(null));
+  // Closing plays a short slide-out before the detail page is unmounted;
+  // opening plays the matching slide-in (see .animate-detail-in/out in index.css).
+  const [detailClosing, setDetailClosing] = useState(false);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [listReturning, setListReturning] = useState(false);
+  const closeViewing = () => {
+    if (closeTimerRef.current) return;
+    setDetailClosing(true);
+    closeTimerRef.current = setTimeout(() => {
+      closeTimerRef.current = null;
+      setDetailClosing(false);
+      setListReturning(true);
+      setViewingAsset(null);
+    }, 200);
+  };
+  useEffect(() => () => { if (closeTimerRef.current) clearTimeout(closeTimerRef.current); }, []);
+  useModalBackClose(!!viewingAsset, closeViewing);
   // Remembers where the list was scrolled to right before opening a
   // holding, so coming back (via the detail page's Back button or the
   // phone/PWA back gesture) restores that exact spot instead of resetting
@@ -1135,6 +1152,8 @@ function AssetsTab({
   const listScrollPosRef = useRef(0);
   const openHolding = (a: Asset) => {
     listScrollPosRef.current = window.scrollY;
+    setListReturning(false);
+    setDetailClosing(false);
     setViewingAsset(a);
   };
   // Opening a holding's detail page should always land at the top of that
@@ -1771,7 +1790,7 @@ function AssetsTab({
       buildHoldingLots(live).length > 0;
     const detailProps = {
       asset: live,
-      onBack: () => setViewingAsset(null),
+      onBack: closeViewing,
       onEdit: (a: Asset) => {
         setViewingAsset(null);
         openEdit(a);
@@ -1794,7 +1813,11 @@ function AssetsTab({
       onLogTransaction: handleLogTransaction,
       onDeleteDividend: handleDeleteDividend,
     };
-    return isHoldingStyle ? <HoldingDetailView {...detailProps} /> : <AssetDetailPage {...detailProps} />;
+    return (
+      <div className={detailClosing ? 'animate-detail-out' : 'animate-detail-in'}>
+        {isHoldingStyle ? <HoldingDetailView {...detailProps} /> : <AssetDetailPage {...detailProps} />}
+      </div>
+    );
   }
 
   function SortHeader({
@@ -1824,7 +1847,7 @@ function AssetsTab({
   }
 
   return (
-    <div className="space-y-4">
+    <div className={`space-y-4${listReturning ? ' animate-list-return' : ''}`}>
       <PageHeader
         title="Assets"
         description={`${assets.length} ${assets.length === 1 ? 'asset' : 'assets'} · unlimited`}
@@ -2284,27 +2307,16 @@ function AssetsTab({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') openHolding(a);
                   }}
-                  className="grid grid-cols-[1fr_44px_1fr] items-center gap-1.5 px-4 py-3 active:bg-slate-50 dark:active:bg-slate-800/40 cursor-pointer select-none"
+                  className="grid grid-cols-[1fr_auto] items-center gap-2 px-4 py-3 active:bg-slate-50 dark:active:bg-slate-800/40 cursor-pointer select-none"
                 >
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-ink truncate">{a.name}</p>
-                    <p className="text-[11px] text-slate-600 mt-0.5 truncate">{subtitle}</p>
-                  </div>
-                  {/* Fixed-width center column — with the name and value+menu
-                      columns both set to 1fr on either side, this sits at
-                      the exact horizontal center of every row regardless of
-                      how long the name or value text is. */}
-                  <div className="flex items-center justify-center">
-                    {marketOpen && r.previousClose !== undefined && r.currentPrice !== undefined && (
-                      <Sparkline
-                        seed={a.symbol ?? a.id}
-                        previousClose={r.previousClose}
-                        currentPrice={dayChangeResetActive ? r.previousClose : r.currentPrice}
-                        progress={dayChangeResetActive ? 0 : marketSessionProgress}
-                        width={44}
-                        height={18}
-                      />
+                  <div className="min-w-0 flex items-center gap-2.5">
+                    {MARKET_SELECTABLE_CLASSES.has(a.assetClass) && a.symbol && (
+                      <CompanyLogo symbol={a.symbol} name={a.name} market={a.market ?? 'IN'} isin={a.isin} size={30} />
                     )}
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-ink leading-snug break-words">{a.name}</p>
+                      <p className="text-[11px] text-slate-600 mt-0.5 truncate">{subtitle}</p>
+                    </div>
                   </div>
                   <div className="flex items-center justify-end gap-0.5">
                     <div className="text-right shrink-0">
@@ -2438,6 +2450,9 @@ function AssetsTab({
                                 isBeingDragged ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
                               }`}
                             />
+                            {MARKET_SELECTABLE_CLASSES.has(a.assetClass) && a.symbol && (
+                              <CompanyLogo symbol={a.symbol} name={a.name} market={a.market ?? 'IN'} isin={a.isin} size={34} />
+                            )}
                             <div className="min-w-0">
                               <p className="font-medium text-ink truncate max-w-[16rem]">{a.name}</p>
                               <p className="text-xs text-muted mt-0.5 truncate max-w-[16rem]">

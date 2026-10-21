@@ -32,6 +32,7 @@ import { useDailyHardRefresh } from './hooks/useDailyHardRefresh';
 import { useScrollRestoration } from './hooks/useScrollRestoration';
 import Sidebar from './components/Sidebar';
 import TopHeader from './components/TopHeader';
+import { useVisualViewportOffset } from './hooks/useVisualViewportOffset';
 import BottomNav from './components/BottomNav';
 import SwipeTabs from './components/SwipeTabs';
 import PrivacyFab from './components/PrivacyFab';
@@ -94,6 +95,7 @@ function AppShell() {
   useScrollRestoration();
   // Auto hard-refresh every day at 6:00 a.m.
   useDailyHardRefresh();
+  useVisualViewportOffset();
 
   // First-time sign-ups/sign-ins get the full-screen onboarding wizard with
   // none of the normal chrome (sidebar/topbar/bottom nav) — matches how

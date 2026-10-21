@@ -14,6 +14,7 @@ import {
   Wallet,
   Scale,
 } from 'lucide-react';
+import { hardRefresh } from '../utils/hardRefresh';
 import QuickAddMenu from './QuickAddMenu';
 import { useUiStore } from '../store/uiStore';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
@@ -43,16 +44,6 @@ const moreLinks: MoreLink[] = [
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
-const NON_TEXT_INPUT_TYPES = new Set(['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color', 'file', 'hidden']);
-
-/** True for elements that bring up the on-screen keyboard. */
-function isTextEntry(el: Element | null): boolean {
-  if (!el) return false;
-  if (el instanceof HTMLTextAreaElement) return true;
-  if (el instanceof HTMLInputElement) return !NON_TEXT_INPUT_TYPES.has(el.type);
-  return el instanceof HTMLElement && el.isContentEditable;
-}
-
 function tapFeedback() {
   if ('vibrate' in navigator) {
     try {
@@ -68,30 +59,11 @@ export default function BottomNav() {
   // While a text field has focus the keyboard covers the bottom of the screen.
   // Native apps hide their tab bar in that state; do the same so it never sits
   // on top of the field being typed into.
-  const [typing, setTyping] = useState(false);
   const location = useLocation();
   const isMoreActive = moreLinks.some((l) => l.to === location.pathname);
   const hideFab = useUiStore((s) => s.hideFab);
   useBodyScrollLock(moreOpen);
   useModalBackClose(moreOpen, () => setMoreOpen(false));
-
-  useEffect(() => {
-    const onFocusIn = (e: FocusEvent) => {
-      if (isTextEntry(e.target as Element)) setTyping(true);
-    };
-    const onFocusOut = () => {
-      // Wait a tick: focus is moving to the next field, not away from typing.
-      window.setTimeout(() => {
-        if (!isTextEntry(document.activeElement)) setTyping(false);
-      }, 60);
-    };
-    document.addEventListener('focusin', onFocusIn);
-    document.addEventListener('focusout', onFocusOut);
-    return () => {
-      document.removeEventListener('focusin', onFocusIn);
-      document.removeEventListener('focusout', onFocusOut);
-    };
-  }, []);
 
   useEffect(() => {
     if (!moreOpen) return;
@@ -102,11 +74,17 @@ export default function BottomNav() {
     return () => window.removeEventListener('keydown', onKey);
   }, [moreOpen]);
 
-  /** Tapping the tab you're already on scrolls it back to the top, like native tab bars. */
+  /** Tapping the tab you're already on refreshes it. */
   const onTabTap = (to: string) => {
     setMoreOpen(false);
     tapFeedback();
-    if (location.pathname === to) window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Tapping the tab you're already on refreshes the page (falls back to
+    // scrolling to the top if the app can't reach the network).
+    if (location.pathname === to) {
+      void hardRefresh().then((ok) => {
+        if (!ok) window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    }
   };
 
   return (
@@ -114,13 +92,13 @@ export default function BottomNav() {
       {/* Floating quick-add action button, sits just above the bottom nav.
           Hidden when a page's own bottom toolbar (e.g. bulk-selection
           actions on Wealth) is occupying the same corner, and while typing. */}
-      {!hideFab && !typing && (
+      {!hideFab && (
         <div className="md:hidden fixed right-4 z-40" style={{ bottom: 'calc(56px + env(safe-area-inset-bottom) + 12px)' }}>
           <QuickAddMenu variant="fab" />
         </div>
       )}
 
-      {!typing && (
+      {(
         <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface border-t border-line pb-[env(safe-area-inset-bottom)]">
           <div className="grid grid-cols-4 h-14">
             {primaryLinks.map(({ to, label, icon: Icon }) => (

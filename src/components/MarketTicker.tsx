@@ -170,25 +170,21 @@ export default function MarketTicker() {
   );
 }
 
-/** Mobile: a thin bar under the top bar. It no longer auto-scrolls — it sits
- *  still showing NIFTY, SENSEX and BANKNIFTY, and the person can swipe it
- *  sideways to see the rest of the row (snaps to each index). */
+/** Mobile: a thin one-line bar under the top bar. Each index shows
+ *  NAME  level  ±points (±pct%) on a single line, and the person swipes the
+ *  bar sideways to see all three (NIFTY, SENSEX, BANKNIFTY). */
 export function MarketTickerMarquee({ className }: { className?: string }) {
   const quotes = useIndexQuotes();
   return (
     <div
       className={cn(
-        'no-scrollbar overflow-x-auto overflow-y-hidden overscroll-x-contain snap-x snap-proximity h-9 flex items-center text-[12.5px] bg-surface border-b border-line',
+        'no-scrollbar overflow-x-auto overflow-y-hidden overscroll-x-contain h-9 flex items-center text-[12.5px] bg-surface border-b border-line',
         className
       )}
       style={{ touchAction: 'pan-x', scrollbarWidth: 'none' }}
       aria-label="Market indices"
     >
-      <div className="flex items-center gap-x-8 px-4 whitespace-nowrap w-max">
-        {renderItems(quotes).map((item, i) => (
-          <div key={i} className="snap-start">{item}</div>
-        ))}
-      </div>
+      <div className="flex shrink-0 items-center gap-x-8 px-4 whitespace-nowrap">{renderItems(quotes)}</div>
     </div>
   );
 }

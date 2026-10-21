@@ -8,7 +8,7 @@ import { resolveQuote } from './quote.js';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 let session = null; // { cookie, crumb, at } — reused while the function instance is warm
 
-async function getSession(force = false) {
+export async function getSession(force = false) {
   if (!force && session && Date.now() - session.at < 30 * 60 * 1000) return session;
   const r = await fetch('https://fc.yahoo.com', { headers: { 'User-Agent': UA }, redirect: 'manual' });
   const raw = typeof r.headers.getSetCookie === 'function' ? r.headers.getSetCookie() : [r.headers.get('set-cookie')].filter(Boolean);

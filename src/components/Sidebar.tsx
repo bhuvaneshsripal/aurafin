@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Target,
@@ -23,6 +23,8 @@ import { useUiStore } from '../store/uiStore';
 import ProfileSwitcher from './ProfileSwitcher';
 import AppLogo from './AppLogo';
 import FeedbackModal from './FeedbackModal';
+
+import { hardRefresh } from '../utils/hardRefresh';
 
 type NavLinkDef = { to: string; label: string; icon: typeof LayoutDashboard; end?: boolean };
 
@@ -58,9 +60,14 @@ const accountLinks: NavLinkDef[] = [
 ];
 
 function NavItem({ to, label, icon: Icon, end }: NavLinkDef) {
+  const location = useLocation();
   return (
     <NavLink
       to={to}
+      onClick={() => {
+        // Clicking the page you're already on refreshes it.
+        if (location.pathname === to) void hardRefresh();
+      }}
       end={end ?? to === '/'}
       title={label}
       className={({ isActive }) =>

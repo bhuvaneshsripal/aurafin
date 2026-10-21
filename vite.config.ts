@@ -13,6 +13,8 @@ import { fetchFundamentals } from './api/_lib/fundamentals.js'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
 import { fetchIndices } from './api/_lib/indices.js'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
+import { resolveLogo } from './api/_lib/logo.js'
+// @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
 import { fetchGlobalIndices } from './api/_lib/globalIndices.js'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
 import { fetchIndianIndices } from './api/_lib/indianIndices.js'
@@ -54,6 +56,20 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
         console.error(`[dev/market] ${raw} failed:`, err instanceof Error ? err.message : err)
         send(502, { error: 'Could not reach the live price source' })
       }
+      return
+    }
+
+    if (url.pathname === '/api/market/logo') {
+      const symbol = (url.searchParams.get('symbol') ?? '').trim()
+      const market = (url.searchParams.get('market') ?? 'IN').toUpperCase() === 'US' ? 'US' : 'IN'
+      if (!symbol) { res.statusCode = 400; res.end(); return }
+      try {
+        const logo = await resolveLogo(symbol, market, url.searchParams.get('isin') ?? '')
+        if (!logo) { res.statusCode = 404; res.end(); return }
+        res.statusCode = 200
+        res.setHeader('Content-Type', logo.contentType)
+        res.end(logo.buffer)
+      } catch { res.statusCode = 502; res.end() }
       return
     }
 

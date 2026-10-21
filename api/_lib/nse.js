@@ -78,6 +78,28 @@ async function fetchNseQuote(symbol) {
   };
 }
 
+/** ISIN for an NSE-listed equity (used to look up its Groww logo). */
+async function fetchNseIsin(symbol) {
+  const cookie = await getNseCookie();
+  const res = await fetch(
+    `https://www.nseindia.com/api/quote-equity?symbol=${encodeURIComponent(symbol)}`,
+    {
+      headers: {
+        ...BROWSER_HEADERS,
+        Accept: 'application/json',
+        Referer: `https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(symbol)}`,
+        Cookie: cookie,
+      },
+    }
+  );
+  if (!res.ok) {
+    invalidateNseCookie();
+    return null;
+  }
+  const isin = (await res.json())?.info?.isin;
+  return typeof isin === 'string' && /^[A-Z]{2}[A-Z0-9]{9}\d$/.test(isin) ? isin : null;
+}
+
 /** Search NSE's autocomplete for a symbol matching an ISIN or company name. */
 async function searchNseSymbol(query) {
   const cookie = await getNseCookie();
@@ -135,4 +157,4 @@ async function fetchNseAllIndices() {
   return Array.isArray(data?.data) ? data.data : [];
 }
 
-export { fetchNseQuote, searchNseSymbol, invalidateNseCookie, fetchNseAllIndices };
+export { fetchNseIsin, fetchNseQuote, searchNseSymbol, invalidateNseCookie, fetchNseAllIndices };
