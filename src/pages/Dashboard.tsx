@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { usePinnedTooltip, isTouchDevice, type ChartClickState } from '../hooks/usePinnedTooltip';
+import PinnedChartTooltip from '../components/PinnedChartTooltip';
 import { isFullySold, computeHoldingPnl, isInvestmentHolding, computePortfolioPnl } from '../utils/investmentPnl';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, Wallet, Receipt, Target, TrendingUp } from 'lucide-react';
@@ -265,15 +267,19 @@ export default function Dashboard() {
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-        <StatCard
-          dense
-          label="Net worth"
-          loading={!ready}
-          value={money(hasWealth ? netWorthShown : 0)}
-          onToggle={hasWealth ? () => setIncludeSold((v) => !v) : undefined}
-          toggled={includeSold}
-          sublabel={hasWealth ? (includeSold ? `Incl. ${preciseMoney(soldAmount)} sold so far` : 'Assets minus liabilities') : <Link to="/wealth" className="text-primary-ink font-medium hover:underline">Add your first asset</Link>}
-        />
+        {/* Full-width on phones so Net worth gets its own row; on desktop it
+           sits in the three-column strip like the other two cards. */}
+        <div className="col-span-2 lg:col-span-1">
+          <StatCard
+            dense
+            label="Net worth"
+            loading={!ready}
+            value={money(hasWealth ? netWorthShown : 0)}
+            onToggle={hasWealth ? () => setIncludeSold((v) => !v) : undefined}
+            toggled={includeSold}
+            sublabel={hasWealth ? (includeSold ? `Incl. ${preciseMoney(soldAmount)} sold so far` : 'Assets minus liabilities') : <Link to="/wealth" className="text-primary-ink font-medium hover:underline">Add your first asset</Link>}
+          />
+        </div>
         <StatCard
           dense
           label="Total invested"
@@ -454,6 +460,7 @@ function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
   // renders points that actually exist in Firestore for this user.
   const snapshots = useSnapshotsStore((s) => s.snapshots);
   const [range, setRange] = useState<Range>('ALL');
+  const pin = usePinnedTooltip();
 
   const allHistory = useMemo(() => {
     const sorted = [...snapshots].sort((a: Snapshot, b: Snapshot) => a.date.localeCompare(b.date));
@@ -551,9 +558,13 @@ function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
           description="Your net-worth history will appear here as you build your financial timeline."
         />
       ) : (
-        <div className="h-[220px] -ml-2">
+        <div className="h-[220px] -ml-2 relative" ref={pin.containerRef}>
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            <AreaChart
+              data={data}
+              margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+              onClick={(state) => pin.handleChartClick(state as ChartClickState)}
+            >
               <CartesianGrid stroke={chart.grid} strokeDasharray="3 3" vertical={false} />
               <XAxis
                 dataKey="date"
@@ -576,15 +587,17 @@ function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
               />
               <Tooltip
                 cursor={chart.tooltip.cursor}
-                content={(p) => (
-                  <NetWorthTooltip
-                    active={p.active}
-                    payload={p.payload}
-                    label={p.label ? String(p.label) : undefined}
-                    privacyMode={privacyMode}
-                    data={data}
-                  />
-                )}
+                content={(p) =>
+                  pin.pinned || isTouchDevice() ? null : (
+                    <NetWorthTooltip
+                      active={p.active}
+                      payload={p.payload}
+                      label={p.label ? String(p.label) : undefined}
+                      privacyMode={privacyMode}
+                      data={data}
+                    />
+                  )
+                }
               />
               <Area
                 type="monotone"
@@ -598,6 +611,17 @@ function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
               />
             </AreaChart>
           </ResponsiveContainer>
+          {pin.pinned && (
+            <PinnedChartTooltip containerRef={pin.containerRef} x={pin.pinned.x} onHide={pin.hidePinned}>
+              <NetWorthTooltip
+                active
+                payload={[{}]}
+                label={pin.pinned.label}
+                privacyMode={privacyMode}
+                data={data}
+              />
+            </PinnedChartTooltip>
+          )}
         </div>
       )}
     </Card>
@@ -710,6 +734,8 @@ function CashflowCard({
   privacyMode: boolean;
 }) {
   const m = (v: number) => maskAmount(v, 'INR', privacyMode, { fractionDigits: 0 });
+  const pin = usePinnedTooltip();
+  const pinnedRow = pin.pinned ? trend.find((r) => r.label === pin.pinned!.label) : undefined;
   return (
     <Card padding="lg" className="h-full">
       <CardHeader
@@ -752,9 +778,14 @@ function CashflowCard({
             </div>
           </div>
           {trend.length > 1 && (
-            <div className="h-[190px] -ml-2">
+            <div className="h-[190px] -ml-2 relative" ref={pin.containerRef}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={trend} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} barGap={3}>
+                <BarChart
+                  data={trend}
+                  margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
+                  barGap={3}
+                  onClick={(state) => pin.handleChartClick(state as ChartClickState)}
+                >
                   <CartesianGrid stroke={chart.grid} strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="label" tick={chart.tick} axisLine={false} tickLine={false} />
                   <YAxis
@@ -766,18 +797,34 @@ function CashflowCard({
                   />
                   <Tooltip
                     cursor={{ fill: 'var(--color-surface-hover)' }}
-                    content={(p) => (
-                      <ChartTooltip
-                        {...(p as object)}
-                        privacyMode={privacyMode}
-                        labels={{ income: 'Income', expense: 'Expenses' }}
-                      />
-                    )}
+                    content={(p) =>
+                      pin.pinned || isTouchDevice() ? null : (
+                        <ChartTooltip
+                          {...(p as object)}
+                          privacyMode={privacyMode}
+                          labels={{ income: 'Income', expense: 'Expenses' }}
+                        />
+                      )
+                    }
                   />
                   <Bar dataKey="income" fill={chart.primary} radius={[3, 3, 0, 0]} maxBarSize={22} isAnimationActive={false} />
                   <Bar dataKey="expense" fill="#d6b06b" radius={[3, 3, 0, 0]} maxBarSize={22} isAnimationActive={false} />
                 </BarChart>
               </ResponsiveContainer>
+              {pin.pinned && pinnedRow && (
+                <PinnedChartTooltip containerRef={pin.containerRef} x={pin.pinned.x} onHide={pin.hidePinned}>
+                  <ChartTooltip
+                    active
+                    payload={[
+                      { dataKey: 'income', name: 'Income', value: pinnedRow.income, color: chart.primary },
+                      { dataKey: 'expense', name: 'Expenses', value: pinnedRow.expense, color: '#d6b06b' },
+                    ]}
+                    label={pinnedRow.label}
+                    privacyMode={privacyMode}
+                    labels={{ income: 'Income', expense: 'Expenses' }}
+                  />
+                </PinnedChartTooltip>
+              )}
             </div>
           )}
         </>

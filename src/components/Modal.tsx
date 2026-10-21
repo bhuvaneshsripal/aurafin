@@ -53,7 +53,7 @@ function PanelBody({
           <X size={18} />
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5">{children}</div>
+      <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-4 sm:px-6 py-5">{children}</div>
     </>
   );
 }
@@ -100,7 +100,7 @@ function ContentPanel({
         style={{ top }}
       >
         {hideHeader ? (
-          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5">{children}</div>
+          <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-4 sm:px-6 py-5">{children}</div>
         ) : (
           <PanelBody title={title} onClose={onClose}>
             {children}
@@ -171,13 +171,19 @@ export default function Modal({
     );
   }
 
-  return (
+  // Portaled to <body> for the same reason as fullScreen/contentPanel: left
+  // inline, this overlay lives inside `.app-scale` (CSS zoom), which scales
+  // the `fixed` backdrop and stops it covering the whole phone screen, so the
+  // page behind showed through. Escaping it gives a true full-viewport
+  // backdrop that is also dimmed and blurred enough to keep the page behind
+  // from competing with the dialog.
+  return createPortal(
     <div
-      className="animate-backdrop-in fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4"
+      className="animate-backdrop-in fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-[3px] px-4 py-4"
       onClick={onClose}
     >
       <div
-        className={`animate-menu-in bg-surface border border-line shadow-xl w-full ${widthClassName} max-h-[90vh] flex flex-col`}
+        className={`animate-menu-in bg-surface border border-line shadow-xl w-full ${widthClassName} max-h-[88dvh] max-h-[88vh] flex flex-col`}
         style={{ borderRadius: 'var(--radius-modal)', transformOrigin: 'center' }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -197,10 +203,11 @@ export default function Modal({
            this, the browser's scrollbar carves into the right p-6 padding
            the moment content overflows, so right-aligned controls (e.g. a
            delete button) visually jump to the very edge and look clipped. */}
-        <div className="px-6 pb-6 overflow-y-auto" style={{ scrollbarGutter: 'stable' }}>
+        <div className="px-6 pb-6 overflow-y-auto overflow-x-hidden min-w-0" style={{ scrollbarGutter: 'stable' }}>
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

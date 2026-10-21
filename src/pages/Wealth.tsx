@@ -36,6 +36,7 @@ import {
   Banknote,
   Wallet,
   Camera,
+  Save,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -2911,6 +2912,154 @@ function SipQuickActions({
   );
 }
 
+/** Lists the one-off top-ups ("Buy More" lumpsums) on a SIP so a mistaken
+ *  or cancelled one can be corrected: edit its date or amount, or remove it
+ *  entirely. Invested value, units and returns are all derived from
+ *  `sipTopUps`, so removing one updates them straight away. */
+function SipTopUpsCard({
+  asset,
+  onUpdate,
+}: {
+  asset: Asset;
+  onUpdate: (a: Asset) => void | Promise<void>;
+}) {
+  const [editing, setEditing] = useState<{ id: string; date: string; amount: string } | null>(null);
+  const [removing, setRemoving] = useState<{ id: string; date: string; amount: number } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const topUps = asset.sipTopUps ?? [];
+  if (topUps.length === 0) return null;
+
+  const total = topUps.reduce((sum, t) => sum + t.amount, 0);
+  const sorted = [...topUps].sort((a, b) => a.date.localeCompare(b.date));
+
+  const saveEdit = async () => {
+    if (!editing) return;
+    const amt = Number(editing.amount);
+    if (!editing.date || !amt || amt <= 0) return;
+    setBusy(true);
+    try {
+      const sipTopUps = topUps.map((t) =>
+        t.id === editing.id ? { ...t, date: editing.date, amount: amt } : t
+      );
+      await onUpdate({ ...asset, sipTopUps, updatedAt: Date.now() });
+      setEditing(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmRemove = async () => {
+    if (!removing) return;
+    setBusy(true);
+    try {
+      const sipTopUps = topUps.filter((t) => t.id !== removing.id);
+      await onUpdate({ ...asset, sipTopUps, updatedAt: Date.now() });
+      setRemoving(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="bg-surface rounded-2xl border border-line p-5">
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <p className="text-xs font-semibold tracking-wide text-slate-600">TOP-UPS (BUY MORE)</p>
+        <p className="text-xs text-slate-500">
+          Total{' '}
+          <span className="font-semibold text-ink">{formatPreciseCurrency(total, asset.currency)}</span>
+        </p>
+      </div>
+      <ul className="divide-y divide-line-soft">
+        {sorted.map((t) => (
+          <li key={t.id} className="flex items-center justify-between gap-3 py-2.5">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-ink">{formatPreciseCurrency(t.amount, asset.currency)}</p>
+              <p className="text-xs text-slate-500">{formatDate(t.date)}</p>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                aria-label="Edit top-up"
+                onClick={() => setEditing({ id: t.id, date: t.date, amount: String(t.amount) })}
+                className="h-9 w-9 flex items-center justify-center rounded-lg text-slate-500 hover:bg-surface-hover"
+              >
+                <Pencil size={15} />
+              </button>
+              <button
+                type="button"
+                aria-label="Remove top-up"
+                onClick={() => setRemoving({ id: t.id, date: t.date, amount: t.amount })}
+                className="h-9 w-9 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50"
+              >
+                <Trash2 size={15} />
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      <Modal open={!!editing} onClose={() => !busy && setEditing(null)} title="Edit top-up">
+        {editing && (
+          <div className="space-y-4">
+            <Field label="Date">
+              <DateInput
+                value={editing.date}
+                onChange={(v) => setEditing({ ...editing, date: v })}
+                max={toIsoDate()}
+                className="mt-1 w-full border border-line bg-transparent rounded-lg px-3 py-2.5 text-sm"
+              />
+            </Field>
+            <Field label="Amount">
+              <input
+                type="number"
+                step="any"
+                inputMode="decimal"
+                value={editing.amount}
+                onChange={(e) => setEditing({ ...editing, amount: e.target.value })}
+                className={inputClass}
+              />
+            </Field>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setEditing(null)}
+                disabled={busy}
+                className="flex-1 border border-line text-slate-600 dark:text-slate-300 py-2.5 rounded-lg text-sm font-medium hover:bg-surface-hover"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={saveEdit}
+                disabled={busy || !editing.amount || Number(editing.amount) <= 0}
+                className="flex-1 inline-flex items-center justify-center h-10 sm:h-9 px-4 text-sm font-medium rounded-lg bg-brand-600 hover:bg-brand-700 text-white disabled:opacity-50"
+              >
+                {busy ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <ConfirmDeleteModal
+        open={!!removing}
+        onClose={() => !busy && setRemoving(null)}
+        onConfirm={confirmRemove}
+        busy={busy}
+        title="Remove this top-up?"
+        description={
+          removing
+            ? `${formatPreciseCurrency(removing.amount, asset.currency)} added on ${formatDate(removing.date)} will be taken out of this SIP's invested value and returns. Use this if the top-up was cancelled or entered by mistake.`
+            : ''
+        }
+        confirmLabel="Remove top-up"
+        busyLabel="Removing…"
+      />
+    </div>
+  );
+}
+
 /** Pause/Resume for a Mutual Fund SIP, with a date the person can backdate —
  *  e.g. "I skipped August, it's September now" isn't "pause as of today",
  *  it's "paused from 1 Aug". Missed months already in the past just need
@@ -3499,6 +3648,7 @@ function HoldingDetailView({
       </div>
 
       {asset.assetClass === 'sip' && <SipQuickActions asset={asset} onUpdate={onQuickUpdate} />}
+      {asset.assetClass === 'sip' && <SipTopUpsCard asset={asset} onUpdate={onQuickUpdate} />}
 
       {orderedLots.length > 0 && (
         <div className="bg-surface rounded-2xl border border-line p-5">
@@ -4679,6 +4829,7 @@ function AssetDetailPage({
       )}
 
       {asset.assetClass === 'sip' && <SipQuickActions asset={asset} onUpdate={onQuickUpdate} />}
+      {asset.assetClass === 'sip' && <SipTopUpsCard asset={asset} onUpdate={onQuickUpdate} />}
 
       {asset.recurringInvestment && recurringSip && (
         <div className="bg-surface rounded-2xl border border-line p-5">
@@ -5636,12 +5787,23 @@ function AssetDetailsForm({
               {ASSET_CLASS_LABELS[assetClass] ?? assetClass}
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-brand-600 shrink-0"
-          >
-            <ArrowLeft size={16} /> Back to Assets
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={onClose}
+              className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-brand-600"
+            >
+              <ArrowLeft size={16} /> Back to Assets
+            </button>
+            <button
+              type="button"
+              onClick={submit}
+              aria-label="Save asset"
+              title="Save"
+              className="h-9 w-9 flex items-center justify-center rounded-full bg-brand-600 hover:bg-brand-700 text-white shadow-sm transition-colors"
+            >
+              <Save size={16} />
+            </button>
+          </div>
         </div>
       ) : (
         onBack && (
@@ -5684,7 +5846,7 @@ function AssetDetailsForm({
               <button
                 type="button"
                 onClick={() => setAssetTypeEditing(true)}
-                className="w-full min-h-10 sm:min-h-9 flex items-center justify-between gap-3 rounded-lg border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-1 text-left"
+                className="w-full min-h-10 sm:min-h-9 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-1.5 text-left"
               >
                 <span className="flex items-center gap-2 min-w-0">
                   <span className="h-6 w-6 shrink-0 rounded-md bg-white dark:bg-slate-800 flex items-center justify-center text-emerald-600">
@@ -5693,11 +5855,11 @@ function AssetDetailsForm({
                       return <CatIcon size={13} />;
                     })()}
                   </span>
-                  <span className="text-sm font-medium text-ink truncate">
+                  <span className="text-sm font-medium text-ink break-words leading-snug">
                     {ASSET_CLASS_LABELS[assetClass] ?? assetClass}
                   </span>
                 </span>
-                <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400 shrink-0">Change</span>
+                <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400 shrink-0 ml-auto">Change</span>
               </button>
             )}
           </Field>
@@ -5796,6 +5958,9 @@ function AssetDetailsForm({
               {formatPreciseCurrency(totalPurchaseAmount, currency)}
             </p>
           </div>
+          <p className="text-xs text-slate-500 -mt-1">
+            Bought at a different price? Add another purchase below and the total and average cost update automatically.
+          </p>
           <div className="space-y-2.5">
             {purchaseLots.map((lot, i) => {
               const gramsFilled = Number(lot.grams) > 0;
@@ -5817,7 +5982,7 @@ function AssetDetailsForm({
                       type="button"
                       onClick={() => collapsible && toggleLotCollapsed(lot.id)}
                       disabled={!collapsible}
-                      className={`flex items-center gap-1.5 min-w-0 text-left ${collapsible ? 'cursor-pointer' : ''}`}
+                      className={`flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0 text-left ${collapsible ? 'cursor-pointer' : ''}`}
                     >
                       {collapsible && (
                         <ChevronDown
@@ -5827,7 +5992,7 @@ function AssetDetailsForm({
                       )}
                       <span className="text-xs font-medium text-slate-600 shrink-0">Purchase {i + 1}</span>
                       {collapsed && (
-                        <span className="text-xs text-slate-400 truncate">
+                        <span className="basis-full pl-[21px] text-xs text-slate-500 break-words">
                           {[
                             lot.date || null,
                             gramsFilled ? `${lot.grams} g` : null,
@@ -5902,10 +6067,6 @@ function AssetDetailsForm({
           >
             <Plus size={16} /> Add another purchase
           </button>
-          <p className="text-xs text-slate-600">
-            Bought more later? Come back to Edit and add another purchase row — grams and amount add
-            up automatically.
-          </p>
         </div>
       )}
       {isUnitTracked && (
@@ -6077,6 +6238,9 @@ function AssetDetailsForm({
                 </span>
               </p>
             </div>
+            <p className="text-xs text-slate-500 -mt-1">
+              Bought at a different price? Add another purchase below and the average cost and returns update automatically.
+            </p>
             <div className="space-y-2.5">
               {shareLots.map((lot, i) => {
                 const mode = lotInputMode[lot.id] ?? 'qty';
@@ -6109,7 +6273,7 @@ function AssetDetailsForm({
                         type="button"
                         onClick={() => collapsible && toggleLotCollapsed(lot.id)}
                         disabled={!collapsible}
-                        className={`flex items-center gap-1.5 min-w-0 text-left ${collapsible ? 'cursor-pointer' : ''}`}
+                        className={`flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0 text-left ${collapsible ? 'cursor-pointer' : ''}`}
                       >
                         {collapsible && (
                           <ChevronDown
@@ -6119,7 +6283,7 @@ function AssetDetailsForm({
                         )}
                         <span className="text-xs font-medium text-slate-600 shrink-0">Purchase {i + 1}</span>
                         {collapsed && (
-                          <span className="text-xs text-slate-400 truncate">
+                          <span className="basis-full pl-[21px] text-xs text-slate-500 break-words">
                             {[
                               lot.date || null,
                               qtyOrAmountFilled && mode === 'qty' ? `${lot.quantity} shares` : null,
@@ -6311,10 +6475,6 @@ function AssetDetailsForm({
             >
               <Plus size={16} /> Add another purchase
             </button>
-            <p className="text-xs text-slate-600">
-              Bought more later at a different price? Come back to Edit and add another purchase row —
-              quantity and average cost update automatically, and returns recalculate off the new average.
-            </p>
           </div>
           )}
         </>
@@ -7663,7 +7823,7 @@ function Field({
   className?: string;
 }) {
   return (
-    <label className={`block ${className ?? ''}`}>
+    <label className={`block min-w-0 ${className ?? ''}`}>
       {/* min-h + items-end reserves space for a 2-line label and bottom-aligns
          the text, so when a field sits next to a shorter label in a grid row
          (e.g. "Interest Rate (%)" beside "Bank / Institution"), both inputs

@@ -1,4 +1,11 @@
 @import "tailwindcss";
+
+@layer base {
+  .grid > *,
+  .flex > * {
+    min-width: 0;
+  }
+}
 /* Inter (the app's only typeface) is loaded by a <link> in index.html — a CSS
    @import can't work here because Tailwind's layers precede it. */
 
@@ -262,6 +269,11 @@ html {
   scroll-behavior: smooth;
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: 100%;
+  /* Never let the page itself pan sideways on a phone. Any wide child (a
+     form row, a table, a long word) is clipped at the edge instead of
+     dragging the whole screen left and leaving blank space on the right. */
+  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 body {
