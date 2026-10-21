@@ -170,22 +170,24 @@ export default function MarketTicker() {
   );
 }
 
-/** Mobile: a thin bar under the top bar where the indices glide right-to-left
- *  continuously (pauses while touched; plain scrollable row if the user prefers reduced motion). */
+/** Mobile: a thin bar under the top bar. It no longer auto-scrolls — it sits
+ *  still showing NIFTY, SENSEX and BANKNIFTY, and the person can swipe it
+ *  sideways to see the rest of the row (snaps to each index). */
 export function MarketTickerMarquee({ className }: { className?: string }) {
   const quotes = useIndexQuotes();
-  const row = 'flex items-center gap-x-8 pr-8 whitespace-nowrap shrink-0';
   return (
     <div
-      className={cn('ticker-scroll overflow-hidden h-9 flex items-center text-[12.5px] bg-surface border-b border-line', className)}
+      className={cn(
+        'no-scrollbar overflow-x-auto overflow-y-hidden overscroll-x-contain snap-x snap-proximity h-9 flex items-center text-[12.5px] bg-surface border-b border-line',
+        className
+      )}
+      style={{ touchAction: 'pan-x', scrollbarWidth: 'none' }}
       aria-label="Market indices"
     >
-      <div
-        className="ticker-track flex w-max active:[animation-play-state:paused]"
-        style={{ animationDuration: '22s' }}
-      >
-        <div className={row}>{renderItems(quotes)}</div>
-        <div className={row} aria-hidden="true">{renderItems(quotes)}</div>
+      <div className="flex items-center gap-x-8 px-4 whitespace-nowrap w-max">
+        {renderItems(quotes).map((item, i) => (
+          <div key={i} className="snap-start">{item}</div>
+        ))}
       </div>
     </div>
   );

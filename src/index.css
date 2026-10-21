@@ -735,8 +735,8 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 /* Swiping between bottom-nav tabs: the new page slides in from the side you swiped toward. */
 @keyframes page-swipe-next {
   from {
-    opacity: 0.6;
-    transform: translate3d(32px, 0, 0);
+    opacity: 1;
+    transform: translate3d(24px, 0, 0);
   }
   to {
     opacity: 1;
@@ -745,8 +745,8 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 @keyframes page-swipe-prev {
   from {
-    opacity: 0.6;
-    transform: translate3d(-32px, 0, 0);
+    opacity: 1;
+    transform: translate3d(-24px, 0, 0);
   }
   to {
     opacity: 1;
@@ -754,10 +754,10 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   }
 }
 html[data-swipe='next'] .animate-page-in {
-  animation: page-swipe-next 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: page-swipe-next 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 html[data-swipe='prev'] .animate-page-in {
-  animation: page-swipe-prev 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: page-swipe-prev 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 /* A headline figure swapping from skeleton to value. */

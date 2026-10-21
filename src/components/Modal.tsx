@@ -53,7 +53,7 @@ function PanelBody({
           <X size={18} />
         </button>
       </div>
-      <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-4 sm:px-6 py-5">{children}</div>
+      <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain px-4 sm:px-6 py-5">{children}</div>
     </>
   );
 }
@@ -100,7 +100,7 @@ function ContentPanel({
         style={{ top }}
       >
         {hideHeader ? (
-          <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-4 sm:px-6 py-5">{children}</div>
+          <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain px-4 sm:px-6 py-5">{children}</div>
         ) : (
           <PanelBody title={title} onClose={onClose}>
             {children}
@@ -203,7 +203,7 @@ export default function Modal({
            this, the browser's scrollbar carves into the right p-6 padding
            the moment content overflows, so right-aligned controls (e.g. a
            delete button) visually jump to the very edge and look clipped. */}
-        <div className="px-6 pb-6 overflow-y-auto overflow-x-hidden min-w-0" style={{ scrollbarGutter: 'stable' }}>
+        <div className="px-6 pb-6 overflow-y-auto overflow-x-hidden overscroll-contain min-w-0" style={{ scrollbarGutter: 'stable' }}>
           {children}
         </div>
       </div>

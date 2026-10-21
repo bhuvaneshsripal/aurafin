@@ -93,11 +93,24 @@ export default function SwipeTabs() {
         if (wasDragging) resetPage(true); // spring back
         return;
       }
-      // The outgoing page unmounts, so just drop its offset without animating.
-      resetPage(false);
+      // Leave the outgoing page exactly where the finger left it. Snapping it
+      // back to centre here was the "blink": the transition below keeps the
+      // old page on screen until the next one is ready, so it visibly jumped
+      // back before being swapped out. React removes this element itself when
+      // the new page commits; the timeout is only a safety net that springs
+      // it back if navigation somehow never happens.
+      const leaving = page;
+      page = null;
       const root = document.documentElement;
       root.dataset.swipe = dx < 0 ? 'next' : 'prev';
       window.setTimeout(() => delete root.dataset.swipe, 400);
+      window.setTimeout(() => {
+        if (leaving && leaving.isConnected && leaving.style.transform) {
+          leaving.style.transition = 'transform 200ms cubic-bezier(0.22, 1, 0.36, 1)';
+          leaving.style.transform = '';
+          leaving.style.willChange = '';
+        }
+      }, 1200);
       // Transition keeps the current page on screen until the next one is
       // ready, instead of flashing blank while it loads.
       startTransition(() => navigate(TABS[next]));
