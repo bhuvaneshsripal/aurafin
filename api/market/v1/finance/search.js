@@ -17,16 +17,8 @@ import { searchIndia } from '../../../_lib/indiaSearch.js';
 // exchange) so the US suggestion list stays US-only.
 const US_EXCHANGES = new Set(['NMS', 'NYQ', 'NGM', 'NCM', 'ASE', 'PCX', 'BTS', 'PNK']);
 
-// Exchanges Yahoo tags Indian-listed equities/ETFs with (NSE and BSE),
-// kept as a secondary check. The primary, more reliable signal is the
-// symbol suffix Yahoo always puts on Indian listings (.NS for NSE, .BO
-// for BSE) — see isIndianSymbol below. Together these stop the Yahoo
-// fallback (used when NSE's own autocomplete is unreachable) from
-// surfacing unrelated foreign listings just because they share letters
-// with the query (e.g. searching "NSE" matching a Shenzhen/Hamburg/Paris
-// ticker).
-const IN_EXCHANGES = new Set(['NSI', 'BSE']);
-const isIndianSymbol = (symbol) => /\.(NS|BO)$/i.test(symbol ?? '');
+// Indian-listing filtering (NSE/BSE suffix plus exchange code) is applied in
+// _lib/indiaSearch.js, which this handler calls for the IN market.
 
 async function searchYahoo(q) {
   const upstream = await fetch(

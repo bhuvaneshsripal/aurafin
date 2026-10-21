@@ -18,7 +18,7 @@ const BOLD_DIGITS: Record<string, string> = {
   '9': '𝟗',
 };
 
-export function toBoldDigits(input: string): string {
+function toBoldDigits(input: string): string {
   return input.replace(/[0-9]/g, (d) => BOLD_DIGITS[d]);
 }
 
