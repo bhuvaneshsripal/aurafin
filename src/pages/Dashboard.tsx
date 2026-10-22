@@ -47,15 +47,8 @@ import {
   Skeleton,
   chart,
 } from '../components/ui';
-import {
-  ASSET_CLASS_LABELS,
-  formatAxisAmount,
-  formatCurrency,
-  formatPercentMagnitude,
-  formatSignedCurrency,
-  formatPreciseCurrency,
-  maskAmount,
-} from '../utils/currency';
+import { ASSET_CLASS_LABELS, maskAmount } from '../utils/currency';
+import { formatAxisAmount, formatCurrency, formatPercentMagnitude, formatSignedCurrency, formatPreciseCurrency, hideNumber } from '../utils/privateFormat';
 import { ASSET_CLASS_TO_CATEGORY } from '../utils/taxonomy';
 import { resolveAssetValues } from '../utils/assetValues';
 import type { Goal, Snapshot, Transaction } from '../types';
@@ -507,18 +500,19 @@ function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
     return [minV - pad, maxV + pad];
   }, [data]);
 
-  const summary = !hasTrend
+  // With the eye closed the whole "Up/Down … over …" sentence is hidden (it
+  // would reveal both the direction and size of the change), leaving a neutral line.
+  const showTrendSummary = hasTrend && !privacyMode;
+  const summary = !showTrendSummary
     ? 'Your net worth across the selected period.'
-    : `${change >= 0 ? 'Up' : 'Down'} ${
-        privacyMode ? '••••••' : formatCurrency(Math.abs(change), 'INR', { fractionDigits: 0 })
-      } (${formatPercentMagnitude(changePct, 1)}) over ${RANGE_LABEL[range]}`;
+    : `${change >= 0 ? 'Up' : 'Down'} ${formatCurrency(Math.abs(change), 'INR', { fractionDigits: 0 })} (${formatPercentMagnitude(changePct, 1)}) over ${RANGE_LABEL[range]}`;
 
   return (
     <Card padding="lg" className="h-full">
       <CardHeader
         title="Net worth over time"
         description={
-          <span className={hasTrend ? (change >= 0 ? 'text-positive font-medium' : 'text-negative font-medium') : ''}>
+          <span className={showTrendSummary ? (change >= 0 ? 'text-positive font-medium' : 'text-negative font-medium') : ''}>
             {summary}
           </span>
         }
@@ -704,7 +698,7 @@ function AllocationCard({
               <li key={d.key} className="flex items-center gap-2.5 text-sm">
                 <span className="h-2.5 w-2.5 rounded-sm shrink-0" style={{ background: d.color }} />
                 <span className="text-ink-2 truncate flex-1">{d.label}</span>
-                <span className="font-numeric font-medium text-ink">{sum > 0 ? ((d.value / sum) * 100).toFixed(1) : '0.0'}%</span>
+                <span className="font-numeric font-medium text-ink">{hideNumber(`${sum > 0 ? ((d.value / sum) * 100).toFixed(1) : '0.0'}%`)}</span>
               </li>
             ))}
           </ul>
@@ -772,7 +766,7 @@ function CashflowCard({
               <p className={`font-numeric text-base font-semibold mt-0.5 ${saved >= 0 ? 'text-ink' : 'text-negative'}`}>
                 {m(saved)}
                 {savingsRate !== null && !privacyMode && (
-                  <span className="ml-1.5 text-xs font-medium text-muted">{savingsRate.toFixed(0)}%</span>
+                  <span className="ml-1.5 text-xs font-medium text-muted">{hideNumber(`${savingsRate.toFixed(0)}%`)}</span>
                 )}
               </p>
             </div>
@@ -883,7 +877,7 @@ function GoalsCard({
               <li key={g.id}>
                 <div className="flex items-baseline justify-between gap-3 text-sm mb-1.5">
                   <span className="font-medium text-ink truncate">{g.name}</span>
-                  <span className="font-numeric text-xs font-medium text-muted shrink-0">{pct}%</span>
+                  <span className="font-numeric text-xs font-medium text-muted shrink-0">{hideNumber(`${pct}%`)}</span>
                 </div>
                 <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                   <div className="h-full rounded-full bg-brand-600" style={{ width: `${pct}%` }} />

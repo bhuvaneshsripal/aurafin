@@ -28,7 +28,7 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import Amount from '../components/Amount';
 import LoadingDots from '../components/LoadingDots';
 import type { Goal } from '../types';
-import { formatCurrency } from '../utils/currency';
+import { formatCurrency, hideNumber } from '../utils/privateFormat';
 import CurrencySelect from '../components/CurrencySelect';
 import { useUrlTab } from '../hooks/useUrlTab';
 import { inputClasses } from '../components/ui';
@@ -243,7 +243,7 @@ function HealthCheck() {
             <HealthCard title="Emergency Fund" status={efStatus} icon={Shield} iconTone="emergency">
               <StatRow label="LIQUID ASSETS" value={<Amount value={liquidAssets} />} />
               <p className="text-xs text-muted -mt-2">Cash &amp; Savings · FD &amp; RD · Liquid / Debt Funds</p>
-              <StatRow label="RUNWAY" value={<><span className="font-numeric">{runwayMonths.toFixed(runwayMonths < 10 ? 1 : 0)}</span> months</>} />
+              <StatRow label="RUNWAY" value={<><span className="font-numeric">{hideNumber(runwayMonths.toFixed(runwayMonths < 10 ? 1 : 0))}</span> months</>} />
               <ScaleBar value={runwayMonths} max={12} marks={['0', '3m', '6m', '12m+']} />
               <p className="text-sm text-muted">Build at least 3 months of expenses in liquid savings</p>
             </HealthCard>
@@ -251,7 +251,7 @@ function HealthCheck() {
             {/* Savings Rate */}
             <HealthCard title="Savings Rate" subtitle="intended · from financial profile" status={srStatus} icon={PiggyBank} iconTone="savings">
               <div>
-                <span className="text-3xl font-numeric text-brand-600 dark:text-brand-300">{Math.round(savingsRate * 100)}%</span>
+                <span className="text-3xl font-numeric text-brand-600 dark:text-brand-300">{hideNumber(`${Math.round(savingsRate * 100)}%`)}</span>
                 <span className="text-muted text-sm ml-1.5">of income saved</span>
               </div>
               <p className="text-xs text-muted">Based on your Financial Profile · actual savings may differ</p>
@@ -315,7 +315,7 @@ function HealthCheck() {
             {/* Debt Ratio */}
             <HealthCard title="Debt Ratio" status={drStatus} className="sm:col-span-2 lg:col-span-3">
               <div>
-                <span className="text-3xl font-numeric text-ink">{Math.round(debtRatio * 100)}%</span>
+                <span className="text-3xl font-numeric text-ink">{hideNumber(`${Math.round(debtRatio * 100)}%`)}</span>
                 <span className="text-muted text-sm ml-1.5">of assets are debt-funded</span>
               </div>
               <div className="grid grid-cols-2 gap-4 pt-1">
@@ -635,7 +635,7 @@ function GoalsTab() {
                 {wealthDataKnown ? (
                   <>
                     <span>{formatCurrency(current, g.currency)} · from Net Worth</span>
-                    <span>{pct}% of {formatCurrency(g.targetAmount, g.currency)}</span>
+                    <span>{hideNumber(`${pct}%`)} of {formatCurrency(g.targetAmount, g.currency)}</span>
                   </>
                 ) : (
                   <LoadingDots />

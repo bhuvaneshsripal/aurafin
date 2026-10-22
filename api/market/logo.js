@@ -14,7 +14,8 @@ export default async function handler(req, res) {
   try {
     const logo = await resolveLogo(symbol, market, String(req.query.isin ?? ''));
     if (!logo) {
-      res.setHeader('Cache-Control', 's-maxage=86400');
+      // Short: a miss is often a transient upstream hiccup, so let it retry soon.
+      res.setHeader('Cache-Control', 'no-store');
       res.status(404).end();
       return;
     }

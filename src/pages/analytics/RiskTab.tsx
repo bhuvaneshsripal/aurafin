@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { hideNumber } from '../../utils/privateFormat';
 import { AlertTriangle, CheckCircle2, Info, ShieldAlert } from 'lucide-react';
 import { Badge, Card, CardHeader, StatCard } from '../../components/ui';
 import Amount from '../../components/Amount';
@@ -23,7 +24,7 @@ export default function RiskTab({ data }: { data: AnalyticsData }) {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Diversification score" value={`${risk.score}/100`} tone={gradeTone} sublabel={risk.grade} />
         <StatCard label="Effective holdings" value={risk.effectiveHoldings.toFixed(1)} sublabel={`of ${risk.holdings.length} actual`} />
-        <StatCard label="Top 5 holdings" value={`${risk.top5Pct.toFixed(0)}%`} sublabel="share of portfolio" />
+        <StatCard label="Top 5 holdings" value={hideNumber(`${risk.top5Pct.toFixed(0)}%`)} sublabel="share of portfolio" />
         <StatCard label="Liquid assets" value={<Amount value={liquid} currency={currency} />} sublabel="cash, FDs, liquid funds" />
       </div>
 
@@ -59,7 +60,7 @@ export default function RiskTab({ data }: { data: AnalyticsData }) {
                   {h.asset.name} <span className="text-xs text-muted">· {ASSET_CLASS_LABELS[h.asset.assetClass]}</span>
                 </span>
                 <span className="shrink-0 text-muted">
-                  <Amount value={h.value} currency={currency} /> · {h.pct.toFixed(1)}%
+                  <Amount value={h.value} currency={currency} /> · {hideNumber(`${h.pct.toFixed(1)}%`)}
                 </span>
               </div>
               <div className="h-1.5 overflow-hidden rounded-full bg-surface-hover">

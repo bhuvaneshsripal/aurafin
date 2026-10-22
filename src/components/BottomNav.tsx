@@ -19,6 +19,7 @@ import QuickAddMenu from './QuickAddMenu';
 import { useUiStore } from '../store/uiStore';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { useModalBackClose } from '../hooks/useModalBackClose';
+import { useExitPresence } from '../hooks/useExitPresence';
 
 const primaryLinks = [
   { to: '/', label: 'Overview', icon: LayoutDashboard },
@@ -62,6 +63,7 @@ export default function BottomNav() {
   const location = useLocation();
   const isMoreActive = moreLinks.some((l) => l.to === location.pathname);
   const hideFab = useUiStore((s) => s.hideFab);
+  const { mounted: moreMounted, closing: moreClosing } = useExitPresence(moreOpen, 180);
   useBodyScrollLock(moreOpen);
   useModalBackClose(moreOpen, () => setMoreOpen(false));
 
@@ -137,9 +139,9 @@ export default function BottomNav() {
         </nav>
       )}
 
-      {moreOpen && (
+      {moreMounted && (
         <div
-          className="animate-backdrop-in md:hidden fixed inset-0 z-50 bg-slate-900/30 flex items-end"
+          className={`${moreClosing ? 'animate-backdrop-out' : 'animate-backdrop-in'} md:hidden fixed inset-0 z-50 bg-slate-900/30 flex items-end`}
           onClick={() => setMoreOpen(false)}
         >
           <div
@@ -147,7 +149,7 @@ export default function BottomNav() {
             aria-modal="true"
             aria-label="More"
             onClick={(e) => e.stopPropagation()}
-            className="animate-sheet-in w-full bg-surface rounded-t-2xl border-t border-line pb-[env(safe-area-inset-bottom)] max-h-[75vh] overflow-y-auto overscroll-contain"
+            className={`${moreClosing ? 'animate-sheet-out' : 'animate-sheet-in'} w-full bg-surface rounded-t-2xl border-t border-line pb-[env(safe-area-inset-bottom)] max-h-[75vh] overflow-y-auto overscroll-contain`}
           >
             <div className="flex items-center justify-between px-5 pt-4 pb-2">
               <h3 className="text-base font-semibold text-ink">More</h3>

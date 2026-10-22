@@ -20,7 +20,7 @@ import { useAuthStore } from '../../store/authStore';
 import { useHouseholdProfilesStore } from '../../store/householdProfilesStore';
 import { upsertDoc, removeDoc } from '../../hooks/useFirestoreSync';
 import { BUDGET_CATEGORIES, budgetKey, canonicalCategory } from '../../utils/budgetCategories';
-import { formatCurrency } from '../../utils/currency';
+import { formatCurrency, hideNumber } from '../../utils/privateFormat';
 import { toIsoMonth } from '../../utils/date';
 import { cn } from '../../components/ui/cn';
 import type { BudgetItem } from '../../types';
@@ -447,7 +447,7 @@ export default function BudgetTab() {
           <div className="mt-4">
             <ProgressBar pct={usedPct} />
             <div className="mt-1.5 flex justify-between text-xs text-muted">
-              <span>{usedPct.toFixed(0)}% of plan used</span>
+              <span>{hideNumber(`${usedPct.toFixed(0)}%`)} of plan used</span>
               {overCount > 0 && (
                 <span className="text-negative font-medium">
                   {overCount} {overCount === 1 ? 'category' : 'categories'} over budget

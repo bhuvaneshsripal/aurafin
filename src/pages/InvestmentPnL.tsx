@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import CompanyLogo from '../components/CompanyLogo';
 import { Link } from 'react-router-dom';
 import {
   TrendingUp,
@@ -30,7 +31,9 @@ import {
   Tooltip as RTooltip,
   ResponsiveContainer,
   CartesianGrid,
+  ReferenceLine,
 } from 'recharts';
+import { chart as chartTheme } from '../components/ui/chartTheme';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLivePricesStore } from '../store/livePricesStore';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
@@ -48,8 +51,9 @@ import {
   type RealizedSaleDetail,
 } from '../utils/investmentPnl';
 import { resolveAssetValues } from '../utils/assetValues';
-import { ASSET_CLASS_LABELS, ASSET_CLASS_COLORS } from '../utils/taxonomy';
-import { formatCurrency, maskAmount, maskPreciseAmount, CURRENCY_SYMBOLS } from '../utils/currency';
+import { ASSET_CLASS_LABELS, ASSET_CLASS_COLORS, MARKET_SELECTABLE_CLASSES } from '../utils/taxonomy';
+import { maskAmount, maskPreciseAmount, CURRENCY_SYMBOLS } from '../utils/currency';
+import { formatCurrency, formatAxisAmount, hideNumber } from '../utils/privateFormat';
 import { exportToCsv } from '../utils/exportCsv';
 import { exportDomToPdf } from '../utils/exportPdf';
 import { formatDate, toIsoDate } from '../utils/date';
@@ -69,7 +73,7 @@ function fmt(value: number, currency: string, privacy: boolean, precise = false)
 function pctLabel(v: number | undefined) {
   if (v === undefined || Number.isNaN(v)) return '—';
   const sign = v > 0 ? '+' : '';
-  return `${sign}${v.toFixed(2)}%`;
+  return hideNumber(`${sign}${v.toFixed(2)}%`) as string;
 }
 
 function signClass(v: number | undefined) {
@@ -91,6 +95,11 @@ function formatShortDate(iso: string | undefined) {
 /** Initials badge shown in place of a company/fund logo — deterministically
  *  colored per asset class, since there's no logo service wired up. */
 function AssetBadge({ asset, size = 36 }: { asset: Asset; size?: number }) {
+  // Listed stocks/ETFs get their real company logo (or the branded monogram
+  // CompanyLogo falls back to), same as the Wealth list.
+  if (asset.symbol && MARKET_SELECTABLE_CLASSES.has(asset.assetClass)) {
+    return <CompanyLogo symbol={asset.symbol} name={asset.name} market={asset.market ?? 'IN'} isin={asset.isin} size={size} />;
+  }
   const color = ASSET_CLASS_COLORS[asset.assetClass] ?? '#64748b';
   const label = (asset.symbol || asset.name || '?').trim().slice(0, 2).toUpperCase();
   return (
@@ -290,6 +299,31 @@ function PortfolioPerformanceChart({
 
   const hasData = points.length > 1;
 
+  // Sign-aware colours (see the gradients below): where the zero line falls
+  // inside the plotted range decides where green turns red.
+  const tone = useMemo(() => {
+    const GREEN = chartTheme.primary;
+    const RED = chartTheme.negative;
+    const vals = points.map((p) => p.total);
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    const clamp = (n: number) => Math.min(1, Math.max(0, n));
+    const split = (hi: number, lo: number) => (hi === lo ? (hi >= 0 ? 1 : 0) : clamp(hi / (hi - lo)));
+    if (mode === 'value') {
+      return { strokeTop: GREEN, strokeBottom: GREEN, strokeSplit: 1, fillSplit: 1, fillTopOpacity: 0.16, fillBottomOpacity: 0.16, last: GREEN };
+    }
+    const last = vals.length ? vals[vals.length - 1] : 0;
+    return {
+      strokeTop: GREEN,
+      strokeBottom: RED,
+      strokeSplit: split(max, min),
+      fillSplit: split(Math.max(max, 0), Math.min(min, 0)),
+      fillTopOpacity: 0.18,
+      fillBottomOpacity: 0.18,
+      last: last < 0 ? RED : GREEN,
+    };
+  }, [points, mode]);
+
   return (
     <div className="bg-surface rounded-2xl border border-line p-5 shadow-soft">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
@@ -335,45 +369,68 @@ function PortfolioPerformanceChart({
       {!hasData ? (
         <div className="h-52 flex items-center justify-center text-[13px] text-slate-400">No transactions in this period yet.</div>
       ) : (
-        <div className="h-52 -ml-2">
+        <div className="h-56 -ml-2">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={points} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
+            <AreaChart data={points} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
               <defs>
-                <linearGradient id="pnlFillPositive" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#247a4d" stopOpacity={0.1} />
-                  <stop offset="100%" stopColor="#247a4d" stopOpacity={0.1} />
+                {/* Colour follows the sign: green where the line is above zero,
+                    red where it is below, switching exactly at the zero line. */}
+                <linearGradient id="pnlStroke" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset={0} stopColor={tone.strokeTop} />
+                  <stop offset={tone.strokeSplit} stopColor={tone.strokeTop} />
+                  <stop offset={tone.strokeSplit} stopColor={tone.strokeBottom} />
+                  <stop offset={1} stopColor={tone.strokeBottom} />
+                </linearGradient>
+                <linearGradient id="pnlFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset={0} stopColor={tone.strokeTop} stopOpacity={tone.fillTopOpacity} />
+                  <stop offset={tone.fillSplit} stopColor={tone.strokeTop} stopOpacity={0.04} />
+                  <stop offset={tone.fillSplit} stopColor={tone.strokeBottom} stopOpacity={0.04} />
+                  <stop offset={1} stopColor={tone.strokeBottom} stopOpacity={tone.fillBottomOpacity} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="text-slate-100 dark:text-slate-800" />
+              <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3" vertical={false} />
               <XAxis
                 dataKey="date"
                 tickFormatter={(d: string) => formatShortDate(d)}
-                tick={{ fontSize: 11, fill: '#94a3b8' }}
+                tick={chartTheme.tick}
                 axisLine={false}
                 tickLine={false}
                 minTickGap={30}
               />
               <YAxis
-                tickFormatter={(v: number) => formatCurrency(v, currency)}
-                tick={{ fontSize: 11, fill: '#94a3b8' }}
+                tickFormatter={(v: number) => formatAxisAmount(v, currency)}
+                tick={chartTheme.tick}
                 axisLine={false}
                 tickLine={false}
-                width={70}
+                width={58}
               />
+              {mode === 'pnl' && <ReferenceLine y={0} stroke="var(--color-line)" strokeWidth={1.25} />}
               <RTooltip
-                formatter={(v: unknown) => [
-                  privacy ? '••••••' : formatCurrency(Number(v ?? 0), currency),
-                  mode === 'value' ? 'Value' : 'P&L',
-                ]}
-                labelFormatter={(d: React.ReactNode) => formatShortDate(String(d))}
-                contentStyle={{ borderRadius: 12, border: '1px solid #e5e7eb', fontSize: 12.5 }}
+                cursor={chartTheme.tooltip.cursor}
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null;
+                  const v = Number(payload[0].value ?? 0);
+                  const color = mode === 'pnl' ? (v < 0 ? chartTheme.negative : chartTheme.positive) : chartTheme.primary;
+                  return (
+                    <div style={chartTheme.tooltip.contentStyle}>
+                      <div style={chartTheme.tooltip.labelStyle}>{formatShortDate(String(label))}</div>
+                      <div style={{ color, fontWeight: 600 }}>
+                        {mode === 'value' ? 'Value' : 'P&L'}:{' '}
+                        {privacy ? '••••••' : mode === 'pnl' && v > 0 ? `+${formatCurrency(v, currency)}` : formatCurrency(v, currency)}
+                      </div>
+                    </div>
+                  );
+                }}
               />
               <Area
                 type="monotone"
                 dataKey="total"
-                stroke="#247a4d"
+                stroke="url(#pnlStroke)"
                 strokeWidth={2}
-                fill="url(#pnlFillPositive)"
+                fill="url(#pnlFill)"
+                baseValue={0}
+                dot={points.length <= 6 ? { r: 3.5, strokeWidth: 2, stroke: 'var(--color-surface)', fill: tone.last } : false}
+                activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-surface)', fill: tone.last }}
                 isAnimationActive
                 animationDuration={500}
               />
@@ -417,7 +474,7 @@ function SoldRow({
         </div>
       </td>
       <td className="py-3 pr-3 text-right font-numeric text-[13px] text-slate-700 dark:text-slate-300">
-        {h.totalSoldQty.toLocaleString(undefined, { maximumFractionDigits: 4 })} {h.unitLabel}
+        {hideNumber(h.totalSoldQty.toLocaleString(undefined, { maximumFractionDigits: 4 }))} {h.unitLabel}
       </td>
       <td className="py-3 pr-3 text-right font-numeric text-[13px] text-slate-700 dark:text-slate-300">{fmt(h.totalCostOfSold, currency, privacy)}</td>
       <td className="py-3 pr-3 text-right font-numeric text-[13px] text-slate-700 dark:text-slate-300">{fmt(h.totalSaleProceeds, currency, privacy)}</td>
@@ -502,7 +559,7 @@ function ActivityRow({ entry, currency, privacy }: { entry: ActivityEntry; curre
             {isBuy ? 'Buy' : 'Sell'} · {entry.asset.name}
           </p>
           <p className="text-[12px] text-slate-500 dark:text-slate-500">
-            {entry.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })} {entry.unitLabel} × {fmt(entry.price, currency, privacy, true)} · {formatShortDate(entry.date)}
+            {hideNumber(entry.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 }))} {entry.unitLabel} × {fmt(entry.price, currency, privacy, true)} · {formatShortDate(entry.date)}
           </p>
         </div>
         <div className="text-right shrink-0">
@@ -517,7 +574,7 @@ function ActivityRow({ entry, currency, privacy }: { entry: ActivityEntry; curre
         <div className="pb-3 pl-11 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12.5px]">
           <DetailRow label="Type" value={isBuy ? 'Buy' : 'Sell'} />
           <DetailRow label="Symbol" value={entry.asset.symbol || '—'} />
-          <DetailRow label="Quantity" value={`${entry.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${entry.unitLabel}`} />
+          <DetailRow label="Quantity" value={`${hideNumber(entry.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 }))} ${entry.unitLabel}`} />
           <DetailRow label="Price" value={fmt(entry.price, currency, privacy, true)} />
           <DetailRow label="Gross amount" value={fmt(entry.grossAmount, currency, privacy)} />
           <DetailRow label="Fees / charges" value={entry.fees > 0 ? fmt(entry.fees, currency, privacy) : '—'} />
@@ -596,7 +653,7 @@ function AssetDetailModal({
           <div className="grid grid-cols-3 gap-3">
             <StatBox
               label="Current Position"
-              value={h.kind === 'generic' ? ASSET_CLASS_LABELS[h.asset.assetClass] : `${h.remainingQty.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${h.unitLabel}`}
+              value={h.kind === 'generic' ? ASSET_CLASS_LABELS[h.asset.assetClass] : `${hideNumber(h.remainingQty.toLocaleString(undefined, { maximumFractionDigits: 4 }))} ${h.unitLabel}`}
             />
             <StatBox label="Current Value" value={fmt(h.currentValue, currency, privacy)} />
             <StatBox label="Invested" value={fmt(h.investedValue, currency, privacy)} />
@@ -614,7 +671,7 @@ function AssetDetailModal({
             <div>
               <h4 className="text-[13px] font-semibold text-slate-800 dark:text-slate-200 mb-2">Purchase History</h4>
               <MiniTable
-                rows={h.buyLots.map((l) => [formatShortDate(l.date), `${l.qty.toLocaleString(undefined, { maximumFractionDigits: 4 })}`, fmt(l.price, currency, privacy, true), fmt(l.amount, currency, privacy)])}
+                rows={h.buyLots.map((l) => [formatShortDate(l.date), `${hideNumber(l.qty.toLocaleString(undefined, { maximumFractionDigits: 4 }))}`, fmt(l.price, currency, privacy, true), fmt(l.amount, currency, privacy)])}
                 headers={['Date', 'Qty', 'Price', 'Amount']}
               />
             </div>
@@ -639,7 +696,7 @@ function AssetDetailModal({
                       <tr key={s.id} className="border-t border-line-soft">
                         <td className="px-1 py-1.5 font-numeric text-left text-slate-500">{formatShortDate(s.date)}</td>
                         <td className="px-1 py-1.5 font-numeric text-right text-slate-800 dark:text-slate-200">
-                          {s.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                          {hideNumber(s.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 }))}
                         </td>
                         <td className="px-1 py-1.5 font-numeric text-right text-slate-800 dark:text-slate-200">
                           {fmt(s.sellPrice, currency, privacy, true)}
@@ -697,7 +754,7 @@ function AssetDetailModal({
           <>
             This undoes the sale of{' '}
             <strong>
-              {pendingDeleteSale?.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })} {h?.unitLabel}
+              {hideNumber(pendingDeleteSale?.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 }) ?? "")} {h?.unitLabel}
             </strong>{' '}
             on {formatShortDate(pendingDeleteSale?.date)} — the quantity goes back to being held. This can't be undone.
           </>
@@ -1180,7 +1237,7 @@ export default function InvestmentPnL() {
                 <BreakdownStat label="Completed Positions" value={String(portfolio.completedCount)} tone="text-ink" />
                 <BreakdownStat
                   label="Win Rate"
-                  value={portfolio.winRatePercent !== undefined ? `${portfolio.winRatePercent.toFixed(1)}%` : '—'}
+                  value={portfolio.winRatePercent !== undefined ? hideNumber(`${portfolio.winRatePercent.toFixed(1)}%`) : '—'}
                   tone="text-ink"
                   tooltip="Calculated only from fully-sold (closed) positions — active holdings aren't counted as a win or loss yet."
                 />

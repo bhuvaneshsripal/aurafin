@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { hideNumber } from '../../utils/privateFormat';
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from 'recharts';
 import { Check, RotateCcw } from 'lucide-react';
 import { Badge, Button, Card, CardHeader, Input, SegmentedControl, Table, TableContainer, TBody, Td, Th, THead, Tr, chart } from '../../components/ui';
@@ -40,7 +41,7 @@ export default function AllocationTab({ data }: { data: AnalyticsData }) {
                     <Cell key={s.key} fill={s.color} />
                   ))}
                 </Pie>
-                <Tooltip {...chart.tooltip} formatter={(v) => [`${((Number(v) / allocation.total) * 100).toFixed(1)}%`, '']} />
+                <Tooltip {...chart.tooltip} formatter={(v) => [hideNumber(`${((Number(v) / allocation.total) * 100).toFixed(1)}%`), '']} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -52,7 +53,7 @@ export default function AllocationTab({ data }: { data: AnalyticsData }) {
                   {s.label}
                 </span>
                 <span className="text-muted">
-                  <Amount value={s.value} currency={currency} /> · {s.pct.toFixed(1)}%
+                  <Amount value={s.value} currency={currency} /> · {hideNumber(`${s.pct.toFixed(1)}%`)}
                 </span>
               </li>
             ))}
@@ -145,7 +146,7 @@ export default function AllocationTab({ data }: { data: AnalyticsData }) {
                           {r.label}
                         </span>
                       </Td>
-                      <Td className="text-right">{r.currentPct.toFixed(1)}%</Td>
+                      <Td className="text-right">{hideNumber(`${r.currentPct.toFixed(1)}%`)}</Td>
                       <Td className="text-right">{r.targetPct.toFixed(1)}%</Td>
                       <Td className="text-right">
                         <Badge variant={r.status === 'on_track' ? 'success' : r.status === 'over' ? 'warning' : 'info'}>

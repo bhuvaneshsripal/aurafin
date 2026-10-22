@@ -68,6 +68,7 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
         if (!logo) { res.statusCode = 404; res.end(); return }
         res.statusCode = 200
         res.setHeader('Content-Type', logo.contentType)
+        res.setHeader('Cache-Control', 'public, max-age=2592000, immutable')
         res.end(logo.buffer)
       } catch { res.statusCode = 502; res.end() }
       return
@@ -269,6 +270,18 @@ export default defineConfig({
             // otherwise the worker adds latency / can hand back an old quote.
             urlPattern: ({ url }) => url.pathname === '/api/market/indices',
             handler: 'NetworkOnly',
+          },
+          {
+            // Company logos never change: serve from cache first (instant and
+            // free on a slow connection) and only hit the network the first
+            // time. Kept in their own cache so they can't evict price data.
+            urlPattern: ({ url }) => url.pathname === '/api/market/logo' || url.pathname.startsWith('/company-logos/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'company-logos',
+              expiration: { maxEntries: 500, maxAgeSeconds: 30 * 24 * 60 * 60 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
           },
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/api/market'),

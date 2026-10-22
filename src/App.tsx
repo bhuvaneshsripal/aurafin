@@ -37,6 +37,7 @@ import BottomNav from './components/BottomNav';
 import SwipeTabs from './components/SwipeTabs';
 import PrivacyFab from './components/PrivacyFab';
 import Toaster from './components/Toaster';
+import NetworkBanner from './components/NetworkBanner';
 import LockScreen from './components/LockScreen';
 import InstallPromptModal from './components/InstallPromptModal';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -89,6 +90,9 @@ function RouteFallback() {
 function AppShell() {
   const location = useLocation();
   const needsOnboarding = useAuthStore((s) => s.needsOnboarding);
+  // Re-render the whole page tree when the eye toggles, so formatters that
+  // read the privacy flag (utils/privateFormat) repaint everywhere at once.
+  useUiStore((s) => s.privacyMode);
   // Keeps each page's scroll position across in-app navigation (sidebar,
   // bottom nav, back button) — see the hook for why a hard refresh still
   // resets to the top.
@@ -156,6 +160,7 @@ function AppShell() {
       <BottomNav />
       <SwipeTabs />
       <Toaster />
+      <NetworkBanner />
       <PrivacyFab />
       <InstallPromptModal />
     </div>

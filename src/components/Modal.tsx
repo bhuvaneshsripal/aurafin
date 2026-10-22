@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { useModalBackClose } from '../hooks/useModalBackClose';
+import { useExitPresence } from '../hooks/useExitPresence';
 
 interface ModalProps {
   open: boolean;
@@ -67,11 +68,13 @@ function ContentPanel({
   title,
   onClose,
   hideHeader,
+  closing,
   children,
 }: {
   title: ReactNode;
   onClose: () => void;
   hideHeader?: boolean;
+  closing?: boolean;
   children: ReactNode;
 }) {
   const [top, setTop] = useState(0);
@@ -115,11 +118,11 @@ function ContentPanel({
          the panel below reveals a softened version of the page instead of
          sharp content (e.g. asset rows) peeking through. */}
       <div
-        className="fixed left-0 right-0 md:left-[var(--sb-w)] bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-40 bg-slate-900/30 backdrop-blur-[3px] pointer-events-none"
+        className={`fixed left-0 right-0 md:left-[var(--sb-w)] bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-40 bg-slate-900/30 backdrop-blur-[3px] pointer-events-none ${closing ? 'animate-backdrop-out' : 'animate-backdrop-in'}`}
         style={{ top }}
       />
       <div
-        className="animate-backdrop-in fixed left-0 right-0 md:left-[var(--sb-w)] bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-50 bg-surface flex flex-col m-3 sm:m-4 rounded-2xl border border-line shadow-lg overflow-hidden"
+        className={`${closing ? 'animate-menu-out' : 'animate-dialog-in'} fixed left-0 right-0 md:left-[var(--sb-w)] bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-50 bg-surface flex flex-col m-3 sm:m-4 rounded-2xl border border-line shadow-lg overflow-hidden`}
         style={{ top }}
       >
         {hideHeader ? (
@@ -166,7 +169,8 @@ export default function Modal({
   // don't need to wire it up themselves.
   useModalBackClose(open, onClose);
 
-  if (!open) return null;
+  const { mounted, closing } = useExitPresence(open, 180);
+  if (!mounted) return null;
 
   if (fullScreen) {
     // Portaled straight to <body>, escaping the `.app-scale` zoomed content
@@ -175,7 +179,7 @@ export default function Modal({
     // smaller than the true viewport — visibly not covering the bottom nav,
     // which itself renders outside `.app-scale` at full size.
     return createPortal(
-      <div className="animate-backdrop-in fixed inset-x-0 top-0 bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-50 bg-surface flex flex-col">
+      <div className={`${closing ? 'animate-detail-out' : 'animate-detail-in'} fixed inset-x-0 top-0 bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-50 bg-surface flex flex-col`}>
         <PanelBody title={title} onClose={onClose}>
           {children}
         </PanelBody>
@@ -187,7 +191,7 @@ export default function Modal({
   if (contentPanel) {
     // Same "escape .app-scale" reasoning as fullScreen above.
     return createPortal(
-      <ContentPanel title={title} onClose={onClose} hideHeader={hideHeader}>
+      <ContentPanel title={title} onClose={onClose} hideHeader={hideHeader} closing={closing}>
         {children}
       </ContentPanel>,
       document.body
@@ -202,11 +206,11 @@ export default function Modal({
   // from competing with the dialog.
   return createPortal(
     <div
-      className="animate-backdrop-in fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-[3px] px-4 py-4"
+      className={`${closing ? 'animate-backdrop-out' : 'animate-backdrop-in'} fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-[3px] px-4 py-4`}
       onClick={onClose}
     >
       <div
-        className={`animate-menu-in bg-surface border border-line shadow-xl w-full ${widthClassName} max-h-[88dvh] max-h-[88vh] flex flex-col`}
+        className={`${closing ? 'animate-menu-out' : 'animate-dialog-in'} bg-surface border border-line shadow-xl w-full ${widthClassName} max-h-[88dvh] max-h-[88vh] flex flex-col`}
         style={{ borderRadius: 'var(--radius-modal)', transformOrigin: 'center' }}
         onClick={(e) => e.stopPropagation()}
       >

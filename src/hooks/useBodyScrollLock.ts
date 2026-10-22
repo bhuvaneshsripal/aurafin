@@ -5,7 +5,6 @@ import { useEffect } from 'react';
  * Shared across every caller so overlays can open and close in any order.
  */
 let lockCount = 0;
-let bodyOverflowBeforeLock = '';
 let htmlOverflowBeforeLock = '';
 let lockedScrollY = 0;
 let pinScroll: (() => void) | null = null;
@@ -14,11 +13,11 @@ let pinScroll: (() => void) | null = null;
  * Locks page scrolling while `active` is true. Used by every overlay (modals,
  * the quick-add menu, the bottom-nav sheet, search, etc.).
  *
- * Why <html> as well as <body>: index.css sets `overflow-x: clip` on <html>.
+ * Why <html> and not <body>: index.css sets `overflow-x: clip` on <html>.
  * Once <html> has a non-visible overflow, the browser stops propagating
- * <body>'s overflow to the viewport, so `body { overflow: hidden }` alone
- * does NOT stop the page scrolling — the background kept moving under every
- * modal. The lock therefore has to be applied to <html> (the real scroller).
+ * <body>'s overflow to the viewport, so `body { overflow: hidden }` does
+ * NOT stop the page scrolling — and it also breaks sticky positioning of the
+ * sidebar/top bar. The lock is therefore applied to <html> only.
  *
  * The scroll position is also pinned as a safety net (some mobile browsers
  * still let a gesture nudge the document), so the page behind never moves.
@@ -34,11 +33,16 @@ export function useBodyScrollLock(active: boolean) {
 
     if (lockCount === 0) {
       const html = document.documentElement;
-      bodyOverflowBeforeLock = document.body.style.overflow;
       htmlOverflowBeforeLock = html.style.overflow;
       lockedScrollY = window.scrollY;
       html.style.overflow = 'hidden';
-      document.body.style.overflow = 'hidden';
+      // Deliberately NOT setting overflow on <body>: once <html> has a
+      // non-visible overflow, <body>'s overflow no longer propagates to the
+      // viewport, so `body { overflow: hidden }` would turn <body> into its
+      // own (non-scrolling) scroll container. Every `position: sticky`
+      // element inside it (sidebar, top bar) then stops sticking and scrolls
+      // away with the page — the Edit Asset panel opened over a page with
+      // the sidebar/top bar shifted up. Locking <html> alone is enough.
       pinScroll = () => {
         if (window.scrollY !== lockedScrollY) {
           window.scrollTo({ top: lockedScrollY, behavior: 'instant' });
@@ -54,7 +58,6 @@ export function useBodyScrollLock(active: boolean) {
         if (pinScroll) window.removeEventListener('scroll', pinScroll);
         pinScroll = null;
         document.documentElement.style.overflow = htmlOverflowBeforeLock;
-        document.body.style.overflow = bodyOverflowBeforeLock;
       }
     };
   }, [active]);

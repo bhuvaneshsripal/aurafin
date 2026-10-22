@@ -816,6 +816,28 @@ html[data-swipe='prev'] .animate-page-in {
 .animate-detail-out { animation: detail-out 200ms ease-in both; pointer-events: none; }
 .animate-list-return { animation: list-return 220ms var(--ease-out) both; }
 
+/* Exit counterparts for dialogs, panels and sheets: clicking an item plays
+   the "-in" animation, closing it plays the matching "-out" before unmount
+   (see useExitPresence). */
+@keyframes backdrop-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes menu-out {
+  from { opacity: 1; transform: scale(1) translate3d(0, 0, 0); }
+  to { opacity: 0; transform: scale(0.97) translate3d(0, 6px, 0); }
+}
+@keyframes sheet-out {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(0, 100%, 0); }
+}
+.animate-backdrop-out { animation: backdrop-out 160ms ease-in both; pointer-events: none; }
+.animate-menu-out { animation: menu-out 160ms ease-in both; }
+.animate-sheet-out { animation: sheet-out 180ms ease-in both; }
+/* Dialogs also grow in slightly, so in/out read as one gesture. */
+@keyframes dialog-in {
+  from { opacity: 0; transform: scale(0.96) translate3d(0, 8px, 0); }
+  to { opacity: 1; transform: scale(1) translate3d(0, 0, 0); }
+}
+.animate-dialog-in { animation: dialog-in var(--dur-base) var(--ease-out) both; }
+
 /* Respect the OS "reduce motion" setting. */
 @media (prefers-reduced-motion: reduce) {
   html[data-swipe] .animate-page-in {
@@ -823,6 +845,10 @@ html[data-swipe='prev'] .animate-page-in {
   }
   .animate-detail-in,
   .animate-detail-out,
+  .animate-backdrop-out,
+  .animate-menu-out,
+  .animate-sheet-out,
+  .animate-dialog-in,
   .animate-list-return,
   .animate-shake,
   .animate-page-in,

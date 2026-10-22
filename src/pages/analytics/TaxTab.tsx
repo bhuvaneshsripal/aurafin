@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Download } from 'lucide-react';
 import { Badge, Button, Card, CardHeader, EmptyState, Input, SegmentedControl, StatCard, Table, TableContainer, TBody, Td, Th, THead, Tr } from '../../components/ui';
 import Amount from '../../components/Amount';
+import { hideNumber } from '../../utils/privateFormat';
 import { useAnalyticsSettingsStore } from '../../store/analyticsSettingsStore';
 import { computeHoldingPnl, isInvestmentHolding } from '../../utils/investmentPnl';
 import { resolveAssetValues } from '../../utils/assetValues';
@@ -136,7 +137,7 @@ export default function TaxTab({ data }: { data: AnalyticsData }) {
             <LotList title="Tax-loss harvesting" description="Unrealised losses you could book to offset gains" lots={harvestLosses} currency={currency} tone="negative" />
           )}
           {harvestGains.length > 0 && exemptionLeft > 0 && (
-            <LotList title="Gain harvesting" description={`Long-term equity gains you can book tax-free, up to the ${exemptionLeft.toLocaleString('en-IN')} left in this year's exemption`} lots={harvestGains} currency={currency} tone="positive" />
+            <LotList title="Gain harvesting" description={`Long-term equity gains you can book tax-free, up to the ${hideNumber(exemptionLeft.toLocaleString('en-IN'))} left in this year's exemption`} lots={harvestGains} currency={currency} tone="positive" />
           )}
           {turningLong.length > 0 && (
             <LotList title="Turning long-term soon" description="Wait for these to cross the long-term line before selling" lots={turningLong} currency={currency} tone="positive" showDays />

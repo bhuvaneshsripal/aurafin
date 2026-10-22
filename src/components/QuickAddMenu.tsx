@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { hideNumber } from '../utils/privateFormat';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -344,15 +345,15 @@ function SnapshotForm({ onDone }: { onDone: () => void }) {
       <div className="bg-slate-50 dark:bg-slate-700 rounded-lg p-4 text-sm space-y-1">
         <div className="flex justify-between">
           <span className="text-slate-500">Total Assets</span>
-          <span className="font-medium text-ink">{totalAssets.toLocaleString(undefined, { useGrouping: true })}</span>
+          <span className="font-medium text-ink">{hideNumber(totalAssets.toLocaleString(undefined, { useGrouping: true }))}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-slate-500">Total Liabilities</span>
-          <span className="font-medium text-ink">{totalLiabilities.toLocaleString(undefined, { useGrouping: true })}</span>
+          <span className="font-medium text-ink">{hideNumber(totalLiabilities.toLocaleString(undefined, { useGrouping: true }))}</span>
         </div>
         <div className="flex justify-between border-t border-slate-200 dark:border-slate-600 pt-1 mt-1">
           <span className="text-slate-500">Net Worth</span>
-          <span className="font-semibold text-ink">{netWorth.toLocaleString(undefined, { useGrouping: true })}</span>
+          <span className="font-semibold text-ink">{hideNumber(netWorth.toLocaleString(undefined, { useGrouping: true }))}</span>
         </div>
       </div>
       <button onClick={submit} className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white">

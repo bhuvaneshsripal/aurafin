@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { hideNumber } from '../../utils/privateFormat';
 import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, AlertTriangle, Sparkles, X } from 'lucide-react';
 import {
   PieChart,
@@ -55,7 +56,7 @@ function Delta({ pct, goodWhenDown }: { pct: number | undefined; goodWhenDown?: 
   return (
     <span className={cn('inline-flex items-center gap-0.5 text-xs font-medium', good ? 'text-positive' : 'text-negative')}>
       {up ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-      {Math.abs(pct).toFixed(0)}% vs last month
+      {hideNumber(`${Math.abs(pct).toFixed(0)}%`)} vs last month
     </span>
   );
 }
@@ -187,13 +188,13 @@ export default function InsightsTab() {
     const prevExp = groupByCategory(prevTx, 'expense');
     if (expense > 0 && expCats.length) {
       const top = expCats.map(([, c]) => c).sort((a, b) => b.value - a.value)[0];
-      out.push({ tone: 'info', text: `${top.name} is your biggest expense — ${((top.value / expense) * 100).toFixed(0)}% of this month's spending.` });
+      out.push({ tone: 'info', text: `${top.name} is your biggest expense — ${hideNumber(`${((top.value / expense) * 100).toFixed(0)}%`)} of this month's spending.` });
     }
     const risers = expCats
       .map(([k, c]) => ({ ...c, change: pctChange(c.value, prevExp.get(k)?.value ?? 0), prev: prevExp.get(k)?.value ?? 0 }))
       .filter((c) => c.change !== undefined && c.change >= 25 && c.value - c.prev >= 500)
       .sort((a, b) => b.value - b.prev - (a.value - a.prev));
-    if (risers[0]) out.push({ tone: 'warn', text: `${risers[0].name} is up ${risers[0].change!.toFixed(0)}% from last month.` });
+    if (risers[0]) out.push({ tone: 'warn', text: `${risers[0].name} is up ${hideNumber(`${risers[0].change!.toFixed(0)}%`)} from last month.` });
     if (overBudget.length) out.push({ tone: 'warn', text: `Over budget in ${overBudget.length} ${overBudget.length === 1 ? 'category' : 'categories'}: ${overBudget.slice(0, 3).map((c) => c.name).join(', ')}.` });
     if (projected !== undefined && planned > 0 && projected > planned) {
       out.push({ tone: 'warn', text: `At this pace you'll spend about ${money(projected)} by month end — ${money(projected - planned)} over your ${money(planned)} budget.` });
@@ -203,10 +204,10 @@ export default function InsightsTab() {
     if (savingsRate !== undefined) {
       out.push(
         savingsRate >= 20
-          ? { tone: 'good', text: `You're saving ${savingsRate.toFixed(0)}% of your income this month.` }
+          ? { tone: 'good', text: `You're saving ${hideNumber(`${savingsRate.toFixed(0)}%`)} of your income this month.` }
           : savingsRate < 0
             ? { tone: 'warn', text: `Spending is ${money(-net)} more than income this month.` }
-            : { tone: 'info', text: `Savings rate is ${savingsRate.toFixed(0)}% — the common target is 20% or more.` }
+            : { tone: 'info', text: `Savings rate is ${hideNumber(`${savingsRate.toFixed(0)}%`)} — the common target is 20% or more.` }
       );
     }
     if (daysElapsed >= 7 && noSpendDays >= 3) out.push({ tone: 'good', text: `${noSpendDays} no-spend days so far this month.` });
@@ -276,7 +277,7 @@ export default function InsightsTab() {
               <LoadingDots />
             )}
           </p>
-          {savingsRate !== undefined && <p className="text-xs text-muted">Savings rate {savingsRate.toFixed(0)}%</p>}
+          {savingsRate !== undefined && <p className="text-xs text-muted">Savings rate {hideNumber(`${savingsRate.toFixed(0)}%`)}</p>}
         </div>
         <div className="bg-surface rounded-2xl border border-line p-4">
           <p className="text-sm text-muted">Budget</p>
@@ -290,7 +291,7 @@ export default function InsightsTab() {
                 />
               </div>
               <p className="text-xs text-muted mt-1">
-                {budgetUsedPct.toFixed(0)}% used ·{' '}
+                {hideNumber(`${budgetUsedPct.toFixed(0)}%`)} used ·{' '}
                 {expense <= planned ? (
                   <>
                     <Amount value={planned - expense} /> left
@@ -443,10 +444,10 @@ export default function InsightsTab() {
                             (flow === 'expense' ? c.change > 0 : c.change < 0) ? 'text-negative' : 'text-positive'
                           )}
                         >
-                          {c.change > 0 ? '▲' : '▼'} {Math.abs(c.change).toFixed(0)}%
+                          {c.change > 0 ? '▲' : '▼'} {hideNumber(`${Math.abs(c.change).toFixed(0)}%`)}
                         </span>
                       )}
-                      <span className="text-xs text-muted w-10 text-right">{c.share.toFixed(0)}%</span>
+                      <span className="text-xs text-muted w-10 text-right">{hideNumber(`${c.share.toFixed(0)}%`)}</span>
                       <span className="text-sm font-medium text-ink whitespace-nowrap w-24 text-right">
                         <Amount value={c.value} />
                       </span>
@@ -460,7 +461,7 @@ export default function InsightsTab() {
                           />
                         </div>
                         <span className="text-[11px] text-muted whitespace-nowrap">
-                          {budgetPct.toFixed(0)}% of <Amount value={c.budget!} />
+                          {hideNumber(`${budgetPct.toFixed(0)}%`)} of <Amount value={c.budget!} />
                         </span>
                       </div>
                     )}

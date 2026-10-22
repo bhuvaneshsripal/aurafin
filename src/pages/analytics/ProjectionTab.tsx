@@ -3,7 +3,7 @@ import { ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, Cartesian
 import { Card, CardHeader, Input, StatCard, chart } from '../../components/ui';
 import Amount from '../../components/Amount';
 import { useFinancialProfileStore } from '../../store/financialProfileStore';
-import { formatAxisAmount, formatCompact } from '../../utils/currency';
+import { formatAxisAmount, formatCompact, hideNumber } from '../../utils/privateFormat';
 import { runProjection, suggestAssumptions } from '../../utils/projection';
 import type { AnalyticsData } from './useAnalyticsData';
 
@@ -88,7 +88,7 @@ export default function ProjectionTab({ data }: { data: AnalyticsData }) {
         <StatCard label="Bad case (10th pct)" value={<Amount value={result.finalP10} currency={currency} />} sublabel="9 in 10 runs did better" />
         <StatCard label="Good case (90th pct)" value={<Amount value={result.finalP90} currency={currency} />} sublabel="1 in 10 runs did better" />
         {hasTarget ? (
-          <StatCard label="Chance of hitting target" value={`${prob}%`} tone={probTone} sublabel={result.medianYearsToTarget !== undefined ? `typically in ~${result.medianYearsToTarget} yrs` : 'not within the horizon in most runs'} />
+          <StatCard label="Chance of hitting target" value={hideNumber(`${prob}%`)} tone={probTone} sublabel={result.medianYearsToTarget !== undefined ? `typically in ~${result.medianYearsToTarget} yrs` : 'not within the horizon in most runs'} />
         ) : (
           <StatCard label="Target" value="Not set" sublabel="add one above" />
         )}

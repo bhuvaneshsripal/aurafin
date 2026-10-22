@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, useEffect } from 'react';
+import { hideNumber } from '../../utils/privateFormat';
 import {
   Plus,
   Trash2,
@@ -132,7 +133,7 @@ function pctChange(cur: number, prev: number): { value: string; up: boolean } | 
   if (!(prev > 0)) return undefined;
   const p = ((cur - prev) / prev) * 100;
   if (!Number.isFinite(p)) return undefined;
-  return { value: `${Math.abs(p).toFixed(0)}%`, up: p >= 0 };
+  return { value: hideNumber(`${Math.abs(p).toFixed(0)}%`) as string, up: p >= 0 };
 }
 
 // -------------------------------------------------------------------- tab --
@@ -477,7 +478,7 @@ export default function TransactionsTab() {
           loading={!cashflowDataKnown}
           tone={net >= 0 ? 'default' : 'negative'}
           value={<Amount value={net} />}
-          sublabel={savingsRate !== undefined ? `Savings rate ${savingsRate.toFixed(0)}%` : undefined}
+          sublabel={savingsRate !== undefined ? `Savings rate ${hideNumber(`${savingsRate.toFixed(0)}%`)}` : undefined}
         />
       </div>
 
@@ -508,7 +509,7 @@ export default function TransactionsTab() {
                     <div className="flex items-center justify-between text-sm mb-1">
                       <span className={cn('font-medium', categoryFilter === c.key ? 'text-brand-700' : 'text-ink')}>{c.name}</span>
                       <span className="font-numeric text-muted">
-                        <Amount value={c.total} /> · {pct.toFixed(0)}%
+                        <Amount value={c.total} /> · {hideNumber(`${pct.toFixed(0)}%`)}
                       </span>
                     </div>
                     <div className="h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">

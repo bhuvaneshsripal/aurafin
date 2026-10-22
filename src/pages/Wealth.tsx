@@ -1,4 +1,4 @@
-import { Suspense, useState, useEffect, useLayoutEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import { Suspense, useState, useEffect, useLayoutEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -102,14 +102,8 @@ import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { ACCOUNT_TYPES, resolveAccountIcon, type AccountType } from '../utils/accountVisuals';
 import type { Asset, AssetClass, DividendKind, Liability, LiabilityClass, Snapshot, Transaction } from '../types';
 import { useTransactionsStore } from '../store/transactionsStore';
-import {
-  formatPreciseCurrency,
-  formatAxisAmount,
-  formatPercentMagnitude,
-  formatSignedCurrency,
-  maskPreciseAmount,
-  maskAmount,
-} from '../utils/currency';
+import { maskPreciseAmount, maskAmount } from '../utils/currency';
+import { formatPreciseCurrency, formatAxisAmount, formatPercentMagnitude, formatSignedCurrency, hideNumber } from '../utils/privateFormat';
 import {
   ASSET_TAXONOMY,
   LIABILITY_TAXONOMY,
@@ -1166,13 +1160,14 @@ function AssetsTab({
   // *then* jumps to the restored position on the next tick — a visible
   // flash-then-jump that looks like the scroll position isn't being kept.
   // Setting it pre-paint lands directly on the right spot with no flash.
+  const inSubPage = !!viewingAsset || (modalOpen && !!editing);
   useLayoutEffect(() => {
-    if (viewingAsset) {
+    if (inSubPage) {
       window.scrollTo({ top: 0, behavior: 'instant' });
     } else {
       window.scrollTo({ top: listScrollPosRef.current, behavior: 'instant' });
     }
-  }, [viewingAsset]);
+  }, [inSubPage]);
   const [holdingsMenuOpenId, setHoldingsMenuOpenId] = useState<string | null>(null);
   // Whether the currently-open row menu should render above its "..." button
   // instead of below. Rows near the bottom of the screen (e.g. the last
@@ -1773,9 +1768,27 @@ function AssetsTab({
     : sortedRows;
 
   const openEdit = (a: Asset) => {
+    // Remember the list's scroll spot (unless we came from a detail page,
+    // which already saved it) so Back returns to the same place.
+    if (!viewingAsset) listScrollPosRef.current = window.scrollY;
     setEditing(a);
     setModalOpen(true);
   };
+
+  // Edit Asset is a normal page inside the content area (sidebar and top bar
+  // stay in place), not an overlay.
+  if (modalOpen && editing) {
+    return (
+      <div className="animate-detail-in">
+        <AssetDetailsForm
+          key={editing.id}
+          initial={editing}
+          onSave={handleSave}
+          onClose={() => setModalOpen(false)}
+        />
+      </div>
+    );
+  }
 
   if (viewingAsset) {
     const live = assets.find((x) => x.id === viewingAsset.id) ?? viewingAsset;
@@ -2416,7 +2429,7 @@ function AssetsTab({
                       qty > 0
                         ? WEIGHT_TRACKED_CLASSES.has(a.assetClass)
                           ? `${formatGrams(qty)} g`
-                          : qty.toLocaleString('en-IN', { maximumFractionDigits: 4 })
+                          : hideNumber(qty.toLocaleString('en-IN', { maximumFractionDigits: 4 }))
                         : '—';
                     const isBeingDragged = draggingId === a.id;
                     const pending = isAssetLivePriced(a) && !totalsReady;
@@ -2535,7 +2548,7 @@ function AssetsTab({
                             skeleton
                           ) : (
                             <div className="flex flex-col items-end gap-1.5">
-                              <span className="font-normal text-ink-2">{r.alloc.toFixed(1)}%</span>
+                              <span className="font-normal text-ink-2">{hideNumber(`${r.alloc.toFixed(1)}%`)}</span>
                               <span className="block h-1 w-16 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                                 <span
                                   className="block h-full rounded-full bg-brand-500"
@@ -2669,10 +2682,6 @@ function AssetsTab({
           document.body
         );
       })()}
-
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Edit Asset" contentPanel hideHeader>
-        {editing && <AssetDetailsForm initial={editing} onSave={handleSave} onClose={() => setModalOpen(false)} />}
-      </Modal>
 
       <Modal
         open={!!confirmDeleteAsset}
@@ -3380,6 +3389,12 @@ function HoldingDetailView({
   const previousCloses = useLivePricesStore((s) => s.previousCloses);
   const liveGoldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
   const privacyMode = useUiStore((s) => s.privacyMode);
+  // Eye closed => every figure on this page is hidden, not just the totals.
+  const HIDDEN = '••••••';
+  const mPrecise = (v: number, c: string) => (privacyMode ? HIDDEN : formatPreciseCurrency(v, c));
+  const mSigned = (v: number, c: string, d?: number) => (privacyMode ? HIDDEN : formatSignedCurrency(v, c, d));
+  const mPct = (v: number, d?: number) => (privacyMode ? '•••' : formatPercentMagnitude(v, d));
+  const mNum = (v: ReactNode) => (privacyMode ? '•••' : v);
   const dayChangeResetActive = useDayChangeResetWindow();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const allTransactions = useTransactionsStore((s) => s.transactions);
@@ -3542,17 +3557,20 @@ function HoldingDetailView({
       {/* Symbol row — name + last price/day-change, styled after a
           brokerage app's holding header. */}
       <div className="flex items-center gap-3 px-1">
+        {asset.symbol && MARKET_SELECTABLE_CLASSES.has(asset.assetClass) && (
+          <CompanyLogo symbol={asset.symbol} name={asset.name} market={asset.market ?? 'IN'} isin={asset.isin} size={44} />
+        )}
         <div className="min-w-0 flex-1">
           <p className="text-lg sm:text-xl font-semibold text-ink truncate">
             {asset.symbol || asset.name}
           </p>
           <p className="text-sm mt-0.5">
             {currentPrice !== undefined && (
-              <span className="text-slate-600">{formatPreciseCurrency(currentPrice, asset.currency)}</span>
+              <span className="text-slate-600">{mPrecise(currentPrice, asset.currency)}</span>
             )}
             {dayChangePerUnit !== undefined && dayChangePercent !== undefined && (
               <span className={`ml-1.5 font-medium ${dayChangePerUnit >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                {formatSignedCurrency(dayChangePerUnit, asset.currency)} ({formatPercentMagnitude(dayChangePercent)})
+                {mSigned(dayChangePerUnit, asset.currency)} ({mPct(dayChangePercent)})
               </span>
             )}
           </p>
@@ -3582,8 +3600,8 @@ function HoldingDetailView({
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-600 dark:text-slate-300">Unrealised returns</span>
               <span className={`font-semibold ${positive ? 'text-emerald-600' : 'text-red-500'}`}>
-                {formatSignedCurrency(pnl, asset.currency)}
-                {invested ? ` (${formatPercentMagnitude((pnl / invested) * 100)})` : ''}
+                {mSigned(pnl, asset.currency)}
+                {invested ? ` (${mPct((pnl / invested) * 100)})` : ''}
               </span>
             </div>
           )}
@@ -3599,7 +3617,7 @@ function HoldingDetailView({
               <div className="flex items-center justify-between text-sm">
                 <span className="text-slate-600 dark:text-slate-300">Daily interest (avg)</span>
                 <span className="font-semibold text-emerald-600">
-                  {formatSignedCurrency(
+                  {mSigned(
                     pnl / Math.max(1, Math.floor((Date.now() - new Date(asset.startDate).getTime()) / (24 * 60 * 60 * 1000))),
                     asset.currency
                   )}
@@ -3607,7 +3625,7 @@ function HoldingDetailView({
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-slate-600 dark:text-slate-300">Total interest earned</span>
-                <span className="font-semibold text-emerald-600">{formatSignedCurrency(pnl, asset.currency)}</span>
+                <span className="font-semibold text-emerald-600">{mSigned(pnl, asset.currency)}</span>
               </div>
             </>
           )}
@@ -3615,7 +3633,7 @@ function HoldingDetailView({
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-600 dark:text-slate-300">1D returns</span>
               <span className={`font-semibold ${dayChangeTotal >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                {formatSignedCurrency(dayChangeTotal, asset.currency)} ({formatPercentMagnitude(dayChangePercent)})
+                {mSigned(dayChangeTotal, asset.currency)} ({mPct(dayChangePercent)})
               </span>
             </div>
           )}
@@ -3626,7 +3644,7 @@ function HoldingDetailView({
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-600 dark:text-slate-300">Mkt price</span>
               <span className="font-semibold text-ink">
-                {formatPreciseCurrency(currentPrice, asset.currency)}
+                {mPrecise(currentPrice, asset.currency)}
               </span>
             </div>
           )}
@@ -3634,7 +3652,7 @@ function HoldingDetailView({
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-600 dark:text-slate-300">Avg price</span>
               <span className="font-semibold text-ink">
-                {formatPreciseCurrency(asset.avgCost, asset.currency)}
+                {mPrecise(asset.avgCost, asset.currency)}
               </span>
             </div>
           )}
@@ -3642,7 +3660,7 @@ function HoldingDetailView({
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-600 dark:text-slate-300">Total qty</span>
               <span className="font-semibold text-ink">
-                {WEIGHT_TRACKED_CLASSES.has(asset.assetClass) ? `${formatGrams(qty)} g` : qty}
+                {mNum(WEIGHT_TRACKED_CLASSES.has(asset.assetClass) ? `${formatGrams(qty)} g` : qty)}
               </span>
             </div>
           )}
@@ -3655,7 +3673,7 @@ function HoldingDetailView({
                 <span className="text-slate-600 dark:text-slate-300 flex items-center gap-1">
                   XIRR <Info size={12} className="text-slate-300" />
                 </span>
-                <span className="font-semibold text-ink">{xirr.toFixed(2)}%</span>
+                <span className="font-semibold text-ink">{mNum(`${xirr.toFixed(2)}%`)}</span>
               </div>
             </div>
           </>
@@ -3713,7 +3731,7 @@ function HoldingDetailView({
           <div className="divide-y divide-line-soft">
             {orderedLots.map((lot, i) => {
               const isWeight = WEIGHT_TRACKED_CLASSES.has(asset.assetClass);
-              const qtyLabel = isWeight ? `${formatGrams(lot.qty)}g` : `${lot.qty} qty`;
+              const qtyLabel = privacyMode ? '••• qty' : isWeight ? `${formatGrams(lot.qty)}g` : `${lot.qty} qty`;
 
               if (breakdownMode === 'returns') {
                 const lotCurrentPrice = currentPrice ?? lot.price;
@@ -3731,7 +3749,7 @@ function HoldingDetailView({
                     </div>
                     <div className="text-right">
                       <p className={`text-sm font-semibold ${lotPositive ? 'text-emerald-600' : 'text-red-500'}`}>
-                        {formatSignedCurrency(lotPnl, asset.currency)} ({formatPercentMagnitude(lotPnlPercent)})
+                        {mSigned(lotPnl, asset.currency)} ({mPct(lotPnlPercent)})
                       </p>
                       <p className="text-xs text-slate-600 mt-0.5">
                         {ageDays !== undefined ? `${ageDays} day${ageDays === 1 ? '' : 's'}` : '—'}
@@ -3751,10 +3769,10 @@ function HoldingDetailView({
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-semibold text-ink">
-                      {formatPreciseCurrency(displayPrice, asset.currency)}
+                      {mPrecise(displayPrice, asset.currency)}
                     </p>
                     <p className="text-xs text-slate-600 mt-0.5">
-                      ({formatPreciseCurrency(displayAmount, asset.currency)})
+                      ({mPrecise(displayAmount, asset.currency)})
                     </p>
                   </div>
                 </div>
@@ -3779,15 +3797,15 @@ function HoldingDetailView({
             <div className="grid grid-cols-3 gap-3 mb-4">
               <div>
                 <p className="text-xs text-muted">Total received</p>
-                <p className="text-sm font-semibold text-emerald-600">{formatPreciseCurrency(totalNet, asset.currency)}</p>
+                <p className="text-sm font-semibold text-emerald-600">{mPrecise(totalNet, asset.currency)}</p>
               </div>
               <div>
                 <p className="text-xs text-muted">Last 12 months</p>
-                <p className="text-sm font-semibold text-ink">{formatPreciseCurrency(ttmGross, asset.currency)}</p>
+                <p className="text-sm font-semibold text-ink">{mPrecise(ttmGross, asset.currency)}</p>
               </div>
               <div>
                 <p className="text-xs text-muted">Yield on cost</p>
-                <p className="text-sm font-semibold text-ink">{ttmYield !== undefined ? `${ttmYield.toFixed(2)}%` : '—'}</p>
+                <p className="text-sm font-semibold text-ink">{ttmYield !== undefined ? mNum(`${ttmYield.toFixed(2)}%`) : '—'}</p>
               </div>
             </div>
             <div className="divide-y divide-line">
@@ -3800,14 +3818,14 @@ function HoldingDetailView({
                     </p>
                     <p className="text-xs text-slate-600 mt-0.5 truncate">
                       {t.dividend?.perShare !== undefined
-                        ? `${formatPreciseCurrency(t.dividend.perShare, asset.currency)} × ${t.dividend.qty}`
+                        ? `${mPrecise(t.dividend.perShare, asset.currency)} × ${privacyMode ? '•••' : t.dividend.qty}`
                         : 'Total amount'}
-                      {t.dividend && t.dividend.tds > 0 ? ` · TDS ${formatPreciseCurrency(t.dividend.tds, asset.currency)}` : ''}
+                      {t.dividend && t.dividend.tds > 0 ? ` · TDS ${mPrecise(t.dividend.tds, asset.currency)}` : ''}
                       {t.dividend?.exDate ? ` · Ex ${formatDate(t.dividend.exDate)}` : ''}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <p className="text-sm font-semibold text-emerald-600">+{formatPreciseCurrency(t.amount, asset.currency)}</p>
+                    <p className="text-sm font-semibold text-emerald-600">+{mPrecise(t.amount, asset.currency)}</p>
                     {onDeleteDividend && (
                       <button
                         type="button"
@@ -4344,9 +4362,9 @@ function BuySellDividendModal({
                   <div className="border-t border-line pt-1.5 space-y-1">
                     <p className="text-xs text-muted">
                       Tax lots (FIFO):{' '}
-                      {sellPreview.shortQty > 0 && `${+sellPreview.shortQty.toFixed(4)} short-term`}
+                      {sellPreview.shortQty > 0 && `${hideNumber(+sellPreview.shortQty.toFixed(4))} short-term`}
                       {sellPreview.shortQty > 0 && sellPreview.longQty > 0 && ' · '}
-                      {sellPreview.longQty > 0 && `${+sellPreview.longQty.toFixed(4)} long-term`}
+                      {sellPreview.longQty > 0 && `${hideNumber(+sellPreview.longQty.toFixed(4))} long-term`}
                     </p>
                     <div className="flex justify-between">
                       <span className="text-muted">Est. capital-gains tax</span>
@@ -4472,7 +4490,7 @@ function BuySellDividendModal({
                 </div>
                 {divYieldOnCost !== undefined && (
                   <p className="text-xs text-muted pt-0.5">
-                    Adds {divYieldOnCost.toFixed(2)}% yield on your invested cost.
+                    Adds {hideNumber(`${divYieldOnCost.toFixed(2)}%`)} yield on your invested cost.
                   </p>
                 )}
               </div>
@@ -5793,16 +5811,16 @@ function AssetDetailsForm({
   );
 
   return (
-    <div className="space-y-4">
-      {onClose ? (
-        <div className="flex items-start justify-between gap-3 -mx-4 sm:-mx-6 -mt-5 mb-1 px-4 sm:px-6 py-4 bg-[#F2E4CC] dark:bg-[#3A3020] border-b border-[#E3CBA0] dark:border-[#5A4A2E]">
+    <div className={onClose ? 'space-y-5' : 'space-y-4'}>
+      {onClose && (
+        <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-xl font-bold text-ink">Edit Asset</h2>
+            <h2 className="text-2xl font-bold text-ink tracking-tight">Edit Asset</h2>
             <p className="text-muted text-sm mt-0.5">
               {ASSET_CLASS_LABELS[assetClass] ?? assetClass}
             </p>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-3 shrink-0">
             <button
               onClick={onClose}
               className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-brand-600"
@@ -5820,15 +5838,15 @@ function AssetDetailsForm({
             </button>
           </div>
         </div>
-      ) : (
-        onBack && (
+      )}
+      <div className={onClose ? 'bg-surface border border-line rounded-2xl p-4 sm:p-6 space-y-4 max-w-[860px]' : 'space-y-4'}>
+      {!onClose && onBack && (
           <button
             onClick={onBack}
             className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-brand-600 -mt-1"
           >
             <ArrowLeft size={16} /> Back to asset type
           </button>
-        )
       )}
       {isUnitTracked && nameCurrencyField}
       <div className={isMarketSelectable ? 'grid grid-cols-2 gap-3 items-start' : ''}>
@@ -5861,6 +5879,8 @@ function AssetDetailsForm({
               <button
                 type="button"
                 onClick={() => setAssetTypeEditing(true)}
+                aria-label="Change asset type"
+                title="Change asset type"
                 className="w-full min-h-10 sm:min-h-9 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-1.5 text-left"
               >
                 <span className="flex items-center gap-2 min-w-0">
@@ -5874,7 +5894,7 @@ function AssetDetailsForm({
                     {ASSET_CLASS_LABELS[assetClass] ?? assetClass}
                   </span>
                 </span>
-                <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400 shrink-0 ml-auto">Change</span>
+                <ChevronDown size={16} className="text-emerald-700 dark:text-emerald-400 shrink-0 ml-auto" aria-hidden />
               </button>
             )}
           </Field>
@@ -5906,8 +5926,8 @@ function AssetDetailsForm({
               onChange={(v) => setMarket(v as 'IN' | 'US')}
               className={`${inputClass} bg-white text-ink-2`}
               options={[
-                { value: 'IN', label: '🇮🇳 India (NSE / BSE)' },
-                { value: 'US', label: '🇺🇸 United States (NASDAQ / NYSE)' },
+                { value: 'IN', label: 'IND · NSE / BSE' },
+                { value: 'US', label: 'US · NASDAQ / NYSE' },
               ]}
             />
           </Field>
@@ -7039,6 +7059,7 @@ function AssetDetailsForm({
           Save Asset
         </button>
       )}
+      </div>
     </div>
   );
 }
@@ -7818,7 +7839,7 @@ function AllocationChart({
             <div className="text-right shrink-0 font-numeric">
               <span className="text-ink font-semibold">{formatPreciseCurrency(d.value)}</span>
               <span className="text-muted font-normal ml-2 inline-block w-12">
-                {total > 0 ? ((d.value / total) * 100).toFixed(1) : '0.0'}%
+                {hideNumber(`${total > 0 ? ((d.value / total) * 100).toFixed(1) : '0.0'}%`)}
               </span>
             </div>
           </li>

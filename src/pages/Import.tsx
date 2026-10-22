@@ -11,7 +11,7 @@ import { useAssetsStore } from '../store/assetsStore';
 import { bulkUpsertDocs } from '../hooks/useFirestoreSync';
 import { parseSpreadsheetFile, rowsToAssets, type ParsedRow } from '../utils/importParser';
 import { fetchLiveQuotes, type LiveQuoteDetail } from '../utils/marketPrices';
-import { formatCurrency, formatPreciseCurrency } from '../utils/currency';
+import { formatCurrency, formatPreciseCurrency, hideNumber } from '../utils/privateFormat';
 import { ASSET_TAXONOMY } from '../utils/taxonomy';
 import { exportToCsv, exportToXlsx, IMPORT_TEMPLATE_ROWS } from '../utils/exportCsv';
 import { takePendingImportFile } from '../utils/pendingImportFile';
@@ -526,7 +526,7 @@ export default function Import() {
                           {r.pnlPercent !== undefined && (
                             <span className="text-xs ml-1">
                               ({r.pnl >= 0 ? '+' : ''}
-                              {r.pnlPercent.toFixed(2)}%)
+                              {hideNumber(r.pnlPercent.toFixed(2))}%)
                             </span>
                           )}
                         </span>
