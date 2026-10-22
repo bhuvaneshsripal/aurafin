@@ -1009,14 +1009,17 @@ html[data-vv-pan] #app-marquee {
     position: fixed;
     /* Slides down under the "new update" notice (--update-h) when it shows. */
     top: var(--update-h, 0px);
+    transition: top 220ms cubic-bezier(0.22, 1, 0.36, 1);
     left: 0;
     right: 0;
     z-index: 30;
   }
   .app-scale {
     padding-top: calc(var(--topbar-h, 3.5rem) + var(--update-h, 0px));
+    transition: padding-top 220ms cubic-bezier(0.22, 1, 0.36, 1);
   }
   #app-marquee {
     top: calc(3.5rem + var(--update-h, 0px));
+    transition: top 220ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 }

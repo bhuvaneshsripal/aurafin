@@ -4,6 +4,7 @@ import { ArrowRight, RefreshCw, X } from 'lucide-react';
 import { useExitPresence } from '../hooks/useExitPresence';
 import { hardRefresh } from '../utils/hardRefresh';
 import { useUpdateStore } from '../store/updateStore';
+import { useSwipeDismiss } from '../hooks/useSwipeDismiss';
 
 const CHECK_EVERY_MS = 5 * 60 * 1000;
 
@@ -53,6 +54,11 @@ export default function UpdateBanner() {
   }, [needRefresh, setUpdateAvailable]);
 
   const { mounted, closing } = useExitPresence(needRefresh, 180);
+  // Swipe left / right / up to put the notice away.
+  const swipe = useSwipeDismiss(() => setNeedRefresh(false), 'up');
+  useEffect(() => {
+    if (needRefresh) swipe.reset();
+  }, [needRefresh, swipe.reset]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // On phones the top bar and the index strip are pinned to the screen, so
   // the notice reserves its own height (--update-h) and they slide down by
@@ -96,7 +102,9 @@ export default function UpdateBanner() {
       <div
         role="status"
         aria-live="polite"
-        className={`${closing ? 'animate-menu-out' : 'animate-dialog-in'} relative mx-auto w-full max-w-[1240px] overflow-hidden flex items-center gap-3.5 sm:gap-4 rounded-[20px] bg-white dark:bg-[#1a1d1b] border border-[#e4ebe8] dark:border-white/10 pl-5 pr-3 py-3 shadow-[0_6px_22px_-8px_rgba(15,40,30,0.16)]`}
+        {...swipe.bind}
+        style={swipe.style}
+        className={`select-none ${swipe.flung ? '' : closing ? 'animate-menu-out' : 'animate-dialog-in'} relative mx-auto w-full max-w-[600px] overflow-hidden flex items-center gap-3.5 sm:gap-4 rounded-[20px] bg-white dark:bg-[#1a1d1b] border border-[#e4ebe8] dark:border-white/10 pl-5 pr-3 py-3 shadow-[0_6px_22px_-8px_rgba(15,40,30,0.16)]`}
       >
         {/* Green accent bar on the left edge */}
         <span className="absolute inset-y-0 left-0 w-[5px] bg-[#0a9a4b]" aria-hidden />
