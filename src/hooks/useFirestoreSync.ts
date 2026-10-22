@@ -299,28 +299,62 @@ export async function removeDoc(uidOrUser: string | { uid: string; isAnonymous?:
  * single doc at users/{uid}/meta/avatar. Call once near the app root
  * (alongside the other useFirestoreCollectionSync calls in DataSync).
  */
+const avatarCacheKey = (uid: string) => `aurafin-avatar:${uid}`;
+
+function readAvatarCache(uid: string): string | null {
+  try {
+    return localStorage.getItem(avatarCacheKey(uid));
+  } catch {
+    return null;
+  }
+}
+
+function writeAvatarCache(uid: string, dataUrl: string | null) {
+  try {
+    if (dataUrl) localStorage.setItem(avatarCacheKey(uid), dataUrl);
+    else localStorage.removeItem(avatarCacheKey(uid));
+  } catch {
+    // Storage full or blocked: the Firestore copy is still the source of truth.
+  }
+}
+
 export function useAvatarSync() {
-  const user = useAuthStore((s) => s.user);
+  // Depend on the uid, not the user object: the store swaps the cached user
+  // for the real Firebase user on startup, and re-subscribing on that swap
+  // briefly dropped the photo back to the default one.
+  const uid = useAuthStore((s) => s.user?.uid ?? null);
   const setDataUrl = useAvatarStore((s) => s.setDataUrl);
 
   useEffect(() => {
-    if (!user) {
+    if (!uid) {
       setDataUrl(null);
       return;
     }
-    const ref = doc(db, 'users', user.uid, 'meta', 'avatar');
+    // Show the last known photo straight away (and while offline) instead of
+    // flashing the default one until Firestore answers.
+    setDataUrl(readAvatarCache(uid));
+
+    const ref = doc(db, 'users', uid, 'meta', 'avatar');
     const unsub = onSnapshot(
       ref,
-      (snap) => setDataUrl((snap.data()?.dataUrl as string | undefined) ?? null),
-      () => setDataUrl(null)
+      (snap) => {
+        // A cache-only "doesn't exist" answer isn't trustworthy: wait for the server.
+        if (!snap.exists() && snap.metadata.fromCache) return;
+        const url = (snap.data()?.dataUrl as string | undefined) ?? null;
+        setDataUrl(url);
+        writeAvatarCache(uid, url);
+      },
+      // On a listener error keep whatever photo we already have.
+      (err) => console.error('Avatar sync error', err)
     );
     return () => unsub();
-  }, [user, setDataUrl]);
+  }, [uid, setDataUrl]);
 }
 
 /** Save (or overwrite) the user's custom profile picture. */
 export async function saveAvatar(uid: string, dataUrl: string) {
   const ref = doc(db, 'users', uid, 'meta', 'avatar');
+  writeAvatarCache(uid, dataUrl);
   await setDoc(ref, { dataUrl }, { merge: true });
 }
 
@@ -328,6 +362,7 @@ export async function saveAvatar(uid: string, dataUrl: string) {
  *  any) or initials. */
 export async function removeAvatar(uid: string) {
   const ref = doc(db, 'users', uid, 'meta', 'avatar');
+  writeAvatarCache(uid, null);
   await deleteDoc(ref);
 }
 

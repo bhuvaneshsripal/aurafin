@@ -1091,10 +1091,8 @@ function NotificationsCard() {
   );
 }
 
-/** Live "1 USD = ₹X" line for the selected base currency (INR -> INR vs USD). */
-function FxVsDollar({ currency }: { currency: string }) {
-  // Against USD itself there is nothing to compare, so show USD vs INR.
-  const quote = currency === 'USD' ? 'INR' : currency;
+/** Live "1 <compare> = <base><X>" line for the chosen pair of currencies. */
+function FxVsDollar({ base, compare }: { base: string; compare: string }) {
   const [rate, setRate] = useState<number | null | undefined>(undefined); // undefined = loading
   const [asOf, setAsOf] = useState<Date | null>(null);
   const [tick, setTick] = useState(0);
@@ -1102,7 +1100,7 @@ function FxVsDollar({ currency }: { currency: string }) {
   useEffect(() => {
     let cancelled = false;
     setRate(undefined);
-    fetchFxRate('USD', quote).then((r) => {
+    fetchFxRate(compare, base).then((r) => {
       if (cancelled) return;
       setRate(r);
       setAsOf(r ? new Date() : null);
@@ -1110,37 +1108,36 @@ function FxVsDollar({ currency }: { currency: string }) {
     return () => {
       cancelled = true;
     };
-  }, [quote, tick]);
+  }, [base, compare, tick]);
 
-  const sym = CURRENCY_SYMBOLS[quote] ?? quote;
+  const sym = CURRENCY_SYMBOLS[base] ?? base;
   const fmt = (n: number, d: number) => n.toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d });
 
   return (
-    <div className="mt-4 rounded-lg border border-line bg-surface-hover/40 px-4 py-3 flex items-center justify-between gap-3">
-      <div className="min-w-0">
-        <p className="text-xs text-muted">Exchange rate vs US Dollar</p>
-        {rate === undefined ? (
-          <p className="text-sm text-muted">Fetching live rate…</p>
-        ) : rate === null ? (
-          <p className="text-sm text-negative">Couldn't fetch the live rate. Try again.</p>
-        ) : (
-          <>
-            <p className="text-lg font-semibold text-ink">
-              1 USD = {sym}{fmt(rate, 2)}
-            </p>
-            <p className="text-xs text-muted">
-              {sym}1 = ${fmt(1 / rate, 4)}
-              {asOf && <> · updated {asOf.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</>}
-            </p>
-          </>
-        )}
-      </div>
+    <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1">
+      {rate === undefined ? (
+        <p className="text-sm text-muted">Fetching live rate…</p>
+      ) : rate === null ? (
+        <p className="text-sm text-negative">Couldn't fetch the live rate. Try again.</p>
+      ) : (
+        <>
+          <p className="text-base font-semibold text-ink">
+            1 {compare} = {sym}{fmt(rate, 2)}
+          </p>
+          {asOf && (
+            <span className="text-xs text-muted">
+              Updated {asOf.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+        </>
+      )}
       <button
+        type="button"
         onClick={() => setTick((t) => t + 1)}
         aria-label="Refresh exchange rate"
-        className="shrink-0 p-2 rounded-lg border border-line hover:bg-surface-hover text-ink-2"
+        className="p-1 rounded-md text-muted hover:text-ink hover:bg-surface-hover transition-colors"
       >
-        <RefreshCw size={15} className={rate === undefined ? 'animate-spin' : ''} />
+        <RefreshCw size={14} className={rate === undefined ? 'animate-spin' : ''} />
       </button>
     </div>
   );
@@ -1148,22 +1145,22 @@ function FxVsDollar({ currency }: { currency: string }) {
 
 function PreferencesTab() {
   const [baseCurrency, setBaseCurrency] = useState('INR');
+  const [compareCurrency, setCompareCurrency] = useState('USD');
   return (
     <>
       <Card>
-        <div className="flex items-center gap-2 mb-1">
-          <h2 className="text-sm font-semibold text-ink">Base Currency</h2>
+        <h2 className="text-sm font-semibold text-ink mb-4">Base Currency</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:max-w-xl">
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1.5">Base currency</label>
+            <CurrencySelect value={baseCurrency} onChange={setBaseCurrency} className="w-full border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1.5">Compare with</label>
+            <CurrencySelect value={compareCurrency} onChange={setCompareCurrency} className="w-full border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
         </div>
-        <p className="text-xs text-muted mb-4">
-          Your net worth and totals will be shown in this currency across the dashboard — with full
-          multi-currency support for assets held in any currency.
-        </p>
-        <CurrencySelect
-          value={baseCurrency}
-          onChange={setBaseCurrency}
-          className="w-full sm:w-64 border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-        />
-        <FxVsDollar currency={baseCurrency} />
+        <FxVsDollar base={baseCurrency} compare={compareCurrency} />
       </Card>
       <GoldRateCard />
       <DisplaySizeCard />
