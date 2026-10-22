@@ -1151,11 +1151,7 @@ function PreferencesTab() {
   return (
     <>
       <Card>
-        <h2 className="text-sm font-semibold text-ink mb-1">Refresh app</h2>
-        <p className="text-xs text-muted mb-4">
-          Seeing old values or an outdated version? Hard refresh clears the app's cached files and
-          saved prices, then reloads with the latest data. Your account and data are not affected.
-        </p>
+        <h2 className="text-sm font-semibold text-ink mb-3">Update app</h2>
         <button
           type="button"
           disabled={refreshing}
@@ -1166,7 +1162,7 @@ function PreferencesTab() {
           className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white px-4 py-2 rounded-lg text-sm font-medium"
         >
           <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
-          {refreshing ? 'Refreshing…' : 'Hard refresh'}
+          {refreshing ? 'Updating…' : 'Update'}
         </button>
       </Card>
 

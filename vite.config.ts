@@ -217,7 +217,7 @@ export default defineConfig({
     tailwindcss(),
     marketApiDevPlugin(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       injectRegister: 'auto',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'favicon-32.png', 'favicon-16.png', 'maskable-512.png'],
       manifest: {
@@ -254,13 +254,12 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
-        // Without these, a tab left open across a redeploy keeps its old
-        // service worker (and its old cached chunk list) until every tab is
-        // fully closed — so clicking into a lazy-loaded route like Wealth
-        // tries to fetch a JS chunk that no longer exists on the new
-        // deployment and the page goes blank. This makes a new deploy take
-        // over open tabs right away instead.
-        skipWaiting: true,
+        // A new deploy installs in the background and WAITS (skipWaiting off)
+        // until the user taps "Update" in the top banner (UpdateBanner), so
+        // an open tab keeps its own matching cached chunks and lazy routes
+        // never 404 mid-session. clientsClaim lets the first install control
+        // the page immediately.
+        skipWaiting: false,
         clientsClaim: true,
         cleanupOutdatedCaches: true,
         runtimeCaching: [

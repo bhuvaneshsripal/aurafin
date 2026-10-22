@@ -510,28 +510,53 @@ function PerformersCard({ title, icon, items, currency, privacy }: {
   currency: string;
   privacy: boolean;
 }) {
+  // Always starts collapsed (plain state — not persisted), so a refresh
+  // brings it back closed.
+  const [open, setOpen] = useState(false);
   return (
     <div className="bg-surface rounded-2xl border border-line p-5 shadow-soft">
-      <div className="flex items-center gap-2 mb-3">
-        {icon}
-        <h3 className="text-[14px] font-semibold text-ink">{title}</h3>
-      </div>
-      {items.length === 0 ? (
-        <p className="text-[12.5px] text-slate-400 py-3">Not enough data yet.</p>
-      ) : (
-        <div className="space-y-1">
-          {items.map((h, i) => (
-            <div key={h.asset.id} className="flex items-center gap-2.5 py-1.5">
-              <span className="w-5 text-[12px] font-semibold text-slate-400 shrink-0">{i + 1}</span>
-              <AssetBadge asset={h.asset} size={26} />
-              <span className="flex-1 min-w-0 text-[13px] font-medium text-slate-800 dark:text-slate-200 truncate">{h.asset.name}</span>
-              <span className={`font-numeric text-[13px] font-semibold shrink-0 ${signClass(h.lifetimeReturnPercent)}`}>
-                {pctLabel(h.lifetimeReturnPercent)}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between gap-2"
+      >
+        <span className="flex items-center gap-2">
+          {icon}
+          <h3 className="text-[14px] font-semibold text-ink">{title}</h3>
+        </span>
+        <ChevronDown size={16} className={`text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open &&
+        (items.length === 0 ? (
+          <p className="text-[12.5px] text-slate-400 py-3 mt-2">Not enough data yet.</p>
+        ) : (
+          <div className="space-y-1 mt-3">
+            {items.map((h, i) => {
+              const sold = h.status === 'sold';
+              return (
+                <div key={h.asset.id} className="flex items-center gap-2.5 py-1.5">
+                  <span className="w-5 text-[12px] font-semibold text-slate-400 shrink-0">{i + 1}</span>
+                  <AssetBadge asset={h.asset} size={26} />
+                  <span className="flex-1 min-w-0 text-[13px] font-medium text-slate-800 dark:text-slate-200 truncate">{h.asset.name}</span>
+                  {sold ? (
+                    <span
+                      title="Fully sold — this is the final realized return, so it no longer moves with the live price."
+                      className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500"
+                    >
+                      Sold
+                    </span>
+                  ) : h.isLive ? (
+                    <span title="Updates with the live price" className="shrink-0 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  ) : null}
+                  <span className={`font-numeric text-[13px] font-semibold shrink-0 ${signClass(h.lifetimeReturnPercent)}`}>
+                    {pctLabel(h.lifetimeReturnPercent)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ))}
       <p className="sr-only">Amounts shown in {currency}, {privacy ? 'masked' : 'visible'}.</p>
     </div>
   );
@@ -957,6 +982,8 @@ export default function InvestmentPnL() {
   const [selectedHolding, setSelectedHolding] = useState<HoldingPnl | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [soldExpanded, setSoldExpanded] = useState(false);
+  // Collapsed on every load/refresh (intentionally not persisted).
+  const [activityOpen, setActivityOpen] = useState(false);
   const [pendingDeleteSold, setPendingDeleteSold] = useState<HoldingPnl | null>(null);
   const [movingSoldBack, setMovingSoldBack] = useState(false);
 
@@ -1324,26 +1351,35 @@ export default function InvestmentPnL() {
             </div>
 
             {/* Best / Worst performers */}
-            <div className="grid md:grid-cols-2 gap-4">
+            <div className="grid md:grid-cols-2 gap-4 items-start">
               <PerformersCard title="Best Performers" icon={<Trophy size={16} className="text-brand-600" />} items={bestPerformers} currency={activeCurrency} privacy={privacyMode} />
               <PerformersCard title="Worst Performers" icon={<ThumbsDown size={16} className="text-red-500" />} items={worstPerformers} currency={activeCurrency} privacy={privacyMode} />
             </div>
 
             {/* Investment Activity */}
             <div className="bg-surface rounded-2xl border border-line p-5 shadow-soft">
-              <div className="flex items-center justify-between mb-1">
+              <button
+                type="button"
+                onClick={() => setActivityOpen((o) => !o)}
+                aria-expanded={activityOpen}
+                className="w-full flex items-center justify-between mb-1"
+              >
                 <h3 className="text-[15px] font-semibold text-ink">Investment Activity</h3>
-                <span className="text-[12px] text-slate-400">{activity.length} transaction{activity.length === 1 ? '' : 's'}</span>
-              </div>
-              {activity.length === 0 ? (
-                <p className="text-[13px] text-slate-400 py-6 text-center">No transactions in this range.</p>
-              ) : (
-                <div className="mt-1">
-                  {activity.slice(0, 100).map((e) => (
-                    <ActivityRow key={e.key} entry={e} currency={activeCurrency} privacy={privacyMode} />
-                  ))}
-                </div>
-              )}
+                <span className="flex items-center gap-2 text-[12px] text-slate-400">
+                  {activity.length} transaction{activity.length === 1 ? '' : 's'}
+                  <ChevronDown size={15} className={`transition-transform ${activityOpen ? 'rotate-180' : ''}`} />
+                </span>
+              </button>
+              {activityOpen &&
+                (activity.length === 0 ? (
+                  <p className="text-[13px] text-slate-400 py-6 text-center">No transactions in this range.</p>
+                ) : (
+                  <div className="mt-1">
+                    {activity.slice(0, 100).map((e) => (
+                      <ActivityRow key={e.key} entry={e} currency={activeCurrency} privacy={privacyMode} />
+                    ))}
+                  </div>
+                ))}
             </div>
           </div>
         </>

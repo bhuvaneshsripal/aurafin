@@ -38,6 +38,7 @@ import SwipeTabs from './components/SwipeTabs';
 import PrivacyFab from './components/PrivacyFab';
 import Toaster from './components/Toaster';
 import NetworkBanner from './components/NetworkBanner';
+import UpdateBanner from './components/UpdateBanner';
 import LockScreen from './components/LockScreen';
 import InstallPromptModal from './components/InstallPromptModal';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -161,6 +162,7 @@ function AppShell() {
       <SwipeTabs />
       <Toaster />
       <NetworkBanner />
+      <UpdateBanner />
       <PrivacyFab />
       <InstallPromptModal />
     </div>
