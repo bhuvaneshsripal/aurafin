@@ -7,6 +7,11 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
  *  was too short, and flies off-screen smoothly when it was far or fast
  *  enough, then calls `onDismiss`. A plain tap never counts as a swipe, so
  *  the notice's own buttons keep working. */
+/** How long the fly-off takes (ms). Slow and gentle on purpose. */
+const FLY_MS = 600;
+/** How long the spring-back takes (ms). */
+const RETURN_MS = 420;
+
 export function useSwipeDismiss(onDismiss: () => void, edge: 'up' | 'down') {
   const [drag, setDrag] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
@@ -49,8 +54,8 @@ export function useSwipeDismiss(onDismiss: () => void, edge: 'up' | 'down') {
     const fast = dist / dt > 0.5; // px per ms
     if (!cancelled && (far || (fast && dist > 30))) {
       setFlung(true);
-      setDrag(horizontal ? { x: dx < 0 ? -window.innerWidth : window.innerWidth, y: 0 } : { x: dx, y: sign * 240 });
-      window.setTimeout(onDismiss, 220);
+      setDrag(horizontal ? { x: dx < 0 ? -window.innerWidth : window.innerWidth, y: 0 } : { x: dx, y: sign * 160 });
+      window.setTimeout(onDismiss, FLY_MS);
     } else {
       setDrag({ x: 0, y: 0 }); // spring back
     }
@@ -67,7 +72,11 @@ export function useSwipeDismiss(onDismiss: () => void, edge: 'up' | 'down') {
     touchAction: 'none',
     transform: drag.x || drag.y ? `translate3d(${drag.x}px, ${drag.y}px, 0)` : undefined,
     opacity: flung ? 0 : drag.x || drag.y ? Math.max(0.35, 1 - offset) : undefined,
-    transition: dragging ? 'none' : 'transform 220ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease-out',
+    transition: dragging
+      ? 'none'
+      : flung
+        ? `transform ${FLY_MS}ms cubic-bezier(0.33, 0, 0.2, 1), opacity ${FLY_MS}ms ease-in-out`
+        : `transform ${RETURN_MS}ms cubic-bezier(0.22, 1, 0.36, 1), opacity ${RETURN_MS}ms ease-out`,
     willChange: dragging ? 'transform, opacity' : undefined,
   };
 
