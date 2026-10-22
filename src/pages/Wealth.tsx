@@ -5557,7 +5557,7 @@ function AssetDetailsForm({
   // the person hand-edits Current Value themselves, auto-fill backs off.
   const [equityLiveLoading, setEquityLiveLoading] = useState(false);
   const [equityLiveError, setEquityLiveError] = useState(false);
-  const [equityLivePrice, setEquityLivePrice] = useState<number | null>(null);
+  const [, setEquityLivePrice] = useState<number | null>(null);
   const isEquityLive = SYMBOL_ENABLED_CLASSES.has(assetClass) && !isSip && !isWeightTracked;
 
   // --- Symbol autocomplete (Stocks / ETFs / International Equity) --------
