@@ -268,7 +268,7 @@ export default function TopHeader() {
       </div>
 
       {/* Mobile only: scrolling index strip pinned just under the top bar. */}
-      <MarketTickerMarquee className="md:hidden sticky top-14 z-20" />
+      <MarketTickerMarquee id="app-marquee" className="md:hidden sticky top-14 z-20" />
 
       <PortfolioExportModal open={reportOpen} onClose={() => setReportOpen(false)} />
 

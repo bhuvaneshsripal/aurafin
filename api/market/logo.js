@@ -7,12 +7,12 @@ export default async function handler(req, res) {
   const market = String(req.query.market ?? 'IN').toUpperCase() === 'US' ? 'US' : 'IN';
   if (req.query.debug) {
     const trace = [];
-    const logo = await resolveLogo(symbol, market, String(req.query.isin ?? ''), trace).catch((e) => { trace.push({ error: String(e) }); return null; });
+    const logo = await resolveLogo(symbol, market, String(req.query.isin ?? ''), trace, String(req.query.name ?? '')).catch((e) => { trace.push({ error: String(e) }); return null; });
     res.status(200).json({ symbol, market, foundLogo: !!logo, trace });
     return;
   }
   try {
-    const logo = await resolveLogo(symbol, market, String(req.query.isin ?? ''));
+    const logo = await resolveLogo(symbol, market, String(req.query.isin ?? ''), undefined, String(req.query.name ?? ''));
     if (!logo) {
       // Short: a miss is often a transient upstream hiccup, so let it retry soon.
       res.setHeader('Cache-Control', 'no-store');

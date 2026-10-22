@@ -70,6 +70,8 @@ interface LotEvent {
   fees: number;
   /** Only present on sell events — bank/cash account proceeds were credited to. */
   accountId?: string;
+  /** Only on sell events — cost basis locked in when the sale was recorded. Used when there is no buy history to average from. */
+  costBasis?: number;
 }
 
 /** Merges an asset's buy lots (shareLots or purchaseLots) with its
@@ -121,6 +123,7 @@ function buildLotEvents(asset: Asset): LotEvent[] {
       price: l.price,
       fees: l.fees ?? 0,
       accountId: l.accountId,
+      costBasis: l.costBasis,
     }));
 
   return [...buys, ...sells].sort((a, b) => a.date.localeCompare(b.date));
@@ -222,8 +225,12 @@ export function computeHoldingPnl(asset: Asset, currentPrice: number | undefined
     } else {
       // Sell — cap at what's actually held so a stray/duplicate record
       // can't drive remaining quantity negative.
-      const qty = Math.min(ev.qty, heldQty + EPS);
-      const costBasis = avgCost;
+      // With no buy history at all (e.g. a sale recorded against a holding
+      // whose purchase lots were removed), there is nothing to cap against,
+      // so keep the sale as recorded and use its stored cost basis.
+      const hasBuys = events.some((e) => e.type === 'buy');
+      const qty = hasBuys ? Math.min(ev.qty, heldQty + EPS) : ev.qty;
+      const costBasis = hasBuys ? avgCost : ev.costBasis ?? 0;
       const costOfSold = qty * costBasis;
       const saleValue = qty * ev.price - ev.fees;
       const realizedPnl = saleValue - costOfSold;
@@ -395,7 +402,9 @@ export function computePortfolioPnl(
       return computeHoldingPnl(a, resolved.currentPrice, resolved.isLive);
     })
     // Drop assets with no recorded buy history at all (nothing to show).
-    .filter((h) => h.totalBoughtQty > 0);
+    // Keep anything with a buy OR a sale on record — a holding whose sales
+    // survive but whose buy lots don't must still show up as sold.
+    .filter((h) => h.totalBoughtQty > 0 || h.totalSoldQty > 0);
 
   // Everything else that still counts as "invested" (FDs, RDs, PPF/EPF/NPS,
   // bonds, real estate, alternatives, etc.) — no buy/sell lots, so these

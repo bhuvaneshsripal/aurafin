@@ -4,7 +4,7 @@
  * and consistent with the numbers shown on Wealth / Dashboard.
  */
 import type { Asset } from '../types';
-import { ASSET_CLASS_TO_CATEGORY } from './taxonomy';
+import { ASSET_CLASS_COLORS, ASSET_CLASS_LABELS, ASSET_CLASS_TO_CATEGORY } from './taxonomy';
 
 export interface ValuedAsset {
   asset: Asset;
@@ -133,6 +133,72 @@ export function allocateNewMoney(rows: DriftRow[], total: number, newMoney: numb
     for (const k of CATEGORY_KEYS) if ((targets[k] ?? 0) > 0) out[k] = (newMoney * (targets[k] ?? 0)) / tsum;
   }
   return out;
+}
+
+/** One asset class inside a category, e.g. "Direct Stock" inside "Equity". */
+export interface SubSlice {
+  assetClass: string;
+  label: string;
+  color: string;
+  value: number;
+  /** % of the whole portfolio. */
+  pct: number;
+  /** % of its own category (e.g. Direct Stock as a share of Equity). */
+  pctOfCategory: number;
+}
+
+export interface CategoryBreakdown extends CategorySlice {
+  children: SubSlice[];
+}
+
+/** Categories (Equity, Debt, …) each broken down into the asset classes inside them. */
+export function buildCategoryBreakdown(items: ValuedAsset[]): { total: number; categories: CategoryBreakdown[] } {
+  const { total, slices } = buildAllocation(items);
+  const subs = new Map<string, Map<string, number>>();
+  for (const i of items) {
+    const v = Math.max(0, i.value);
+    if (v <= 0) continue;
+    const cat = categoryOf(i.asset);
+    const m = subs.get(cat) ?? new Map<string, number>();
+    m.set(i.asset.assetClass, (m.get(i.asset.assetClass) ?? 0) + v);
+    subs.set(cat, m);
+  }
+  const categories: CategoryBreakdown[] = slices.map((s) => {
+    const m = subs.get(s.key) ?? new Map<string, number>();
+    const children: SubSlice[] = [...m.entries()]
+      .map(([assetClass, value]) => ({
+        assetClass,
+        label: ASSET_CLASS_LABELS[assetClass] ?? assetClass,
+        color: ASSET_CLASS_COLORS[assetClass] ?? s.color,
+        value,
+        pct: total > 0 ? (value / total) * 100 : 0,
+        pctOfCategory: s.value > 0 ? (value / s.value) * 100 : 0,
+      }))
+      .sort((a, b) => b.value - a.value);
+    return { ...s, children };
+  });
+  return { total, categories };
+}
+
+export interface ConcentrationRow {
+  asset: Asset;
+  value: number;
+  pct: number;
+  /** Amount to sell so this holding drops to the limit. Proceeds are kept as cash, so the total is unchanged. 0 = within limit. */
+  trim: number;
+}
+
+/** Single-holding concentration against a per-position limit (in % of the portfolio). */
+export function concentration(items: ValuedAsset[], limitPct: number): { total: number; top: ConcentrationRow[]; breaches: ConcentrationRow[] } {
+  const positive = items.filter((i) => i.value > 0);
+  const total = positive.reduce((s, i) => s + i.value, 0);
+  const rows: ConcentrationRow[] = positive
+    .map((i) => ({ asset: i.asset, value: i.value, pct: total > 0 ? (i.value / total) * 100 : 0, trim: 0 }))
+    .sort((a, b) => b.value - a.value);
+  for (const r of rows) {
+    if (r.pct > limitPct) r.trim = Math.max(0, r.value - (limitPct / 100) * total);
+  }
+  return { total, top: rows.slice(0, 10), breaches: rows.filter((r) => r.trim > 0) };
 }
 
 // ---------------------------------------------------------------- risk

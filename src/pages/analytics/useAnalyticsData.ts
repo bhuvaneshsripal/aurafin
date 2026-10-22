@@ -39,9 +39,12 @@ export function useAnalyticsData() {
     () => assets.map((a) => ({ asset: a, value: resolveAssetValues(a, livePrices, sipValues, gold).value })),
     [assets, livePrices, sipValues, gold]
   );
-  const allocation = useMemo(() => buildAllocation(items), [items]);
+  // Same rule the Wealth Allocation tab uses: assets flagged "exclude from
+  // allocation" (e.g. a house you don't want in the mix) are left out.
+  const allocItems = useMemo(() => items.filter((i) => !i.asset.excludeFromAllocation), [items]);
+  const allocation = useMemo(() => buildAllocation(allocItems), [allocItems]);
   const liquid = useMemo(() => computeLiquidAssets(assets, livePrices, sipValues), [assets, livePrices, sipValues]);
 
-  return { assets, taxAssets, items, allocation, liquid, currency, currencies, setCurrency: setPicked, livePrices, sipValues, gold, hasData: assets.length > 0 };
+  return { assets, taxAssets, items, allocItems, allocation, liquid, currency, currencies, setCurrency: setPicked, livePrices, sipValues, gold, hasData: assets.length > 0 };
 }
 export type AnalyticsData = ReturnType<typeof useAnalyticsData>;

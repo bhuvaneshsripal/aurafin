@@ -42,7 +42,7 @@ const RETRY_DELAYS_MS = [2000, 6000, 15000];
 export default function CompanyLogo({ symbol, name, market = 'IN', isin, size = 32 }: Props) {
   const local = symbol || name ? localLogoFor(symbol ?? '', name) : null;
   const onlineBase = symbol
-    ? `/api/market/logo?symbol=${encodeURIComponent(symbol)}&market=${market}${isin ? `&isin=${encodeURIComponent(isin)}` : ''}`
+    ? `/api/market/logo?symbol=${encodeURIComponent(symbol)}&market=${market}${isin ? `&isin=${encodeURIComponent(isin)}` : ''}&name=${encodeURIComponent(name ?? '')}`
     : null;
   // 0 = try local (if any), 1 = online lookup, 2 = gave up
   const [stage, setStage] = useState<0 | 1 | 2>(local ? 0 : onlineBase ? 1 : 2);

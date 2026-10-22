@@ -12,12 +12,27 @@ export function useVisualViewportOffset() {
       if (vv.offsetTop > 0) root.setAttribute('data-vv-pan', '');
       else root.removeAttribute('data-vv-pan');
     };
+    // Never let the page drift sideways when an input is focused / the
+    // keyboard opens: snap back to the left edge as soon as it happens.
+    const lockX = () => {
+      if (window.scrollX !== 0) window.scrollTo(0, window.scrollY);
+      if (document.documentElement.scrollLeft !== 0) document.documentElement.scrollLeft = 0;
+      if (document.body.scrollLeft !== 0) document.body.scrollLeft = 0;
+    };
+    const onScroll = () => {
+      update();
+      lockX();
+    };
     update();
-    vv.addEventListener('resize', update);
-    vv.addEventListener('scroll', update);
+    vv.addEventListener('resize', onScroll);
+    vv.addEventListener('scroll', onScroll);
+    window.addEventListener('scroll', lockX, { passive: true });
+    document.addEventListener('focusin', lockX);
     return () => {
-      vv.removeEventListener('resize', update);
-      vv.removeEventListener('scroll', update);
+      window.removeEventListener('scroll', lockX);
+      document.removeEventListener('focusin', lockX);
+      vv.removeEventListener('resize', onScroll);
+      vv.removeEventListener('scroll', onScroll);
       root.style.removeProperty('--vv-top');
       root.removeAttribute('data-vv-pan');
     };

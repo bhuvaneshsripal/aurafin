@@ -1,25 +1,50 @@
 import { useMemo, useState } from 'react';
-import { hideNumber } from '../../utils/privateFormat';
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from 'recharts';
-import { Check, RotateCcw } from 'lucide-react';
+import { Check, Download, RotateCcw } from 'lucide-react';
 import { Badge, Button, Card, CardHeader, Input, SegmentedControl, Table, TableContainer, TBody, Td, Th, THead, Tr, chart } from '../../components/ui';
 import Amount from '../../components/Amount';
+import { hideNumber } from '../../utils/privateFormat';
 import { useAnalyticsSettingsStore } from '../../store/analyticsSettingsStore';
-import { allocateNewMoney, CATEGORY_KEYS, CATEGORY_META, computeDrift, TARGET_PRESETS, targetSum, type CategoryKey, type TargetAllocation } from '../../utils/portfolioAnalytics';
+import { exportToCsv } from '../../utils/exportCsv';
+import {
+  allocateNewMoney,
+  buildCategoryBreakdown,
+  CATEGORY_KEYS,
+  CATEGORY_META,
+  computeDrift,
+  concentration,
+  TARGET_PRESETS,
+  targetSum,
+  type CategoryKey,
+  type TargetAllocation,
+} from '../../utils/portfolioAnalytics';
 import type { AnalyticsData } from './useAnalyticsData';
+import CategoryBreakdownList from './CategoryBreakdown';
+
+const LIMIT_OPTIONS = ['10', '15', '20', '25'];
 
 export default function AllocationTab({ data }: { data: AnalyticsData }) {
-  const { allocation, currency } = data;
-  const { targets, band, setTargets, setBand } = useAnalyticsSettingsStore();
+  const { currency, allocItems } = data;
+  const { targets, band, holdingLimit, setTargets, setBand, setHoldingLimit } = useAnalyticsSettingsStore();
   const [newMoney, setNewMoney] = useState('');
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<TargetAllocation>(targets);
 
+  const { total, categories } = useMemo(() => buildCategoryBreakdown(allocItems), [allocItems]);
   const hasTargets = targetSum(targets) > 0;
-  const rows = useMemo(() => computeDrift(allocation.slices, allocation.total, targets, band), [allocation, targets, band]);
+  const rows = useMemo(() => computeDrift(categories, total, targets, band), [categories, total, targets, band]);
   const money = Number(newMoney) > 0 ? Number(newMoney) : 0;
-  const plan = useMemo(() => allocateNewMoney(rows, allocation.total, money, targets), [rows, allocation.total, money, targets]);
+  const plan = useMemo(() => allocateNewMoney(rows, total, money, targets), [rows, total, money, targets]);
+  const conc = useMemo(() => concentration(allocItems, holdingLimit), [allocItems, holdingLimit]);
   const draftSum = targetSum(draft);
+
+  // Full rebalance = every category moved exactly to its target. Buys and sells
+  // should match when targets add to 100%; the difference is cash left over.
+  const fullBuy = rows.reduce((s, r) => s + Math.max(0, r.adjust), 0);
+  const fullSell = rows.reduce((s, r) => s + Math.max(0, -r.adjust), 0);
+  const offTarget = rows.filter((r) => r.status !== 'on_track').length;
+  const equity = categories.find((c) => c.key === 'equity');
+  const directStock = equity?.children.find((c) => c.assetClass === 'stock');
 
   const save = () => {
     setTargets(draft);
@@ -28,36 +53,54 @@ export default function AllocationTab({ data }: { data: AnalyticsData }) {
 
   const chartData = rows.map((r) => ({ name: r.label, Current: +r.currentPct.toFixed(1), Target: +r.targetPct.toFixed(1), color: r.color }));
 
+  const downloadPlan = () => {
+    const out = rows.map((r) => ({
+      'Asset class': r.label,
+      'Current %': +r.currentPct.toFixed(2),
+      'Target %': +r.targetPct.toFixed(2),
+      'Drift (pts)': +r.driftPct.toFixed(2),
+      Status: r.status === 'on_track' ? 'Within band' : r.status === 'over' ? 'Overweight' : 'Underweight',
+      Action: r.status === 'on_track' ? 'Hold' : r.adjust > 0 ? 'Buy' : 'Sell',
+      [`Amount (${currency})`]: Math.round(Math.abs(r.adjust)),
+    }));
+    void exportToCsv('aurafin-rebalance-plan.csv', out);
+  };
+
+  if (allocItems.length === 0) return null;
+
   return (
     <div className="space-y-5">
+      {/* Summary */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <SummaryTile label="Portfolio value" value={<Amount value={total} currency={currency} />} />
+        <SummaryTile label="Classes off target" value={`${offTarget} of ${rows.length || categories.length}`} tone={offTarget > 0 ? 'warn' : 'ok'} />
+        <SummaryTile label="Full rebalance: buy" value={<Amount value={fullBuy} currency={currency} />} hint={hasTargets ? undefined : 'Set targets first'} />
+        <SummaryTile label="Full rebalance: sell" value={<Amount value={fullSell} currency={currency} />} hint={hasTargets ? undefined : 'Set targets first'} />
+      </div>
+
       <div className="grid gap-5 lg:grid-cols-5">
         <Card className="lg:col-span-2">
-          <CardHeader title="Current allocation" description="By asset class, at today's value" />
+          <CardHeader title="Current allocation" description="By asset class — tap Equity to see Direct Stock, ETF and SIP" />
           <div className="h-56">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={allocation.slices} dataKey="value" nameKey="label" innerRadius={55} outerRadius={85} paddingAngle={2} stroke="none">
-                  {allocation.slices.map((s) => (
+                <Pie data={categories} dataKey="value" nameKey="label" innerRadius={55} outerRadius={85} paddingAngle={2} stroke="none">
+                  {categories.map((s) => (
                     <Cell key={s.key} fill={s.color} />
                   ))}
                 </Pie>
-                <Tooltip {...chart.tooltip} formatter={(v) => [hideNumber(`${((Number(v) / allocation.total) * 100).toFixed(1)}%`), '']} />
+                <Tooltip {...chart.tooltip} formatter={(v) => [hideNumber(`${((Number(v) / total) * 100).toFixed(1)}%`), '']} />
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <ul className="mt-2 space-y-1.5">
-            {allocation.slices.map((s) => (
-              <li key={s.key} className="flex items-center justify-between text-sm">
-                <span className="flex items-center gap-2 text-ink">
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: s.color }} />
-                  {s.label}
-                </span>
-                <span className="text-muted">
-                  <Amount value={s.value} currency={currency} /> · {hideNumber(`${s.pct.toFixed(1)}%`)}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <div className="mt-2">
+            <CategoryBreakdownList categories={categories} currency={currency} />
+          </div>
+          {directStock && equity && (
+            <p className="mt-3 text-xs text-muted">
+              Direct stocks are {hideNumber(`${directStock.pctOfCategory.toFixed(0)}%`)} of your equity and {hideNumber(`${directStock.pct.toFixed(1)}%`)} of the whole portfolio.
+            </p>
+          )}
         </Card>
 
         <Card className="lg:col-span-3">
@@ -125,7 +168,17 @@ export default function AllocationTab({ data }: { data: AnalyticsData }) {
       {hasTargets && !editing && (
         <>
           <Card padding="none">
-            <CardHeader divided padded title="Rebalancing plan" description="What it takes to get back to your target mix" />
+            <CardHeader
+              divided
+              padded
+              title="Rebalancing plan"
+              description="What it takes to get back to your target mix"
+              actions={
+                <Button size="sm" variant="secondary" onClick={downloadPlan}>
+                  <Download size={14} /> Export
+                </Button>
+              }
+            />
             <TableContainer>
               <Table>
                 <THead>
@@ -155,8 +208,8 @@ export default function AllocationTab({ data }: { data: AnalyticsData }) {
                         </Badge>
                       </Td>
                       <Td className="text-right">
-                        {Math.abs(r.adjust) < 1 ? (
-                          <span className="text-muted">Hold</span>
+                        {r.status === 'on_track' ? (
+                          <span className="text-muted">Within band</span>
                         ) : (
                           <span className={r.adjust > 0 ? 'text-positive' : 'text-negative'}>
                             {r.adjust > 0 ? 'Buy ' : 'Sell '}
@@ -169,6 +222,61 @@ export default function AllocationTab({ data }: { data: AnalyticsData }) {
                 </TBody>
               </Table>
             </TableContainer>
+          </Card>
+
+          <Card padding="none">
+            <CardHeader
+              divided
+              padded
+              title="Concentration"
+              description={`Holdings above ${holdingLimit}% of your portfolio, and how much to trim to get them back under the limit`}
+              actions={
+                <SegmentedControl size="sm" value={String(holdingLimit)} onChange={(v) => setHoldingLimit(Number(v))} items={LIMIT_OPTIONS.map((l) => ({ key: l, label: `${l}%` }))} />
+              }
+            />
+            {conc.top.length === 0 ? (
+              <p className="px-5 py-6 text-sm text-muted">No holdings to check yet.</p>
+            ) : (
+              <TableContainer>
+                <Table>
+                  <THead>
+                    <Tr>
+                      <Th>Holding</Th>
+                      <Th className="text-right">Value</Th>
+                      <Th className="text-right">Weight</Th>
+                      <Th className="text-right">To get under limit</Th>
+                    </Tr>
+                  </THead>
+                  <TBody>
+                    {conc.top.map((r) => (
+                      <Tr key={r.asset.id}>
+                        <Td>
+                          <span className="block max-w-[14rem] truncate font-medium text-ink">{r.asset.name}</span>
+                        </Td>
+                        <Td className="text-right">
+                          <Amount value={r.value} currency={currency} />
+                        </Td>
+                        <Td className="text-right">
+                          <Badge variant={r.trim > 0 ? 'warning' : 'success'}>{hideNumber(`${r.pct.toFixed(1)}%`)}</Badge>
+                        </Td>
+                        <Td className="text-right">
+                          {r.trim > 0 ? (
+                            <span className="text-negative">
+                              Sell <Amount value={r.trim} currency={currency} />
+                            </span>
+                          ) : (
+                            <span className="text-muted">OK</span>
+                          )}
+                        </Td>
+                      </Tr>
+                    ))}
+                  </TBody>
+                </Table>
+              </TableContainer>
+            )}
+            {conc.breaches.length > 0 && (
+              <p className="px-5 pb-4 pt-3 text-xs text-muted">Selling keeps the proceeds as cash inside the portfolio, so the total value does not change.</p>
+            )}
           </Card>
 
           <Card>
@@ -201,6 +309,16 @@ export default function AllocationTab({ data }: { data: AnalyticsData }) {
           </Card>
         </>
       )}
+    </div>
+  );
+}
+
+function SummaryTile({ label, value, hint, tone }: { label: string; value: React.ReactNode; hint?: string; tone?: 'ok' | 'warn' }) {
+  return (
+    <div className="rounded-xl border border-line bg-surface px-4 py-3">
+      <p className="text-xs font-medium text-muted">{label}</p>
+      <p className={`mt-1 text-base font-semibold ${tone === 'warn' ? 'text-negative' : tone === 'ok' ? 'text-positive' : 'text-ink'}`}>{value}</p>
+      {hint && <p className="mt-0.5 text-[11px] text-muted">{hint}</p>}
     </div>
   );
 }

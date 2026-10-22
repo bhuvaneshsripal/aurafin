@@ -277,6 +277,8 @@ html {
 }
 
 body {
+  max-width: 100vw;
+  overflow-x: clip;
   font-family: var(--font-sans);
   font-optical-sizing: auto;
   font-weight: 400;
@@ -989,24 +991,28 @@ textarea[aria-invalid="true"]:focus {
   }
 }
 
-/* Keep the sticky top bar on screen when the on-screen keyboard pans the
-   visual viewport (set by useVisualViewportOffset in App). */
-html[data-vv-pan] #app-topbar {
-  transform: translate3d(0, var(--vv-top, 0px), 0);
+/* The top bar never scrolls away. When the on-screen keyboard pans the
+   visual viewport (--vv-top, set by useVisualViewportOffset), the bar and the
+   market strip under it ride along so they stay on screen. `.app-scale` is
+   CSS-zoomed, so the px offset is divided by the zoom to land exactly on the
+   visible edge. */
+html[data-vv-pan] #app-topbar,
+html[data-vv-pan] #app-marquee {
+  transform: translate3d(0, calc(var(--vv-top, 0px) / var(--app-zoom, 0.95)), 0);
 }
 
-/* Phones: while a content panel (e.g. Edit Asset) is open, keep the top bar
-   fixed at the very top of the screen and reserve its space in the page so
-   nothing shifts behind the panel. */
+/* Phones: the top bar is pinned to the top of the screen at all times
+   (fixed rather than sticky, so no scroll position or ancestor can push it
+   out of view). The page reserves the bar's height so nothing sits under it. */
 @media (max-width: 767px) {
-  html[data-panel-open] #app-topbar {
+  #app-topbar {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
-    transform: none;
+    z-index: 30;
   }
-  html[data-panel-open] .app-scale {
-    padding-top: var(--topbar-h, 0px);
+  .app-scale {
+    padding-top: var(--topbar-h, 3.5rem);
   }
 }

@@ -108,7 +108,6 @@ import {
   ASSET_TAXONOMY,
   LIABILITY_TAXONOMY,
   ASSET_CLASS_LABELS,
-  ASSET_CLASS_COLORS,
   ASSET_CLASS_TO_CATEGORY,
   LIABILITY_CLASS_LABELS,
   LIABILITY_CLASS_TO_CATEGORY,
@@ -137,12 +136,16 @@ import {
   type MfSearchResult,
 } from '../utils/mutualFunds';
 import { fetchLivePrices, fetchFxRate, searchStockSymbols, type StockSearchResult } from '../utils/marketPrices';
+import { buildCategoryBreakdown, type CategoryBreakdown } from '../utils/portfolioAnalytics';
+import { useAnalyticsData } from './analytics/useAnalyticsData';
+import CategoryBreakdownList from './analytics/CategoryBreakdown';
 import { useDayChangeResetWindow, useMarketSessionProgress, useIsMarketOpen } from '../utils/marketHours';
 import { useUrlTab } from '../hooks/useUrlTab';
 import CompanyLogo from '../components/CompanyLogo';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 const AnalyticsContent = lazyWithRetry(() => import('./Analytics'));
 import { useModalBackClose } from '../hooks/useModalBackClose';
+import { useUrlRestore } from '../hooks/useUrlRestore';
 import { toast } from '../store/toastStore';
 
 type Tab = 'assets' | 'liabilities' | 'networth' | 'allocation' | 'analytics';
@@ -1161,6 +1164,16 @@ function AssetsTab({
   // flash-then-jump that looks like the scroll position isn't being kept.
   // Setting it pre-paint lands directly on the right spot with no flash.
   const inSubPage = !!viewingAsset || (modalOpen && !!editing);
+  // Keep the open holding / edit screen across a browser refresh by
+  // mirroring it into the URL (?holding=<id> / ?edit=<id>).
+  useUrlRestore('holding', viewingAsset, assets, (a) => {
+    setListReturning(false);
+    setViewingAsset(a);
+  });
+  useUrlRestore('edit', modalOpen ? editing : null, assets, (a) => {
+    setEditing(a);
+    setModalOpen(true);
+  });
   useLayoutEffect(() => {
     if (inSubPage) {
       window.scrollTo({ top: 0, behavior: 'instant' });
@@ -3423,6 +3436,9 @@ function HoldingDetailView({
     { key: 'returns', label: 'Returns (Age)' },
   ];
   const [breakdownModeIdx, setBreakdownModeIdx] = useState(0);
+  // Breakdown is always collapsed on open; only the arrow expands it.
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
+  useEffect(() => setBreakdownOpen(false), [asset.id]);
   const cycleBreakdownMode = (dir: 1 | -1) =>
     setBreakdownModeIdx((i) => (i + dir + BREAKDOWN_MODES.length) % BREAKDOWN_MODES.length);
   const breakdownMode = BREAKDOWN_MODES[breakdownModeIdx].key;
@@ -3434,7 +3450,6 @@ function HoldingDetailView({
     liveGoldPricePerGram
   );
   const positive = (pnl ?? 0) >= 0;
-  const category = ASSET_CLASS_TO_CATEGORY[asset.assetClass];
   const qty = asset.quantity ?? 0;
 
   const previousClose = resolvePreviousClose(asset.symbol, previousCloses);
@@ -3685,8 +3700,22 @@ function HoldingDetailView({
 
       {orderedLots.length > 0 && (
         <div className="bg-surface rounded-2xl border border-line p-5">
-          <div className="flex items-center justify-between mb-1">
+          <button
+            type="button"
+            onClick={() => setBreakdownOpen((v) => !v)}
+            aria-expanded={breakdownOpen}
+            aria-label={breakdownOpen ? 'Collapse breakdown' : 'Expand breakdown'}
+            className="w-full flex items-center justify-between"
+          >
             <h3 className="font-bold text-ink">Breakdown</h3>
+            <ChevronDown
+              size={18}
+              className={`text-muted transition-transform ${breakdownOpen ? 'rotate-180' : ''}`}
+            />
+          </button>
+          {breakdownOpen && (
+          <>
+          <div className="flex items-center justify-end mb-1 mt-2">
             <div
               role="button"
               tabIndex={0}
@@ -3779,6 +3808,8 @@ function HoldingDetailView({
               );
             })}
           </div>
+          </>
+          )}
         </div>
       )}
 
@@ -3869,9 +3900,7 @@ function HoldingDetailView({
         </div>
       </Modal>
 
-      <p className="text-xs text-slate-600 text-center px-4">
-        {category?.label ?? ASSET_CLASS_LABELS[asset.assetClass]}
-      </p>
+
     </div>
   );
 }
@@ -4303,16 +4332,22 @@ function BuySellDividendModal({
               </label>
               <input type="number" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="e.g. 5" className={inputClass} autoFocus />
               <div className="mt-2 flex gap-2">
-                {[25, 50, 75, 100].map((pct) => (
-                  <button
-                    key={pct}
-                    type="button"
-                    onClick={() => setQty(String(Math.round(currentQty * pct * 1e4 / 100) / 1e4))}
-                    className="px-2.5 py-1 rounded-full text-xs font-medium border border-line text-slate-600 dark:text-slate-300 hover:bg-surface-hover"
-                  >
-                    {pct === 100 ? 'Sell all' : `${pct}%`}
-                  </button>
-                ))}
+                {[25, 50, 75, 100].map((pct) => {
+                  const pctQty = String(Math.round(currentQty * pct * 1e4 / 100) / 1e4);
+                  const selected = qty === pctQty;
+                  return (
+                    <button
+                      key={pct}
+                      type="button"
+                      onClick={() => setQty(pctQty)}
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium border text-slate-600 dark:text-slate-300 hover:bg-surface-hover outline-none transition-colors focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/25 active:border-brand-500 ${
+                        selected ? 'border-brand-500 ring-2 ring-brand-500/25 text-brand-700' : 'border-line'
+                      }`}
+                    >
+                      {pct === 100 ? 'Sell all' : `${pct}%`}
+                    </button>
+                  );
+                })}
               </div>
             </div>
             <div>
@@ -4375,9 +4410,6 @@ function BuySellDividendModal({
                     {sellPreview.slab && (
                       <p className="text-xs text-muted">Short-term part is taxed at your slab rate ({slabRate}%).</p>
                     )}
-                    <p className="text-[11px] text-muted">
-                      Estimate only — includes this financial year's other sales and the LTCG exemption, not your full tax position.
-                    </p>
                   </div>
                 )}
               </div>
@@ -6875,12 +6907,6 @@ function AssetDetailsForm({
               <Loader2 size={12} className="animate-spin" /> Fetching live price for "{symbol.trim()}"…
             </p>
           )}
-          {isEquityLive && !equityLiveLoading && equityLivePrice !== null && (
-            <p className="text-xs text-slate-600 mt-1">
-              Live price {formatPreciseCurrency(equityLivePrice, currency)} × {quantity || 0} — updates
-              automatically; edit this field to override.
-            </p>
-          )}
           {isEquityLive && !equityLiveLoading && equityLiveError && (
             <p className={errorTextClass}>
               Couldn't fetch a live price for "{symbol.trim()}" — enter the current value manually.
@@ -7751,22 +7777,10 @@ function AnalyticsTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
 }
 
 function AllocationTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
-  const assets = useAssetsStore((s) => s.assets);
-  const livePrices = useLivePricesStore((s) => s.prices);
-  const sipValues = useLivePricesStore((s) => s.sipValues);
-  const liveGoldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
-  const byClass: Record<string, number> = {};
-  assets.forEach((a) => {
-    if (a.excludeFromAllocation) return;
-    const { value } = resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram);
-    byClass[a.assetClass] = (byClass[a.assetClass] ?? 0) + value;
-  });
-  const data = Object.entries(byClass).map(([key, value]) => ({
-    name: ASSET_CLASS_LABELS[key] ?? key,
-    value,
-    color: ASSET_CLASS_COLORS[key] ?? '#94a3b8',
-  }));
-  const total = data.reduce((s, d) => s + d.value, 0);
+  // Same numbers as Analytics → Rebalance: active profile, fully sold holdings
+  // dropped, "exclude from allocation" respected, one currency at a time.
+  const { allocItems, currency, currencies } = useAnalyticsData();
+  const { total, categories } = useMemo(() => buildCategoryBreakdown(allocItems), [allocItems]);
 
   return (
     <div className="space-y-4">
@@ -7774,7 +7788,7 @@ function AllocationTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) 
 
       <TabNav tab={tab} setTab={setTab} />
 
-      {data.length === 0 ? (
+      {categories.length === 0 ? (
         <Card padding="none">
           <EmptyState
             icon={<BarChart2 size={18} />}
@@ -7783,20 +7797,29 @@ function AllocationTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) 
           />
         </Card>
       ) : (
-        <AllocationChart data={data} total={total} />
+        <>
+          <AllocationChart categories={categories} total={total} currency={currency} />
+          {currencies.length > 1 && (
+            <p className="mt-3 text-xs text-muted">
+              Showing {currency} only, because amounts in different currencies can't be added together. Switch currency in Analytics.
+            </p>
+          )}
+        </>
       )}
     </div>
   );
 }
 
 function AllocationChart({
-  data,
+  categories,
   total,
+  currency,
 }: {
-  data: { name: string; value: number; color: string }[];
+  categories: CategoryBreakdown[];
   total: number;
+  currency: string;
 }) {
-  const sorted = [...data].sort((a, b) => b.value - a.value);
+  const sorted = [...categories].sort((a, b) => b.value - a.value);
   return (
     <Card padding="lg" className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
       <div className="relative">
@@ -7805,7 +7828,7 @@ function AllocationChart({
             <Pie
               data={sorted}
               dataKey="value"
-              nameKey="name"
+              nameKey="label"
               innerRadius={68}
               outerRadius={104}
               paddingAngle={2}
@@ -7813,7 +7836,7 @@ function AllocationChart({
               isAnimationActive={false}
             >
               {sorted.map((entry) => (
-                <Cell key={entry.name} fill={entry.color} />
+                <Cell key={entry.key} fill={entry.color} />
               ))}
             </Pie>
             <Tooltip
@@ -7829,22 +7852,9 @@ function AllocationChart({
           <span className="font-numeric text-base font-semibold text-ink">{formatPreciseCurrency(total)}</span>
         </div>
       </div>
-      <ul className="divide-y divide-line-soft">
-        {sorted.map((d) => (
-          <li key={d.name} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <span className="h-2.5 w-2.5 rounded-sm shrink-0" style={{ backgroundColor: d.color }} />
-              <span className="text-ink-2 font-medium truncate">{d.name}</span>
-            </div>
-            <div className="text-right shrink-0 font-numeric">
-              <span className="text-ink font-semibold">{formatPreciseCurrency(d.value)}</span>
-              <span className="text-muted font-normal ml-2 inline-block w-12">
-                {hideNumber(`${total > 0 ? ((d.value / total) * 100).toFixed(1) : '0.0'}%`)}
-              </span>
-            </div>
-          </li>
-        ))}
-      </ul>
+      <div className="min-w-0">
+        <CategoryBreakdownList categories={sorted} currency={currency} />
+      </div>
     </Card>
   );
 }

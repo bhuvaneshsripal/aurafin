@@ -107,7 +107,7 @@ export default function BottomNav() {
               <NavLink
                 key={to}
                 to={to}
-                end={to === '/'}
+                end={to === '/' || to === '/wealth'}
                 onClick={() => onTabTap(to)}
                 className={({ isActive }) =>
                   `tap-scale flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors ${

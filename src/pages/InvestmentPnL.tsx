@@ -1068,10 +1068,25 @@ export default function InvestmentPnL() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [portfolio.active, typeFilter, search, performanceFilter, positionFilter]
   );
+  // Every sale on record, across ALL currencies and asset classes — fully sold
+  // or partly sold. The currency switch only scopes the totals above; this
+  // table shows each row in its own currency so nothing is hidden. Completed
+  // Positions / Win Rate keep using the fully closed `portfolio.sold` only.
+  const soldRecords = useMemo(
+    () =>
+      assets
+        .filter((a) => a.assetClass !== 'cash' && (a.saleLots?.length ?? 0) > 0)
+        .map((a) => {
+          const r = resolveAssetValues(a, livePrices, sipValues, goldPricePerGram);
+          return computeHoldingPnl(a, r.currentPrice, r.isLive);
+        })
+        .filter((h) => h.totalSoldQty > 0),
+    [assets, livePrices, sipValues, goldPricePerGram]
+  );
   const filteredSold = useMemo(
-    () => portfolio.sold.filter((h) => matchesType(h) && matchesSearch(h) && matchesPerformance(h) && matchesPosition(h)),
+    () => soldRecords.filter((h) => matchesType(h) && matchesSearch(h) && matchesPerformance(h) && matchesPosition(h)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [portfolio.sold, typeFilter, search, performanceFilter, positionFilter]
+    [soldRecords, typeFilter, search, performanceFilter, positionFilter]
   );
 
   const activityAll = useMemo(() => buildActivityFeed(portfolio.holdings), [portfolio.holdings]);
@@ -1291,7 +1306,7 @@ export default function InvestmentPnL() {
                           <SoldRow
                             key={h.asset.id}
                             h={h}
-                            currency={activeCurrency}
+                            currency={h.asset.currency}
                             privacy={privacyMode}
                             onOpen={() => setSelectedHolding(h)}
                             onDelete={() => setPendingDeleteSold(h)}

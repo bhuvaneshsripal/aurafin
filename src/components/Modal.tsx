@@ -137,6 +137,37 @@ function ContentPanel({
   );
 }
 
+
+/** Size of what is actually visible (the area above the on-screen keyboard).
+ *  Dialogs are fitted to it so the whole box stays readable when the
+ *  keyboard opens, instead of its lower part hiding behind the keys. */
+function useVisibleBox(active: boolean) {
+  const [box, setBox] = useState<{ top: number; height: number } | null>(null);
+  useEffect(() => {
+    if (!active) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => setBox({ top: vv.offsetTop, height: vv.height });
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    // When a field is tapped, bring it into the middle of the visible area
+    // once the keyboard has finished opening.
+    const onFocus = (e: FocusEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (!el || !/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+      window.setTimeout(() => el.scrollIntoView({ block: 'center', behavior: 'smooth' }), 300);
+    };
+    document.addEventListener('focusin', onFocus);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+      document.removeEventListener('focusin', onFocus);
+    };
+  }, [active]);
+  return box;
+}
+
 export default function Modal({
   open,
   onClose,
@@ -170,6 +201,7 @@ export default function Modal({
   useModalBackClose(open, onClose);
 
   const { mounted, closing } = useExitPresence(open, 180);
+  const visible = useVisibleBox(open);
   if (!mounted) return null;
 
   if (fullScreen) {
@@ -207,11 +239,16 @@ export default function Modal({
   return createPortal(
     <div
       className={`${closing ? 'animate-backdrop-out' : 'animate-backdrop-in'} fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-[3px] px-4 py-4`}
+      style={visible ? { top: visible.top, bottom: 'auto', height: visible.height } : undefined}
       onClick={onClose}
     >
       <div
         className={`${closing ? 'animate-menu-out' : 'animate-dialog-in'} bg-surface border border-line shadow-xl w-full ${widthClassName} max-h-[88dvh] max-h-[88vh] flex flex-col`}
-        style={{ borderRadius: 'var(--radius-modal)', transformOrigin: 'center' }}
+        style={{
+          borderRadius: 'var(--radius-modal)',
+          transformOrigin: 'center',
+          ...(visible ? { maxHeight: Math.min(visible.height * 0.88, visible.height - 32) } : {}),
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header stays outside the scroll area — pinned in place, and its

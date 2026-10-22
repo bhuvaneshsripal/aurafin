@@ -8,6 +8,41 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 const domainCache = new Map(); // symbol -> domain (successful lookups only)
 const isinCache = new Map(); // symbol -> ISIN (successful lookups only)
 
+
+// ETFs have no company profile or stock-logo entry of their own, so show the
+// logo of the fund house (AMC) that issues them. Matched on symbol or name.
+const AMC_DOMAINS = [
+  [/KOTAK/, 'kotakmf.com'],
+  [/HDFC/, 'hdfcfund.com'],
+  [/NIPPON|BEES$|^CPSEETF|^NETF/, 'mf.nipponindiaim.com'],
+  [/ICICI|^I?PRU/, 'icicipruamc.com'],
+  [/^SETF|\bSBI\b|^SBI/, 'sbimf.com'],
+  [/AXIS/, 'axismf.com'],
+  [/^UTI|\bUTI\b/, 'utimf.com'],
+  [/MIRAE|^MAM|^MON100|^MONIFTY/, 'miraeassetmf.co.in'],
+  [/MOTILAL|^MOM\d|^MOSMALL|^MOVALUE|^MOREALTY|^MOLOWVOL/, 'motilaloswalmf.com'],
+  [/\bDSP\b|^DSP/, 'dspim.com'],
+  [/ABSL|BIRLA/, 'mutualfund.adityabirlacapital.com'],
+  [/TATA/, 'tatamutualfund.com'],
+  [/\bLIC\b|^LIC/, 'licmf.com'],
+  [/INVESCO/, 'invescomutualfund.com'],
+  [/QUANTUM/, 'quantumamc.com'],
+  [/EDELWEISS|BHARAT ?22|^EBBETF|^EBANKNIFTY/, 'edelweissmf.com'],
+  [/ZERODHA|^LIQUIDCASE|^GOLDCASE/, 'zerodhafundhouse.com'],
+  [/GROWW/, 'growwmf.com'],
+  [/BANDHAN|IDFC/, 'bandhanmf.com'],
+  [/FRANKLIN/, 'franklintempletonindia.com'],
+  [/HSBC/, 'assetmanagement.hsbc.co.in'],
+  [/SUNDARAM/, 'sundarammutual.com'],
+  [/BAJAJ/, 'bajajamc.com'],
+  [/PPFAS|PARAG/, 'amc.ppfas.com'],
+];
+function amcDomainFor(base, name) {
+  const hay = `${base} ${String(name ?? '').toUpperCase()}`;
+  for (const [re, d] of AMC_DOMAINS) if (re.test(base) || re.test(hay)) return d;
+  return null;
+}
+
 async function websiteFor(yahooSymbol, retry = true) {
   const s = await getSession();
   const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(yahooSymbol)}?modules=assetProfile&crumb=${encodeURIComponent(s.crumb)}`;
@@ -74,7 +109,7 @@ async function lookupIsin(base) {
   });
 }
 
-export async function resolveLogo(rawSymbol, market = 'IN', knownIsin, trace) {
+export async function resolveLogo(rawSymbol, market = 'IN', knownIsin, trace, name) {
   const raw = String(rawSymbol).trim().toUpperCase();
   const base = raw.replace(/\.(NS|BO)$/i, '');
   const key = `${market}:${raw}`;
@@ -116,10 +151,12 @@ export async function resolveLogo(rawSymbol, market = 'IN', knownIsin, trace) {
   trace?.push({ step: 'logo-cdns', found: !!hit });
   if (hit) return hit;
 
-  // 2) Fallback: the logo published for the company's own website.
+  // 2) Fallback: the logo published for the company's own website. An ETF
+  //    has none, so its fund house (Kotak, HDFC, Nippon…) is used instead.
   let domain = domainCache.get(key);
   if (!domain) {
-    domain = await findDomain(raw, market);
+    domain = market === 'IN' ? amcDomainFor(base, name) : null;
+    if (!domain) domain = await findDomain(raw, market);
     if (domain) domainCache.set(key, domain);
   }
   trace?.push({ step: 'website', domain: domain ?? null });

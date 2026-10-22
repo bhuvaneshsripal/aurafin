@@ -173,10 +173,11 @@ export default function MarketTicker() {
 /** Mobile: a thin one-line bar under the top bar. Each index shows
  *  NAME  level  ±points (±pct%) on a single line, and the person swipes the
  *  bar sideways to see all three (NIFTY, SENSEX, BANKNIFTY). */
-export function MarketTickerMarquee({ className }: { className?: string }) {
+export function MarketTickerMarquee({ className, id }: { className?: string; id?: string }) {
   const quotes = useIndexQuotes();
   return (
     <div
+      id={id}
       className={cn(
         'no-scrollbar overflow-x-auto overflow-y-hidden overscroll-x-contain h-9 flex items-center text-[12.5px] bg-surface border-b border-line',
         className

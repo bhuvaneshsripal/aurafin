@@ -64,7 +64,7 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
       const market = (url.searchParams.get('market') ?? 'IN').toUpperCase() === 'US' ? 'US' : 'IN'
       if (!symbol) { res.statusCode = 400; res.end(); return }
       try {
-        const logo = await resolveLogo(symbol, market, url.searchParams.get('isin') ?? '')
+        const logo = await resolveLogo(symbol, market, url.searchParams.get('isin') ?? '', undefined, url.searchParams.get('name') ?? '')
         if (!logo) { res.statusCode = 404; res.end(); return }
         res.statusCode = 200
         res.setHeader('Content-Type', logo.contentType)
