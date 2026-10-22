@@ -15,6 +15,7 @@ import {
   Scale,
 } from 'lucide-react';
 import { hardRefresh } from '../utils/hardRefresh';
+import UpdateDot from './UpdateDot';
 import QuickAddMenu from './QuickAddMenu';
 import { useUiStore } from '../store/uiStore';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
@@ -132,7 +133,10 @@ export default function BottomNav() {
                 isMoreActive ? 'text-primary-ink' : 'text-muted'
               }`}
             >
-              <MoreHorizontal size={20} strokeWidth={1.75} />
+              <span className="relative inline-flex">
+                <MoreHorizontal size={20} strokeWidth={1.75} />
+                <UpdateDot />
+              </span>
               More
             </button>
           </div>
@@ -176,7 +180,10 @@ export default function BottomNav() {
                     }`
                   }
                 >
-                  <Icon size={20} strokeWidth={1.75} />
+                  <span className="relative inline-flex">
+                    <Icon size={20} strokeWidth={1.75} />
+                    {to === '/settings' && <UpdateDot />}
+                  </span>
                   {label}
                 </NavLink>
               ))}

@@ -97,7 +97,12 @@ function ContentPanel({
       const vvTop = window.visualViewport?.offsetTop ?? 0;
       // Bar height (+ however far the on-screen keyboard has panned the
       // visual viewport), so the panel always starts right under the top bar.
-      setTop(topbar ? topbar.getBoundingClientRect().height + vvTop : vvTop);
+      // On phones the bar sits below the pinned "new update" notice, if any.
+      const notice =
+        window.matchMedia('(max-width: 767px)').matches
+          ? document.getElementById('app-update-banner')?.getBoundingClientRect().height ?? 0
+          : 0;
+      setTop(topbar ? topbar.getBoundingClientRect().height + notice + vvTop : vvTop);
     };
     measure();
     window.addEventListener('resize', measure);

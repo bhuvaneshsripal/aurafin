@@ -130,6 +130,7 @@ function AppShell() {
       <LockScreen />
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0 app-scale">
+        <UpdateBanner />
         <TopHeader />
         <main className="flex-1 w-full max-w-[1240px] mx-auto px-4 pt-5 pb-36 sm:px-6 sm:pt-6 sm:pb-36 md:px-8 md:pt-7 md:pb-10">
           <ErrorBoundary key={location.pathname}>
@@ -162,7 +163,6 @@ function AppShell() {
       <SwipeTabs />
       <Toaster />
       <NetworkBanner />
-      <UpdateBanner />
       <PrivacyFab />
       <InstallPromptModal />
     </div>

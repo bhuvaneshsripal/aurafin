@@ -1007,12 +1007,16 @@ html[data-vv-pan] #app-marquee {
 @media (max-width: 767px) {
   #app-topbar {
     position: fixed;
-    top: 0;
+    /* Slides down under the "new update" notice (--update-h) when it shows. */
+    top: var(--update-h, 0px);
     left: 0;
     right: 0;
     z-index: 30;
   }
   .app-scale {
-    padding-top: var(--topbar-h, 3.5rem);
+    padding-top: calc(var(--topbar-h, 3.5rem) + var(--update-h, 0px));
+  }
+  #app-marquee {
+    top: calc(3.5rem + var(--update-h, 0px));
   }
 }
