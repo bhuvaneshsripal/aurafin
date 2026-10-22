@@ -12,6 +12,7 @@ import AppLogo from './AppLogo';
 import GlobalSearch from './GlobalSearch';
 import MarketTicker, { MarketTickerMarquee } from './MarketTicker';
 import { Button, IconButton } from './ui';
+import UpdateDot from './UpdateDot';
 import { PortfolioExportModal } from './PortfolioExportModal';
 
 const menuPanel =
@@ -206,7 +207,10 @@ export default function TopHeader() {
 
           <div className="relative" ref={mobileMenuRef}>
             <IconButton label="Menu" onClick={() => setMobileMenuOpen((o) => !o)}>
-              <MoreVertical size={18} />
+              <span className="relative inline-flex">
+                <MoreVertical size={18} />
+                <UpdateDot />
+              </span>
             </IconButton>
 
             {mobileMenuOpen && (
@@ -224,7 +228,10 @@ export default function TopHeader() {
                     <p className="text-sm font-semibold text-ink truncate">{user?.displayName ?? 'Your account'}</p>
                     <p className="text-xs text-muted truncate">{user?.email ?? 'View profile & settings'}</p>
                   </div>
-                  <SettingsIcon size={16} className="text-muted shrink-0" />
+                  <span className="relative shrink-0 inline-flex">
+                    <SettingsIcon size={16} className="text-muted" />
+                    <UpdateDot />
+                  </span>
                 </button>
 
                 <button

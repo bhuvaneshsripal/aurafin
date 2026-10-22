@@ -43,6 +43,7 @@ import { useInstallPromptStore, triggerInstallPrompt } from '../store/installPro
 import type { HouseholdProfile } from '../types';
 import Modal from '../components/Modal';
 import { hardRefresh } from '../utils/hardRefresh';
+import UpdateDot from '../components/UpdateDot';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useUrlTab } from '../hooks/useUrlTab';
 import CustomSelect from '../components/CustomSelect';
@@ -1147,25 +1148,8 @@ function FxVsDollar({ currency }: { currency: string }) {
 
 function PreferencesTab() {
   const [baseCurrency, setBaseCurrency] = useState('INR');
-  const [refreshing, setRefreshing] = useState(false);
   return (
     <>
-      <Card>
-        <h2 className="text-sm font-semibold text-ink mb-3">Update app</h2>
-        <button
-          type="button"
-          disabled={refreshing}
-          onClick={() => {
-            setRefreshing(true);
-            void hardRefresh();
-          }}
-          className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white px-4 py-2 rounded-lg text-sm font-medium"
-        >
-          <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
-          {refreshing ? 'Updating…' : 'Update'}
-        </button>
-      </Card>
-
       <Card>
         <div className="flex items-center gap-2 mb-1">
           <h2 className="text-sm font-semibold text-ink">Base Currency</h2>
@@ -1843,9 +1827,30 @@ export default function Settings() {
     initialTab && TABS.some((t) => t.key === initialTab) ? initialTab : 'account'
   );
 
+  const [refreshing, setRefreshing] = useState(false);
+
   return (
     <div className="space-y-5">
-      <PageHeader title="Settings" description="Account, preferences & privacy" />
+      <PageHeader
+        title={
+          <span className="inline-flex items-center gap-3 flex-wrap">
+            Settings
+            <button
+              type="button"
+              disabled={refreshing}
+              onClick={() => {
+                setRefreshing(true);
+                void hardRefresh();
+              }}
+              className="relative inline-flex items-center gap-1.5 rounded-lg border border-line bg-white hover:bg-surface-hover disabled:opacity-60 px-2.5 py-1 text-[13px] font-medium tracking-normal text-ink-2 transition-colors"
+            >
+              <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+              {refreshing ? 'Updating…' : 'Update app'}
+              <UpdateDot className="-top-1 -right-1" />
+            </button>
+          </span>
+        }
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-6 items-start">
         <nav className="bg-white rounded-2xl p-1.5 inline-flex md:flex md:flex-col gap-0.5 overflow-x-auto no-scrollbar md:overflow-visible w-fit max-w-full md:w-full">

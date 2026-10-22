@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { RefreshCw, Sparkles, X } from 'lucide-react';
 import { useExitPresence } from '../hooks/useExitPresence';
 import { hardRefresh } from '../utils/hardRefresh';
+import { useUpdateStore } from '../store/updateStore';
 
 const CHECK_EVERY_MS = 5 * 60 * 1000;
 
@@ -30,6 +31,12 @@ export default function UpdateBanner() {
       window.addEventListener('online', check);
     },
   });
+
+  // Dismissing the banner doesn't clear the red dots: the update is still pending.
+  const setUpdateAvailable = useUpdateStore((s) => s.setUpdateAvailable);
+  useEffect(() => {
+    if (needRefresh) setUpdateAvailable(true);
+  }, [needRefresh, setUpdateAvailable]);
 
   const { mounted, closing } = useExitPresence(needRefresh, 180);
   if (!mounted) return null;

@@ -23,6 +23,7 @@ import { useUiStore } from '../store/uiStore';
 import ProfileSwitcher from './ProfileSwitcher';
 import AppLogo from './AppLogo';
 import FeedbackModal from './FeedbackModal';
+import UpdateDot from './UpdateDot';
 
 import { hardRefresh } from '../utils/hardRefresh';
 
@@ -78,7 +79,10 @@ function NavItem({ to, label, icon: Icon, end }: NavLinkDef) {
         }`
       }
     >
-      <Icon size={18} strokeWidth={1.75} className="shrink-0" />
+      <span className="relative shrink-0 inline-flex">
+        <Icon size={18} strokeWidth={1.75} className="shrink-0" />
+        {to === '/settings' && <UpdateDot />}
+      </span>
       <span className="sb-label truncate">{label}</span>
     </NavLink>
   );
