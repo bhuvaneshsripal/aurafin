@@ -18,6 +18,18 @@ const SCREEN_MAX = 1.15;
 const FONT_KEY = 'aurafin-font-scale';
 const SCREEN_KEY = 'aurafin-screen-scale';
 
+const EYE_SHOW_KEY = 'aurafin-floating-eye';
+const EYE_POS_KEY = 'aurafin-floating-eye-pos';
+
+function readEyePos(): { x: number; y: number } | null {
+  try {
+    const p = JSON.parse(localStorage.getItem(EYE_POS_KEY) ?? 'null');
+    return p && Number.isFinite(p.x) && Number.isFinite(p.y) ? { x: p.x, y: p.y } : null;
+  } catch {
+    return null;
+  }
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
@@ -39,6 +51,12 @@ function applyScreenScale(scale: number) {
 interface DisplaySettingsState {
   fontScale: number;
   screenScale: number;
+  /** Show the floating (draggable) eye button on screen. */
+  floatingEye: boolean;
+  /** Where the floating eye was left (px from top-left); null = default corner. */
+  eyePos: { x: number; y: number } | null;
+  setFloatingEye: (on: boolean) => void;
+  setEyePos: (pos: { x: number; y: number } | null) => void;
   init: () => void;
   increaseFont: () => void;
   decreaseFont: () => void;
@@ -51,6 +69,19 @@ interface DisplaySettingsState {
 export const useDisplaySettingsStore = create<DisplaySettingsState>((set, get) => ({
   fontScale: DEFAULT_FONT_SCALE,
   screenScale: DEFAULT_SCREEN_SCALE,
+  floatingEye: localStorage.getItem(EYE_SHOW_KEY) !== 'false',
+  eyePos: readEyePos(),
+  setFloatingEye: (on) => {
+    try { localStorage.setItem(EYE_SHOW_KEY, String(on)); } catch { /* best-effort */ }
+    set({ floatingEye: on });
+  },
+  setEyePos: (pos) => {
+    try {
+      if (pos) localStorage.setItem(EYE_POS_KEY, JSON.stringify(pos));
+      else localStorage.removeItem(EYE_POS_KEY);
+    } catch { /* best-effort */ }
+    set({ eyePos: pos });
+  },
 
   init: () => {
     const storedFont = parseFloat(localStorage.getItem(FONT_KEY) ?? '');

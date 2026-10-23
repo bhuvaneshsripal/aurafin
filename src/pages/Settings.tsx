@@ -947,6 +947,36 @@ function DisplaySizeCard() {
   );
 }
 
+function FloatingEyeCard() {
+  const on = useDisplaySettingsStore((s) => s.floatingEye);
+  const setOn = useDisplaySettingsStore((s) => s.setFloatingEye);
+  const pos = useDisplaySettingsStore((s) => s.eyePos);
+  const setPos = useDisplaySettingsStore((s) => s.setEyePos);
+  return (
+    <Card>
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-ink mb-1">Floating eye button</h2>
+          <p className="text-xs text-muted">
+            A second show/hide-amounts eye on the screen. Press and hold it, then drag to move it
+            anywhere. Turn off to hide it.
+          </p>
+        </div>
+        <Toggle checked={on} onChange={() => setOn(!on)} label="Show floating eye button" />
+      </div>
+      {on && pos && (
+        <button
+          type="button"
+          onClick={() => setPos(null)}
+          className="mt-3 text-xs font-medium text-brand-600 hover:underline"
+        >
+          Reset position
+        </button>
+      )}
+    </Card>
+  );
+}
+
 function GoldRateCard() {
   const premiumPercent = useGoldSettingsStore((s) => s.premiumPercent);
   const setPremiumPercent = useGoldSettingsStore((s) => s.setPremiumPercent);
@@ -1164,6 +1194,7 @@ function PreferencesTab() {
       </Card>
       <GoldRateCard />
       <DisplaySizeCard />
+      <FloatingEyeCard />
       <NotificationsCard />
     </>
   );

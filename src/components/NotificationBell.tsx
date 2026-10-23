@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useLocation } from 'react-router-dom';
 import { ArrowLeft, Bell, BellOff, BellRing, Trash2 } from 'lucide-react';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { IconButton } from './ui';
@@ -43,6 +44,8 @@ export default function NotificationBell(_props: { align?: 'right' | 'left' } = 
     typeof Notification === 'undefined' ? 'unsupported' : Notification.permission
   );
   const ref = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const location = useLocation();
   const dayLabel = (at: number) => {
     const key = new Date(at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
     const today = getIstDateInfo().dateKey;
@@ -86,6 +89,24 @@ export default function NotificationBell(_props: { align?: 'right' | 'left' } = 
     return () => window.removeEventListener('resize', measure);
   }, [open]);
 
+  // Any tap outside the panel (sidebar, top bar, bottom nav, page) closes it;
+  // the bell itself is left alone so it can still toggle. A route change
+  // closes it too.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node | null;
+      if (!t) return;
+      if (panelRef.current?.contains(t) || ref.current?.contains(t)) return;
+      setOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown, true);
+    return () => document.removeEventListener('pointerdown', onDown, true);
+  }, [open]);
+  useEffect(() => {
+    setOpen(false);
+  }, [location.pathname, location.search]);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
@@ -127,8 +148,9 @@ export default function NotificationBell(_props: { align?: 'right' | 'left' } = 
           onClick={() => setOpen(false)}
         >
         <div
+          ref={panelRef}
           onClick={(e) => e.stopPropagation()}
-          className="h-full w-full md:w-1/2 bg-sandal flex flex-col border-l border-line shadow-xl"
+          className="h-full w-full md:w-1/2 bg-page flex flex-col border-l border-line shadow-xl"
         >
           <div className="px-4 h-14 border-b border-line flex items-center justify-between shrink-0 bg-surface">
             <div className="flex items-center gap-2">
@@ -143,6 +165,17 @@ export default function NotificationBell(_props: { align?: 'right' | 'left' } = 
               <p className="text-base font-semibold text-ink">Notifications</p>
             </div>
             <div className="flex items-center gap-2">
+              {perm === 'granted' && (
+                <button
+                  type="button"
+                  onClick={() => void showSystemNotification('Aurafin', 'Test notification', 'aurafin-test')}
+                  aria-label="Send a test notification"
+                  title="Send a test notification"
+                  className="h-7 w-7 flex items-center justify-center rounded-full border border-line text-slate-600 hover:bg-surface-hover"
+                >
+                  <BellRing size={13} />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setEnabled(!enabled)}
@@ -177,16 +210,6 @@ export default function NotificationBell(_props: { align?: 'right' | 'left' } = 
               {perm === 'denied'
                 ? 'Pop-ups are blocked — allow notifications in your browser settings'
                 : 'Turn on pop-up notifications'}
-            </button>
-          )}
-
-          {perm === 'granted' && (
-            <button
-              type="button"
-              onClick={() => void showSystemNotification('Aurafin test', 'Notifications are working on this device.', 'aurafin-test')}
-              className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-slate-600 hover:bg-surface-hover text-left border-b border-line-soft shrink-0 bg-surface"
-            >
-              <BellRing size={16} /> Send a test notification
             </button>
           )}
 
