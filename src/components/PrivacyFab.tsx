@@ -3,7 +3,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import { useUiStore } from '../store/uiStore';
 import { useDisplaySettingsStore } from '../store/displaySettingsStore';
 
-const SIZE = 40; // px
+const SIZE = 46; // px
 const MARGIN = 8;
 const HOLD_MS = 250;
 
@@ -21,19 +21,23 @@ export default function PrivacyFab() {
 
   const [pos, setPos] = useState<{ x: number; y: number } | null>(savedPos);
   const [dragging, setDragging] = useState(false);
+  const latestPos = useRef<{ x: number; y: number } | null>(null);
+  const [, setTick] = useState(0);
   const drag = useRef<{ id: number; dx: number; dy: number; armed: boolean; active: boolean; timer?: number } | null>(null);
 
-  // Follow resets from Settings.
-  useEffect(() => setPos(savedPos), [savedPos]);
+  // Follow resets from Settings (and pull a saved spot back on screen).
+  useEffect(() => setPos(savedPos ? clampPos(savedPos.x, savedPos.y) : null), [savedPos]);
 
-  const clampPos = (x: number, y: number) => ({
-    x: Math.min(window.innerWidth - SIZE - MARGIN, Math.max(MARGIN, x)),
-    y: Math.min(window.innerHeight - SIZE - MARGIN, Math.max(MARGIN, y)),
-  });
+  function clampPos(x: number, y: number) {
+    return {
+      x: Math.min(window.innerWidth - SIZE - MARGIN, Math.max(MARGIN, x)),
+      y: Math.min(window.innerHeight - SIZE - MARGIN, Math.max(MARGIN, y)),
+    };
+  }
 
   // Keep it on screen if the window is resized / rotated.
   useEffect(() => {
-    const onResize = () => setPos((p) => (p ? clampPos(p.x, p.y) : p));
+    const onResize = () => setTick((n) => n + 1); // re-clamp at render; never overwrite the saved spot
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
@@ -56,7 +60,9 @@ export default function PrivacyFab() {
     const d = drag.current;
     if (!d || d.id !== e.pointerId || !d.armed) return;
     d.active = true;
-    setPos(clampPos(e.clientX - d.dx, e.clientY - d.dy));
+    const next = clampPos(e.clientX - d.dx, e.clientY - d.dy);
+    latestPos.current = next;
+    setPos(next);
   };
 
   const finish = (e: React.PointerEvent<HTMLButtonElement>, cancelled: boolean) => {
@@ -67,16 +73,18 @@ export default function PrivacyFab() {
     setDragging(false);
     if (d.armed) {
       // A hold (with or without movement) is never a tap.
-      if (d.active) setPos((p) => { if (p) setEyePos(p); return p; });
+      if (d.active && latestPos.current) setEyePos(latestPos.current);
       return;
     }
     if (!cancelled) togglePrivacy();
   };
 
-  // Default: bottom-right, clear of the bottom nav on phones.
-  const style = pos
-    ? { left: pos.x, top: pos.y, width: SIZE, height: SIZE }
-    : { right: 16, bottom: 'calc(72px + env(safe-area-inset-bottom))', width: SIZE, height: SIZE };
+  // Default (first time): bottom-left, just above the bottom nav on phones;
+  // bottom-right on larger screens. Once moved, the saved spot wins.
+  const shown = pos ? clampPos(pos.x, pos.y) : null;
+  const style = shown
+    ? { left: shown.x, top: shown.y, width: SIZE, height: SIZE }
+    : { left: 16, bottom: 'calc(80px + env(safe-area-inset-bottom))', width: SIZE, height: SIZE };
 
   return (
     <button
@@ -88,12 +96,14 @@ export default function PrivacyFab() {
       onContextMenu={(e) => e.preventDefault()}
       aria-label={privacyMode ? 'Show amounts' : 'Hide amounts'}
       title={privacyMode ? 'Show amounts (hold and drag to move)' : 'Hide amounts (hold and drag to move)'}
-      style={{ ...style, touchAction: 'none', WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
-      className={`icon-outline-green mini-fab fixed z-30 flex items-center justify-center rounded-full shadow-md md:!bottom-4 ${
+      style={{ ...style, border: '2px solid var(--color-brand-300)', color: 'var(--color-brand-600)', touchAction: 'none', WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
+      className={`icon-outline-green mini-fab fixed z-[45] flex items-center justify-center rounded-full shadow-md ${
+        shown ? '' : 'md:!left-auto md:!right-4 md:!bottom-4'
+      } ${
         dragging ? 'scale-110 shadow-xl opacity-90' : 'tap-scale'
       }`}
     >
-      {privacyMode ? <EyeOff size={18} /> : <Eye size={18} />}
+      {privacyMode ? <EyeOff size={21} /> : <Eye size={21} />}
     </button>
   );
 }

@@ -8,6 +8,7 @@ let lockCount = 0;
 let htmlOverflowBeforeLock = '';
 let lockedScrollY = 0;
 let pinScroll: (() => void) | null = null;
+let onFocusOut: (() => void) | null = null;
 
 /**
  * Locks page scrolling while `active` is true. Used by every overlay (modals,
@@ -44,11 +45,19 @@ export function useBodyScrollLock(active: boolean) {
       // away with the page — the Edit Asset panel opened over a page with
       // the sidebar/top bar shifted up. Locking <html> alone is enough.
       pinScroll = () => {
+        // While a field is focused the browser scrolls to reveal it as the
+        // keyboard opens; snapping back every frame fights that and makes the
+        // screen flicker. The overlay is fixed, so let it be and restore the
+        // position once typing ends (see onFocusOut below).
+        const a = document.activeElement;
+        if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || (a as HTMLElement).isContentEditable)) return;
         if (window.scrollY !== lockedScrollY) {
           window.scrollTo({ top: lockedScrollY, behavior: 'instant' });
         }
       };
       window.addEventListener('scroll', pinScroll, { passive: true });
+      onFocusOut = () => window.setTimeout(() => pinScroll?.(), 150);
+      document.addEventListener('focusout', onFocusOut);
     }
     lockCount += 1;
 
@@ -57,6 +66,8 @@ export function useBodyScrollLock(active: boolean) {
       if (lockCount === 0) {
         if (pinScroll) window.removeEventListener('scroll', pinScroll);
         pinScroll = null;
+        if (onFocusOut) document.removeEventListener('focusout', onFocusOut);
+        onFocusOut = null;
         document.documentElement.style.overflow = htmlOverflowBeforeLock;
       }
     };

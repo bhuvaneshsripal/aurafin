@@ -58,6 +58,7 @@ function tapFeedback() {
 
 export default function BottomNav() {
   const [moreOpen, setMoreOpen] = useState(false);
+  const [typing, setTyping] = useState(false);
   // While a text field has focus the keyboard covers the bottom of the screen.
   // Native apps hide their tab bar in that state; do the same so it never sits
   // on top of the field being typed into.
@@ -66,10 +67,38 @@ export default function BottomNav() {
   const searchOpen = useUiStore((s) => s.searchOpen);
   const notificationsOpen = useUiStore((s) => s.notificationsOpen);
   // The bottom nav stays visible on the notifications page; only the "+" button hides.
-  const hideFab = useUiStore((s) => s.hideFab) || searchOpen || notificationsOpen;
+  const hideFab = useUiStore((s) => s.hideFab) || typing || searchOpen || notificationsOpen;
   const { mounted: moreMounted, closing: moreClosing } = useExitPresence(moreOpen, 180);
   useBodyScrollLock(moreOpen);
   useModalBackClose(moreOpen, () => setMoreOpen(false));
+
+  // Hide the bar only while a text field is focused (keyboard up).
+  useEffect(() => {
+    const NON_TEXT = ['checkbox', 'radio', 'button', 'submit', 'reset', 'file', 'range', 'color', 'image'];
+    const isTextField = (el: Element | null) => {
+      if (!el) return false;
+      if (el instanceof HTMLTextAreaElement) return !el.readOnly;
+      if (el instanceof HTMLInputElement) return !el.readOnly && !NON_TEXT.includes(el.type);
+      return (el as HTMLElement).isContentEditable === true;
+    };
+    let t: number | undefined;
+    const onIn = (e: FocusEvent) => {
+      window.clearTimeout(t);
+      if (isTextField(e.target as Element)) setTyping(true);
+    };
+    const onOut = () => {
+      window.clearTimeout(t);
+      // Delay so hopping between two fields doesn't flash the bar.
+      t = window.setTimeout(() => setTyping(isTextField(document.activeElement)), 120);
+    };
+    document.addEventListener('focusin', onIn);
+    document.addEventListener('focusout', onOut);
+    return () => {
+      window.clearTimeout(t);
+      document.removeEventListener('focusin', onIn);
+      document.removeEventListener('focusout', onOut);
+    };
+  }, []);
 
   useEffect(() => {
     if (!moreOpen) return;
@@ -104,7 +133,7 @@ export default function BottomNav() {
         </div>
       )}
 
-      {!searchOpen && (
+      {!searchOpen && !typing && (
         <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface border-t border-line pb-[env(safe-area-inset-bottom)]">
           <div className="grid grid-cols-4 h-14">
             {primaryLinks.map(({ to, label, icon: Icon }) => (

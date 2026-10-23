@@ -1082,3 +1082,14 @@ input.global-search-input:focus,
     scale: 1;
   }
 }
+
+
+/* Phones: a backdrop blur is re-rendered every frame while the on-screen
+   keyboard slides in/out, which shows up as the screen flickering when typing.
+   Keep the dim, drop the blur on touch devices. */
+@media (hover: none) and (pointer: coarse) {
+  [class*="backdrop-blur"] {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}

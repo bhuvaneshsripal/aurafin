@@ -4947,6 +4947,54 @@ function DetailField({ label, value }: { label: string; value: string }) {
   );
 }
 
+const DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
+
+function readDraft(key: string): Record<string, unknown> | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    if (!d || typeof d.t !== 'number' || Date.now() - d.t > DRAFT_TTL_MS) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return d.v ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function clearDraft(key: string | null) {
+  if (!key) return;
+  try { localStorage.removeItem(key); } catch { /* best-effort */ }
+}
+
+/** useState that also saves the value as a draft (only while it differs from
+ *  the starting value) so an unsaved edit survives a page refresh. */
+function useDraftState<T>(key: string | null, field: string, init: T | (() => T)) {
+  const initRef = useRef<string>('');
+  const [val, setVal] = useState<T>(() => {
+    const base = typeof init === 'function' ? (init as () => T)() : init;
+    try { initRef.current = JSON.stringify(base) ?? ''; } catch { initRef.current = ''; }
+    if (key) {
+      const d = readDraft(key);
+      if (d && field in d) return d[field] as T;
+    }
+    return base;
+  });
+  useEffect(() => {
+    if (!key) return;
+    try {
+      const d = readDraft(key) ?? {};
+      if ((JSON.stringify(val) ?? '') === initRef.current) delete d[field];
+      else d[field] = val;
+      if (Object.keys(d).length) localStorage.setItem(key, JSON.stringify({ t: Date.now(), v: d }));
+      else localStorage.removeItem(key);
+    } catch { /* best-effort */ }
+  }, [key, field, val]);
+  return [val, setVal] as const;
+}
+
 /**
  * Shared asset details form. Used two ways:
  *  - Step 2 of the Add Asset flow: `category`/`initialType` are supplied, `onBack` returns to Step 1.
@@ -4986,19 +5034,22 @@ function AssetDetailsForm({
     : initialType ?? 'stock';
   const effectiveCategory = category ?? ASSET_CLASS_TO_CATEGORY[startClass];
 
-  const [name, setName] = useState(initial?.name ?? '');
-  const [assetClass, setAssetClass] = useState<AssetClass>(startClass);
+  // Keep what's typed while editing an existing asset across a refresh.
+  const draftKey = initial ? `aurafin-asset-draft:${initial.id}:${initial.updatedAt ?? 0}` : null;
+  const closeForm = onClose ? () => { clearDraft(draftKey); onClose(); } : undefined;
+  const [name, setName] = useDraftState(draftKey, 'name', initial?.name ?? '');
+  const [assetClass, setAssetClass] = useDraftState<AssetClass>(draftKey, 'assetClass', startClass);
   // Collapsed by default when editing an existing asset — shows a
   // colored preview chip with a "Change" link instead of a raw <select>;
   // clicking Change (or, for a new asset, always) reveals the real select.
   const [assetTypeEditing, setAssetTypeEditing] = useState(!initial);
-  const [value, setValue] = useState(initial?.value?.toString() ?? '');
-  const [currency, setCurrency] = useState(initial?.currency ?? 'INR');
-  const [symbol, setSymbol] = useState(initial?.symbol ?? '');
-  const [quantity, setQuantity] = useState(initial?.quantity?.toString() ?? '');
-  const [avgCost, setAvgCost] = useState(initial?.avgCost?.toString() ?? '');
-  const [investedValue, setInvestedValue] = useState(initial?.investedValue?.toString() ?? '');
-  const [institution, setInstitution] = useState(initial?.institution ?? '');
+  const [value, setValue] = useDraftState(draftKey, 'value', initial?.value?.toString() ?? '');
+  const [currency, setCurrency] = useDraftState(draftKey, 'currency', initial?.currency ?? 'INR');
+  const [symbol, setSymbol] = useDraftState(draftKey, 'symbol', initial?.symbol ?? '');
+  const [quantity, setQuantity] = useDraftState(draftKey, 'quantity', initial?.quantity?.toString() ?? '');
+  const [avgCost, setAvgCost] = useDraftState(draftKey, 'avgCost', initial?.avgCost?.toString() ?? '');
+  const [investedValue, setInvestedValue] = useDraftState(draftKey, 'investedValue', initial?.investedValue?.toString() ?? '');
+  const [institution, setInstitution] = useDraftState(draftKey, 'institution', initial?.institution ?? '');
   // "Hide details" / "Show details" — collapses the less-common fields
   // below (Geography, Sub-class, Tags, Notes, and the two flags) out of
   // the way by default. Always starts collapsed on a fresh mount (a new
@@ -5006,35 +5057,35 @@ function AssetDetailsForm({
   // these filled in — expanding it is a per-visit action, not a
   // remembered preference.
   const [showMoreDetails, setShowMoreDetails] = useState(false);
-  const [geography, setGeography] = useState(initial?.geography ?? '');
-  const [subClass, setSubClass] = useState(initial?.subClass ?? '');
-  const [tags, setTags] = useState<string[]>(initial?.tags ?? []);
+  const [geography, setGeography] = useDraftState(draftKey, 'geography', initial?.geography ?? '');
+  const [subClass, setSubClass] = useDraftState(draftKey, 'subClass', initial?.subClass ?? '');
+  const [tags, setTags] = useDraftState<string[]>(draftKey, 'tags', initial?.tags ?? []);
   const [tagDraft, setTagDraft] = useState('');
-  const [notes, setNotes] = useState(initial?.notes ?? '');
-  const [excludeFromAllocation, setExcludeFromAllocation] = useState(initial?.excludeFromAllocation ?? false);
-  const [emergencyFund, setEmergencyFund] = useState(initial?.emergencyFund ?? false);
+  const [notes, setNotes] = useDraftState(draftKey, 'notes', initial?.notes ?? '');
+  const [excludeFromAllocation, setExcludeFromAllocation] = useDraftState(draftKey, 'excludeFromAllocation', initial?.excludeFromAllocation ?? false);
+  const [emergencyFund, setEmergencyFund] = useDraftState(draftKey, 'emergencyFund', initial?.emergencyFund ?? false);
   const addTag = (raw: string) => {
     const t = raw.trim().replace(/\s+/g, '-').toLowerCase();
     if (t && !tags.includes(t)) setTags((prev) => [...prev, t]);
     setTagDraft('');
   };
-  const [interestRate, setInterestRate] = useState(initial?.interestRate?.toString() ?? '');
-  const [startDate, setStartDate] = useState(initial?.startDate ?? '');
-  const [maturityDate, setMaturityDate] = useState(initial?.maturityDate ?? '');
-  const [monthlyInstallment, setMonthlyInstallment] = useState(
+  const [interestRate, setInterestRate] = useDraftState(draftKey, 'interestRate', initial?.interestRate?.toString() ?? '');
+  const [startDate, setStartDate] = useDraftState(draftKey, 'startDate', initial?.startDate ?? '');
+  const [maturityDate, setMaturityDate] = useDraftState(draftKey, 'maturityDate', initial?.maturityDate ?? '');
+  const [monthlyInstallment, setMonthlyInstallment] = useDraftState(draftKey, 'monthlyInstallment', 
     initial?.monthlyInstallment?.toString() ?? ''
   );
-  const [sipAmount, setSipAmount] = useState(initial?.sipAmount?.toString() ?? '');
-  const [sipFrequency, setSipFrequency] = useState<'monthly' | 'quarterly'>(
+  const [sipAmount, setSipAmount] = useDraftState(draftKey, 'sipAmount', initial?.sipAmount?.toString() ?? '');
+  const [sipFrequency, setSipFrequency] = useDraftState<'monthly' | 'quarterly'>(draftKey, 'sipFrequency', 
     initial?.sipFrequency ?? 'monthly'
   );
-  const [sipDay, setSipDay] = useState(initial?.sipDay?.toString() ?? '');
+  const [sipDay, setSipDay] = useDraftState(draftKey, 'sipDay', initial?.sipDay?.toString() ?? '');
   // --- Market (India / US) + recurring investment (SIP) for Stocks/ETFs/
   // International Equity ---------------------------------------------------
-  const [market, setMarket] = useState<'IN' | 'US'>(initial?.market ?? 'IN');
+  const [market, setMarket] = useDraftState<'IN' | 'US'>(draftKey, 'market', initial?.market ?? 'IN');
   const isMarketSelectable = MARKET_SELECTABLE_CLASSES.has(assetClass);
   const isRecurringEligible = RECURRING_ELIGIBLE_CLASSES.has(assetClass);
-  const [recurringInvestment, setRecurringInvestment] = useState(
+  const [recurringInvestment, setRecurringInvestment] = useDraftState(draftKey, 'recurringInvestment', 
     initial?.recurringInvestment ?? false
   );
   // Only auto-flip Currency to match a newly picked Market on a *new* asset —
@@ -5049,9 +5100,9 @@ function AssetDetailsForm({
   // Each buy is its own lot (grams + amount); totals are summed below.
   // An older gold entry with no lots yet but existing quantity/investedValue
   // is backfilled as a single lot so no data is lost.
-  const [purchaseLots, setPurchaseLots] = useState<
+  const [purchaseLots, setPurchaseLots] = useDraftState<
     { id: string; date?: string; grams: string; amount: string }[]
-  >(() => {
+  >(draftKey, 'purchaseLots', () => {
     if (initial?.purchaseLots?.length) {
       return initial.purchaseLots.map((l) => ({
         id: l.id,
@@ -5080,9 +5131,9 @@ function AssetDetailsForm({
   // Bought more later at a different price? Add another row — total
   // quantity and the weighted-average cost are computed automatically.
   const isUnitTrackedClass = (c: AssetClass) => SYMBOL_ENABLED_CLASSES.has(c) && !SIP_CLASSES.has(c);
-  const [shareLots, setShareLots] = useState<
+  const [shareLots, setShareLots] = useDraftState<
     { id: string; date?: string; quantity: string; price: string }[]
-  >(() => {
+  >(draftKey, 'shareLots', () => {
     if (initial?.shareLots?.length) {
       // Oldest purchase first, so "Purchase 1" is always the earliest buy
       // (stable sort keeps undated rows in their saved order).
@@ -5171,17 +5222,17 @@ function AssetDetailsForm({
   // market-selectable classes (Stock/ETF/International Equity), where it's
   // always USD vs INR.
   const otherCurrency = currency === 'USD' ? 'INR' : 'USD';
-  const [lotInputMode, setLotInputMode] = useState<Record<string, 'qty' | 'amount'>>({});
-  const [lotAmount, setLotAmount] = useState<Record<string, string>>({});
-  const [lotAmountCurrency, setLotAmountCurrency] = useState<Record<string, string>>({});
+  const [lotInputMode, setLotInputMode] = useDraftState<Record<string, 'qty' | 'amount'>>(draftKey, 'lotInputMode', {});
+  const [lotAmount, setLotAmount] = useDraftState<Record<string, string>>(draftKey, 'lotAmount', {});
+  const [lotAmountCurrency, setLotAmountCurrency] = useDraftState<Record<string, string>>(draftKey, 'lotAmountCurrency', {});
   // Price/Unit can likewise be typed in either currency — e.g. an Indian
   // investor who paid in ₹ for a US stock and only knows the INR price per
   // share. `lotPriceRaw` is what's actually typed (in `lotPriceCurrency`);
   // `lot.price` itself always stays in the asset's own currency (converted
   // at the live FX rate), since that's what every other calculation
   // (avg. cost, invested value, live-price comparisons) assumes it's in.
-  const [lotPriceRaw, setLotPriceRaw] = useState<Record<string, string>>({});
-  const [lotPriceCurrency, setLotPriceCurrency] = useState<Record<string, string>>({});
+  const [lotPriceRaw, setLotPriceRaw] = useDraftState<Record<string, string>>(draftKey, 'lotPriceRaw', {});
+  const [lotPriceCurrency, setLotPriceCurrency] = useDraftState<Record<string, string>>(draftKey, 'lotPriceCurrency', {});
   // Once there are 2+ purchase entries, each is collapsible to a single
   // summary line (see "Purchase N" row below) so a long purchase history
   // doesn't turn the form into an endless scroll. Which entries are
@@ -5373,7 +5424,7 @@ function AssetDetailsForm({
   // previously hand-edited Current Value, since that's a fresh, explicit
   // choice to go live.
   const isGold = assetClass === 'gold';
-  const [goldPurity, setGoldPurity] = useState<'24k' | '22k' | null>(initial?.goldPurity ?? null);
+  const [goldPurity, setGoldPurity] = useDraftState<'24k' | '22k' | null>(draftKey, 'goldPurity', initial?.goldPurity ?? null);
   const liveGold24k = useLivePricesStore((s) => s.goldPricePerGram);
   const liveGoldLoading = useLivePricesStore((s) => s.goldPriceLoading);
   const liveGoldError = useLivePricesStore((s) => s.goldPriceError);
@@ -5746,6 +5797,7 @@ function AssetDetailsForm({
         : undefined;
     const costBasis = sipProgress && sipProgress.totalInvested > 0 ? sipProgress.totalInvested : invested;
 
+    clearDraft(draftKey);
     onSave({
       id: initial?.id ?? crypto.randomUUID(),
       name,
@@ -5863,7 +5915,7 @@ function AssetDetailsForm({
           </div>
           <div className="flex items-center gap-3 shrink-0">
             <button
-              onClick={onClose}
+              onClick={closeForm}
               className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-brand-600"
             >
               <ArrowLeft size={16} /> Back to Assets

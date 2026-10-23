@@ -12,6 +12,10 @@ const COPY: Record<Exclude<NetworkQuality, 'good'>, { title: string; body: strin
  *  and swipe-to-dismiss (left, right or down).
  *  Dismissing hides it until the connection state changes again (e.g. it
  *  drops from low to offline, or recovers and later degrades). */
+// Slow, gentle motion for dismissing / snapping back.
+const SLOW_MS = 450;
+const SLOW_EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
+
 export default function NetworkBanner() {
   const quality = useNetworkQuality();
   const [dismissedFor, setDismissedFor] = useState<NetworkQuality | null>(null);
@@ -27,7 +31,7 @@ export default function NetworkBanner() {
   useEffect(() => {
     if (quality !== 'good') setLast(quality);
   }, [quality]);
-  const { mounted, closing } = useExitPresence(show, 180);
+  const { mounted, closing } = useExitPresence(show, SLOW_MS);
 
   // --- Swipe to dismiss (left, right or down) ---------------------------
   const [drag, setDrag] = useState({ x: 0, y: 0 });
@@ -80,7 +84,7 @@ export default function NetworkBanner() {
       const W = window.innerWidth;
       setFlung(true);
       setDrag(horizontal ? { x: dx < 0 ? -W : W, y: 0 } : { x: dx, y: 240 });
-      window.setTimeout(() => setDismissedFor(quality), 200);
+      window.setTimeout(() => setDismissedFor(quality), SLOW_MS);
     } else {
       setDrag({ x: 0, y: 0 });
     }
@@ -104,7 +108,9 @@ export default function NetworkBanner() {
           touchAction: 'none',
           transform: drag.x || drag.y ? `translate(${drag.x}px, ${drag.y}px)` : undefined,
           opacity: flung ? 0 : drag.x || drag.y ? Math.max(0.35, 1 - Math.max(Math.abs(drag.x) / 300, drag.y / 160)) : undefined,
-          transition: dragging ? 'none' : 'transform 200ms ease-out, opacity 200ms ease-out',
+          transition: dragging ? 'none' : `transform ${SLOW_MS}ms ${SLOW_EASE}, opacity ${SLOW_MS}ms ease`,
+          animationDuration: closing && !flung ? `${SLOW_MS}ms` : undefined,
+          animationTimingFunction: closing && !flung ? 'ease-in-out' : undefined,
         }}
         className={`${flung ? '' : closing ? 'animate-menu-out' : 'animate-dialog-in'} select-none pointer-events-auto w-full max-w-md flex items-center gap-3.5 rounded-2xl px-4 py-3 bg-[#1b1d23] text-white border border-white/5 shadow-lg`}
       >

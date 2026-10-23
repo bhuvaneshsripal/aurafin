@@ -8,7 +8,7 @@ import {
   sendPasswordResetEmail,
   EmailAuthProvider,
 } from 'firebase/auth';
-import { RefreshCw, Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, X, Download, Upload, Mail, Bell, FileText, MoreVertical } from 'lucide-react';
+import { RefreshCw, Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, X, Download, Upload, Mail, Bell, FileText } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
 import { useAppLockStore } from '../store/appLockStore';
@@ -640,9 +640,6 @@ function AppLockCard() {
         <Lock size={20} className="text-slate-700 dark:text-slate-300 shrink-0 mt-0.5" />
         <div>
           <h2 className="text-sm font-semibold text-ink">App Lock</h2>
-          <p className="text-xs text-muted mt-1">
-            Require a 4-digit PIN to open the app. Locks automatically after 1 minute in the background, or tap "Lock Now" to lock it instantly — handy on a laptop before stepping away.
-          </p>
         </div>
       </div>
 
@@ -705,7 +702,7 @@ function AppLockCard() {
             Save PIN
           </button>
           <p className="text-xs text-muted text-center">
-            Forgot your PIN? There's no email reset — entering the wrong PIN 3 times in a row signs you out automatically, so you can log back in with your account and set a new one here.
+            3 wrong tries signs you out. Log in again to set a new PIN.
           </p>
         </div>
       </Modal>
@@ -1573,8 +1570,6 @@ function DataTab() {
   const profiles = useHouseholdProfilesStore((s) => s.profiles);
 
   const [pendingRestore, setPendingRestore] = useState<AurafinBackup | null>(null);
-  const [reportOpen, setReportOpen] = useState(false);
-  const [reportMenuOpen, setReportMenuOpen] = useState(false);
   const [restoreError, setRestoreError] = useState('');
   const [restoreStatus, setRestoreStatus] = useState<'idle' | 'restoring' | 'done'>('idle');
 
@@ -1649,79 +1644,25 @@ function DataTab() {
   return (
     <>
       <Card>
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-ink mb-1">Report</h2>
-            <p className="text-xs text-muted">
-              Preview and download a PDF report of your portfolio holdings.
-            </p>
-          </div>
-
-          {/* The action lives in a 3-dot menu on every screen size. */}
-          <div className="relative shrink-0">
-            <button
-              type="button"
-              aria-label="Report options"
-              aria-haspopup="menu"
-              aria-expanded={reportMenuOpen}
-              onClick={() => setReportMenuOpen((o) => !o)}
-              className="h-8 w-8 flex items-center justify-center rounded-lg border border-line hover:bg-surface-hover text-ink-2"
-            >
-              <MoreVertical size={16} />
-            </button>
-            {reportMenuOpen && (
-              <>
-                <div className="fixed inset-0 z-30" onClick={() => setReportMenuOpen(false)} />
-                <div
-                  role="menu"
-                  className="absolute right-0 top-full mt-1 z-40 min-w-[11rem] rounded-xl border border-line bg-surface shadow-lg py-1"
-                >
-                  <button
-                    role="menuitem"
-                    onClick={() => {
-                      setReportMenuOpen(false);
-                      setReportOpen(true);
-                    }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-ink hover:bg-surface-hover text-left"
-                  >
-                    <FileText size={16} className="text-muted" />
-                    Export report
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </Card>
-      <PortfolioExportModal open={reportOpen} onClose={() => setReportOpen(false)} />
-
-      <Card>
         <h2 className="text-sm font-semibold text-ink mb-1">Backup</h2>
         <p className="text-xs text-muted mb-4">
-          Download everything in your account as a single JSON file, and restore it back into any
-          account later — useful before switching devices or just as a safety copy.
+          Keep a backup file of your account that comes in handy when switching devices.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1 border border-line rounded-xl p-4">
             <h3 className="text-sm font-semibold text-ink">Download backup</h3>
-            <p className="text-xs text-muted mt-1">
-              Saves all assets, liabilities, goals, transactions, snapshots, budgets, and profiles.
-            </p>
             <button
               onClick={handleDownloadBackup}
               className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors mt-3 bg-brand-600 hover:bg-brand-700 text-white"
             >
               <Download size={16} />
-              Download JSON Backup
+              Download Backup
             </button>
           </div>
 
           <div className="flex-1 border border-line rounded-xl p-4">
             <h3 className="text-sm font-semibold text-ink">Restore from backup</h3>
-            <p className="text-xs text-muted mt-1">
-              Adds the items from a backup file into this account. Existing data is kept.
-            </p>
             <label className="mt-3 inline-flex items-center gap-2 border border-line text-ink-2 hover:bg-surface-hover px-4 py-2 rounded-lg text-sm font-medium cursor-pointer">
               <Upload size={16} />
               Choose Backup File
@@ -1742,20 +1683,14 @@ function DataTab() {
       </Card>
 
       <Card>
-        <h2 className="text-sm font-semibold text-ink mb-1">Data</h2>
-        <p className="text-xs text-muted mb-4">
-          Your data is stored in your own Firebase project. You can export it any time from the Firebase
-          console, or permanently remove everything you've entered in <span className="font-luxury">Aurafin</span> below.
-        </p>
+        <h2 className="text-sm font-semibold text-ink mb-4">Data</h2>
 
         <div className="flex gap-3 border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/20 rounded-xl p-4">
           <AlertTriangle size={20} className="text-red-500 shrink-0 mt-0.5" />
           <div className="flex-1">
             <h3 className="text-sm font-semibold text-red-600 dark:text-red-400">Delete all data</h3>
             <p className="text-xs text-muted mt-1">
-              Permanently removes every asset, liability, goal, transaction, and snapshot in your
-              account. Your login itself is not deleted — you'll stay signed in with an empty account.
-              This cannot be undone.
+              Permanently removes everything in your account. This cannot be undone.
             </p>
             <button
               onClick={() => setConfirmOpen(true)}
@@ -1856,6 +1791,7 @@ export default function Settings() {
   );
 
   const [refreshing, setRefreshing] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   return (
     <div className="space-y-5">
@@ -1881,21 +1817,31 @@ export default function Settings() {
       />
 
       <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-6 items-start">
-        <nav className="bg-white rounded-2xl p-1.5 inline-flex md:flex md:flex-col gap-0.5 overflow-x-auto no-scrollbar md:overflow-visible w-fit max-w-full md:w-full">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`shrink-0 md:w-full text-left px-3 h-9 rounded-lg text-sm font-medium transition-colors ${
-                tab === t.key
-                  ? 'bg-primary-soft text-primary-ink'
-                  : 'text-slate-600 hover:bg-surface-hover hover:text-ink'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </nav>
+        <div className="flex items-center gap-1.5 md:gap-2 md:flex-col md:items-stretch min-w-0">
+          <nav className="bg-white rounded-2xl p-1 md:p-1.5 inline-flex md:flex md:flex-col gap-0 md:gap-0.5 overflow-x-auto no-scrollbar md:overflow-visible w-fit min-w-0 max-w-full md:w-full">
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`shrink-0 md:w-full text-left px-2 md:px-3 h-9 rounded-lg text-[13px] md:text-sm font-medium transition-colors ${
+                  tab === t.key
+                    ? 'bg-primary-soft text-primary-ink'
+                    : 'text-slate-600 hover:bg-surface-hover hover:text-ink'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </nav>
+          <button
+            type="button"
+            onClick={() => setReportOpen(true)}
+            className="shrink-0 inline-flex items-center justify-center gap-1 md:gap-1.5 h-9 px-2.5 md:px-3 rounded-xl border border-line bg-white hover:bg-surface-hover text-[13px] md:text-sm font-medium text-ink-2 transition-colors md:w-full"
+          >
+            <FileText size={15} className="text-muted" />
+            Report
+          </button>
+        </div>
 
         <div className="space-y-6 min-w-0">
           {tab === 'account' && (
@@ -1912,6 +1858,7 @@ export default function Settings() {
           {tab === 'data' && <DataTab />}
         </div>
       </div>
+      <PortfolioExportModal open={reportOpen} onClose={() => setReportOpen(false)} />
     </div>
   );
 }

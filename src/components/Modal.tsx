@@ -152,19 +152,47 @@ function useVisibleBox(active: boolean) {
     if (!active) return;
     const vv = window.visualViewport;
     if (!vv) return;
-    const update = () => setBox({ top: vv.offsetTop, height: vv.height });
-    update();
+    let raf = 0;
+    const apply = () => {
+      raf = 0;
+      // The page already resizes with the keyboard (interactive-widget=
+      // resizes-content), so the layout viewport matches what's visible and
+      // no manual fitting is needed. Only fit by hand when the browser
+      // instead pans/overlays (visual viewport much smaller than layout).
+      const overlaid = window.innerHeight - vv.height > 80;
+      const next = overlaid ? { top: Math.round(vv.offsetTop), height: Math.round(vv.height) } : null;
+      setBox((prev) => {
+        if (!prev && !next) return prev;
+        if (prev && next && prev.top === next.top && prev.height === next.height) return prev;
+        return next;
+      });
+    };
+    // One update per frame, not one per resize tick while the keyboard animates.
+    const update = () => {
+      if (!raf) raf = requestAnimationFrame(apply);
+    };
+    apply();
     vv.addEventListener('resize', update);
     vv.addEventListener('scroll', update);
-    // When a field is tapped, bring it into the middle of the visible area
-    // once the keyboard has finished opening.
+    // When a field is tapped, bring it into view once the keyboard has
+    // finished opening — but only if it is actually hidden. Scrolling a field
+    // that is already visible (e.g. hopping between PIN boxes) made the
+    // screen jump on every digit.
+    let t: number | undefined;
     const onFocus = (e: FocusEvent) => {
       const el = e.target as HTMLElement | null;
       if (!el || !/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
-      window.setTimeout(() => el.scrollIntoView({ block: 'center', behavior: 'smooth' }), 300);
+      window.clearTimeout(t);
+      t = window.setTimeout(() => {
+        const r = el.getBoundingClientRect();
+        const h = window.visualViewport?.height ?? window.innerHeight;
+        if (r.top < 8 || r.bottom > h - 8) el.scrollIntoView({ block: 'center' });
+      }, 300);
     };
     document.addEventListener('focusin', onFocus);
     return () => {
+      if (raf) cancelAnimationFrame(raf);
+      window.clearTimeout(t);
       vv.removeEventListener('resize', update);
       vv.removeEventListener('scroll', update);
       document.removeEventListener('focusin', onFocus);
