@@ -1,7 +1,7 @@
 # Login page images (AI-generated human faces)
 
 Generate 7 images (16:9, ~1600x900, JPG) in Midjourney, ChatGPT/DALL-E, Gemini, Firefly or similar,
-and save them as `public/login-slides/1.png` ... `7.png`. Keep the subject centred; the carousel crops with `object-cover`.
+and save them as `public/login-slides/1.jpg` ... `7.jpg`. Keep the subject centred; the carousel crops with `object-cover`.
 
 Shared style: "photorealistic, candid portrait, natural light, shallow depth of field, warm and confident, modern Indian setting, 16:9"
 

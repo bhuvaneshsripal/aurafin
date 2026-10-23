@@ -1,0 +1,376 @@
+/* ==========================================================================
+   Growth journey: a dedicated, scroll-pinned cinematic section.
+   Everything is scoped under .gj-* so it cannot leak into the app's design tokens.
+   ========================================================================== */
+
+.gj-wrap {
+  --gj-top: 4.75rem;      /* clears the sticky Login header */
+  --gj-muted: rgba(226, 232, 240, 0.72);
+  --gj-gold: #f5d37a;
+  --gj-emerald: #34d399;
+  position: relative;
+  width: calc(100% + 2rem);
+  margin: 0 -1rem;
+  color: #f8fafc;
+  background: #050a14;
+  isolation: isolate;
+}
+
+.gj-stage {
+  position: relative;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  --gj-p: 0;
+}
+
+/* Layered dark backdrop: deep navy, a faint emerald glow, a warm gold glow, and a grid. */
+.gj-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(60rem 36rem at 72% 30%, rgba(16, 185, 129, 0.16), transparent 60%),
+    radial-gradient(44rem 30rem at 18% 85%, rgba(212, 175, 55, 0.1), transparent 62%),
+    linear-gradient(180deg, #060b17 0%, #03060f 60%, #050a14 100%);
+}
+.gj-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
+  background-size: 64px 64px;
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
+  mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
+}
+
+/* The 3D scene (or the 2D fallback) fills the right side of the stage. */
+.gj-visual {
+  position: absolute;
+  z-index: 1;
+  top: var(--gj-top);
+  right: 0;
+  bottom: 0;
+  left: 26%;
+}
+.gj-canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.gj-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 62% 45%, transparent 45%, #03060f 100%);
+}
+
+.gj-progress {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.gj-progress-bar {
+  display: block;
+  height: 100%;
+  transform-origin: left center;
+  transform: scaleX(0);
+  background: linear-gradient(90deg, #34d399, #f5d37a);
+  box-shadow: 0 0 12px rgba(245, 211, 122, 0.6);
+}
+
+/* Captions share one grid cell, so the column is as tall as the tallest one. */
+.gj-copy {
+  position: absolute;
+  z-index: 3;
+  top: calc(50% + var(--gj-top) / 2);
+  left: max(2rem, 6vw);
+  width: min(30rem, 36vw);
+  transform: translateY(-50%);
+  display: grid;
+}
+.gj-cap {
+  grid-area: 1 / 1;
+  align-self: center;
+  will-change: opacity, transform;
+}
+
+.gj-kicker {
+  margin: 0 0 0.9rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--gj-gold);
+}
+
+.gj-title {
+  margin: 0 0 1rem;
+  font-size: clamp(2rem, 3.6vw, 3.25rem);
+  font-weight: 650;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+  background: linear-gradient(180deg, #ffffff 0%, #e2e8f0 55%, #a7f3d0 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.gj-sub {
+  margin: 0;
+  max-width: 28rem;
+  font-size: clamp(0.95rem, 1.2vw, 1.1rem);
+  line-height: 1.65;
+  color: var(--gj-muted);
+}
+
+/* Glassmorphism stat cards */
+.gj-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1.6rem;
+}
+.gj-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.9rem 1rem;
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+  box-shadow:
+    0 18px 40px -18px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.gj-stat-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(226, 232, 240, 0.6);
+}
+.gj-stat-value {
+  font-size: 1.35rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--gj-gold);
+  text-shadow: 0 0 18px rgba(245, 211, 122, 0.35);
+}
+.gj-stat-hi {
+  border-color: rgba(52, 211, 153, 0.35);
+}
+.gj-stat-hi .gj-stat-value {
+  color: #6ee7b7;
+  text-shadow: 0 0 18px rgba(52, 211, 153, 0.4);
+}
+.gj-stat-note {
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: rgba(226, 232, 240, 0.55);
+}
+
+.gj-dots {
+  position: absolute;
+  z-index: 4;
+  left: max(2rem, 6vw);
+  bottom: 2.2rem;
+  display: flex;
+  gap: 0.45rem;
+}
+.gj-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.25);
+  transition: width 0.4s ease, background 0.4s ease;
+}
+.gj-dot.is-on {
+  width: 1.6rem;
+  background: var(--gj-gold);
+}
+
+.gj-disclaimer {
+  position: absolute;
+  z-index: 4;
+  right: max(2rem, 4vw);
+  bottom: 1.1rem;
+  max-width: 26rem;
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  text-align: right;
+  color: rgba(226, 232, 240, 0.5);
+}
+
+/* 2D fallback: animated by the same --gj-p progress variable. */
+.gj-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+.gj-fallback svg {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  overflow: visible;
+}
+.gj-fb-line {
+  stroke-dasharray: 1;
+  stroke-dashoffset: calc(1 - var(--gj-p, 0));
+  filter: drop-shadow(0 0 8px rgba(52, 211, 153, 0.55));
+}
+.gj-fb-area {
+  opacity: var(--gj-p, 0);
+}
+.gj-fb-bar {
+  transform-box: fill-box;
+  transform-origin: bottom;
+  /* Each bar rises in turn (--i sets the stagger) and settles at full height. */
+  transform: scaleY(clamp(0.001, calc(var(--gj-p, 0) * 1.5 - var(--i, 0) * 0.12), 1));
+}
+.gj-fb-coin {
+  fill: #e2b75a;
+  opacity: 0.9;
+}
+.gj-fb-tip {
+  fill: #fde68a;
+  opacity: var(--gj-p, 0);
+  filter: drop-shadow(0 0 10px rgba(253, 230, 138, 0.9));
+}
+
+/* ----- Phones and small tablets: visual on top, copy docked to the bottom ----- */
+@media (max-width: 760px) {
+  .gj-visual {
+    top: var(--gj-top);
+    left: 0;
+    bottom: 40%;
+  }
+  .gj-vignette {
+    background: linear-gradient(to bottom, transparent 40%, #050a14 92%);
+  }
+  .gj-copy {
+    top: auto;
+    left: 1.25rem;
+    right: 1.25rem;
+    bottom: 3.6rem;
+    width: auto;
+    transform: none;
+  }
+  .gj-cap {
+    align-self: end;
+  }
+  .gj-kicker {
+    margin-bottom: 0.5rem;
+  }
+  .gj-title {
+    margin-bottom: 0.6rem;
+    font-size: clamp(1.6rem, 7vw, 2.1rem);
+  }
+  .gj-sub {
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+  .gj-stats {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+  .gj-stat {
+    padding: 0.6rem 0.75rem;
+  }
+  .gj-stat:last-child {
+    grid-column: 1 / -1;
+  }
+  .gj-stat-value {
+    font-size: 1.05rem;
+  }
+  .gj-dots {
+    display: none;
+  }
+  .gj-disclaimer {
+    left: 1.25rem;
+    right: 1.25rem;
+    bottom: 0.5rem;
+    max-width: none;
+    font-size: 0.6rem;
+    text-align: left;
+  }
+}
+
+/* ----- Reduced motion: no pin, no scroll animation. The stage becomes a static
+   editorial layout that shows every caption and the final 2D frame. ----- */
+.gj-wrap.is-static .gj-stage {
+  height: auto;
+  overflow: visible;
+  padding: 4.5rem 0 3rem;
+  --gj-p: 1;
+}
+.gj-wrap.is-static .gj-visual {
+  position: relative;
+  inset: auto;
+  height: 22rem;
+  margin: 0 auto 2.5rem;
+  max-width: 40rem;
+}
+.gj-wrap.is-static .gj-copy {
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  width: min(34rem, 100% - 3rem);
+  margin: 0 auto;
+  transform: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+  padding: 0 1.5rem;
+}
+.gj-wrap.is-static .gj-cap {
+  grid-area: auto;
+}
+.gj-wrap.is-static [data-band] {
+  opacity: 1 !important;
+  transform: none !important;
+  visibility: visible !important;
+}
+.gj-wrap.is-static .gj-progress,
+.gj-wrap.is-static .gj-dots,
+.gj-wrap.is-static .gj-vignette {
+  display: none;
+}
+.gj-wrap.is-static .gj-disclaimer {
+  position: relative;
+  right: auto;
+  bottom: auto;
+  max-width: 34rem;
+  margin: 2.5rem auto 0;
+  padding: 0 1.5rem;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gj-dot,
+  .gj-progress-bar {
+    transition: none;
+  }
+}
+
+/* GSAP wraps the pinned section in a spacer that has no background of its own, so a fast scroll
+   can briefly expose the page's white background. Paint the spacer with the same dark colour. */
+.pin-spacer:has(> .gj-wrap) {
+  background: #050a14;
+}

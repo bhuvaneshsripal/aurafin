@@ -1,9 +1,15 @@
-import { useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { lazy, Suspense, useState } from 'react';
+import { Eye, EyeOff, Moon, Sun } from 'lucide-react';
+import { useUiStore } from '../store/uiStore';
 import { useAuthStore } from '../store/authStore';
 import { friendlyAuthError } from '../utils/authErrors';
 import LoginShowcase from '../components/LoginShowcase';
+import StockAnalysisArticle from '../components/StockAnalysisArticle';
 import Modal from '../components/Modal';
+import SignUpScreen from '../components/SignUpScreen';
+
+// Cinematic growth section: loaded on demand so it adds nothing to the login page's first paint.
+const GrowthJourney = lazy(() => import('../components/growth/GrowthJourney'));
 
 function FieldError({ message }: { message: string }) {
   return (
@@ -19,7 +25,12 @@ function FieldError({ message }: { message: string }) {
 }
 
 export default function Login() {
-  const { loginWithGoogle, loginWithEmail, registerWithEmail } = useAuthStore();
+  const { loginWithGoogle, loginWithEmail, registerWithEmail, loginAsGuest } = useAuthStore();
+  const [demoLoading, setDemoLoading] = useState(false);
+  const [fullSignup, setFullSignup] = useState(false);
+  const theme = useUiStore((st) => st.theme);
+  const toggleTheme = useUiStore((st) => st.toggleTheme);
+  const [demoError, setDemoError] = useState('');
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -70,7 +81,25 @@ export default function Login() {
     }
   };
 
+  // Demo = guest mode: full access, data kept only in this browser (localStorage), never in the Firestore database.
+  const tryDemo = async () => {
+    setDemoError('');
+    setDemoLoading(true);
+    try {
+      await loginAsGuest();
+    } catch (e) {
+      setDemoError(friendlyAuthError(e, 'The demo could not start. Please try again.'));
+    } finally {
+      setDemoLoading(false);
+    }
+  };
+
   const openAuth = (m: 'login' | 'register') => {
+    if (m === 'register') {
+      setError('');
+      setFullSignup(true);
+      return;
+    }
     setMode(m);
     setError('');
     setEmailErr('');
@@ -78,8 +107,20 @@ export default function Login() {
     setOpen(true);
   };
 
+  if (fullSignup) {
+    return (
+      <SignUpScreen
+        onBack={() => setFullSignup(false)}
+        onLogin={() => {
+          setFullSignup(false);
+          openAuth('login');
+        }}
+      />
+    );
+  }
+
   return (
-    <div className="animate-page-in lp-screen bg-slate-50">
+    <div className="animate-page-in lp-screen bg-page">
       <header className="lp-header bg-surface border-b border-line">
         <div className="lp-brand">
           <img src="/logo-icon.png" alt="" className="lp-brand-logo" />
@@ -88,6 +129,15 @@ export default function Login() {
           </span>
         </div>
         <nav className="lp-nav">
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+            className="btn-press lp-theme-btn"
+          >
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
           <button type="button" onClick={() => openAuth('login')} className="btn-press lp-nav-btn lp-nav-outline text-ink">
             Login
           </button>
@@ -98,7 +148,23 @@ export default function Login() {
       </header>
 
       <main className="lp-main">
-        <LoginShowcase />
+        <section className="lp-intro" aria-label="About Aurafin">
+          <span className="lp-intro-kicker">About Aurafin</span>
+          <p className="lp-intro-line">
+            <span className="font-brand lp-intro-name">Aurafin</span> is a privacy-first net worth tracker for stocks, crypto, cash, goals and more, built for Indian investors.
+          </p>
+          <button type="button" className="btn-press lp-demo-btn" onClick={tryDemo} disabled={demoLoading}>
+            {demoLoading ? 'Starting demo…' : 'Try demo'}
+          </button>
+          {demoError && <p className="lf-msg" role="alert">{demoError}</p>}
+        </section>
+        <div className="lp-hero">
+          <LoginShowcase onCta={() => openAuth('register')} />
+        </div>
+        <StockAnalysisArticle />
+        <Suspense fallback={null}>
+          <GrowthJourney />
+        </Suspense>
       </main>
 
       <Modal open={open} onClose={() => setOpen(false)} title={mode === 'login' ? 'Welcome back' : 'Create your account'}>
@@ -132,9 +198,9 @@ export default function Login() {
           {error && <p className="text-[0.875em] text-red-500 mb-[0.75em]">{error}</p>}
 
           <div className="login-divider flex items-center gap-3">
-            <div className="h-px bg-slate-200 flex-1" />
-            <span className="text-slate-600">or use email</span>
-            <div className="h-px bg-slate-200 flex-1" />
+            <div className="h-px bg-line flex-1" />
+            <span className="text-ink-2">or use email</span>
+            <div className="h-px bg-line flex-1" />
           </div>
 
           <div className="login-fields">
@@ -192,7 +258,7 @@ export default function Login() {
             </button>
           </div>
 
-          <p className="login-switch text-slate-600 text-center">
+          <p className="login-switch text-ink-2 text-center">
             {mode === 'login' ? "No account yet? " : 'Already have an account? '}
             <button
               onClick={() => setMode(mode === 'login' ? 'register' : 'login')}

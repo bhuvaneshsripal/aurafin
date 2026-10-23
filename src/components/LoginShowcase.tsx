@@ -6,7 +6,7 @@ import type { ComponentType } from 'react';
  * Centre carousel for the login page. 7 slides, auto-advancing every 6s.
  *
  * Each slide looks for a real photo at /public/login-slides/<n>.jpg
- * (.png). Wide or small images are shown whole (object-fit: contain) over a blurred copy of themselves, so nothing is cropped.
+ * (.jpg). Images fill the whole frame (object-fit: cover); `pos` sets which part stays in view.
  * Until a photo exists - or if it fails to load - the slide shows a themed
  * gradient with an icon, so the page never looks broken.
  */
@@ -15,23 +15,25 @@ interface Slide {
   sub: string;
   alt: string;
   image: string;
+  /** CSS object-position, i.e. which part of the photo stays visible when cropped. */
+  pos?: string;
   Icon: ComponentType<{ size?: number | string; strokeWidth?: number | string }>;
   gradient: string;
 }
 
 const SLIDES: Slide[] = [
-  { title: 'Track the markets', sub: 'Live charts and trends, always in view.', alt: 'Glowing stock market chart with candlesticks and price numbers', image: '/login-slides/1.png', Icon: Wallet, gradient: 'linear-gradient(135deg,#0f3d2b,#2f9e6a)' },
-  { title: 'Smart investments', sub: 'Stocks, funds and gold in one view.', alt: 'Old book with the word Investments on its spine', image: '/login-slides/2.png', Icon: TrendingUp, gradient: 'linear-gradient(135deg,#0b2545,#1c7ed6)' },
-  { title: 'Confident trading', sub: 'Follow every move with live prices.', alt: 'Phone showing a candlestick trading chart', image: '/login-slides/3.png', Icon: Landmark, gradient: 'linear-gradient(135deg,#1b1b2f,#5b4a8a)' },
-  { title: 'All your assets together', sub: 'Stocks, crypto and cash, tracked in one place.', alt: 'Phone, tablet and laptop showing crypto and trading screens with coins behind', image: '/login-slides/4.png', Icon: Coins, gradient: 'linear-gradient(135deg,#3a0f3f,#e0526b)' },
-  { title: 'Live prices', sub: 'Real-time gains and losses across your holdings.', alt: 'Screen full of green and red stock percentage changes', image: '/login-slides/5.png', Icon: PiggyBank, gradient: 'linear-gradient(135deg,#4a2c00,#e9a23b)' },
-  { title: 'Bull or bear, stay in control', sub: 'Plan your goals through every market cycle.', alt: 'Toy bear and bull facing each other on a newspaper stock page', image: '/login-slides/6.png', Icon: Target, gradient: 'linear-gradient(135deg,#102a43,#3e8ea6)' },
-  { title: 'Save first, spend the rest', sub: 'Build savings habits that compound over time.', alt: 'Investor quote graphic about saving before spending', image: '/login-slides/7.png', Icon: ShieldCheck, gradient: 'linear-gradient(135deg,#17352a,#3d6b5a)' },
+  { title: 'Build wealth, step by step', sub: 'Invest, save and grow your money over time.', alt: 'Wooden blocks spelling Invest, Save, Grow and Build Wealth in front of coin stacks and a Financial Freedom jar', image: '/login-slides/1.jpg', Icon: Wallet, gradient: 'linear-gradient(135deg,#0f3d2b,#2f9e6a)' },
+  { title: 'Track the Nifty live', sub: 'Watch prices and gains across your favourite stocks.', alt: 'Laptop showing the Nifty 50 candlestick chart beside a list of rising stock prices', image: '/login-slides/2.jpg', Icon: TrendingUp, gradient: 'linear-gradient(135deg,#0b2545,#1c7ed6)' },
+  { title: 'Start with SIPs', sub: 'Mutual funds that compound your money steadily.', alt: 'Coin stacks topped with SIP, MF, Index, Equity and Wealth blocks beside a mutual fund checklist', image: '/login-slides/3.jpg', Icon: Landmark, gradient: 'linear-gradient(135deg,#1b1b2f,#5b4a8a)' },
+  { title: 'Gold, silver and more', sub: 'Diversify across precious metals, stocks and property.', alt: 'Gold bar, silver bars and coins beside a panel of gold, silver, stock and real estate returns', image: '/login-slides/4.jpg', Icon: Coins, gradient: 'linear-gradient(135deg,#3a0f3f,#e0526b)' },
+  { title: 'Plan your retirement', sub: 'Emergency funds, insurance and a plan you can repeat.', alt: 'Notebook with a retirement plan checklist and a pen', image: '/login-slides/5.jpg', Icon: PiggyBank, gradient: 'linear-gradient(135deg,#4a2c00,#e9a23b)' },
+  { title: 'Diversify your portfolio', sub: 'Balance funds, stocks, gold and cash to manage risk.', alt: 'Pie chart of a portfolio split across mutual funds, stocks, gold and cash', image: '/login-slides/6.jpg', Icon: Target, gradient: 'linear-gradient(135deg,#102a43,#3e8ea6)' },
+  { title: 'Reach your financial goals', sub: 'From buying a home to living freely.', alt: 'Notebook listing financial goals such as buying a house and early retirement, with a city sunset behind', image: '/login-slides/7.jpg', Icon: ShieldCheck, gradient: 'linear-gradient(135deg,#17352a,#3d6b5a)' },
 ];
 
 const INTERVAL_MS = 6000;
 
-export default function LoginShowcase() {
+export default function LoginShowcase({ onCta }: { onCta?: () => void }) {
   const [index, setIndex] = useState(0);
   const [failed, setFailed] = useState<Record<number, boolean>>({});
   const timer = useRef<number | null>(null);
@@ -41,10 +43,24 @@ export default function LoginShowcase() {
     timer.current = window.setInterval(() => setIndex((i) => (i + 1) % SLIDES.length), INTERVAL_MS);
   }, []);
 
+  const root = useRef<HTMLElement | null>(null);
+
+  // Auto-advance only while the carousel is on screen; stop once scrolled past it.
   useEffect(() => {
-    restart();
-    return () => {
+    const stop = () => {
       if (timer.current !== null) window.clearInterval(timer.current);
+      timer.current = null;
+    };
+    const el = root.current;
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      restart();
+      return stop;
+    }
+    const io = new IntersectionObserver(([entry]) => (entry.isIntersecting ? restart() : stop()), { threshold: 0.2 });
+    io.observe(el);
+    return () => {
+      io.disconnect();
+      stop();
     };
   }, [restart]);
 
@@ -56,18 +72,16 @@ export default function LoginShowcase() {
   const active = SLIDES[index];
 
   return (
-    <section className="lp-showcase" aria-roledescription="carousel" aria-label="Aurafin highlights">
+    <section ref={root} className="lp-showcase" aria-roledescription="carousel" aria-label="Aurafin highlights">
       <div className="lp-stage">
         {SLIDES.map((s, i) => (
           <div key={s.title} className={`lp-slide${i === index ? ' is-on' : ''}`} aria-hidden={i !== index} style={{ background: s.gradient }}>
-            {!failed[i] && (
-              <img src={s.image} alt="" aria-hidden="true" className="lp-bg" draggable={false} />
-            )}
             {!failed[i] && (
               <img
                 src={s.image}
                 alt={s.alt}
                 className="lp-img"
+                style={{ objectPosition: s.pos ?? 'center' }}
                 loading={i === 0 ? 'eager' : 'lazy'}
                 draggable={false}
                 onError={() => setFailed((f) => ({ ...f, [i]: true }))}
@@ -80,6 +94,22 @@ export default function LoginShowcase() {
             )}
           </div>
         ))}
+        <div className="lp-overlay">
+          <div className="lp-caption" aria-live="polite">
+            <h2 className="font-brand">{active.title}</h2>
+            <p>{active.sub}</p>
+            {onCta && (
+              <button type="button" className="lp-cta btn-press" onClick={onCta}>
+                Get started
+              </button>
+            )}
+          </div>
+          <div className="lp-dots" role="tablist" aria-label="Choose slide">
+            {SLIDES.map((s, i) => (
+              <button key={s.title} type="button" role="tab" aria-selected={i === index} aria-label={`Slide ${i + 1}: ${s.title}`} className={`lp-dot${i === index ? ' is-on' : ''}`} onClick={() => go(i)} />
+            ))}
+          </div>
+        </div>
         <button type="button" className="lp-arrow lp-prev" onClick={() => go(index - 1)} aria-label="Previous slide">
           <ChevronLeft size={22} />
         </button>
@@ -88,16 +118,6 @@ export default function LoginShowcase() {
         </button>
       </div>
 
-      <div className="lp-caption" aria-live="polite">
-        <h2 className="font-brand text-ink">{active.title}</h2>
-        <p className="text-slate-600">{active.sub}</p>
-      </div>
-
-      <div className="lp-dots" role="tablist" aria-label="Choose slide">
-        {SLIDES.map((s, i) => (
-          <button key={s.title} type="button" role="tab" aria-selected={i === index} aria-label={`Slide ${i + 1}: ${s.title}`} className={`lp-dot${i === index ? ' is-on' : ''}`} onClick={() => go(i)} />
-        ))}
-      </div>
     </section>
   );
 }
