@@ -98,11 +98,6 @@ export default function LoginShowcase({ onCta }: { onCta?: () => void }) {
           <div className="lp-caption" aria-live="polite">
             <h2 className="font-brand">{active.title}</h2>
             <p>{active.sub}</p>
-            {onCta && (
-              <button type="button" className="lp-cta btn-press" onClick={onCta}>
-                Get started
-              </button>
-            )}
           </div>
           <div className="lp-dots" role="tablist" aria-label="Choose slide">
             {SLIDES.map((s, i) => (
@@ -118,6 +113,11 @@ export default function LoginShowcase({ onCta }: { onCta?: () => void }) {
         </button>
       </div>
 
+      {onCta && (
+        <button type="button" className="lp-cta btn-press" onClick={onCta}>
+          Get started
+        </button>
+      )}
     </section>
   );
 }

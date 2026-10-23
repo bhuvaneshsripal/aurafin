@@ -9,10 +9,13 @@
   --gj-gold: #f5d37a;
   --gj-emerald: #34d399;
   position: relative;
-  width: calc(100% + 2rem);
+  /* Over-bleed by a few px each side so sub-pixel rounding never exposes the light page behind. */
+  width: calc(100% + 2rem + 6px);
+  max-width: none;
   margin: 0 -1rem;
   color: #f8fafc;
   background: #050a14;
+  box-shadow: 0 0 0 3px #050a14;
   isolation: isolate;
 }
 

@@ -147,6 +147,7 @@ export default function GrowthJourney() {
     const stage = stageRef.current;
     if (!wrap || !stage || reduced) return;
 
+    let cleanupTick = () => {};
     const ctx = gsap.context(() => {
       const bands = Array.from(stage.querySelectorAll<HTMLElement>('[data-band]')).map((el) => ({
         el,
@@ -181,17 +182,116 @@ export default function GrowthJourney() {
       };
 
       render(0);
+      // ---- Guided scroll -------------------------------------------------------------------
+      // When the section reaches the top of the screen, page scrolling is held in place and the
+      // person's scroll / swipe / arrow-key input drives the animation instead. The animation
+      // moves at a limited speed, so it can never be skipped by scrolling fast. Once it has
+      // played to the end (or back to the start) the page scrolls on normally.
+      const MAX_RATE = 1 / 8; // fastest possible: the whole journey in ~8 seconds
+      const LEAD = 0.05; // how far input may run ahead of what is on screen
+      const SCREENS = 4; // scroll distance (in screen heights) that equals the whole journey
+      let current = 0; // what is on screen
+      let target = 0; // where input wants it to be
+      let locked = false;
+      let touchY = 0;
 
-      ScrollTrigger.create({
+      let st: ScrollTrigger | undefined;
+      const startY = () => st?.start ?? window.scrollY;
+
+      const push = (deltaPx: number): boolean => {
+        // Returns true when the animation used the input (so the page must not scroll).
+        if (deltaPx > 0 && current >= 0.9995) return false;
+        if (deltaPx < 0 && current <= 0.0005) return false;
+        const next = target + deltaPx / (window.innerHeight * SCREENS);
+        target = Math.min(1, Math.max(0, current - LEAD, Math.min(next, current + LEAD)));
+        return true;
+      };
+
+      const onWheel = (e: WheelEvent) => {
+        const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1;
+        if (push(e.deltaY * unit)) e.preventDefault();
+        else unlock();
+      };
+      const onTouchStart = (e: TouchEvent) => {
+        touchY = e.touches[0].clientY;
+      };
+      const onTouchMove = (e: TouchEvent) => {
+        const y = e.touches[0].clientY;
+        const d = touchY - y;
+        touchY = y;
+        if (push(d * 1.4)) {
+          if (e.cancelable) e.preventDefault();
+        } else unlock();
+      };
+      const onKey = (e: KeyboardEvent) => {
+        const vh = window.innerHeight;
+        const d =
+          e.key === 'ArrowDown' ? vh * 0.2 :
+          e.key === 'ArrowUp' ? -vh * 0.2 :
+          e.key === 'PageDown' || (e.key === ' ' && !e.shiftKey) ? vh * 0.6 :
+          e.key === 'PageUp' || (e.key === ' ' && e.shiftKey) ? -vh * 0.6 : 0;
+        if (!d) return;
+        if (push(d)) e.preventDefault();
+        else unlock();
+      };
+      // Keeps the page still while locked (covers scrollbar dragging and other scroll sources).
+      const onScrollHold = () => {
+        if (locked && Math.abs(window.scrollY - startY()) > 1) window.scrollTo(0, startY());
+      };
+
+      const lock = () => {
+        if (locked) return;
+        locked = true;
+        window.scrollTo(0, startY());
+        window.addEventListener('wheel', onWheel, { passive: false });
+        window.addEventListener('touchstart', onTouchStart, { passive: true });
+        window.addEventListener('touchmove', onTouchMove, { passive: false });
+        window.addEventListener('keydown', onKey);
+        window.addEventListener('scroll', onScrollHold, { passive: true });
+      };
+      function unlock() {
+        if (!locked) return;
+        locked = false;
+        window.removeEventListener('wheel', onWheel);
+        window.removeEventListener('touchstart', onTouchStart);
+        window.removeEventListener('touchmove', onTouchMove);
+        window.removeEventListener('keydown', onKey);
+        window.removeEventListener('scroll', onScrollHold);
+      }
+
+      st = ScrollTrigger.create({
         trigger: wrap,
         start: 'top top',
-        end: () => `+=${Math.round(window.innerHeight * 3.6)}`,
-        pin: true,
-        pinSpacing: true,
-        scrub: 0.6,
+        end: '+=2',
         invalidateOnRefresh: true,
-        onUpdate: (self) => render(self.progress),
+        onEnter: () => {
+          // Arriving from above: play from the start unless it has already finished.
+          if (current < 0.9995) lock();
+        },
+        onEnterBack: () => {
+          // Arriving from below: play backwards unless it is already at the start.
+          if (current > 0.0005) lock();
+        },
+        onLeave: unlock,
+        onLeaveBack: unlock,
       });
+
+      const tick = (_time: number, deltaMs: number) => {
+        const dt = Math.min(deltaMs, 100) / 1000;
+        const diff = target - current;
+        if (diff === 0) return;
+        if (Math.abs(diff) < 0.00005) {
+          current = target;
+        } else {
+          current += Math.sign(diff) * Math.min(Math.abs(diff), MAX_RATE * dt);
+        }
+        render(current);
+      };
+      gsap.ticker.add(tick);
+      cleanupTick = () => {
+        gsap.ticker.remove(tick);
+        unlock();
+      };
     }, wrap);
 
     // Re-measure once the page-in fade has settled, so pin positions are exact.
@@ -199,6 +299,7 @@ export default function GrowthJourney() {
 
     return () => {
       window.clearTimeout(refreshTimer);
+      cleanupTick();
       ctx.revert();
       scrollState.progress = 0;
       scrollState.smooth = 0;

@@ -7,6 +7,8 @@ import LoginShowcase from '../components/LoginShowcase';
 import StockAnalysisArticle from '../components/StockAnalysisArticle';
 import Modal from '../components/Modal';
 import SignUpScreen from '../components/SignUpScreen';
+import InstallBanner from '../components/InstallBanner';
+import InstallPromptModal from '../components/InstallPromptModal';
 
 // Cinematic growth section: loaded on demand so it adds nothing to the login page's first paint.
 const GrowthJourney = lazy(() => import('../components/growth/GrowthJourney'));
@@ -166,6 +168,9 @@ export default function Login() {
           <GrowthJourney />
         </Suspense>
       </main>
+
+      <InstallBanner />
+      <InstallPromptModal />
 
       <Modal open={open} onClose={() => setOpen(false)} title={mode === 'login' ? 'Welcome back' : 'Create your account'}>
         <div className="login-modal-body">
