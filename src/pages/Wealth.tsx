@@ -2345,7 +2345,16 @@ function AssetsTab({
                     </div>
                   </div>
                   <div className="flex items-center justify-end gap-0.5">
-                    <div className="text-right shrink-0">
+                    {/* Tapping the values cycles Current(Invested) → Returns →
+                        Market price for every row (same as the header
+                        toggle) instead of opening the holding. */}
+                    <div
+                      className="text-right shrink-0 cursor-pointer -my-3 py-3 pl-3"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        cycleCompactSort(1);
+                      }}
+                    >
                       {loading ? (
                         <span className="inline-block h-3 w-12 rounded bg-slate-100 dark:bg-slate-800 animate-pulse ml-auto" />
                       ) : displayMetric === 'returns' ? (
@@ -7109,6 +7118,11 @@ function LiabilitiesTab({
   const [editing, setEditing] = useState<Liability | null>(null);
   useModalBackClose(modalOpen, () => setModalOpen(false));
   const [pendingDelete, setPendingDelete] = useState<Liability | null>(null);
+  // Keep the open "Edit Liability" screen across a browser refresh (?editliab=<id>).
+  useUrlRestore('editliab', modalOpen ? editing : null, liabilities, (l) => {
+    setEditing(l);
+    setModalOpen(true);
+  });
 
   const handleDelete = async (id: string) => {
     if (!user) return;

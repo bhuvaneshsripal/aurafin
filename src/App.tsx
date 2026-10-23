@@ -28,6 +28,7 @@ import { useLivePrices } from './hooks/useLivePrices';
 import { useLiveSipValues } from './hooks/useLiveSipValues';
 import { useLiveGoldPrice } from './hooks/useLiveGoldPrice';
 import { useWeeklyDigestScheduler } from './hooks/useWeeklyDigestScheduler';
+import { useMarketAlerts } from './hooks/useMarketAlerts';
 import { useDailyHardRefresh } from './hooks/useDailyHardRefresh';
 import { useScrollRestoration } from './hooks/useScrollRestoration';
 import Sidebar from './components/Sidebar';
@@ -202,6 +203,11 @@ function WeeklyDigestSync() {
   return null;
 }
 
+function MarketAlertsSync() {
+  useMarketAlerts();
+  return null;
+}
+
 function DataSync() {
   const setAssets = useAssetsStore((s) => s.setAssets);
   const setLiabilities = useLiabilitiesStore((s) => s.setLiabilities);
@@ -366,6 +372,7 @@ export default function App() {
       <DataSync />
       <LivePriceSync />
       <WeeklyDigestSync />
+      <MarketAlertsSync />
       <InstallPromptListener />
       <AppReady>
         <AppShell />

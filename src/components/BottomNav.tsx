@@ -63,7 +63,10 @@ export default function BottomNav() {
   // on top of the field being typed into.
   const location = useLocation();
   const isMoreActive = moreLinks.some((l) => l.to === location.pathname);
-  const hideFab = useUiStore((s) => s.hideFab);
+  const searchOpen = useUiStore((s) => s.searchOpen);
+  const notificationsOpen = useUiStore((s) => s.notificationsOpen);
+  // The bottom nav stays visible on the notifications page; only the "+" button hides.
+  const hideFab = useUiStore((s) => s.hideFab) || searchOpen || notificationsOpen;
   const { mounted: moreMounted, closing: moreClosing } = useExitPresence(moreOpen, 180);
   useBodyScrollLock(moreOpen);
   useModalBackClose(moreOpen, () => setMoreOpen(false));
@@ -101,7 +104,7 @@ export default function BottomNav() {
         </div>
       )}
 
-      {(
+      {!searchOpen && (
         <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface border-t border-line pb-[env(safe-area-inset-bottom)]">
           <div className="grid grid-cols-4 h-14">
             {primaryLinks.map(({ to, label, icon: Icon }) => (

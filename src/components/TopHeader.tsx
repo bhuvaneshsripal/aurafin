@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Moon, Sun, Globe, Eye, EyeOff, Bell, ChevronDown, MoreVertical, Settings as SettingsIcon, Lock, LogOut, FileText } from 'lucide-react';
+import { Moon, Sun, Globe, Eye, EyeOff, ChevronDown, MoreVertical, Settings as SettingsIcon, Lock, LogOut, FileText } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
 import { useUiStore } from '../store/uiStore';
@@ -10,6 +10,7 @@ import QuickAddMenu from './QuickAddMenu';
 import ProfileSwitcher from './ProfileSwitcher';
 import AppLogo from './AppLogo';
 import GlobalSearch from './GlobalSearch';
+import NotificationBell from './NotificationBell';
 import MarketTicker, { MarketTickerMarquee } from './MarketTicker';
 import { Button, IconButton } from './ui';
 import UpdateDot from './UpdateDot';
@@ -32,7 +33,6 @@ export default function TopHeader() {
   const location = useLocation();
 
   const [profileOpen, setProfileOpen] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -50,7 +50,6 @@ export default function TopHeader() {
   };
 
   const profileRef = useRef<HTMLDivElement>(null);
-  const notifRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -71,7 +70,6 @@ export default function TopHeader() {
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) setProfileOpen(false);
-      if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false);
       if (mobileMenuRef.current && !mobileMenuRef.current.contains(e.target as Node)) setMobileMenuOpen(false);
     };
     document.addEventListener('mousedown', onClickOutside);
@@ -142,19 +140,7 @@ export default function TopHeader() {
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </IconButton>
 
-          <div className="relative shrink-0" ref={notifRef}>
-            <IconButton label="Notifications" onClick={() => setNotifOpen((o) => !o)}>
-              <Bell size={18} />
-            </IconButton>
-            {notifOpen && (
-              <div className={`${menuPanel} w-72 max-w-[90vw]`}>
-                <div className="px-4 py-3 border-b border-line-soft">
-                  <p className="text-sm font-semibold text-ink">Notifications</p>
-                </div>
-                <div className="px-4 py-8 text-center text-sm text-muted">You're all caught up.</div>
-              </div>
-            )}
-          </div>
+          <NotificationBell />
 
           <div className="w-px h-6 bg-line mx-1.5 shrink-0" />
 
@@ -200,6 +186,8 @@ export default function TopHeader() {
         {/* Mobile toolbar, right column */}
         <div className="flex md:hidden items-center gap-0.5 shrink-0 justify-self-end">
           <GlobalSearch />
+
+          <NotificationBell />
 
           <IconButton label={privacyMode ? 'Show amounts' : 'Hide amounts'} onClick={togglePrivacy}>
             {privacyMode ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -249,12 +237,6 @@ export default function TopHeader() {
                   {theme === 'dark' ? <Sun size={17} className="text-muted" /> : <Moon size={17} className="text-muted" />}
                   {theme === 'dark' ? 'Light mode' : 'Dark mode'}
                 </button>
-
-                <button onClick={() => setNotifOpen((o) => !o)} className={menuItem}>
-                  <Bell size={17} className="text-muted" />
-                  Notifications
-                </button>
-                {notifOpen && <div className="px-4 pb-3 -mt-1 text-xs text-muted">You're all caught up.</div>}
 
                 <div className="border-t border-line-soft" />
 

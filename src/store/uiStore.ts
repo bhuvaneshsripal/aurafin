@@ -8,6 +8,13 @@ interface UiState {
    * pages that show their own bottom toolbar (e.g. bulk-selection actions)
    * in the same corner, so the two don't overlap. */
   hideFab: boolean;
+  /** True while the global search panel is open — the mobile bottom nav and
+   *  "+" button hide themselves so they don't sit above the keyboard. */
+  searchOpen: boolean;
+  /** True while the full-screen notifications page is open (hides the bottom nav). */
+  notificationsOpen: boolean;
+  setNotificationsOpen: (open: boolean) => void;
+  setSearchOpen: (open: boolean) => void;
   /** Desktop sidebar collapsed to an icon rail. (On tablet widths the rail is
    *  always used; on phones the bottom nav replaces the sidebar entirely.) */
   sidebarCollapsed: boolean;
@@ -61,6 +68,10 @@ export const useUiStore = create<UiState>((set, get) => ({
   theme: 'light',
   privacyMode: true,
   hideFab: false,
+  searchOpen: false,
+  notificationsOpen: false,
+  setNotificationsOpen: (open) => set({ notificationsOpen: open }),
+  setSearchOpen: (open) => set({ searchOpen: open }),
   sidebarCollapsed: false,
   initSidebar: () => {
     let collapsed = false;

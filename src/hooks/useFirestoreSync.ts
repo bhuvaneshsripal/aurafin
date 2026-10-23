@@ -11,6 +11,7 @@ import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useSnapshotsStore } from '../store/snapshotsStore';
 import { toIsoDate } from '../utils/date';
 import { readBackup, writeBackup } from '../utils/dataBackup';
+import { applyPending, confirmPending, pendingFor, pendingItem, recordPending } from '../utils/pendingWrites';
 import type { Snapshot } from '../types';
 
 /** Every subcollection kept under users/{uid} that DataSync listens to.
@@ -127,7 +128,10 @@ export function useFirestoreCollectionSync<T extends { id: string }>(
     // Show the last-known data right away (before Firestore answers, and
     // even if the network never does). It is replaced by real data the
     // moment a snapshot arrives; it does NOT count as server-confirmed.
-    const backup = readBackup<T>(uid, collectionName);
+    const backup = (() => {
+      const b = readBackup<T>(uid, collectionName);
+      return b ? applyPending(uid, collectionName, b) : b;
+    })();
     if (backup && backup.length > 0) {
       setLocal(backup);
       markCollectionLoaded(collectionName);
@@ -157,7 +161,13 @@ export function useFirestoreCollectionSync<T extends { id: string }>(
       const dataChanged = first || snap.docChanges().length > 0;
       first = false;
       if (dataChanged) {
-        const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as T);
+        // Saves not yet confirmed by Firestore (e.g. you edited and refreshed
+        // straight away) stay on top, so a stale snapshot can't revert them.
+        const items = applyPending(
+          uid,
+          collectionName,
+          snap.docs.map((d) => ({ id: d.id, ...d.data() }) as T)
+        );
         setLocal(items);
         writeBackup(uid, collectionName, items);
       }
@@ -171,8 +181,21 @@ export function useFirestoreCollectionSync<T extends { id: string }>(
       markCollectionLoaded(collectionName);
       if (trusted) markCollectionServerConfirmed(collectionName);
     });
+    // Re-send anything saved before the last refresh that never got confirmed.
+    for (const p of pendingFor(uid, collectionName)) {
+      const ref = doc(db, 'users', uid, collectionName, p.id);
+      const send = p.op === 'del' ? deleteDoc(ref) : setDoc(ref, toWrite(pendingItem(p)), { merge: true });
+      void send.then(() => confirmPending(uid, collectionName, p.id, p.at)).catch(() => {});
+    }
     return () => unsub();
   }, [uid, anonymous, collectionName, setLocal, onSyncChange, markCollectionLoaded, markCollectionServerConfirmed]);
+}
+
+/** undefined -> deleteField() so a cleared form field is really removed. */
+function toWrite(item: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(item)) out[key] = value === undefined ? deleteField() : value;
+  return out;
 }
 
 /** Merges `incoming` on top of `existing`, but treats any key in `incoming`
@@ -236,11 +259,10 @@ export async function upsertDoc<T extends { id: string }>(
   // (this form manages it and just cleared it) is converted to Firestore's
   // `deleteField()` sentinel so it's actually removed, merge or not.
   const ref = doc(db, 'users', uid, collectionName, item.id);
-  const withDeletes: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(item as Record<string, unknown>)) {
-    withDeletes[key] = value === undefined ? deleteField() : value;
-  }
-  await setDoc(ref, withDeletes, { merge: true });
+  // Journal first (synchronous), so a refresh right after Save keeps the edit.
+  const token = recordPending(uid, collectionName, item.id, 'set', item as Record<string, unknown>);
+  await setDoc(ref, toWrite(item as Record<string, unknown>), { merge: true });
+  confirmPending(uid, collectionName, item.id, token);
 }
 
 /**
@@ -268,12 +290,14 @@ export async function bulkUpsertDocs<T extends { id: string }>(
   const chunkSize = 450;
   for (let i = 0; i < items.length; i += chunkSize) {
     const chunk = items.slice(i, i + chunkSize);
+    const tokens = chunk.map((item) => recordPending(uid, collectionName, item.id, 'set', item as Record<string, unknown>));
     const batch = writeBatch(db);
     chunk.forEach((item) => {
       const ref = doc(db, 'users', uid, collectionName, item.id);
       batch.set(ref, item, { merge: true });
     });
     await batch.commit();
+    chunk.forEach((item, n) => confirmPending(uid, collectionName, item.id, tokens[n]));
   }
 }
 
@@ -291,7 +315,9 @@ export async function removeDoc(uidOrUser: string | { uid: string; isAnonymous?:
 
   // For regular users, remove from Firestore
   const ref = doc(db, 'users', uid, collectionName, id);
+  const token = recordPending(uid, collectionName, id, 'del');
   await deleteDoc(ref);
+  confirmPending(uid, collectionName, id, token);
 }
 
 /**
@@ -680,4 +706,34 @@ export async function saveValuationHistory(
 ) {
   if (isAnonymousUser(user)) return;
   await setDoc(doc(db, 'users', user.uid, 'meta', 'valuationHistory'), { items }, { merge: false });
+}
+
+/** Global search "Recent searches", stored per account (users/{uid}/meta/
+ *  searchHistory) so a search made on the laptop shows up on the phone too.
+ *  Guests stay device-local (localStorage handled by the caller). */
+export function subscribeSearchHistory(
+  user: { uid: string; isAnonymous?: boolean },
+  onChange: (items: string[] | null) => void
+): () => void {
+  if (isAnonymousUser(user)) return () => {};
+  const ref = doc(db, 'users', user.uid, 'meta', 'searchHistory');
+  return onSnapshot(
+    ref,
+    (snap) => {
+      const items = snap.data()?.items;
+      onChange(
+        Array.isArray(items)
+          ? items.filter((x: unknown) => typeof x === 'string')
+          : snap.exists()
+            ? []
+            : null
+      );
+    },
+    () => onChange(null)
+  );
+}
+
+export async function saveSearchHistory(user: { uid: string; isAnonymous?: boolean }, items: string[]) {
+  if (isAnonymousUser(user)) return;
+  await setDoc(doc(db, 'users', user.uid, 'meta', 'searchHistory'), { items }, { merge: false });
 }

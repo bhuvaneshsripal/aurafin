@@ -142,6 +142,7 @@
 
   /* ---- Semantic tokens (flip in dark mode) ------------------------------- */
   --color-page: #f7f7f5;
+  --color-sandal: #f1e8d6;
   --color-surface: #ffffff;
   --color-surface-muted: #faf9f7;
   --color-surface-hover: #f5f5f2;
@@ -228,6 +229,7 @@
    has no explicit dark variant) are lifted so helper text stays legible. */
 .dark {
   --color-page: #0d0d0c;
+  --color-sandal: #1a1814;
   --color-surface: #151514;
   --color-surface-muted: #1a1a18;
   --color-surface-hover: #1f1f1d;
@@ -1021,5 +1023,62 @@ html[data-vv-pan] #app-marquee {
   #app-marquee {
     top: calc(3.5rem + var(--update-h, 0px));
     transition: top 500ms cubic-bezier(0.33, 0, 0.2, 1);
+  }
+}
+
+/* Global search box: no green focus ring/border (overrides the global input:focus style). */
+input.global-search-input,
+input.global-search-input:focus,
+.dark input.global-search-input:focus {
+  outline: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Global search panel: force ALL text capital. Buttons and inputs don't
+   inherit text-transform from their parent by default, so set it explicitly. */
+.global-search-panel,
+.global-search-panel *,
+.global-search-panel input,
+.global-search-panel input::placeholder,
+.global-search-panel button {
+  text-transform: uppercase !important;
+}
+
+/* ==========================================================================
+   GLOBAL PRESS FEEDBACK — every clickable thing gets a smooth press-in /
+   release so taps feel responsive everywhere. Uses the individual `scale`
+   property (not `transform`) so it never fights the transforms other
+   components already use (drag, tap-scale, animations).
+   ========================================================================== */
+:is(button, a[href], [role="button"], [role="tab"], [role="menuitem"], summary, select, label[for], .cursor-pointer):not(
+    :disabled,
+    [aria-disabled="true"],
+    .tap-scale,
+    [draggable="true"]
+  ) {
+  transition-property: color, background-color, border-color, box-shadow, opacity, scale;
+  transition-duration: 160ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+:is(button, a[href], [role="tab"], [role="menuitem"], summary, label[for]):not(
+    :disabled,
+    [aria-disabled="true"],
+    .tap-scale,
+    [draggable="true"]
+  ):active {
+  scale: 0.96;
+}
+/* Wide tappable rows / cards: a subtler press so they don't look like they shrink. */
+:is([role="button"], .cursor-pointer):not(:disabled, [aria-disabled="true"], .tap-scale, [draggable="true"]):active {
+  scale: 0.985;
+  opacity: 0.92;
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(button, a[href], [role="button"], [role="tab"], [role="menuitem"], summary, select, label[for], .cursor-pointer) {
+    transition-duration: 1ms;
+  }
+  :is(button, a[href], [role="button"], [role="tab"], [role="menuitem"], summary, label[for], .cursor-pointer):active {
+    scale: 1;
   }
 }

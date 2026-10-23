@@ -27,10 +27,15 @@ async function yahooQuote(symbol) {
       { headers: { 'User-Agent': 'Mozilla/5.0' } }
     );
     if (!res.ok) return null;
-    const meta = (await res.json())?.chart?.result?.[0]?.meta;
+    const result = (await res.json())?.chart?.result?.[0];
+    const meta = result?.meta;
     const price = num(meta?.regularMarketPrice);
     if (price === undefined) return null;
-    return { price, previousClose: num(meta?.chartPreviousClose) ?? num(meta?.previousClose) };
+    // Today's opening level = first 1-minute candle's open (lets the app
+    // back-fill "Open" even if it wasn't running at 9:15).
+    const opens = result?.indicators?.quote?.[0]?.open;
+    const open = Array.isArray(opens) ? num(opens.find((v) => num(v) !== undefined)) : undefined;
+    return { price, previousClose: num(meta?.chartPreviousClose) ?? num(meta?.previousClose), open };
   } catch {
     return null;
   }
@@ -70,7 +75,7 @@ async function fetchIndicesUncached() {
     if (results[i] || !idx.nse) return;
     const row = all.find((r) => String(r?.index ?? '').toUpperCase() === idx.nse);
     const price = num(row?.last);
-    if (price !== undefined) results[i] = { price, previousClose: num(row?.previousClose) };
+    if (price !== undefined) results[i] = { price, previousClose: num(row?.previousClose), open: num(row?.open) };
   });
 
   // Anything NSE didn't return: fall back to Yahoo.

@@ -21,7 +21,7 @@ export const MARKET_HOLIDAYS = new Set<string>([]);
 
 /** Current wall-clock time in India (Asia/Kolkata), regardless of the
  *  device's own timezone. */
-function getIstTimeOfDay(now: Date = new Date()): { hour: number; minute: number } {
+export function getIstTimeOfDay(now: Date = new Date()): { hour: number; minute: number } {
   const parts = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Asia/Kolkata',
     hour: '2-digit',
@@ -37,7 +37,7 @@ function getIstTimeOfDay(now: Date = new Date()): { hour: number; minute: number
  *  weekday (1 = Monday ... 7 = Sunday), independent of the device's own
  *  timezone/locale. Used to key "have we already sent this week's digest"
  *  so it fires once per Saturday rather than every time the check runs. */
-function getIstDateInfo(now: Date = new Date()): { dateKey: string; isoWeekday: number } {
+export function getIstDateInfo(now: Date = new Date()): { dateKey: string; isoWeekday: number } {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Kolkata',
     year: 'numeric',

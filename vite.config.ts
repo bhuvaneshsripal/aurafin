@@ -249,6 +249,7 @@ export default defineConfig({
       workbox: {
         // Pre-cache the built app shell so opening the installed app is instant,
         // even offline. Firebase/auth calls always go to the network.
+        importScripts: ['/notification-sw.js'],
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
         globIgnores: ['**/xlsx-*.js'],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,

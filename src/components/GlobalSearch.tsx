@@ -7,6 +7,8 @@ import { useGoalsStore } from '../store/goalsStore';
 import { useTransactionsStore } from '../store/transactionsStore';
 import { useLivePricesStore } from '../store/livePricesStore';
 import { useUiStore } from '../store/uiStore';
+import { useAuthStore } from '../store/authStore';
+import { subscribeSearchHistory, saveSearchHistory } from '../hooks/useFirestoreSync';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import { resolveAssetValues } from '../utils/assetValues';
 import { ASSET_CLASS_LABELS, maskPreciseAmount } from '../utils/currency';
@@ -51,6 +53,28 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
+  const uid = user?.uid;
+  const isGuest = (user as { isAnonymous?: boolean } | null)?.isAnonymous === true;
+
+  // Recent searches follow the account across devices: listen to the synced
+  // list and mirror it locally (localStorage stays as the offline/guest copy).
+  useEffect(() => {
+    if (!user || isGuest) return;
+    return subscribeSearchHistory(user, (items) => {
+      if (!items) return;
+      const next = items.slice(0, MAX_RECENT_SEARCHES);
+      setRecentSearches(next);
+      saveRecentSearches(next);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uid, isGuest]);
+
+  const persistRecent = (next: string[]) => {
+    setRecentSearches(next);
+    saveRecentSearches(next);
+    if (user && !isGuest) void saveSearchHistory(user, next).catch(() => {});
+  };
 
   const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
   const allAssets = useAssetsStore((s) => s.assets);
@@ -98,6 +122,13 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
 
   useBodyScrollLock(open);
 
+  // Tell the layout the search is open so the mobile bottom nav / "+" button hide.
+  const setSearchOpen = useUiStore((s) => s.setSearchOpen);
+  useEffect(() => {
+    setSearchOpen(open);
+    return () => setSearchOpen(false);
+  }, [open, setSearchOpen]);
+
   const q = query.trim().toLowerCase();
 
   const assetMatches = useMemo(
@@ -137,22 +168,16 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
   const addRecentSearch = (term: string) => {
     const trimmed = term.trim();
     if (!trimmed) return;
-    setRecentSearches((prev) => {
-      const next = [trimmed, ...prev.filter((t) => t.toLowerCase() !== trimmed.toLowerCase())].slice(
+    persistRecent(
+      [trimmed, ...recentSearches.filter((t) => t.toLowerCase() !== trimmed.toLowerCase())].slice(
         0,
         MAX_RECENT_SEARCHES
-      );
-      saveRecentSearches(next);
-      return next;
-    });
+      )
+    );
   };
 
   const removeRecentSearch = (term: string) => {
-    setRecentSearches((prev) => {
-      const next = prev.filter((t) => t !== term);
-      saveRecentSearches(next);
-      return next;
-    });
+    persistRecent(recentSearches.filter((t) => t !== term));
   };
 
   const goTo = (path: string) => {
@@ -189,7 +214,7 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
         <div className="animate-backdrop-in fixed inset-0 z-[100] bg-slate-900/40 px-4 pt-[10vh] sm:pt-24 flex justify-center">
           <div
             ref={containerRef}
-            className="animate-menu-in w-full max-w-lg bg-surface rounded-2xl shadow-xl border border-line overflow-hidden h-fit max-h-[70vh] flex flex-col"
+            className="global-search-panel animate-menu-in uppercase w-full max-w-lg bg-surface rounded-2xl shadow-xl border border-line overflow-hidden h-fit max-h-[70vh] flex flex-col"
             style={{ transformOrigin: 'top center' }}
           >
             <div className="flex items-center gap-3 px-4 py-4 border-b border-line-soft shrink-0">
@@ -202,7 +227,7 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
                   if (e.key === 'Enter' && query.trim()) addRecentSearch(query);
                 }}
                 placeholder="Search Aurafin..."
-                className="flex-1 min-w-0 bg-transparent text-base text-ink placeholder:text-slate-400 focus:outline-none focus:ring-0 focus:shadow-none"
+                className="global-search-input flex-1 min-w-0 bg-transparent text-base text-ink placeholder:text-slate-400"
               />
               {query && (
                 <button
@@ -231,8 +256,7 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
                       </p>
                       <button
                         onClick={() => {
-                          setRecentSearches([]);
-                          saveRecentSearches([]);
+                          persistRecent([]);
                         }}
                         className="text-[11px] font-medium text-slate-600 hover:text-slate-600 dark:hover:text-slate-300"
                       >
