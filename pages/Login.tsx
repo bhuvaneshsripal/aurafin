@@ -1,0 +1,175 @@
+import { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
+import { useAuthStore } from '../store/authStore';
+import { friendlyAuthError } from '../utils/authErrors';
+
+export default function Login() {
+  const { loginWithGoogle, loginWithEmail, registerWithEmail, loginAsGuest } = useAuthStore();
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [guestLoading, setGuestLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const submit = async () => {
+    setError('');
+    try {
+      if (mode === 'login') await loginWithEmail(email, password);
+      else await registerWithEmail(email, password);
+    } catch (e) {
+      setError(
+        friendlyAuthError(e, mode === 'login' ? 'We couldn\u2019t log you in. Please try again.' : 'We couldn\u2019t create your account. Please try again.')
+      );
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setError('');
+    setGoogleLoading(true);
+    try {
+      await loginWithGoogle();
+    } catch (e) {
+      // signInWithPopup rejects (e.g. popup blocked, closed by the user,
+      // an unauthorized domain, or a misconfigured Firebase project) and
+      // previously nothing caught that rejection - the button just looked
+      // like it did nothing. Surface it instead, in plain language rather
+      // than Firebase's raw "Firebase: Error (auth/...)" message.
+      const code = (e as { code?: string })?.code;
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        // User closed the popup themselves - not really an error worth showing.
+      } else {
+        setError(friendlyAuthError(e, 'Google sign-in failed. Please try again.'));
+      }
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  return (
+    <div className="animate-page-in login-screen bg-slate-50">
+      <div>
+        <div className="login-head">
+          <img
+            src="/logo-icon.png"
+            alt="Aurafin logo"
+            className="login-logo"
+          />
+          <h1 className="login-title font-brand text-ink">
+            Aurafin<span className="text-brand-500">.</span>
+          </h1>
+          <p className="login-tagline text-slate-500">Your whole financial picture, in one place.</p>
+        </div>
+
+        <div className="login-card bg-surface border border-line shadow-sm">
+          <h2 className="login-h2 font-semibold text-ink">
+            {mode === 'login' ? 'Welcome back' : 'Create your account'}
+          </h2>
+          <p className="login-sub text-slate-500">
+            {mode === 'login' ? 'Log in to keep tracking your net worth.' : 'Start tracking your net worth for free.'}
+          </p>
+
+          <button
+            onClick={handleGoogleLogin}
+            disabled={googleLoading}
+            className="btn-press login-btn login-btn-google flex items-center justify-center gap-[0.6em] font-medium text-ink-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg className="login-icon" viewBox="0 0 18 18" aria-hidden="true">
+              <path
+                fill="#4285F4"
+                d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.874 2.684-6.616z"
+              />
+              <path
+                fill="#34A853"
+                d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M3.964 10.706A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.706V4.962H.957A9.001 9.001 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332z"
+              />
+              <path
+                fill="#EA4335"
+                d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.167 6.656 3.58 9 3.58z"
+              />
+            </svg>
+            {googleLoading ? 'Connecting…' : 'Continue with Google'}
+          </button>
+
+          <button
+            onClick={async () => {
+              setError('');
+              setGuestLoading(true);
+              try {
+                await loginAsGuest();
+              } catch (e) {
+                setError(friendlyAuthError(e, 'We couldn\u2019t start a guest session. Please try again.'));
+                setGuestLoading(false);
+              }
+            }}
+            disabled={guestLoading}
+            className="btn-press login-btn login-btn-demo flex items-center justify-center gap-[0.6em] bg-surface font-medium text-ink-2 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg className="login-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+            {guestLoading ? 'Loading...' : 'Try Demo'}
+          </button>
+
+          {error && <p className="text-[0.875em] text-red-500 mb-[0.75em]">{error}</p>}
+
+          <div className="login-divider flex items-center gap-3">
+            <div className="h-px bg-slate-200 flex-1" />
+            <span className="text-slate-600">or use email</span>
+            <div className="h-px bg-slate-200 flex-1" />
+          </div>
+
+          <div className="login-fields">
+            <input
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="login-input border border-line focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="login-input has-eye border border-line focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                tabIndex={-1}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                className="absolute right-0 top-0 h-full px-3 flex items-center text-slate-600 hover:text-slate-600"
+              >
+                {showPassword ? <EyeOff size="1.125em" /> : <Eye size="1.125em" />}
+              </button>
+            </div>
+            <button
+              onClick={submit}
+              className="btn-press login-btn bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white font-medium"
+            >
+              {mode === 'login' ? 'Log In' : 'Sign Up'}
+            </button>
+          </div>
+
+          <p className="login-switch text-slate-600 text-center">
+            {mode === 'login' ? "No account yet? " : 'Already have an account? '}
+            <button
+              onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
+              className="text-brand-600 font-medium"
+            >
+              {mode === 'login' ? 'Create one' : 'Log in'}
+            </button>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}

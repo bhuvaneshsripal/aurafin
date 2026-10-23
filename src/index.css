@@ -1093,3 +1093,169 @@ input.global-search-input:focus,
     backdrop-filter: none !important;
   }
 }
+
+/* ==========================================================================
+   LOGIN — fixed, non-scrolling screen that scales to the viewport height.
+   Everything inside is sized in `em`, so shrinking this one font-size shrinks
+   the whole layout (text, buttons, spacing, logo) proportionally. Capped at
+   16px on tall screens, floors at 9px on very short ones.
+   ========================================================================== */
+.login-screen {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1rem;
+  font-size: clamp(9px, 1.95dvh, 17px);
+}
+.login-screen > div { width: 100%; max-width: 24em; }
+.login-logo { width: 4em; height: 4em; margin: 0 auto 0.6em; border-radius: 9999px; }
+.login-title { font-size: 2.25em; line-height: 1.1; margin-bottom: 0.3em; }
+.login-head { text-align: center; margin-bottom: 1.25em; }
+.login-card { padding: 1.75em; border-radius: 1em; }
+.login-h2 { font-size: 1.25em; margin-bottom: 1em; }
+.login-sub { font-size: 0.875em; margin-bottom: 1.25em; }
+.login-btn, .login-input {
+  width: 100%;
+  font-size: 1em;
+  padding-top: 0.65em;
+  padding-bottom: 0.65em;
+  border-radius: 0.5em;
+}
+.login-input { padding-left: 0.75em; padding-right: 0.75em; }
+.login-input.has-eye { padding-right: 2.5em; }
+.login-btn { margin-bottom: 0.75em; }
+.login-divider { margin: 0.9em 0; font-size: 0.875em; }
+.login-fields > * + * { margin-top: 0.9em; }
+.login-fields .login-btn { margin-bottom: 0; }
+.login-switch { font-size: 0.875em; margin-top: 1.25em; }
+.login-icon { width: 1.125em; height: 1.125em; flex: none; }
+
+/* Login: pill-shaped social buttons. */
+.login-btn-google,
+.login-btn-demo {
+  border-radius: 9999px;
+  border-width: 2px;
+  border-style: solid;
+}
+/* Google button: outline painted in the four Google colours. */
+.login-btn-google {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--color-surface), var(--color-surface)) padding-box,
+    linear-gradient(90deg, #4285f4 0%, #ea4335 35%, #fbbc05 65%, #34a853 100%) border-box;
+}
+.login-btn-google:hover:not(:disabled) {
+  background:
+    linear-gradient(var(--color-slate-50), var(--color-slate-50)) padding-box,
+    linear-gradient(90deg, #4285f4 0%, #ea4335 35%, #fbbc05 65%, #34a853 100%) border-box;
+}
+/* Try Demo: solid black outline with a soft black shadow. */
+.login-btn-demo {
+  border-color: #111;
+  box-shadow: 0 0.25em 0.6em rgba(0, 0, 0, 0.25);
+}
+.dark .login-btn-demo { border-color: #e5e5e5; box-shadow: 0 0.25em 0.6em rgba(0, 0, 0, 0.6); }
+
+/* Login: outlined floating-label fields (label sits in the border when focused/filled). */
+.lf { position: relative; --lf-focus: #1a73e8; --lf-error: #d93025; }
+.dark .lf { --lf-focus: #8ab4f8; --lf-error: #f28b82; }
+.lf-input {
+  width: 100%;
+  font-size: 1em;
+  padding: 0.95em 0.9em;
+  border: 1px solid var(--color-line);
+  border-radius: 0.5em;
+  background: transparent;
+  color: var(--color-ink);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.lf-input.has-eye { padding-right: 2.75em; }
+.lf-label {
+  position: absolute;
+  left: 0.7em;
+  top: 1.55em;
+  padding: 0 0.25em;
+  font-size: 1em;
+  line-height: 1;
+  color: var(--color-slate-500);
+  background: var(--color-surface);
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: top 0.15s, font-size 0.15s, color 0.15s;
+}
+.lf-input:focus ~ .lf-label,
+.lf-input:not(:placeholder-shown) ~ .lf-label,
+.lf-input:-webkit-autofill ~ .lf-label {
+  top: 0;
+  font-size: 0.8em;
+}
+.lf-input:focus { border-color: var(--lf-focus); box-shadow: 0 0 0 1px var(--lf-focus); }
+.lf-input:focus ~ .lf-label { color: var(--lf-focus); }
+.lf-err .lf-input,
+.lf-err .lf-input:focus { border-color: var(--lf-error); box-shadow: 0 0 0 1px var(--lf-error); }
+.lf-err .lf-label,
+.lf-err .lf-input:focus ~ .lf-label { color: var(--lf-error); }
+.lf-eye {
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 2.9em;
+  padding: 0 0.85em;
+  display: flex;
+  align-items: center;
+  color: var(--color-slate-600);
+}
+.lf-msg {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin-top: 0.4em;
+  padding-left: 0.2em;
+  font-size: 0.8em;
+  color: var(--lf-error);
+}
+.lf-msg svg { width: 1.3em; height: 1.3em; flex: none; }
+
+/* Login landing page: header (logo + Login / Sign up), centred image carousel,
+   auth form in a modal. */
+.lp-screen { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+.lp-header {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: calc(0.75rem + env(safe-area-inset-top)) 1.25rem 0.75rem;
+}
+.lp-brand { display: flex; align-items: center; gap: 0.6rem; }
+.lp-brand-logo { width: 2rem; height: 2rem; border-radius: 9999px; }
+.lp-brand-name { font-size: 1.5rem; line-height: 1; }
+.lp-nav { display: flex; gap: 0.6rem; }
+.lp-nav-btn { font-size: 0.875rem; font-weight: 500; padding: 0.5rem 1.15rem; border-radius: 9999px; }
+.lp-nav-outline { border: 1.5px solid currentColor; background: transparent; }
+.lp-main { flex: 1; display: flex; align-items: center; justify-content: center; padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom)); }
+.lp-showcase { width: 100%; max-width: 80rem; display: flex; flex-direction: column; align-items: center; }
+.lp-stage { position: relative; width: min(100%, calc((100dvh - 13rem) * 16 / 9)); min-width: min(100%, 20rem); aspect-ratio: 16 / 9; border-radius: 1.5rem; overflow: hidden; box-shadow: 0 1.25rem 3rem rgba(0, 0, 0, 0.16); }
+.lp-slide { position: absolute; inset: 0; opacity: 0; transition: opacity 1s ease; }
+.lp-slide.is-on { opacity: 1; }
+.lp-bg { position: absolute; inset: -8%; width: 116%; height: 116%; object-fit: cover; filter: blur(22px) brightness(0.7); }
+.lp-img { position: relative; width: 100%; height: 100%; object-fit: contain; display: block; }
+.lp-fallback { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: rgba(255, 255, 255, 0.85); }
+.lp-arrow {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 2;
+  width: 2.5rem; height: 2.5rem; border-radius: 9999px; border: 0; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.4); color: #fff;
+}
+.lp-arrow:hover { background: rgba(0, 0, 0, 0.6); }
+.lp-prev { left: 0.75rem; }
+.lp-next { right: 0.75rem; }
+.lp-caption { text-align: center; margin-top: 1.25rem; min-height: 4.5rem; }
+.lp-caption h2 { font-size: clamp(1.4rem, 3.4vw, 2rem); font-weight: 700; margin: 0 0 0.25rem; }
+.lp-caption p { margin: 0; }
+.lp-dots { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+.lp-dot { width: 0.5rem; height: 0.5rem; border-radius: 9999px; border: 0; padding: 0; cursor: pointer; background: #cfd2d6; transition: width 0.3s, background 0.3s; }
+.dark .lp-dot { background: #3a3a37; }
+.lp-dot.is-on { width: 1.75rem; background: var(--color-brand-600); }
+.login-modal-body { font-size: 16px; padding-bottom: 0.25rem; }

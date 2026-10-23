@@ -2,19 +2,42 @@ import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { friendlyAuthError } from '../utils/authErrors';
+import LoginShowcase from '../components/LoginShowcase';
+import Modal from '../components/Modal';
+
+function FieldError({ message }: { message: string }) {
+  return (
+    <p className="lf-msg" role="alert">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="11" fill="currentColor" />
+        <rect x="11" y="6" width="2" height="8" rx="1" fill="#fff" />
+        <circle cx="12" cy="17.5" r="1.3" fill="#fff" />
+      </svg>
+      {message}
+    </p>
+  );
+}
 
 export default function Login() {
-  const { loginWithGoogle, loginWithEmail, registerWithEmail, loginAsGuest } = useAuthStore();
+  const { loginWithGoogle, loginWithEmail, registerWithEmail } = useAuthStore();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const [guestLoading, setGuestLoading] = useState(false);
+  const [emailErr, setEmailErr] = useState('');
+  const [passErr, setPassErr] = useState('');
+  const [open, setOpen] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
   const submit = async () => {
     setError('');
+    const trimmed = email.trim();
+    const eErr = !trimmed ? 'Enter an email' : !/^\S+@\S+\.\S+$/.test(trimmed) ? 'Enter a valid email' : '';
+    const pErr = !password ? 'Enter a password' : '';
+    setEmailErr(eErr);
+    setPassErr(pErr);
+    if (eErr || pErr) return;
     try {
       if (mode === 'login') await loginWithEmail(email, password);
       else await registerWithEmail(email, password);
@@ -47,35 +70,45 @@ export default function Login() {
     }
   };
 
+  const openAuth = (m: 'login' | 'register') => {
+    setMode(m);
+    setError('');
+    setEmailErr('');
+    setPassErr('');
+    setOpen(true);
+  };
+
   return (
-    <div className="animate-page-in min-h-screen flex items-center justify-center bg-slate-50 px-4">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <img
-            src="/logo-icon.png"
-            alt="Aurafin logo"
-            className="w-16 h-16 mx-auto mb-3 rounded-full"
-          />
-          <h1 className="font-luxury text-4xl font-semibold text-ink mb-2 tracking-tight">
+    <div className="animate-page-in lp-screen bg-slate-50">
+      <header className="lp-header bg-surface border-b border-line">
+        <div className="lp-brand">
+          <img src="/logo-icon.png" alt="" className="lp-brand-logo" />
+          <span className="font-brand text-ink lp-brand-name">
             Aurafin<span className="text-brand-500">.</span>
-          </h1>
-          <p className="text-base text-slate-500">Your whole financial picture, in one place.</p>
+          </span>
         </div>
+        <nav className="lp-nav">
+          <button type="button" onClick={() => openAuth('login')} className="btn-press lp-nav-btn lp-nav-outline text-ink">
+            Login
+          </button>
+          <button type="button" onClick={() => openAuth('register')} className="btn-press lp-nav-btn bg-brand-600 hover:bg-brand-700 text-white">
+            Sign up
+          </button>
+        </nav>
+      </header>
 
-        <div className="bg-surface rounded-2xl border border-line shadow-sm p-8">
-          <h2 className="text-xl font-semibold text-ink mb-1">
-            {mode === 'login' ? 'Welcome back' : 'Create your account'}
-          </h2>
-          <p className="text-sm text-slate-500 mb-6">
-            {mode === 'login' ? 'Log in to keep tracking your net worth.' : 'Start tracking your net worth for free.'}
-          </p>
+      <main className="lp-main">
+        <LoginShowcase />
+      </main>
 
+      <Modal open={open} onClose={() => setOpen(false)} title={mode === 'login' ? 'Welcome back' : 'Create your account'}>
+        <div className="login-modal-body">
           <button
             onClick={handleGoogleLogin}
             disabled={googleLoading}
-            className="btn-press w-full flex items-center justify-center gap-2.5 border border-line rounded-lg py-2.5 text-base font-medium text-ink-2 hover:bg-slate-50 mb-3 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-press login-btn login-btn-google flex items-center justify-center gap-[0.6em] font-medium text-ink-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+            <svg className="login-icon" viewBox="0 0 18 18" aria-hidden="true">
               <path
                 fill="#4285F4"
                 d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.874 2.684-6.616z"
@@ -96,70 +129,70 @@ export default function Login() {
             {googleLoading ? 'Connecting…' : 'Continue with Google'}
           </button>
 
-          <button
-            onClick={async () => {
-              setError('');
-              setGuestLoading(true);
-              try {
-                await loginAsGuest();
-              } catch (e) {
-                setError(friendlyAuthError(e, 'We couldn\u2019t start a guest session. Please try again.'));
-                setGuestLoading(false);
-              }
-            }}
-            disabled={guestLoading}
-            className="btn-press w-full flex items-center justify-center gap-2.5 border border-line rounded-lg py-2.5 text-base font-medium text-ink-2 hover:bg-slate-50 mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-              <circle cx="12" cy="7" r="4" />
-            </svg>
-            {guestLoading ? 'Loading...' : 'Try Demo'}
-          </button>
+          {error && <p className="text-[0.875em] text-red-500 mb-[0.75em]">{error}</p>}
 
-          {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
-
-          <div className="flex items-center gap-3 my-4">
+          <div className="login-divider flex items-center gap-3">
             <div className="h-px bg-slate-200 flex-1" />
-            <span className="text-sm text-slate-600">or use email</span>
+            <span className="text-slate-600">or use email</span>
             <div className="h-px bg-slate-200 flex-1" />
           </div>
 
-          <div className="space-y-3">
-            <input
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full border border-line rounded-lg px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-brand-500"
-            />
-            <div className="relative">
+          <div className="login-fields">
+            <div className={`lf${emailErr ? ' lf-err' : ''}`}>
               <input
-                type={showPassword ? 'text' : 'password'}
-                placeholder="Your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full border border-line rounded-lg pl-3 pr-10 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-brand-500"
+                id="login-email"
+                type="email"
+                autoComplete="email"
+                placeholder=" "
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (emailErr) setEmailErr('');
+                }}
+                aria-invalid={!!emailErr}
+                className="lf-input"
               />
+              <label htmlFor="login-email" className="lf-label">Email</label>
+              {emailErr && <FieldError message={emailErr} />}
+            </div>
+            <div className={`lf${passErr ? ' lf-err' : ''}`}>
+              <input
+                id="login-password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                placeholder=" "
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (passErr) setPassErr('');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') submit();
+                }}
+                aria-invalid={!!passErr}
+                className="lf-input has-eye"
+              />
+              <label htmlFor="login-password" className="lf-label">Password</label>
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
                 tabIndex={-1}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
-                className="absolute right-0 top-0 h-full px-3 flex items-center text-slate-600 hover:text-slate-600"
+                className="lf-eye"
               >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                {showPassword ? <EyeOff size="1.125em" /> : <Eye size="1.125em" />}
               </button>
+              {passErr && <FieldError message={passErr} />}
             </div>
             <button
               onClick={submit}
-              className="btn-press w-full bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white py-2.5 rounded-lg text-base font-medium"
+              className="btn-press login-btn bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white font-medium"
             >
               {mode === 'login' ? 'Log In' : 'Sign Up'}
             </button>
           </div>
 
-          <p className="text-sm text-slate-600 text-center mt-6">
+          <p className="login-switch text-slate-600 text-center">
             {mode === 'login' ? "No account yet? " : 'Already have an account? '}
             <button
               onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
@@ -169,7 +202,7 @@ export default function Login() {
             </button>
           </p>
         </div>
-      </div>
+      </Modal>
     </div>
   );
 }

@@ -102,7 +102,7 @@ export default function Onboarding() {
         </div>
 
         <div className="bg-surface rounded-2xl border border-line shadow-sm p-8">
-          {step === 'welcome' && <WelcomeStep onNext={() => goTo(1)} onSkipAll={skipAll} onBack={() => navigate(-1)} />}
+          {step === 'welcome' && <WelcomeStep onNext={() => goTo(1)} onSkipAll={skipAll} onBack={() => { void useAuthStore.getState().logout(); }} />}
 
           {step === 'profile' && (
             <ProfileStep

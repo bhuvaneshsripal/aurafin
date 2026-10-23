@@ -1,4 +1,11 @@
 @import "tailwindcss";
+
+@layer base {
+  .grid > *,
+  .flex > * {
+    min-width: 0;
+  }
+}
 /* Inter (the app's only typeface) is loaded by a <link> in index.html — a CSS
    @import can't work here because Tailwind's layers precede it. */
 
@@ -135,6 +142,7 @@
 
   /* ---- Semantic tokens (flip in dark mode) ------------------------------- */
   --color-page: #f7f7f5;
+  --color-sandal: #f8f3e8;
   --color-surface: #ffffff;
   --color-surface-muted: #faf9f7;
   --color-surface-hover: #f5f5f2;
@@ -221,6 +229,7 @@
    has no explicit dark variant) are lifted so helper text stays legible. */
 .dark {
   --color-page: #0d0d0c;
+  --color-sandal: #1a1814;
   --color-surface: #151514;
   --color-surface-muted: #1a1a18;
   --color-surface-hover: #1f1f1d;
@@ -262,9 +271,16 @@ html {
   scroll-behavior: smooth;
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: 100%;
+  /* Never let the page itself pan sideways on a phone. Any wide child (a
+     form row, a table, a long word) is clipped at the edge instead of
+     dragging the whole screen left and leaving blank space on the right. */
+  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 body {
+  max-width: 100vw;
+  overflow-x: clip;
   font-family: var(--font-sans);
   font-optical-sizing: auto;
   font-weight: 400;
@@ -723,8 +739,8 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 /* Swiping between bottom-nav tabs: the new page slides in from the side you swiped toward. */
 @keyframes page-swipe-next {
   from {
-    opacity: 0.6;
-    transform: translate3d(32px, 0, 0);
+    opacity: 1;
+    transform: translate3d(24px, 0, 0);
   }
   to {
     opacity: 1;
@@ -733,8 +749,8 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 @keyframes page-swipe-prev {
   from {
-    opacity: 0.6;
-    transform: translate3d(-32px, 0, 0);
+    opacity: 1;
+    transform: translate3d(-24px, 0, 0);
   }
   to {
     opacity: 1;
@@ -742,10 +758,10 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   }
 }
 html[data-swipe='next'] .animate-page-in {
-  animation: page-swipe-next 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: page-swipe-next 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 html[data-swipe='prev'] .animate-page-in {
-  animation: page-swipe-prev 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: page-swipe-prev 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 /* A headline figure swapping from skeleton to value. */
@@ -785,11 +801,59 @@ html[data-swipe='prev'] .animate-page-in {
   animation-delay: 0.3s;
 }
 
+
+/* Opening a holding: the detail page slides in from the right; closing it
+   slides back out and the list eases back in from the left. */
+@keyframes detail-in {
+  from { opacity: 0; transform: translate3d(28px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes detail-out {
+  from { opacity: 1; transform: translate3d(0, 0, 0); }
+  to { opacity: 0; transform: translate3d(28px, 0, 0); }
+}
+@keyframes list-return {
+  from { opacity: 0; transform: translate3d(-16px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+.animate-detail-in { animation: detail-in 220ms var(--ease-out) both; }
+.animate-detail-out { animation: detail-out 200ms ease-in both; pointer-events: none; }
+.animate-list-return { animation: list-return 220ms var(--ease-out) both; }
+
+/* Exit counterparts for dialogs, panels and sheets: clicking an item plays
+   the "-in" animation, closing it plays the matching "-out" before unmount
+   (see useExitPresence). */
+@keyframes backdrop-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes menu-out {
+  from { opacity: 1; transform: scale(1) translate3d(0, 0, 0); }
+  to { opacity: 0; transform: scale(0.97) translate3d(0, 6px, 0); }
+}
+@keyframes sheet-out {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(0, 100%, 0); }
+}
+.animate-backdrop-out { animation: backdrop-out 160ms ease-in both; pointer-events: none; }
+.animate-menu-out { animation: menu-out 160ms ease-in both; }
+.animate-sheet-out { animation: sheet-out 180ms ease-in both; }
+/* Dialogs also grow in slightly, so in/out read as one gesture. */
+@keyframes dialog-in {
+  from { opacity: 0; transform: scale(0.96) translate3d(0, 8px, 0); }
+  to { opacity: 1; transform: scale(1) translate3d(0, 0, 0); }
+}
+.animate-dialog-in { animation: dialog-in var(--dur-base) var(--ease-out) both; }
+
 /* Respect the OS "reduce motion" setting. */
 @media (prefers-reduced-motion: reduce) {
   html[data-swipe] .animate-page-in {
     animation: none;
   }
+  .animate-detail-in,
+  .animate-detail-out,
+  .animate-backdrop-out,
+  .animate-menu-out,
+  .animate-sheet-out,
+  .animate-dialog-in,
+  .animate-list-return,
   .animate-shake,
   .animate-page-in,
   .animate-value-in,
@@ -886,3 +950,214 @@ textarea[aria-invalid="true"]:focus {
     animation: none;
   }
 }
+
+/* Live ticker: brief colour flash when an index level changes. */
+@keyframes ticker-flash-up { from { background-color: rgb(34 197 94 / 0.35); } to { background-color: transparent; } }
+@keyframes ticker-flash-down { from { background-color: rgb(239 68 68 / 0.35); } to { background-color: transparent; } }
+.ticker-flash-up { animation: ticker-flash-up 0.9s ease-out; }
+.ticker-flash-down { animation: ticker-flash-down 0.9s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .ticker-flash-up, .ticker-flash-down { animation: none; }
+}
+
+
+/* ---- Installed-app (standalone) feel ----------------------------------
+   Only applies once the app is added to the home screen, so normal browser
+   behaviour (pull-to-refresh, text selection) is untouched in a tab. */
+@media (display-mode: standalone) {
+  html,
+  body {
+    /* No rubber-band bounce / accidental pull-to-refresh while scrolling. */
+    overscroll-behavior-y: none;
+  }
+  body {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  input,
+  textarea,
+  [contenteditable='true'] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+}
+
+/* Smoother scrolling / fewer repaints on touch devices. */
+@media (pointer: coarse) {
+  html {
+    scroll-behavior: auto;
+  }
+  body {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* The top bar never scrolls away. When the on-screen keyboard pans the
+   visual viewport (--vv-top, set by useVisualViewportOffset), the bar and the
+   market strip under it ride along so they stay on screen. `.app-scale` is
+   CSS-zoomed, so the px offset is divided by the zoom to land exactly on the
+   visible edge. */
+html[data-vv-pan] #app-topbar,
+html[data-vv-pan] #app-marquee {
+  transform: translate3d(0, calc(var(--vv-top, 0px) / var(--app-zoom, 0.95)), 0);
+}
+
+/* Phones: the top bar is pinned to the top of the screen at all times
+   (fixed rather than sticky, so no scroll position or ancestor can push it
+   out of view). The page reserves the bar's height so nothing sits under it. */
+@media (max-width: 767px) {
+  #app-topbar {
+    position: fixed;
+    /* Slides down under the "new update" notice (--update-h) when it shows. */
+    top: var(--update-h, 0px);
+    transition: top 500ms cubic-bezier(0.33, 0, 0.2, 1);
+    left: 0;
+    right: 0;
+    z-index: 30;
+  }
+  .app-scale {
+    padding-top: calc(var(--topbar-h, 3.5rem) + var(--update-h, 0px));
+    transition: padding-top 500ms cubic-bezier(0.33, 0, 0.2, 1);
+  }
+  #app-marquee {
+    top: calc(3.5rem + var(--update-h, 0px));
+    transition: top 500ms cubic-bezier(0.33, 0, 0.2, 1);
+  }
+}
+
+/* Global search box: no green focus ring/border (overrides the global input:focus style). */
+input.global-search-input,
+input.global-search-input:focus,
+.dark input.global-search-input:focus {
+  outline: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Global search panel: force ALL text capital. Buttons and inputs don't
+   inherit text-transform from their parent by default, so set it explicitly. */
+.global-search-panel,
+.global-search-panel *,
+.global-search-panel input,
+.global-search-panel input::placeholder,
+.global-search-panel button {
+  text-transform: uppercase !important;
+}
+
+/* ==========================================================================
+   GLOBAL PRESS FEEDBACK — every clickable thing gets a smooth press-in /
+   release so taps feel responsive everywhere. Uses the individual `scale`
+   property (not `transform`) so it never fights the transforms other
+   components already use (drag, tap-scale, animations).
+   ========================================================================== */
+:is(button, a[href], [role="button"], [role="tab"], [role="menuitem"], summary, select, label[for], .cursor-pointer):not(
+    :disabled,
+    [aria-disabled="true"],
+    .tap-scale,
+    [draggable="true"]
+  ) {
+  transition-property: color, background-color, border-color, box-shadow, opacity, scale;
+  transition-duration: 160ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+:is(button, a[href], [role="tab"], [role="menuitem"], summary, label[for]):not(
+    :disabled,
+    [aria-disabled="true"],
+    .tap-scale,
+    [draggable="true"]
+  ):active {
+  scale: 0.96;
+}
+/* Wide tappable rows / cards: a subtler press so they don't look like they shrink. */
+:is([role="button"], .cursor-pointer):not(:disabled, [aria-disabled="true"], .tap-scale, [draggable="true"]):active {
+  scale: 0.985;
+  opacity: 0.92;
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(button, a[href], [role="button"], [role="tab"], [role="menuitem"], summary, select, label[for], .cursor-pointer) {
+    transition-duration: 1ms;
+  }
+  :is(button, a[href], [role="button"], [role="tab"], [role="menuitem"], summary, label[for], .cursor-pointer):active {
+    scale: 1;
+  }
+}
+
+
+/* Phones: a backdrop blur is re-rendered every frame while the on-screen
+   keyboard slides in/out, which shows up as the screen flickering when typing.
+   Keep the dim, drop the blur on touch devices. */
+@media (hover: none) and (pointer: coarse) {
+  [class*="backdrop-blur"] {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+
+/* ==========================================================================
+   LOGIN — fixed, non-scrolling screen that scales to the viewport height.
+   Everything inside is sized in `em`, so shrinking this one font-size shrinks
+   the whole layout (text, buttons, spacing, logo) proportionally. Capped at
+   16px on tall screens, floors at 9px on very short ones.
+   ========================================================================== */
+.login-screen {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1rem;
+  font-size: clamp(9px, 1.8dvh, 16px);
+}
+.login-screen > div { width: 100%; max-width: 24em; }
+.login-logo { width: 4em; height: 4em; margin: 0 auto 0.6em; border-radius: 9999px; }
+.login-title { font-size: 2.25em; line-height: 1.1; margin-bottom: 0.3em; }
+.login-tagline { font-size: 1em; }
+.login-head { text-align: center; margin-bottom: 1.5em; }
+.login-card { padding: 1.75em; border-radius: 1em; }
+.login-h2 { font-size: 1.25em; margin-bottom: 0.25em; }
+.login-sub { font-size: 0.875em; margin-bottom: 1.25em; }
+.login-btn, .login-input {
+  width: 100%;
+  font-size: 1em;
+  padding-top: 0.65em;
+  padding-bottom: 0.65em;
+  border-radius: 0.5em;
+}
+.login-input { padding-left: 0.75em; padding-right: 0.75em; }
+.login-input.has-eye { padding-right: 2.5em; }
+.login-btn { margin-bottom: 0.75em; }
+.login-divider { margin: 0.9em 0; font-size: 0.875em; }
+.login-fields > * + * { margin-top: 0.75em; }
+.login-fields .login-btn { margin-bottom: 0; }
+.login-switch { font-size: 0.875em; margin-top: 1.25em; }
+.login-icon { width: 1.125em; height: 1.125em; flex: none; }
+/* iOS Safari zooms into inputs under 16px; keep text inputs at 16px on touch devices. */
+@media (pointer: coarse) { .login-input { font-size: max(1em, 16px); } }
+
+/* Login: pill-shaped social buttons. */
+.login-btn-google,
+.login-btn-demo {
+  border-radius: 9999px;
+  border-width: 2px;
+  border-style: solid;
+}
+/* Google button: outline painted in the four Google colours. */
+.login-btn-google {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--color-surface), var(--color-surface)) padding-box,
+    linear-gradient(90deg, #4285f4 0%, #ea4335 35%, #fbbc05 65%, #34a853 100%) border-box;
+}
+.login-btn-google:hover:not(:disabled) {
+  background:
+    linear-gradient(var(--color-slate-50), var(--color-slate-50)) padding-box,
+    linear-gradient(90deg, #4285f4 0%, #ea4335 35%, #fbbc05 65%, #34a853 100%) border-box;
+}
+/* Try Demo: solid black outline with a soft black shadow. */
+.login-btn-demo {
+  border-color: #111;
+  box-shadow: 0 0.25em 0.6em rgba(0, 0, 0, 0.25);
+}
+.dark .login-btn-demo { border-color: #e5e5e5; box-shadow: 0 0.25em 0.6em rgba(0, 0, 0, 0.6); }
