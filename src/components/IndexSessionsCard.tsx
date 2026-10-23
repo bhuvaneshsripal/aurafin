@@ -69,7 +69,7 @@ export default function IndexSessionsCard({ hasAlerts }: { hasAlerts: boolean })
   return (
     <div className="px-4 pt-4 pb-2 w-full">
       {visible.length > 0 && <p className="text-xs font-semibold tracking-wide text-muted uppercase mb-2">Today's market</p>}
-      <div className="space-y-3">
+      <div>
         {visible.map(({ key, label }) => {
           const q = quotes.find((x) => x.key === key);
           const pct = q?.previousClose ? ((q.price - q.previousClose) / q.previousClose) * 100 : undefined;
@@ -80,7 +80,7 @@ export default function IndexSessionsCard({ hasAlerts }: { hasAlerts: boolean })
           const pre = today.pre?.[key]?.price ?? open;
           const close = today.close?.[key]?.price ?? (afterClose ? q?.price : undefined);
           return (
-            <div key={key} className="rounded-xl border border-line bg-surface p-3">
+            <div key={key} className="py-3 border-b border-line-soft last:border-b-0">
               <div className="flex items-baseline justify-between gap-2">
                 <p className="text-sm font-semibold text-ink">{label}</p>
                 <div className="flex items-center gap-1">
@@ -111,9 +111,9 @@ export default function IndexSessionsCard({ hasAlerts }: { hasAlerts: boolean })
       {pastDays.length > 0 && (
         <div className="mt-5">
           <p className="text-xs font-semibold tracking-wide text-muted uppercase mb-2">Earlier days</p>
-          <div className="space-y-3">
+          <div>
             {pastDays.map((day) => (
-              <div key={day} className="rounded-xl border border-line bg-surface p-3">
+              <div key={day} className="py-3 border-b border-line-soft last:border-b-0">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm font-semibold text-ink">{formatDay(day)}</p>
                   {delBtn(`Delete ${formatDay(day)}`, () => removeSession(day))}

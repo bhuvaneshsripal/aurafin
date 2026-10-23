@@ -219,7 +219,7 @@ export default function NotificationBell(_props: { align?: 'right' | 'left' } = 
             {groups.map(([label, list]) => (
               <div key={label}>
                 <p className="px-4 pt-4 pb-2 text-xs font-semibold tracking-wide text-muted uppercase">{label}</p>
-                <div className="mx-4 rounded-xl border border-line bg-surface divide-y divide-line-soft overflow-hidden">
+                <div className="divide-y divide-line-soft">
                 {list.map((i) => (
                   <div key={i.id} className="px-4 py-3 w-full">
                     <div className="flex items-center justify-between gap-2">
