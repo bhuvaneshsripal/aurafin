@@ -49,7 +49,10 @@ function loadGuestData<T extends { id: string }>(uid: string, collectionName: st
   try {
     const key = getGuestStorageKey(uid, collectionName);
     const data = localStorage.getItem(key);
-    return data ? JSON.parse(data) : [];
+    if (!data) return [];
+    const parsed = JSON.parse(data);
+    // Corrupted/foreign JSON must never crash every page that maps over it.
+    return Array.isArray(parsed) ? (parsed as T[]) : [];
   } catch {
     return [];
   }

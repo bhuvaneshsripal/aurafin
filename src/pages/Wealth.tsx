@@ -4052,8 +4052,12 @@ function BuySellDividendModal({
   const submitBuy = async () => {
     const qtyNum = Number(qty);
     const priceNum = Number(price);
-    if (!qtyNum || qtyNum <= 0 || !priceNum || priceNum <= 0) {
+    if (!Number.isFinite(qtyNum) || !Number.isFinite(priceNum) || !qtyNum || qtyNum <= 0 || !priceNum || priceNum <= 0) {
       setError('Enter a valid quantity and price.');
+      return;
+    }
+    if (date > toIsoDate()) {
+      setError('Purchase date cannot be in the future.');
       return;
     }
     setSaving(true);
@@ -4160,7 +4164,7 @@ function BuySellDividendModal({
     const priceNum = Number(price);
     const feesNum = sellFeesNum;
     const account = accounts.find((a) => a.id === accountId);
-    if (!qtyNum || qtyNum <= 0 || !priceNum || priceNum <= 0) {
+    if (!Number.isFinite(qtyNum) || !Number.isFinite(priceNum) || !qtyNum || qtyNum <= 0 || !priceNum || priceNum <= 0) {
       setError('Enter a valid quantity and price.');
       return;
     }
@@ -5094,7 +5098,7 @@ function AssetDetailsForm({
   useEffect(() => {
     if (!isMarketSelectable || currencyTouchedRef.current) return;
     setCurrency(market === 'US' ? 'USD' : 'INR');
-  }, [market, isMarketSelectable]);
+  }, [market, isMarketSelectable, setCurrency]);
 
   // --- Weight-tracked purchases (Gold / Silver / Platinum) ---------------
   // Each buy is its own lot (grams + amount); totals are summed below.

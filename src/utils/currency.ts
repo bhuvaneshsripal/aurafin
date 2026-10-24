@@ -47,6 +47,8 @@ export function formatCurrency(
   options?: FormatCurrencyOptions
 ) {
   const fractionDigits = options?.fractionDigits ?? 0;
+  // NaN / Infinity (e.g. from a 0/0 upstream) must never reach the UI as "₹NaN".
+  if (!Number.isFinite(value)) value = 0;
   try {
     return new Intl.NumberFormat(currency === 'INR' ? 'en-IN' : 'en-US', {
       style: 'currency',
@@ -107,28 +109,46 @@ export function maskPreciseAmount(value: number, currency: string = 'INR', priva
 
 /** "+₹1,80.00" / "-₹118.41" — sign shown once, up front (and "+" for gains). */
 export function formatSignedCurrency(amount: number, currency: string = 'INR', fractionDigits: number = 2) {
-  const sign = amount > 0 ? '+' : amount < 0 ? '-' : '';
+  if (!Number.isFinite(amount)) amount = 0;
+  // A value that rounds to zero at display precision shows no sign ("-₹0.00" is noise).
+  const factor = 10 ** fractionDigits;
+  const rounded = Math.round(amount * factor) / factor;
+  const sign = rounded > 0 ? '+' : rounded < 0 ? '-' : '';
   return `${sign}${formatCurrency(Math.abs(amount), currency, { fractionDigits })}`;
 }
 
 /** "0.64%" — always unsigned; direction is carried by colour and the signed amount. */
 export function formatPercentMagnitude(percent: number, fractionDigits: number = 2) {
+  if (!Number.isFinite(percent)) percent = 0;
   return `${Math.abs(percent).toFixed(fractionDigits)}%`;
 }
 
 /** Short Indian-style axis label: ₹1.2Cr · ₹8.4L · ₹45K. Only for chart axes. */
 export function formatAxisAmount(value: number, currency: string = 'INR') {
   const symbol = CURRENCY_SYMBOLS[currency] ?? '';
+  if (!Number.isFinite(value)) value = 0;
   const abs = Math.abs(value);
   const sign = value < 0 ? '-' : '';
   const trim = (n: number) => n.toFixed(1).replace(/\.0$/, '');
   if (currency === 'INR') {
     if (abs >= 1e7) return `${sign}${symbol}${trim(abs / 1e7)}Cr`;
-    if (abs >= 1e5) return `${sign}${symbol}${trim(abs / 1e5)}L`;
+    // 9.99e6 would round to "100L"; promote to Cr instead when it rounds up.
+    if (abs >= 1e5) {
+      return abs / 1e5 >= 99.95
+        ? `${sign}${symbol}${trim(abs / 1e7)}Cr`
+        : `${sign}${symbol}${trim(abs / 1e5)}L`;
+    }
   } else {
     if (abs >= 1e6) return `${sign}${symbol}${trim(abs / 1e6)}M`;
   }
-  if (abs >= 1e3) return `${sign}${symbol}${trim(abs / 1e3)}K`;
+  if (abs >= 1e3) {
+    if (abs / 1e3 >= 999.95) {
+      return currency === 'INR'
+        ? `${sign}${symbol}${trim(abs / 1e5)}L`
+        : `${sign}${symbol}${trim(abs / 1e6)}M`;
+    }
+    return `${sign}${symbol}${trim(abs / 1e3)}K`;
+  }
   return `${sign}${symbol}${Math.round(abs)}`;
 }
 

@@ -7,6 +7,7 @@ import {
   getAdditionalUserInfo,
   signOut,
   signInAnonymously,
+  sendPasswordResetEmail,
   type User,
 } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase/config';
@@ -33,6 +34,31 @@ function onboardingKey(uid: string) {
 type CachedUser = Pick<User, 'uid' | 'email' | 'displayName' | 'photoURL'>;
 
 const CACHED_USER_KEY = 'aurafin-cached-user';
+
+// localStorage can throw (private/locked-down browser modes, quota). These
+// wrappers keep a storage hiccup from turning a successful sign-in/sign-up
+// into a visible error.
+function safeGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function safeSet(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* worst case: onboarding isn't remembered across reloads */
+  }
+}
+function safeRemove(key: string) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    /* nothing to clean up */
+  }
+}
 
 function readCachedUser(): CachedUser | null {
   try {
@@ -79,6 +105,7 @@ interface AuthState {
   loginWithEmail: (email: string, password: string) => Promise<void>;
   registerWithEmail: (email: string, password: string) => Promise<void>;
   loginAsGuest: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   completeOnboarding: () => void;
 }
@@ -100,7 +127,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: cachedUser,
   loading: !cachedUser,
   verifying: !!cachedUser,
-  needsOnboarding: cachedUser ? localStorage.getItem(onboardingKey(cachedUser.uid)) === 'true' : false,
+  needsOnboarding: cachedUser ? safeGet(onboardingKey(cachedUser.uid)) === 'true' : false,
   init: () => {
     if (authInitialized) return;
     authInitialized = true;
@@ -115,7 +142,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           user,
           loading: false,
           verifying: false,
-          needsOnboarding: user ? localStorage.getItem(onboardingKey(user.uid)) === 'true' : false,
+          needsOnboarding: user ? safeGet(onboardingKey(user.uid)) === 'true' : false,
         });
       },
       (error) => {
@@ -144,7 +171,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loginWithGoogle: async () => {
     const result = await signInWithPopup(auth, googleProvider);
     if (getAdditionalUserInfo(result)?.isNewUser) {
-      localStorage.setItem(onboardingKey(result.user.uid), 'true');
+      safeSet(onboardingKey(result.user.uid), 'true');
       set({ needsOnboarding: true });
     }
   },
@@ -153,13 +180,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
   registerWithEmail: async (email, password) => {
     const result = await createUserWithEmailAndPassword(auth, email, password);
-    localStorage.setItem(onboardingKey(result.user.uid), 'true');
+    safeSet(onboardingKey(result.user.uid), 'true');
     set({ needsOnboarding: true });
+  },
+  resetPassword: async (email) => {
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+    } catch (e) {
+      // Don't reveal whether an address has an account (account enumeration):
+      // an unknown email looks exactly like a successful send.
+      if ((e as { code?: string })?.code === 'auth/user-not-found') return;
+      throw e;
+    }
   },
   loginAsGuest: async () => {
     const result = await signInAnonymously(auth);
     // Guests need to see onboarding/intro questions just like new sign-ups
-    localStorage.setItem(onboardingKey(result.user.uid), 'true');
+    safeSet(onboardingKey(result.user.uid), 'true');
     set({ needsOnboarding: true });
   },
   logout: async () => {
@@ -168,7 +205,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (currentUser && (currentUser as any).isAnonymous === true) {
       const guestCollections = ['assets', 'liabilities', 'goals', 'transactions', 'snapshots', 'budgets', 'financialProfile', 'profiles'];
       guestCollections.forEach((collection) => {
-        localStorage.removeItem(`aurafin-guest-${currentUser.uid}-${collection}`);
+        safeRemove(`aurafin-guest-${currentUser.uid}-${collection}`);
       });
     }
     await signOut(auth);
@@ -183,7 +220,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
   completeOnboarding: () => {
     const uid = get().user?.uid;
-    if (uid) localStorage.removeItem(onboardingKey(uid));
+    if (uid) safeRemove(onboardingKey(uid));
     set({ needsOnboarding: false });
   },
 }));

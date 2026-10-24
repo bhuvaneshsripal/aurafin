@@ -28,7 +28,7 @@ function FieldError({ message }: { message: string }) {
 }
 
 export default function Login() {
-  const { loginWithGoogle, loginWithEmail, registerWithEmail, loginAsGuest } = useAuthStore();
+  const { loginWithGoogle, loginWithEmail, registerWithEmail, loginAsGuest, resetPassword } = useAuthStore();
   const [demoLoading, setDemoLoading] = useState(false);
   const [fullSignup, setFullSignup] = useState(false);
   const theme = useUiStore((st) => st.theme);
@@ -43,23 +43,66 @@ export default function Login() {
   const [passErr, setPassErr] = useState('');
   const [open, setOpen] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [resetting, setResetting] = useState(false);
 
   const submit = async () => {
+    if (busy) return; // ignore double taps / Enter while a request is in flight
     setError('');
+    setNotice('');
     const trimmed = email.trim();
     const eErr = !trimmed ? 'Enter an email' : !/^\S+@\S+\.\S+$/.test(trimmed) ? 'Enter a valid email' : '';
-    const pErr = !password ? 'Enter a password' : '';
+    const pErr = !password
+      ? 'Enter a password'
+      : mode === 'register' && password.length < 6
+        ? 'Use at least 6 characters'
+        : '';
     setEmailErr(eErr);
     setPassErr(pErr);
     if (eErr || pErr) return;
+    setBusy(true);
     try {
-      if (mode === 'login') await loginWithEmail(email, password);
-      else await registerWithEmail(email, password);
+      // Trimmed: a trailing space (common with mobile autofill) would
+      // otherwise be rejected by Firebase as an invalid email.
+      if (mode === 'login') await loginWithEmail(trimmed, password);
+      else await registerWithEmail(trimmed, password);
     } catch (e) {
       setError(
         friendlyAuthError(e, mode === 'login' ? 'We couldn\u2019t log you in. Please try again.' : 'We couldn\u2019t create your account. Please try again.')
       );
+    } finally {
+      setBusy(false);
     }
+  };
+
+  const handleForgotPassword = async () => {
+    if (resetting) return;
+    setError('');
+    setNotice('');
+    const trimmed = email.trim();
+    if (!trimmed || !/^\S+@\S+\.\S+$/.test(trimmed)) {
+      setEmailErr(!trimmed ? 'Enter your email first' : 'Enter a valid email');
+      return;
+    }
+    setEmailErr('');
+    setResetting(true);
+    try {
+      await resetPassword(trimmed);
+      setNotice(`If an account exists for ${trimmed}, we\u2019ve sent a password reset link. Check your inbox (and spam).`);
+    } catch (e) {
+      setError(friendlyAuthError(e, 'We couldn\u2019t send the reset email. Please try again.'));
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const switchMode = (next: 'login' | 'register') => {
+    setMode(next);
+    setError('');
+    setNotice('');
+    setEmailErr('');
+    setPassErr('');
   };
 
   const handleGoogleLogin = async () => {
@@ -103,10 +146,7 @@ export default function Login() {
       setFullSignup(true);
       return;
     }
-    setMode(m);
-    setError('');
-    setEmailErr('');
-    setPassErr('');
+    switchMode(m);
     setOpen(true);
   };
 
@@ -182,6 +222,7 @@ export default function Login() {
       <Modal open={open} onClose={() => setOpen(false)} title={mode === 'login' ? 'Welcome back' : 'Create your account'}>
         <div className="login-modal-body">
           <button
+            type="button"
             onClick={handleGoogleLogin}
             disabled={googleLoading}
             className="btn-press login-btn login-btn-google flex items-center justify-center gap-[0.6em] font-medium text-ink-2 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -207,7 +248,16 @@ export default function Login() {
             {googleLoading ? 'Connecting…' : 'Continue with Google'}
           </button>
 
-          {error && <p className="text-[0.875em] text-red-500 mb-[0.75em]">{error}</p>}
+          {error && (
+            <p role="alert" className="text-[0.875em] text-red-500 mb-[0.75em]">
+              {error}
+            </p>
+          )}
+          {notice && (
+            <p role="status" className="text-[0.875em] text-brand-600 mb-[0.75em]">
+              {notice}
+            </p>
+          )}
 
           <div className="login-divider flex items-center gap-3">
             <div className="h-px bg-line flex-1" />
@@ -226,6 +276,9 @@ export default function Login() {
                 onChange={(e) => {
                   setEmail(e.target.value);
                   if (emailErr) setEmailErr('');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') submit();
                 }}
                 aria-invalid={!!emailErr}
                 className="lf-input"
@@ -262,18 +315,32 @@ export default function Login() {
               </button>
               {passErr && <FieldError message={passErr} />}
             </div>
+            {mode === 'login' && (
+              <div className="text-right">
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  disabled={resetting}
+                  className="text-brand-600 font-medium text-[0.875em] disabled:opacity-50"
+                >
+                  {resetting ? 'Sending link…' : 'Forgot password?'}
+                </button>
+              </div>
+            )}
             <button
               onClick={submit}
-              className="btn-press login-btn bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white font-medium"
+              disabled={busy}
+              className="btn-press login-btn bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white font-medium disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {mode === 'login' ? 'Log In' : 'Sign Up'}
+              {busy ? (mode === 'login' ? 'Logging in…' : 'Creating account…') : mode === 'login' ? 'Log In' : 'Sign Up'}
             </button>
           </div>
 
           <p className="login-switch text-ink-2 text-center">
             {mode === 'login' ? "No account yet? " : 'Already have an account? '}
             <button
-              onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
+              type="button"
+              onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}
               className="text-brand-600 font-medium"
             >
               {mode === 'login' ? 'Create one' : 'Log in'}

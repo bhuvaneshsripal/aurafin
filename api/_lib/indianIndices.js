@@ -10,6 +10,7 @@
 // `yahoo` is a list of Yahoo tickers to try in order.
 import { fetchNseAllIndices } from './nse.js';
 
+import { fetch } from './fetchTimeout.js';
 export const INDIAN_INDICES = [
   { key: 'niftypvtbank', name: 'NIFTY Private Bank', exchange: 'NSE', nse: ['NIFTY PRIVATE BANK'] },
   { key: 'niftymetal', name: 'NIFTY Metal', exchange: 'NSE', nse: ['NIFTY METAL'] },

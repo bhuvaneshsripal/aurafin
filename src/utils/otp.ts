@@ -15,8 +15,21 @@ export function isOtpEmailConfigured() {
 }
 
 function generateCode() {
+  // Cryptographically secure 6-digit code (Math.random() is predictable and
+  // must never be used for security codes). Rejection sampling avoids bias.
+  const cryptoObj = globalThis.crypto;
+  if (cryptoObj?.getRandomValues) {
+    const buf = new Uint32Array(1);
+    const limit = Math.floor(0xffffffff / 900000) * 900000;
+    do {
+      cryptoObj.getRandomValues(buf);
+    } while (buf[0] >= limit);
+    return String(100000 + (buf[0] % 900000));
+  }
   return String(Math.floor(100000 + Math.random() * 900000));
 }
+
+const OTP_MAX_ATTEMPTS = 5;
 
 export async function sendPinResetOtp(email: string) {
   if (!isOtpEmailConfigured()) {
@@ -27,24 +40,32 @@ export async function sendPinResetOtp(email: string) {
 
   const code = generateCode();
   const expiresAt = Date.now() + OTP_TTL_MS;
-  sessionStorage.setItem(OTP_KEY, JSON.stringify({ code, email, expiresAt }));
+  sessionStorage.setItem(OTP_KEY, JSON.stringify({ code, email, expiresAt, attempts: 0 }));
 
-  const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      service_id: EMAILJS_SERVICE_ID,
-      template_id: EMAILJS_TEMPLATE_ID,
-      user_id: EMAILJS_PUBLIC_KEY,
-      template_params: {
-        to_email: email,
-        otp_code: code,
-        expires_in: '10 minutes',
-      },
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        service_id: EMAILJS_SERVICE_ID,
+        template_id: EMAILJS_TEMPLATE_ID,
+        user_id: EMAILJS_PUBLIC_KEY,
+        template_params: {
+          to_email: email,
+          otp_code: code,
+          expires_in: '10 minutes',
+        },
+      }),
+    });
+  } catch {
+    sessionStorage.removeItem(OTP_KEY);
+    throw new Error('Could not reach the email service. Check your connection and try again.');
+  }
 
   if (!res.ok) {
+    // Don't leave a code around that the person never received.
+    sessionStorage.removeItem(OTP_KEY);
     throw new Error('Could not send the reset email. Please try again in a moment.');
   }
 }
@@ -166,10 +187,27 @@ export function verifyPinResetOtp(email: string, code: string): boolean {
   const raw = sessionStorage.getItem(OTP_KEY);
   if (!raw) return false;
   try {
-    const stored = JSON.parse(raw) as { code: string; email: string; expiresAt: number };
+    const stored = JSON.parse(raw) as {
+      code: string;
+      email: string;
+      expiresAt: number;
+      attempts?: number;
+    };
     if (stored.email !== email) return false;
-    if (Date.now() > stored.expiresAt) return false;
-    if (stored.code !== code) return false;
+    if (Date.now() > stored.expiresAt) {
+      sessionStorage.removeItem(OTP_KEY);
+      return false;
+    }
+    if (stored.code !== code.trim()) {
+      // Limit guesses so a 6-digit code can't be brute-forced.
+      const attempts = (stored.attempts ?? 0) + 1;
+      if (attempts >= OTP_MAX_ATTEMPTS) {
+        sessionStorage.removeItem(OTP_KEY);
+      } else {
+        sessionStorage.setItem(OTP_KEY, JSON.stringify({ ...stored, attempts }));
+      }
+      return false;
+    }
     sessionStorage.removeItem(OTP_KEY);
     return true;
   } catch {

@@ -129,12 +129,23 @@ function AppShell() {
 
   return (
     <div className="flex min-h-screen bg-page">
+      {/* Keyboard users: jump past the sidebar/header straight to the page. */}
+      <a
+        href="#main-content"
+        onClick={(e) => {
+          e.preventDefault();
+          document.getElementById('main-content')?.focus();
+        }}
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[300] focus:px-3 focus:py-2 focus:rounded-lg focus:bg-brand-600 focus:text-white focus:text-sm focus:font-medium"
+      >
+        Skip to content
+      </a>
       <LockScreen />
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0 app-scale">
         <UpdateBanner />
         <TopHeader />
-        <main className="flex-1 w-full max-w-[1240px] mx-auto px-4 pt-5 pb-36 sm:px-6 sm:pt-6 sm:pb-36 md:px-8 md:pt-7 md:pb-10">
+        <main id="main-content" tabIndex={-1} className="focus:outline-none flex-1 w-full max-w-[1240px] mx-auto px-4 pt-5 pb-36 sm:px-6 sm:pt-6 sm:pb-36 md:px-8 md:pt-7 md:pb-10">
           <ErrorBoundary key={location.pathname}>
             <Suspense fallback={<RouteFallback />}>
               <div key={location.pathname} className="animate-page-in" data-page>

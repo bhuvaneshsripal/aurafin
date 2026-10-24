@@ -7,7 +7,26 @@ function triggerDownload(blob: Blob, filename: string) {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  // Revoking straight away can cancel the download in Safari/some mobile
+  // browsers; give the browser a moment to start it first.
+  window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+/** Spreadsheet apps treat a text cell starting with = + - @ (or a tab/CR) as
+ *  a formula, so a note like `=HYPERLINK(...)` typed into the app would run
+ *  when the export is opened in Excel/Sheets (CSV injection). Prefixing a
+ *  single quote forces it to be read as plain text. Real numbers, and strings
+ *  that are just numbers like "-500", are left untouched. */
+function neutraliseFormulas(rows: Record<string, unknown>[]): Record<string, unknown>[] {
+  const NUMERIC = /^[-+]?\d+(\.\d+)?$/;
+  return rows.map((row) => {
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(row)) {
+      out[key] =
+        typeof value === 'string' && /^[=+\-@\t\r]/.test(value) && !NUMERIC.test(value) ? `'${value}` : value;
+    }
+    return out;
+  });
 }
 
 /**
@@ -16,9 +35,10 @@ function triggerDownload(blob: Blob, filename: string) {
 export async function exportToCsv(filename: string, rows: Record<string, unknown>[]) {
   if (rows.length === 0) return;
   const XLSX = await import('xlsx');
-  const worksheet = XLSX.utils.json_to_sheet(rows);
+  const worksheet = XLSX.utils.json_to_sheet(neutraliseFormulas(rows));
   const csv = XLSX.utils.sheet_to_csv(worksheet);
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  // UTF-8 BOM so Excel shows ₹ and non-English names correctly.
+  const blob = new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8;' });
   triggerDownload(blob, filename.endsWith('.csv') ? filename : `${filename}.csv`);
 }
 
@@ -28,7 +48,7 @@ export async function exportToCsv(filename: string, rows: Record<string, unknown
 export async function exportToXlsx(filename: string, rows: Record<string, unknown>[], sheetName = 'Sheet1') {
   if (rows.length === 0) return;
   const XLSX = await import('xlsx');
-  const worksheet = XLSX.utils.json_to_sheet(rows);
+  const worksheet = XLSX.utils.json_to_sheet(neutraliseFormulas(rows));
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
   const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });

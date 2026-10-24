@@ -17,7 +17,23 @@ const MARKET_CLOSE_MINUTE = 30;
 /** Weekday exchange holidays (IST dates, "YYYY-MM-DD") on which NSE/BSE are
  *  closed — add them from the official NSE holiday list each year. Weekends
  *  are handled automatically and don't need to be listed. */
-export const MARKET_HOLIDAYS = new Set<string>([]);
+export const MARKET_HOLIDAYS = new Set<string>([
+  // 2026 NSE/BSE equity-segment weekday holidays (per NSE's circular). Weekend
+  // festivals (e.g. Diwali Laxmi Pujan, Sun 8-Nov, which only has a Muhurat
+  // session) need no entry. Re-check against nseindia.com each January.
+  '2026-01-26', // Republic Day
+  '2026-03-03', // Holi
+  '2026-03-31', // Shri Mahavir Jayanti
+  '2026-04-03', // Good Friday
+  '2026-04-14', // Dr. Baba Saheb Ambedkar Jayanti
+  '2026-05-01', // Maharashtra Day
+  '2026-06-26', // Muharram
+  '2026-10-02', // Mahatma Gandhi Jayanti
+  '2026-10-20', // Dussehra
+  '2026-11-10', // Diwali Balipratipada
+  '2026-11-24', // Guru Nanak Jayanti
+  '2026-12-25', // Christmas
+]);
 
 /** Current wall-clock time in India (Asia/Kolkata), regardless of the
  *  device's own timezone. */

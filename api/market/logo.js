@@ -3,7 +3,9 @@ import { resolveLogo } from '../_lib/logo.js';
 
 export default async function handler(req, res) {
   const symbol = String(req.query.symbol ?? '').trim();
-  if (!symbol) { res.status(400).end(); return; }
+  // Tickers are short and made of letters, digits and a few separators; anything
+  // else can't be a real symbol and must never be spliced into upstream URLs.
+  if (!symbol || !/^[A-Za-z0-9&_.-]{1,24}$/.test(symbol)) { res.status(400).end(); return; }
   const market = String(req.query.market ?? 'IN').toUpperCase() === 'US' ? 'US' : 'IN';
   if (req.query.debug) {
     const trace = [];

@@ -31,18 +31,31 @@ export default class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.error) {
       return (
-        <div className="flex flex-col items-center justify-center gap-3 py-24 px-6 text-center">
+        <div role="alert" className="flex flex-col items-center justify-center gap-3 py-24 px-6 text-center">
           <AlertTriangle className="text-red-500" size={28} />
           <p className="text-ink-2 font-medium">
             Something went wrong loading this page.
           </p>
-          <p className="text-sm text-slate-600 max-w-sm">{this.state.error.message}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors mt-2 bg-brand-600 hover:bg-brand-700 text-white"
-          >
-            Reload
-          </button>
+          <p className="text-sm text-slate-600 max-w-sm">
+            Your data is safe. Try again, or reload the app.
+          </p>
+          {this.state.error.message && (
+            <p className="text-xs text-slate-500 max-w-sm break-words">{this.state.error.message}</p>
+          )}
+          <div className="flex items-center gap-3 mt-2">
+            <button
+              onClick={() => this.setState({ error: null })}
+              className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors border border-slate-300 text-ink-2 hover:bg-slate-50"
+            >
+              Try again
+            </button>
+            <button
+              onClick={() => window.location.reload()}
+              className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors bg-brand-600 hover:bg-brand-700 text-white"
+            >
+              Reload
+            </button>
+          </div>
         </div>
       );
     }

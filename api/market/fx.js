@@ -3,6 +3,7 @@
 // price). Powers the "invest ₹100 in a $354 stock" flow: converting an
 // amount typed in one currency into the asset's own currency so a
 // fractional quantity can be computed from it.
+import { fetch } from '../_lib/fetchTimeout.js';
 export default async function handler(req, res) {
   const from = String(req.query.from ?? 'USD').trim().toUpperCase();
   const to = String(req.query.to ?? 'INR').trim().toUpperCase();

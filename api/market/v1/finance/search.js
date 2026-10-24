@@ -12,6 +12,7 @@
 // "Google" -> GOOGL/GOOG.
 import { searchIndia } from '../../../_lib/indiaSearch.js';
 
+import { fetch } from '../../../_lib/fetchTimeout.js';
 // Exchanges Yahoo tags US-listed equities/ETFs with. Filters out
 // incidental non-US matches (e.g. a cross-listed ADR on another
 // exchange) so the US suggestion list stays US-only.

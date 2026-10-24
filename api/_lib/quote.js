@@ -11,6 +11,7 @@
 //  - Everything else      -> NSE API first, then Yahoo (.NS then .BO).
 import { fetchNseQuote } from './nse.js';
 
+import { fetch } from './fetchTimeout.js';
 // Tickers people commonly type that Yahoo/BSE know under a numeric BSE
 // scrip code instead. NSE (National Stock Exchange of India) listed on BSE
 // only, on 24 Sep 2026, scrip code 544937.

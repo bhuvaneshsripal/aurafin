@@ -42,8 +42,52 @@ function isAnonymous(user: { uid: string; isAnonymous?: boolean }): boolean {
   return user.isAnonymous === true;
 }
 
+// Storage can throw in locked-down/private browser modes. These helpers keep
+// that from crashing the app at import time (a blank white screen) — the
+// worst case is we just lose cross-refresh memory of the lock state.
+function lsGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function ssGet(key: string): string | null {
+  try {
+    return sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function ssSet(key: string, value: string) {
+  try {
+    sessionStorage.setItem(key, value);
+  } catch {
+    /* best-effort only */
+  }
+}
+function ssRemove(key: string) {
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    /* best-effort only */
+  }
+}
+
+// Wrong-PIN count survives a page refresh within the tab, so reloading can't
+// be used to get unlimited guesses.
+const ATTEMPTS_KEY = 'aurafin-pin-attempts';
+function readAttempts(): number {
+  const n = Number(ssGet(ATTEMPTS_KEY));
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
+function writeAttempts(n: number) {
+  if (n > 0) ssSet(ATTEMPTS_KEY, String(n));
+  else ssRemove(ATTEMPTS_KEY);
+}
+
 function isUnlockedThisSession() {
-  return sessionStorage.getItem(SESSION_UNLOCKED_KEY) === 'true';
+  return ssGet(SESSION_UNLOCKED_KEY) === 'true';
 }
 
 function guestLockKey(uid: string) {
@@ -101,11 +145,11 @@ export const useAppLockStore = create<AppLockState & { _storedPin: string | null
   // Optimistic guess from the non-sensitive cache flag, just so the lock
   // screen can show immediately instead of flashing the dashboard while the
   // real PIN loads from Firestore.
-  enabled: localStorage.getItem(ENABLED_CACHE_KEY) === 'true',
-  locked: localStorage.getItem(ENABLED_CACHE_KEY) === 'true' && !isUnlockedThisSession(),
+  enabled: lsGet(ENABLED_CACHE_KEY) === 'true',
+  locked: lsGet(ENABLED_CACHE_KEY) === 'true' && !isUnlockedThisSession(),
   pinAttemptError: null,
   pinLoaded: false,
-  failedAttempts: 0,
+  failedAttempts: readAttempts(),
   _storedPin: null,
 
   init: () => {
@@ -120,7 +164,7 @@ export const useAppLockStore = create<AppLockState & { _storedPin: string | null
         hiddenAt = Date.now();
       } else {
         if (hiddenAt && Date.now() - hiddenAt > AUTO_LOCK_MS) {
-          sessionStorage.removeItem(SESSION_UNLOCKED_KEY);
+          ssRemove(SESSION_UNLOCKED_KEY);
           set({ locked: true, failedAttempts: 0, pinAttemptError: null });
         }
         hiddenAt = null;
@@ -138,16 +182,18 @@ export const useAppLockStore = create<AppLockState & { _storedPin: string | null
     // the person just proved who they are again (Google/email re-login),
     // treat this session as already unlocked instead of asking for the PIN
     // they just got locked out of.
-    const bypass = sessionStorage.getItem(LOCKOUT_BYPASS_KEY) === 'true';
+    const bypass = ssGet(LOCKOUT_BYPASS_KEY) === 'true';
     if (bypass) {
-      sessionStorage.removeItem(LOCKOUT_BYPASS_KEY);
-      sessionStorage.setItem(SESSION_UNLOCKED_KEY, 'true');
+      ssRemove(LOCKOUT_BYPASS_KEY);
+      ssSet(SESSION_UNLOCKED_KEY, 'true');
     }
     set((state) => ({
       _storedPin: pin,
       enabled,
       pinLoaded: true,
-      failedAttempts: 0,
+      // Keep the running wrong-PIN count: a remote update (or a reload) must
+      // not hand out fresh guesses.
+      failedAttempts: state.failedAttempts,
       // A "low network" message no longer applies once the PIN has loaded.
       pinAttemptError: null,
       // Only derive `locked` from the remote state the very first time it
@@ -182,7 +228,7 @@ export const useAppLockStore = create<AppLockState & { _storedPin: string | null
 
   disable: async () => {
     const user = useAuthStore.getState().user;
-    sessionStorage.removeItem(SESSION_UNLOCKED_KEY);
+    ssRemove(SESSION_UNLOCKED_KEY);
     hiddenAt = null;
     try {
       localStorage.setItem(ENABLED_CACHE_KEY, 'false');
@@ -216,7 +262,8 @@ export const useAppLockStore = create<AppLockState & { _storedPin: string | null
     }
 
     if (pin === _storedPin) {
-      sessionStorage.setItem(SESSION_UNLOCKED_KEY, 'true');
+      ssSet(SESSION_UNLOCKED_KEY, 'true');
+      writeAttempts(0);
       set({ locked: false, pinAttemptError: null, failedAttempts: 0 });
       return true;
     }
@@ -227,8 +274,9 @@ export const useAppLockStore = create<AppLockState & { _storedPin: string | null
       // letting them keep guessing. Flag this session so that once they
       // prove who they are again (Google/email), the PIN screen is skipped
       // instead of immediately re-locking them out.
+      writeAttempts(0);
       set({ pinAttemptError: 'Too many incorrect attempts. Signing you out…', failedAttempts: 0 });
-      sessionStorage.setItem(LOCKOUT_BYPASS_KEY, 'true');
+      ssSet(LOCKOUT_BYPASS_KEY, 'true');
       // Small delay so the message above is actually readable before the
       // screen switches to Login.
       window.setTimeout(() => {
@@ -237,13 +285,18 @@ export const useAppLockStore = create<AppLockState & { _storedPin: string | null
       return false;
     }
 
-    set({ pinAttemptError: 'Incorrect PIN. Try again.', failedAttempts: attempts });
+    writeAttempts(attempts);
+    const left = MAX_PIN_ATTEMPTS - attempts;
+    set({
+      pinAttemptError: `Incorrect PIN. ${left} ${left === 1 ? 'attempt' : 'attempts'} left.`,
+      failedAttempts: attempts,
+    });
     return false;
   },
 
   lockNow: () => {
     if (get().enabled) {
-      sessionStorage.removeItem(SESSION_UNLOCKED_KEY);
+      ssRemove(SESSION_UNLOCKED_KEY);
       set({ locked: true, failedAttempts: 0, pinAttemptError: null });
     }
   },

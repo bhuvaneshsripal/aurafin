@@ -13,6 +13,7 @@
 //
 // FX (USD -> INR): frankfurter.dev, falling back to Yahoo Finance's
 // USD/INR chart (INR=X).
+import { fetch } from './fetchTimeout.js';
 export const TROY_OZ_IN_GRAMS = 31.1034768;
 
 const YAHOO_HEADERS = { 'User-Agent': 'Mozilla/5.0' };

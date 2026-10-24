@@ -7,6 +7,7 @@
 // so it is Yahoo-only.
 import { fetchNseAllIndices } from './nse.js';
 
+import { fetch } from './fetchTimeout.js';
 const INDICES = [
   { key: 'nifty', name: 'NIFTY', yahoo: ['^NSEI'], nse: 'NIFTY 50' },
   { key: 'sensex', name: 'SENSEX', yahoo: ['^BSESN'] },

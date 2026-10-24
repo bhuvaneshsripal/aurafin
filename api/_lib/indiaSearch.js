@@ -10,6 +10,7 @@
 // merges and de-duplicates the results (NSE first).
 import { searchNseSymbol } from './nse.js';
 
+import { fetch } from './fetchTimeout.js';
 const IN_EXCHANGES = new Set(['NSI', 'BSE']);
 const isIndianSymbol = (symbol) => /\.(NS|BO)$/i.test(symbol ?? '');
 const baseOf = (symbol) => String(symbol ?? '').replace(/\.(NS|BO)$/i, '').toUpperCase();

@@ -48,6 +48,8 @@ function PanelBody({
       <div className="flex items-center justify-between px-4 sm:px-6 pt-[calc(env(safe-area-inset-top)+16px)] pb-4 shrink-0 border-b border-line-soft">
         <h3 className="text-[18px] font-semibold text-ink tracking-tight">{title}</h3>
         <button
+          type="button"
+          aria-label="Close"
           onClick={onClose}
           className="keep-round tap-scale h-9 w-9 flex items-center justify-center text-slate-600 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200 transition-colors"
         >
@@ -244,7 +246,7 @@ export default function Modal({
     // smaller than the true viewport — visibly not covering the bottom nav,
     // which itself renders outside `.app-scale` at full size.
     return createPortal(
-      <div className={`${closing ? 'animate-detail-out' : 'animate-detail-in'} fixed inset-x-0 top-0 bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-50 bg-surface flex flex-col`}>
+      <div role="dialog" aria-modal="true" className={`${closing ? 'animate-detail-out' : 'animate-detail-in'} fixed inset-x-0 top-0 bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-50 bg-surface flex flex-col`}>
         <PanelBody title={title} onClose={onClose}>
           {children}
         </PanelBody>
@@ -283,12 +285,16 @@ export default function Modal({
           ...(visible ? { maxHeight: Math.min(visible.height * 0.88, visible.height - 32) } : {}),
         }}
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
       >
         {/* Header stays outside the scroll area — pinned in place, and its
            padding is never eaten by the scrollbar (see body below). */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
           <h3 className="text-[18px] font-semibold text-ink tracking-tight">{title}</h3>
           <button
+          type="button"
+          aria-label="Close"
             onClick={onClose}
             className="keep-round tap-scale h-8 w-8 flex items-center justify-center text-slate-600 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200 transition-colors"
           >

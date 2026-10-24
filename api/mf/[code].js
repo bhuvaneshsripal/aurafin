@@ -1,5 +1,6 @@
 // Production replacement for the vite dev-server proxy at /api/mf/:code — see
 // api/mf/search.js for why this is needed on Vercel.
+import { fetch } from '../_lib/fetchTimeout.js';
 export default async function handler(req, res) {
   const code = String(req.query.code ?? '');
   if (!code.trim()) {

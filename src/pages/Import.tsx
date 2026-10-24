@@ -197,9 +197,21 @@ export default function Import() {
   const [importResult, setImportResult] = useState<{ updated: number; added: number } | null>(null);
 
   const handleFile = async (file: File) => {
-    setStatus('parsing');
     setErrorMsg('');
     setFileName(file.name);
+    // Drag-and-drop bypasses the picker's `accept` filter, and a very large
+    // file would freeze the tab while parsing — check both up front.
+    if (!/\.(csv|xlsx|xls)$/i.test(file.name)) {
+      setStatus('error');
+      setErrorMsg('Please choose a .csv, .xlsx or .xls file.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setStatus('error');
+      setErrorMsg('That file is too large (over 10 MB). Export a smaller range and try again.');
+      return;
+    }
+    setStatus('parsing');
     try {
       const parsed = await parseSpreadsheetFile(file);
       if (parsed.length === 0) {

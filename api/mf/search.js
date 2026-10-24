@@ -3,6 +3,7 @@
 // dev server, so without this function every request fell through to vercel.json's
 // SPA catch-all rewrite and got back index.html instead of JSON, which is what the
 // "Couldn't reach the fund search" error was actually seeing.
+import { fetch } from '../_lib/fetchTimeout.js';
 export default async function handler(req, res) {
   const q = typeof req.query.q === 'string' ? req.query.q : '';
   if (!q.trim()) {

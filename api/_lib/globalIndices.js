@@ -4,6 +4,7 @@
 //
 // To change which indices are shown, edit this list — `symbol` is the
 // Yahoo Finance ticker, `region` is the short code shown beside the name.
+import { fetch } from './fetchTimeout.js';
 export const GLOBAL_INDICES = [
   { key: 'dow', name: 'Dow', region: 'US', symbol: '^DJI' },
   { key: 'dowfut', name: 'Dow Futures', region: 'US', symbol: 'YM=F' },

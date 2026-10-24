@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
 import { useUiStore } from '../store/uiStore';
 import { useAppLockStore } from '../store/appLockStore';
+import { toast } from '../store/toastStore';
 import Modal from './Modal';
 import QuickAddMenu from './QuickAddMenu';
 import ProfileSwitcher from './ProfileSwitcher';
@@ -37,6 +38,7 @@ export default function TopHeader() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const isGuest = (user as { isAnonymous?: boolean } | null)?.isAnonymous === true;
 
   // Fades a full-screen overlay in first, then flips the real auth state —
   // so leaving the app reads as a smooth log out instead of an abrupt cut
@@ -44,8 +46,15 @@ export default function TopHeader() {
   const handleLogout = () => {
     setConfirmOpen(false);
     setSigningOut(true);
-    window.setTimeout(() => {
-      logout();
+    window.setTimeout(async () => {
+      try {
+        await logout();
+      } catch {
+        // Sign-out failed (e.g. offline): drop the full-screen overlay instead
+        // of leaving the app stuck on "Logging out…" forever.
+        setSigningOut(false);
+        toast.error('Could not log out. Please check your connection and try again.');
+      }
     }, 320);
   };
 
@@ -263,7 +272,9 @@ export default function TopHeader() {
 
       <Modal open={confirmOpen} onClose={() => setConfirmOpen(false)} title="Log out of Aurafin?">
         <p className="text-sm text-muted mb-6">
-          You'll need to sign in again to see your dashboard.
+          {isGuest
+            ? "You're using the demo. Logging out permanently deletes everything you've added here, and it can't be recovered. Create an account first if you want to keep it."
+            : "You'll need to sign in again to see your dashboard."}
         </p>
         <div className="flex gap-2.5">
           <Button variant="secondary" fullWidth onClick={() => setConfirmOpen(false)}>

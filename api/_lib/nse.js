@@ -8,6 +8,7 @@
 // reuse them instead of doing the handshake on every request. Vercel
 // keeps a function instance warm for a while between calls, so this
 // meaningfully cuts down on handshake round trips.
+import { fetch } from './fetchTimeout.js';
 
 const BROWSER_HEADERS = {
   'User-Agent':

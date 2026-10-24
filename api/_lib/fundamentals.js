@@ -5,6 +5,7 @@
 // UI then asks the person to enter it manually.
 import { resolveQuote } from './quote.js';
 
+import { fetch } from './fetchTimeout.js';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 let session = null; // { cookie, crumb, at } — reused while the function instance is warm
 

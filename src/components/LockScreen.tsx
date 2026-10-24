@@ -66,17 +66,15 @@ export default function LockScreen() {
   const pressDigit = useCallback(
     (digit: string) => {
       if (shake) return;
-      setPinInput((prev) => {
-        if (prev.length >= 4) return prev;
-        const next = prev + digit;
-        if (next.length === 4) {
-          // defer so state has settled before we validate
-          queueMicrotask(() => submitPin(next));
-        }
-        return next;
-      });
+      // Compute from current state and submit outside any state updater:
+      // updaters must stay pure (React may run them twice), otherwise one
+      // entry could be validated twice and count as two wrong attempts.
+      if (pin.length >= 4) return;
+      const next = pin + digit;
+      setPinInput(next);
+      if (next.length === 4) submitPin(next);
     },
-    [shake, submitPin]
+    [shake, pin, submitPin]
   );
 
   const pressBackspace = useCallback(() => {
@@ -147,7 +145,11 @@ export default function LockScreen() {
           ))}
         </div>
 
-        {pinAttemptError && <p className="font-luxury text-sm text-red-500 mt-3">{pinAttemptError}</p>}
+        {pinAttemptError && (
+          <p role="alert" className="font-luxury text-sm text-red-500 mt-3">
+            {pinAttemptError}
+          </p>
+        )}
       </div>
 
       {/* Spacer — pushes the keypad toward the bottom of the screen so

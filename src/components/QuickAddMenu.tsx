@@ -1,3 +1,4 @@
+import { toast } from '../store/toastStore';
 import { useEffect, useRef, useState } from 'react';
 import { hideNumber } from '../utils/privateFormat';
 import { useNavigate } from 'react-router-dom';
@@ -206,19 +207,36 @@ function TransactionForm({ type, onDone }: { type: TransactionType; onDone: () =
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('INR');
   const [date, setDate] = useState(toIsoDate());
+  const [busy, setBusy] = useState(false);
 
   const submit = async () => {
-    if (!user || !category || !amount) return;
-    const t: Transaction = {
-      id: crypto.randomUUID(),
-      type,
-      category,
-      amount: Number(amount),
-      currency,
-      date,
-    };
-    await upsertDoc(user, 'transactions', t);
-    onDone();
+    if (busy || !user) return;
+    const value = Number(amount);
+    if (!category.trim()) {
+      toast.error('Enter a category.');
+      return;
+    }
+    if (!Number.isFinite(value) || value <= 0) {
+      toast.error('Enter an amount greater than 0.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const t: Transaction = {
+        id: crypto.randomUUID(),
+        type,
+        category: category.trim(),
+        amount: value,
+        currency,
+        date,
+      };
+      await upsertDoc(user, 'transactions', t);
+      onDone();
+    } catch {
+      toast.error('Could not save this. Please check your connection and try again.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -242,8 +260,8 @@ function TransactionForm({ type, onDone }: { type: TransactionType; onDone: () =
       <Field label="Date">
         <DateInput value={date} onChange={(v) => setDate(v)} className={inputClass} />
       </Field>
-      <button onClick={submit} className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white">
-        Save
+      <button onClick={submit} disabled={busy} className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white disabled:opacity-60 disabled:cursor-not-allowed">
+        {busy ? 'Saving…' : 'Save'}
       </button>
     </div>
   );
@@ -255,6 +273,7 @@ function TransferForm({ onDone }: { onDone: () => void }) {
   const [fromId, setFromId] = useState(assets[0]?.id ?? '');
   const [toId, setToId] = useState(assets[1]?.id ?? assets[0]?.id ?? '');
   const [amount, setAmount] = useState('');
+  const [busy, setBusy] = useState(false);
 
   if (assets.length < 2) {
     return (
@@ -265,17 +284,44 @@ function TransferForm({ onDone }: { onDone: () => void }) {
   }
 
   const submit = async () => {
-    if (!user || !fromId || !toId || fromId === toId || !amount) return;
+    if (busy || !user) return;
     const value = Number(amount);
     const from = assets.find((a) => a.id === fromId);
     const to = assets.find((a) => a.id === toId);
-    if (!from || !to) return;
-
-    const updatedFrom: Asset = { ...from, value: Math.max(0, from.value - value), updatedAt: Date.now() };
-    const updatedTo: Asset = { ...to, value: to.value + value, updatedAt: Date.now() };
-    await upsertDoc(user, 'assets', updatedFrom);
-    await upsertDoc(user, 'assets', updatedTo);
-    onDone();
+    if (!from || !to) {
+      toast.error('Pick both accounts.');
+      return;
+    }
+    if (fromId === toId) {
+      toast.error('Choose two different assets to transfer between.');
+      return;
+    }
+    if (!Number.isFinite(value) || value <= 0) {
+      toast.error('Enter an amount greater than 0.');
+      return;
+    }
+    // Otherwise the source would clamp to 0 while the destination still gained
+    // the full amount — creating money out of nothing.
+    if (value > from.value) {
+      toast.error(`That's more than the balance in ${from.name}.`);
+      return;
+    }
+    if ((from.currency ?? 'INR') !== (to.currency ?? 'INR')) {
+      toast.error('Transfers between assets in different currencies aren\u2019t supported here.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const updatedFrom: Asset = { ...from, value: from.value - value, updatedAt: Date.now() };
+      const updatedTo: Asset = { ...to, value: to.value + value, updatedAt: Date.now() };
+      await upsertDoc(user, 'assets', updatedFrom);
+      await upsertDoc(user, 'assets', updatedTo);
+      onDone();
+    } catch {
+      toast.error('Could not complete the transfer. Please check your balances and try again.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -299,8 +345,8 @@ function TransferForm({ onDone }: { onDone: () => void }) {
       <Field label="Amount">
         <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} placeholder="0" />
       </Field>
-      <button onClick={submit} className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white">
-        Record Transfer
+      <button onClick={submit} disabled={busy} className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white disabled:opacity-60 disabled:cursor-not-allowed">
+        {busy ? 'Recording…' : 'Record Transfer'}
       </button>
     </div>
   );
