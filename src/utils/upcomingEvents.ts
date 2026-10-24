@@ -1,8 +1,9 @@
 /** Upcoming money events: deposit maturities, SIP/RD debits and goal deadlines. */
 import type { Asset, Goal } from '../types';
-import { computeMaturityInfo, computeSipProgress, shiftMonths } from './assetValues';
+import { computeMaturityInfo, computeSipProgress, parseLocalDate, shiftMonths } from './assetValues';
 import { DEPOSIT_LIKE_CLASSES, RECURRING_DEPOSIT_CLASSES, SIP_CLASSES } from './taxonomy';
 import { toIsoDate } from './date';
+import { ppfMaturityInfo } from './ppf';
 
 export type EventKind = 'maturity' | 'sip' | 'rd' | 'goal';
 
@@ -33,7 +34,7 @@ export function buildUpcomingEvents(assets: Asset[], goals: Goal[], horizonDays:
 
   for (const a of assets) {
     if (DEPOSIT_LIKE_CLASSES.has(a.assetClass) && a.maturityDate) {
-      const m = computeMaturityInfo(a);
+      const m = a.assetClass === 'ppf' && a.ppf ? { maturityAmount: ppfMaturityInfo(a).amount } : computeMaturityInfo(a);
       push({
         id: `mat-${a.id}`,
         kind: 'maturity',
@@ -44,7 +45,22 @@ export function buildUpcomingEvents(assets: Asset[], goals: Goal[], horizonDays:
         currency: a.currency,
       });
     }
-    if (SIP_CLASSES.has(a.assetClass) && a.sipAmount) {
+    // A rented-out property's lease running out — time to renew or find a new tenant.
+    // Uses the 'maturity' kind so existing event lists render it without any new icon/label.
+    if (a.assetClass === 'residential_property' && a.property?.usage === 'rented' && a.property.leaseEnd) {
+      push({
+        id: `lease-${a.id}`,
+        kind: 'maturity',
+        date: a.property.leaseEnd.slice(0, 10),
+        title: `${a.name} lease ends`,
+        subtitle: a.property.tenantName ? `Tenant: ${a.property.tenantName}` : 'Rental lease',
+        amount: a.property.monthlyRent,
+        currency: a.currency,
+      });
+    }
+    // Mutual-fund SIPs, plus stocks / ETFs set up as a recurring investment (their reminder is the
+    // whole point of turning that switch on).
+    if ((SIP_CLASSES.has(a.assetClass) || a.recurringInvestment) && a.sipAmount) {
       const p = computeSipProgress(a, today);
       if (p.nextInstallmentDate) {
         push({ id: `sip-${a.id}`, kind: 'sip', date: p.nextInstallmentDate, title: `${a.name} SIP`, subtitle: a.sipFrequency === 'quarterly' ? 'Quarterly SIP' : 'Monthly SIP', amount: -a.sipAmount, currency: a.currency });
@@ -52,7 +68,7 @@ export function buildUpcomingEvents(assets: Asset[], goals: Goal[], horizonDays:
     }
     if (RECURRING_DEPOSIT_CLASSES.has(a.assetClass) && a.monthlyInstallment && a.startDate) {
       const day = +a.startDate.slice(8, 10) || 1;
-      const end = a.maturityDate ? new Date(a.maturityDate).getTime() : Infinity;
+      const end = a.maturityDate ? parseLocalDate(a.maturityDate).getTime() : Infinity;
       for (let i = 0; i < 24; i++) {
         const d = shiftMonths(today.getFullYear(), today.getMonth(), day, i);
         if (d.getTime() > end) break;

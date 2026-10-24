@@ -84,6 +84,176 @@ export interface IpoDetails {
   lockInEnd?: string;
 }
 
+export interface FundDetails {
+  folio?: string;
+  plan?: 'direct' | 'regular';
+  option?: 'growth' | 'idcw';
+  /** Annual expense ratio, %. */
+  expenseRatio?: number;
+  /** Free text, e.g. "1% if redeemed within 1 year". */
+  exitLoad?: string;
+  /** ISO date the lock-in ends (ELSS / tax saver funds). */
+  lockInEnd?: string;
+  benchmark?: string;
+}
+
+export interface EsopDetails {
+  employer?: string;
+  /** What was granted. */
+  kind?: 'rsu' | 'option';
+  grantDate?: string;
+  vestingStart?: string;
+  /** Total vesting period in months. */
+  vestingMonths?: number;
+  /** Nothing vests until this many months have passed. */
+  cliffMonths?: number;
+  totalUnits?: number;
+  /** Exercise price per unit (options only). */
+  strikePrice?: number;
+  /** Current fair market value per unit. */
+  fmv?: number;
+  expiryDate?: string;
+}
+
+export interface EpfDetails {
+  uan?: string;
+  employer?: string;
+  /** ISO date the person joined the current establishment / first EPF membership. */
+  joiningDate?: string;
+  /** Monthly Basic + DA — the wage EPF contributions are calculated on. */
+  monthlyBasic?: number;
+  /** Employee contribution, % of Basic + DA (statutory 12%). */
+  employeePct?: number;
+  /** Employer contribution, % of Basic + DA (statutory 12%, part of which goes to EPS). */
+  employerPct?: number;
+  /** Extra voluntary contribution (VPF), % of Basic + DA. */
+  vpfPct?: number;
+  /** Employee-share balance on the passbook (includes VPF). */
+  employeeBalance?: number;
+  /** Employer-share balance on the passbook. */
+  employerBalance?: number;
+  /** ISO date the passbook balances are as of. */
+  balanceAsOf?: string;
+  currentAge?: number;
+  retirementAge?: number;
+  /** Expected yearly salary growth, %. */
+  salaryGrowthPct?: number;
+  /** Expected inflation, % — used only to express the projection in today's money. */
+  inflationPct?: number;
+}
+
+export interface PpfDeposit {
+  id: string;
+  /** ISO date (yyyy-mm-dd) the deposit was made. */
+  date: string;
+  amount: number;
+}
+
+export interface PpfDetails {
+  accountNumber?: string;
+  /** Whose account this is — PPF allows one per person (a guardian can open one for a minor). */
+  accountFor?: 'self' | 'spouse' | 'child' | 'parent' | 'other';
+  nominee?: string;
+  /** ISO date the account was opened — drives the 15-year term, loan and withdrawal windows. */
+  openingDate?: string;
+  /**
+   * Passbook balance right after interest was credited on a 31 March (the year-end figure),
+   * so interest for the year after it can be worked out exactly. `checkpointFy` is the
+   * calendar year of that 31 March (e.g. 2026 = balance on 31 Mar 2026).
+   */
+  checkpointFy?: number;
+  checkpointBalance?: number;
+  /** Everything the person has put in up to that checkpoint — only used to show returns. */
+  depositedToCheckpoint?: number;
+  /** Deposits made after the checkpoint (or since opening, when there is no checkpoint). */
+  deposits?: PpfDeposit[];
+  /** Planned deposit per financial year, capped at the statutory limit. */
+  plannedYearlyDeposit?: number;
+  /** Whether the yearly amount goes in as one lump sum by 5 April or as 12 monthly instalments. */
+  depositMode?: 'lump' | 'monthly';
+  /** Yearly step-up in the planned deposit, %. */
+  depositStepUpPct?: number;
+  /** What happens after the 15-year term: 5-year extension blocks, with or without fresh deposits. */
+  extensionBlocks?: 0 | 1 | 2 | 3;
+  extensionWithDeposits?: boolean;
+  /** Tax slab (old regime) used to estimate the Section 80C saving; 0 / undefined = not claiming. */
+  taxSlabPct?: number;
+}
+
+export type PropertyKind = 'apartment' | 'independent_house' | 'villa' | 'builder_floor' | 'studio' | 'plot' | 'other';
+export type PropertyUsage = 'self_occupied' | 'rented' | 'vacant' | 'under_construction';
+
+/** Money spent on a property after buying it (renovation, interiors, extension…). */
+export interface PropertyImprovement {
+  id: string;
+  /** ISO date (yyyy-mm-dd). */
+  date: string;
+  amount: number;
+  note?: string;
+}
+
+/**
+ * Residential property details. Price, rent and running costs are for the WHOLE property;
+ * `ownershipPct` is then applied to work out the person's own share. The asset's own
+ * `value` / `investedValue` are always the person's share.
+ */
+export interface PropertyDetails {
+  kind?: PropertyKind;
+  usage?: PropertyUsage;
+  /** Society / project name. */
+  projectName?: string;
+  address?: string;
+  city?: string;
+  /** Registry / document / RERA number. */
+  registrationNo?: string;
+  /** Built-up / carpet / plot area, in square feet. */
+  areaSqft?: number;
+  areaBasis?: 'carpet' | 'built_up' | 'super_built_up' | 'plot';
+  /** Person's share of the property, % (100 when sole owner). */
+  ownershipPct?: number;
+  coOwners?: string;
+
+  /* Purchase */
+  purchaseDate?: string;
+  purchasePrice?: number;
+  stampDuty?: number;
+  registrationFee?: number;
+  brokerage?: number;
+  otherPurchaseCosts?: number;
+  improvements?: PropertyImprovement[];
+
+  /* Valuation */
+  /** 'manual' keeps whatever Current Value was typed; 'rate' = area × rate per sq ft × share. */
+  valuationMode?: 'manual' | 'rate';
+  ratePerSqft?: number;
+  /** Assumed yearly price growth, % — used for the projection. */
+  growthPct?: number;
+
+  /* Rent (only used while `usage` is 'rented') */
+  monthlyRent?: number;
+  rentEscalationPct?: number;
+  /** Months per year the property is expected to sit empty between tenants. */
+  vacancyMonths?: number;
+  securityDeposit?: number;
+  tenantName?: string;
+  leaseStart?: string;
+  leaseEnd?: string;
+
+  /* Running costs (whole property, always counted) */
+  propertyTaxYearly?: number;
+  maintenanceMonthly?: number;
+  insuranceYearly?: number;
+  otherCostsYearly?: number;
+
+  /** Id of a Liability (usually a home loan) taken against this property. */
+  linkedLoanId?: string;
+
+  /* "If I sold today" */
+  sellingCostPct?: number;
+  /** Tax slab, % — only used for short-term gains (sold within 24 months). */
+  taxSlabPct?: number;
+}
+
 export interface Asset {
   id: string;
   name: string;
@@ -263,6 +433,19 @@ export interface Asset {
   /** When true, this holding is skipped when computing Allocation % (see
    *  AllocationTab) — it still counts toward net worth everywhere else. */
   excludeFromAllocation?: boolean;
+  /** Optional scheme details for mutual / index / hybrid funds. */
+  fundDetails?: FundDetails;
+  /** Contribution, passbook and retirement-planning details for an EPF account. */
+  epf?: EpfDetails;
+  /** Account, deposit ledger and planning details for a PPF account. */
+  ppf?: PpfDetails;
+  /** Purchase cost, valuation, rent, loan and sale-tax details for a residential property. */
+  property?: PropertyDetails;
+  /** Grant and vesting details for ESOPs / RSUs. */
+  esop?: EsopDetails;
+  /** Personal price levels (per unit) for a holding — shown against the live price. */
+  targetPrice?: number;
+  stopLossPrice?: number;
   /** Marks this holding as money earmarked for emergencies. Saved and
    *  shown on the asset, but NOT YET wired into the Essentials
    *  emergency-fund runway calculation, which currently sums a fixed set

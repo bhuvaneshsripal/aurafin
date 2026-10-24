@@ -56,6 +56,7 @@ import { useSnapshotsStore } from '../store/snapshotsStore';
 import SplitAmount from '../components/SplitAmount';
 import { useLivePricesStore, resolvePreviousClose } from '../store/livePricesStore';
 import { formatDate, toIsoDate } from '../utils/date';
+import { newId } from '../utils/id';
 import { goldPricePerGram22k } from '../utils/goldPrice';
 import { computeHoldingPnl, isFullySold } from '../utils/investmentPnl';
 import { fifoMatch, summariseFy, financialYearOf, taxGroupOf, TAX_RULES } from '../utils/capitalGains';
@@ -100,7 +101,7 @@ import CurrencySelect from '../components/CurrencySelect';
 import CustomSelect from '../components/CustomSelect';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { ACCOUNT_TYPES, resolveAccountIcon, type AccountType } from '../utils/accountVisuals';
-import type { Asset, AssetClass, DividendKind, Liability, LiabilityClass, Snapshot, Transaction } from '../types';
+import type { Asset, AssetClass, EpfDetails, PpfDetails, PropertyDetails, EsopDetails, FundDetails, DividendKind, Liability, LiabilityClass, Snapshot, Transaction } from '../types';
 import { useTransactionsStore } from '../store/transactionsStore';
 import { maskPreciseAmount, maskAmount } from '../utils/currency';
 import { formatPreciseCurrency, formatAxisAmount, formatPercentMagnitude, formatSignedCurrency, hideNumber } from '../utils/privateFormat';
@@ -147,6 +148,20 @@ const AnalyticsContent = lazyWithRetry(() => import('./Analytics'));
 import { useModalBackClose } from '../hooks/useModalBackClose';
 import { useUrlRestore } from '../hooks/useUrlRestore';
 import { toast } from '../store/toastStore';
+import {
+  LivePreview,
+  FundDetailsSection,
+  FUND_DETAIL_CLASSES,
+  EsopSection,
+  PriceLevelsSection,
+  PastePurchases,
+  DuplicateWarning,
+} from '../components/assetForm/AssetFormExtras';
+import EpfSection from '../components/assetForm/EpfSection';
+import PpfSection from '../components/assetForm/PpfSection';
+import PropertySection from '../components/assetForm/PropertySection';
+import { propertyCost, rateBasedValue, summarizeProperty } from '../utils/property';
+import { computePpfNow, migrateLegacyPpf, ppfMaturityDate, ppfRate, ppfStatus, yearAdvice } from '../utils/ppf';
 
 type Tab = 'assets' | 'liabilities' | 'networth' | 'allocation' | 'analytics';
 type SortKey = 'manual' | 'name' | 'qty' | 'avgCost' | 'perUnit' | 'invested' | 'value' | 'pnl' | 'alloc' | 'dayChange';
@@ -542,7 +557,7 @@ function AddWealthPage({
     if (!user) return;
     try {
       await upsertDoc(
-        user.uid,
+        user,
         'liabilities',
         liability.profileId ? liability : { ...liability, profileId: activeProfileId ?? undefined }
       );
@@ -1120,6 +1135,9 @@ function AssetsTab({
       saveWealthFilters(user, { categories: selectedCategories, types: selectedTypes, currencies });
     }
   };
+  // Tag filter — tags are typed per asset in the edit form ("Show details"), so this just lists
+  // whatever tags exist. Kept in this session only (it isn't synced like the other filters).
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [viewingAsset, setViewingAsset] = useState<Asset | null>(null);
   // Viewing an asset swaps the whole tab into a full detail page (like a
   // pushed screen), so the phone/PWA Back button should close it and land
@@ -1360,7 +1378,7 @@ function AssetsTab({
     try {
       await upsertDoc(user, 'assets', {
         ...a,
-        id: crypto.randomUUID(),
+        id: newId(),
         name: `${a.name} (Copy)`,
         updatedAt: Date.now(),
       });
@@ -1585,11 +1603,12 @@ function AssetsTab({
   // compact button that opens this sheet with the same controls instead.
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   useBodyScrollLock(filterSheetOpen);
-  const activeFilterCount = selectedCategories.length + selectedTypes.length + selectedCurrencies.length;
+  const activeFilterCount = selectedCategories.length + selectedTypes.length + selectedCurrencies.length + selectedTags.length;
   const clearAllFilters = () => {
     setSelectedCategories([]);
     setSelectedTypes([]);
     setSelectedCurrencies([]);
+    setSelectedTags([]);
   };
 
 
@@ -1626,6 +1645,7 @@ function AssetsTab({
     );
   };
 
+  const activeAssetCount = assets.filter((a) => !isFullySold(a)).length;
   const filtered = assets
     .filter((a) => {
       // Once a holding has been completely sold out it moves to
@@ -1641,7 +1661,8 @@ function AssetsTab({
         selectedCategories.length === 0 || (category && selectedCategories.includes(category.key));
       const matchesType = selectedTypes.length === 0 || selectedTypes.includes(a.assetClass);
       const matchesCurrency = selectedCurrencies.length === 0 || selectedCurrencies.includes(a.currency);
-      return matchesSearch && matchesCategory && matchesType && matchesCurrency;
+      const matchesTags = selectedTags.length === 0 || (a.tags ?? []).some((t) => selectedTags.includes(t));
+      return matchesSearch && matchesCategory && matchesType && matchesCurrency && matchesTags;
     })
     .sort(compareAssetsDefault);
 
@@ -1720,6 +1741,17 @@ function AssetsTab({
         .map((a) => a.assetClass)
     )
   ).map((cls) => ({ value: cls, label: ASSET_CLASS_LABELS[cls] ?? cls }));
+
+  const tagOptions = Array.from(new Set<string>(assets.flatMap((a): string[] => a.tags ?? [])))
+    .sort((x, y) => x.localeCompare(y))
+    .map((t) => ({ value: t, label: t }));
+
+  // A tag that no longer exists on any holding (removed or renamed) shouldn't keep filtering silently.
+  useEffect(() => {
+    const valid = new Set(tagOptions.map((o) => o.value));
+    if (selectedTags.some((t) => !valid.has(t))) setSelectedTags((cur) => cur.filter((t) => valid.has(t)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tagOptions.map((o) => o.value).join(',')]);
 
   const currencyOptions = Array.from(new Set(assets.map((a) => a.currency))).map((c) => ({
     value: c,
@@ -1876,7 +1908,7 @@ function AssetsTab({
     <div className={`space-y-4${listReturning ? ' animate-list-return' : ''}`}>
       <PageHeader
         title="Assets"
-        description={`${assets.length} ${assets.length === 1 ? 'asset' : 'assets'} · unlimited`}
+        description={`${activeAssetCount} ${activeAssetCount === 1 ? 'asset' : 'assets'} · unlimited`}
         actions={
           <>
             <div className="relative flex-1 min-w-[140px] sm:flex-none sm:w-56">
@@ -1937,7 +1969,7 @@ function AssetsTab({
                 selected={selectedTypes}
                 onChange={setSelectedTypes}
               />
-              <FilterDropdown label="Tags" placeholder="Tag" options={[]} selected={[]} onChange={() => {}} />
+              <FilterDropdown label="Tags" placeholder="Tag" options={tagOptions} selected={selectedTags} onChange={setSelectedTags} />
               <FilterDropdown
                 label="Currency"
                 placeholder="Currency"
@@ -2004,7 +2036,7 @@ function AssetsTab({
                 selected={selectedTypes}
                 onChange={setSelectedTypes}
               />
-              <FilterDropdown closeOnSelect label="Tags" placeholder="Tag" options={[]} selected={[]} onChange={() => {}} />
+              <FilterDropdown closeOnSelect label="Tags" placeholder="Tag" options={tagOptions} selected={selectedTags} onChange={setSelectedTags} />
               <FilterDropdown
                 closeOnSelect
                 label="Currency"
@@ -2032,14 +2064,14 @@ function AssetsTab({
         <Card padding="none">
           <EmptyState
             icon={<Wallet size={18} />}
-            title={assets.length === 0 ? 'No assets yet' : 'No assets match your filters'}
+            title={activeAssetCount === 0 ? 'No assets yet' : 'No assets match your filters'}
             description={
-              assets.length === 0
+              activeAssetCount === 0
                 ? 'Add your first holding to start tracking your portfolio.'
                 : 'Try a different search term or clear a filter.'
             }
             action={
-              assets.length === 0 ? (
+              activeAssetCount === 0 ? (
                 <Button onClick={onAdd} leftIcon={<Plus size={16} />}>
                   Add asset
                 </Button>
@@ -2091,7 +2123,7 @@ function AssetsTab({
                   <BarChart2 size={16} strokeWidth={1.75} />
                 </Link>
                 <IconButton
-                  label="More options"
+                  label="Export CSV"
                   variant="ghost"
                   className="h-9 w-9 rounded-full border border-line text-muted hover:text-ink hover:border-slate-300 dark:hover:border-slate-600"
                   onClick={handleExport}
@@ -2119,7 +2151,7 @@ function AssetsTab({
                   {privacyMode ? <EyeOff size={16} strokeWidth={1.75} /> : <Eye size={16} strokeWidth={1.75} />}
                 </button>
                 <IconButton
-                  label="More options"
+                  label="Export CSV"
                   variant="ghost"
                   className="h-9 w-9 rounded-full border border-line text-muted hover:text-ink hover:border-slate-300 dark:hover:border-slate-600"
                   onClick={handleExport}
@@ -2331,7 +2363,12 @@ function AssetsTab({
                     openHolding(a);
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') openHolding(a);
+                    // Ignore keys pressed on the buttons inside the row (e.g. its "..." menu).
+                    if (e.target !== e.currentTarget) return;
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      openHolding(a);
+                    }
                   }}
                   className="grid grid-cols-[1fr_auto] items-center gap-2 px-4 py-3 active:bg-slate-50 dark:active:bg-slate-800/40 cursor-pointer select-none"
                 >
@@ -2397,11 +2434,14 @@ function AssetsTab({
                     <div className="relative shrink-0">
                       <button
                         data-menu-trigger
+                        type="button"
+                        aria-label={`Actions for ${a.name}`}
+                        aria-haspopup="menu"
                         onClick={(e) => {
                           e.stopPropagation();
                           openHoldingsMenu(a.id, e.currentTarget);
                         }}
-                        className="h-6 w-6 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600"
+                        className="h-8 w-8 -mr-1 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600"
                       >
                         <MoreVertical size={13} />
                       </button>
@@ -2468,6 +2508,14 @@ function AssetsTab({
                             ? 'relative z-10 opacity-70 shadow-lg ring-2 ring-brand-400 bg-surface touch-none cursor-grabbing'
                             : ''
                         }`}
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.target !== e.currentTarget) return;
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            openHolding(a);
+                          }
+                        }}
                         onClick={() => {
                           if (suppressRowClickRef.current) return;
                           openHolding(a);
@@ -2581,7 +2629,7 @@ function AssetsTab({
                           )}
                         </Td>
                         <td className="px-2 py-3 relative">
-                          <div data-menu-trigger className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                          <div data-menu-trigger className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity">
                             <IconButton
                               label="Row actions"
                               onClick={(e) => {
@@ -3238,7 +3286,7 @@ function SipBuyMoreModal({
     if (!amt || amt <= 0) return;
     setSaving(true);
     try {
-      const topUps = [...(asset.sipTopUps ?? []), { id: crypto.randomUUID(), date, amount: amt }];
+      const topUps = [...(asset.sipTopUps ?? []), { id: newId(), date, amount: amt }];
       await onUpdate({ ...asset, sipTopUps: topUps, updatedAt: Date.now() });
       onClose();
     } finally {
@@ -3411,6 +3459,7 @@ function HoldingDetailView({
   const previousCloses = useLivePricesStore((s) => s.previousCloses);
   const liveGoldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
   const privacyMode = useUiStore((s) => s.privacyMode);
+  const trackedLoans = useLiabilitiesStore((s) => s.liabilities);
   // Eye closed => every figure on this page is hidden, not just the totals.
   const HIDDEN = '••••••';
   const mPrecise = (v: number, c: string) => (privacyMode ? HIDDEN : formatPreciseCurrency(v, c));
@@ -3653,6 +3702,66 @@ function HoldingDetailView({
               </div>
             </>
           )}
+          {/* PPF: term, maturity and this year's deposit room */}
+          {asset.assetClass === 'ppf' && asset.ppf && (() => {
+            const matDate = ppfMaturityDate(asset.ppf.openingDate ?? asset.startDate);
+            const ppfNowCard = computePpfNow(asset.ppf, ppfRate(asset.interestRate));
+            const adv = ppfNowCard ? yearAdvice(ppfNowCard.fyDeposited) : null;
+            if (!matDate && !adv) return null;
+            return (
+              <>
+                {matDate && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-600 dark:text-slate-300">Matures on</span>
+                    <span className="font-semibold text-ink">{formatDate(matDate)}</span>
+                  </div>
+                )}
+                {adv && matDate && matDate >= toIsoDate() && (
+                  <>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-600 dark:text-slate-300">Deposited in FY {adv.fyLabel}</span>
+                      <span className="font-semibold text-ink">{maskPreciseAmount(adv.deposited, asset.currency, privacyMode)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-600 dark:text-slate-300">Room left this year</span>
+                      <span className="font-semibold text-ink">{maskPreciseAmount(adv.headroom, asset.currency, privacyMode)}</span>
+                    </div>
+                  </>
+                )}
+              </>
+            );
+          })()}
+          {/* Residential property: use, size, growth, rental yield, loan equity and lease */}
+          {asset.assetClass === 'residential_property' && asset.property && (() => {
+            const pd = asset.property;
+            const sum = summarizeProperty(asset, trackedLoans, value);
+            if (!sum) return null;
+            const row = (label: string, val: ReactNode, tone?: 'good' | 'bad') => (
+              <div key={label} className="flex items-center justify-between text-sm">
+                <span className="text-slate-600 dark:text-slate-300">{label}</span>
+                <span className={`font-semibold ${tone === 'good' ? 'text-emerald-600' : tone === 'bad' ? 'text-red-500' : 'text-ink'}`}>{val}</span>
+              </div>
+            );
+            const usageLabel = { self_occupied: 'Self-occupied', rented: 'Rented out', vacant: 'Vacant', under_construction: 'Under construction' }[pd.usage ?? 'self_occupied'];
+            const { appreciation: ap, rental: rt, loan: ln } = sum;
+            return (
+              <>
+                {row('Use', usageLabel)}
+                {pd.city && row('Location', [pd.projectName, pd.city].filter(Boolean).join(', '))}
+                {pd.areaSqft ? row('Area', `${mNum(pd.areaSqft.toLocaleString('en-IN'))} sq ft`) : null}
+                {ap?.nowPerSqft !== undefined && row('Value per sq ft', mPrecise(ap.nowPerSqft, asset.currency))}
+                {ap?.cagr !== undefined && row('Growth per year', mPct(ap.cagr), ap.cagr >= 0 ? 'good' : 'bad')}
+                {rt.earnsRent && pd.monthlyRent ? row('Monthly rent', mPrecise(pd.monthlyRent, asset.currency)) : null}
+                {rt.grossYieldPct !== undefined && row('Gross rental yield', mPct(rt.grossYieldPct))}
+                {rt.netYieldPct !== undefined && row('Net yield', mPct(rt.netYieldPct), rt.netYieldPct >= 0 ? 'good' : 'bad')}
+                {rt.hasAnyFigures && row('Net monthly income', mSigned(rt.yourNetMonthly, asset.currency), rt.yourNetMonthly >= 0 ? 'good' : 'bad')}
+                {ln && row('Loan outstanding', mPrecise(ln.outstanding, asset.currency))}
+                {ln && row('Your equity', mPrecise(ln.equity, asset.currency))}
+                {sum.monthlyAfterEmi !== undefined && row('Net rent after EMI / month', mSigned(sum.monthlyAfterEmi, asset.currency), sum.monthlyAfterEmi >= 0 ? 'good' : 'bad')}
+                {rt.earnsRent && pd.leaseEnd && row('Lease ends', formatDate(pd.leaseEnd), rt.leaseDaysLeft !== undefined && rt.leaseDaysLeft <= 60 ? 'bad' : undefined)}
+              </>
+            );
+          })()}
           {dayChangeTotal !== undefined && dayChangePercent !== undefined && (
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-600 dark:text-slate-300">1D returns</span>
@@ -4022,7 +4131,7 @@ function BuySellDividendModal({
     setNewAccountError('');
     try {
       const newAccount: Asset = {
-        id: crypto.randomUUID(),
+        id: newId(),
         name: newAccountName.trim(),
         assetClass: 'cash',
         value: Number(newAccountBalance) || 0,
@@ -4052,12 +4161,8 @@ function BuySellDividendModal({
   const submitBuy = async () => {
     const qtyNum = Number(qty);
     const priceNum = Number(price);
-    if (!Number.isFinite(qtyNum) || !Number.isFinite(priceNum) || !qtyNum || qtyNum <= 0 || !priceNum || priceNum <= 0) {
+    if (!qtyNum || qtyNum <= 0 || !priceNum || priceNum <= 0) {
       setError('Enter a valid quantity and price.');
-      return;
-    }
-    if (date > toIsoDate()) {
-      setError('Purchase date cannot be in the future.');
       return;
     }
     setSaving(true);
@@ -4069,7 +4174,7 @@ function BuySellDividendModal({
       // purchase made after a previous partial sell doesn't silently
       // resurrect quantity that was already sold.
       if (isWeightTracked) {
-        const newLot = { id: crypto.randomUUID(), date, grams: qtyNum, amount: qtyNum * priceNum };
+        const newLot = { id: newId(), date, grams: qtyNum, amount: qtyNum * priceNum };
         const lots = [...(asset.purchaseLots ?? []), newLot];
         const { remainingQty, avgBuyCost, investedValue } = computeHoldingPnl(
           { ...asset, purchaseLots: lots },
@@ -4085,7 +4190,7 @@ function BuySellDividendModal({
           updatedAt: Date.now(),
         });
       } else {
-        const newLot = { id: crypto.randomUUID(), date, quantity: qtyNum, price: priceNum };
+        const newLot = { id: newId(), date, quantity: qtyNum, price: priceNum };
         const lots = [...(asset.shareLots ?? []), newLot];
         const { remainingQty, avgBuyCost, investedValue } = computeHoldingPnl(
           { ...asset, shareLots: lots },
@@ -4164,7 +4269,7 @@ function BuySellDividendModal({
     const priceNum = Number(price);
     const feesNum = sellFeesNum;
     const account = accounts.find((a) => a.id === accountId);
-    if (!Number.isFinite(qtyNum) || !Number.isFinite(priceNum) || !qtyNum || qtyNum <= 0 || !priceNum || priceNum <= 0) {
+    if (!qtyNum || qtyNum <= 0 || !priceNum || priceNum <= 0) {
       setError('Enter a valid quantity and price.');
       return;
     }
@@ -4200,7 +4305,7 @@ function BuySellDividendModal({
       const saleLots = [
         ...(asset.saleLots ?? []),
         {
-          id: crypto.randomUUID(),
+          id: newId(),
           date,
           quantity: qtyNum,
           price: priceNum,
@@ -4235,7 +4340,7 @@ function BuySellDividendModal({
         await onQuickUpdate({ ...account, value: (account.value ?? 0) + proceeds, updatedAt: Date.now() });
       }
       const saleTx: Transaction = {
-        id: crypto.randomUUID(),
+        id: newId(),
         type: 'income',
         category: 'Investments',
         amount: proceeds,
@@ -4297,7 +4402,7 @@ function BuySellDividendModal({
       if (exDate) details.exDate = exDate;
       if (account) details.accountId = account.id;
       const tx: Transaction = {
-        id: crypto.randomUUID(),
+        id: newId(),
         type: 'income',
         category: 'Dividend',
         amount: divNet,
@@ -4725,6 +4830,7 @@ function AssetDetailPage({
   const liveGoldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
   const goldPriceError = useLivePricesStore((s) => s.goldPriceError);
   const privacyMode = useUiStore((s) => s.privacyMode);
+  const trackedLoans = useLiabilitiesStore((s) => s.liabilities);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const extra = asset as unknown as {
     isin?: string;
@@ -4759,7 +4865,7 @@ function AssetDetailPage({
     extra.isin ? `ISIN: ${extra.isin}` : null,
     extra.sector ? `Sector: ${extra.sector.toUpperCase()}` : null,
     pnl !== undefined
-      ? `P&L: ${pnl >= 0 ? '+' : ''}${formatPreciseCurrency(pnl, asset.currency)}`
+      ? `P&L: ${privacyMode ? '••••••' : `${pnl >= 0 ? '+' : ''}${formatPreciseCurrency(pnl, asset.currency)}`}`
       : null,
     extra.notes ?? null,
   ]
@@ -4823,7 +4929,7 @@ function AssetDetailPage({
           <div className="text-right">
             <p className="text-xs text-slate-600 font-medium">INVESTED</p>
             <p className="text-base font-semibold text-ink">
-              {formatPreciseCurrency(invested ?? value, asset.currency)}
+              {maskPreciseAmount(invested ?? value, asset.currency, privacyMode)}
             </p>
           </div>
         </div>
@@ -4840,8 +4946,7 @@ function AssetDetailPage({
           pnl !== undefined && (
             <p className={`flex items-center gap-1 text-sm font-medium mt-1 ${positive ? 'text-brand-600 dark:text-brand-300' : 'text-red-500 dark:text-red-400'}`}>
               {positive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-              {positive ? '+' : ''}
-              {formatPreciseCurrency(pnl, asset.currency)}
+              {privacyMode ? '••••••' : `${positive ? '+' : ''}${formatPreciseCurrency(pnl, asset.currency)}`}
             </p>
           )
         )}
@@ -4866,7 +4971,7 @@ function AssetDetailPage({
             />
           )}
           {asset.avgCost !== undefined && (
-            <DetailField label="PURCHASE PRICE" value={formatPreciseCurrency(asset.avgCost, asset.currency)} />
+            <DetailField label="PURCHASE PRICE" value={maskPreciseAmount(asset.avgCost, asset.currency, privacyMode)} />
           )}
           {extra.geography && <DetailField label="GEOGRAPHY" value={extra.geography} />}
           {asset.institution && <DetailField label="INSTITUTION" value={asset.institution} />}
@@ -4877,6 +4982,11 @@ function AssetDetailPage({
         </div>
       </div>
 
+      {asset.assetClass === 'ppf' && <PpfDetailCard asset={asset} privacyMode={privacyMode} />}
+      {asset.assetClass === 'residential_property' && (
+        <PropertyDetailCard asset={asset} value={value} loans={trackedLoans} privacyMode={privacyMode} />
+      )}
+
       {asset.assetClass === 'sip' && mfSipProgress && (
         <div className="bg-surface rounded-2xl border border-line p-5">
           <p className="text-xs font-semibold tracking-wide text-slate-600 mb-4">SIP DETAILS</p>
@@ -4884,7 +4994,7 @@ function AssetDetailPage({
             {asset.sipAmount !== undefined && (
               <DetailField
                 label="INSTALLMENT"
-                value={`${formatPreciseCurrency(asset.sipAmount, asset.currency)} / ${asset.sipFrequency === 'quarterly' ? 'quarter' : 'month'}`}
+                value={`${maskPreciseAmount(asset.sipAmount, asset.currency, privacyMode)} / ${asset.sipFrequency === 'quarterly' ? 'quarter' : 'month'}`}
               />
             )}
             {asset.startDate && <DetailField label="STARTED" value={formatDate(asset.startDate)} />}
@@ -4896,9 +5006,10 @@ function AssetDetailPage({
             {(asset.sipTopUps?.length ?? 0) > 0 && (
               <DetailField
                 label="TOP-UPS SO FAR"
-                value={formatPreciseCurrency(
+                value={maskPreciseAmount(
                   asset.sipTopUps!.reduce((s, t) => s + t.amount, 0),
-                  asset.currency
+                  asset.currency,
+                  privacyMode
                 )}
               />
             )}
@@ -4916,7 +5027,7 @@ function AssetDetailPage({
             {asset.sipAmount !== undefined && (
               <DetailField
                 label="INSTALLMENT"
-                value={`${formatPreciseCurrency(asset.sipAmount, asset.currency)} / ${asset.sipFrequency === 'quarterly' ? 'quarter' : 'month'}`}
+                value={`${maskPreciseAmount(asset.sipAmount, asset.currency, privacyMode)} / ${asset.sipFrequency === 'quarterly' ? 'quarter' : 'month'}`}
               />
             )}
             {asset.startDate && <DetailField label="STARTED" value={formatDate(asset.startDate)} />}
@@ -4938,6 +5049,110 @@ function AssetDetailPage({
           <p className="text-sm text-slate-600 leading-relaxed">{notesLine}</p>
         </div>
       )}
+    </div>
+  );
+}
+
+/** PPF summary for the asset page: term, passbook figures, this year's deposit room, loan and withdrawal windows. */
+function PpfDetailCard({ asset, privacyMode }: { asset: Asset; privacyMode: boolean }) {
+  const d = asset.ppf;
+  if (!d) return null;
+  const now = computePpfNow(d, ppfRate(asset.interestRate));
+  const status = ppfStatus(d.openingDate ?? asset.startDate, now);
+  if (!status && !now) return null;
+  const adv = now && status && !status.isMatured ? yearAdvice(now.fyDeposited) : null;
+  const money = (n: number) => maskPreciseAmount(n, asset.currency, privacyMode);
+  const windowText = (w: { state: 'before' | 'open' | 'closed'; from: string; max?: number }) =>
+    w.state === 'open'
+      ? `Available${w.max !== undefined ? ` · up to ${money(w.max)}` : ''}`
+      : w.state === 'before'
+        ? `From ${formatDate(w.from)}`
+        : 'Window closed';
+  return (
+    <div className="bg-surface rounded-2xl border border-line p-5">
+      <p className="text-xs font-semibold tracking-wide text-slate-600 mb-4">PPF DETAILS</p>
+      <div className="grid grid-cols-2 gap-y-4 gap-x-4">
+        {d.accountNumber && <DetailField label="ACCOUNT NO." value={privacyMode ? '••••' : d.accountNumber} />}
+        {d.nominee && <DetailField label="NOMINEE" value={d.nominee} />}
+        {status && <DetailField label="OPENED" value={formatDate(d.openingDate ?? asset.startDate ?? '')} />}
+        {status && <DetailField label="MATURES ON" value={formatDate(status.maturityDate)} />}
+        {status && (
+          <DetailField
+            label="TIME LEFT"
+            value={status.isMatured ? 'Matured' : `${Math.floor(status.monthsLeft / 12)} yr ${status.monthsLeft % 12} mo`}
+          />
+        )}
+        {now && <DetailField label="PASSBOOK BALANCE" value={money(now.creditedBalance)} />}
+        {now && <DetailField label="INTEREST THIS YEAR" value={money(now.accruedInterest)} />}
+        {adv && <DetailField label={`DEPOSITED IN FY ${adv.fyLabel}`} value={money(adv.deposited)} />}
+        {adv && <DetailField label="ROOM LEFT THIS YEAR" value={money(adv.headroom)} />}
+        {status && !status.isMatured && <DetailField label="LOAN AGAINST PPF" value={windowText(status.loan)} />}
+        {status && !status.isMatured && <DetailField label="PARTIAL WITHDRAWAL" value={windowText(status.withdrawal)} />}
+      </div>
+      {adv?.belowMinimum && (
+        <p className="text-xs text-amber-600 mt-4">
+          No minimum deposit made yet this financial year — {adv.daysLeftInFy} days left to keep the account active.
+        </p>
+      )}
+      <p className="text-xs text-slate-600 mt-4">Estimated from your deposits and the rate saved on this asset — your passbook is the final word.</p>
+    </div>
+  );
+}
+
+/** Residential-property summary for the asset page: use, size, growth, rent yield, loan equity and lease. */
+function PropertyDetailCard({
+  asset,
+  value,
+  loans,
+  privacyMode,
+}: {
+  asset: Asset;
+  value: number;
+  loans: Liability[];
+  privacyMode: boolean;
+}) {
+  const pd = asset.property;
+  if (!pd) return null;
+  const sum = summarizeProperty(asset, loans, value);
+  if (!sum) return null;
+  const { appreciation: ap, rental: rt, loan: ln } = sum;
+  const money = (n: number) => maskPreciseAmount(n, asset.currency, privacyMode);
+  const signed = (n: number) => (privacyMode ? '••••••' : formatSignedCurrency(n, asset.currency));
+  const pct = (n: number) => (privacyMode ? '•••' : formatPercentMagnitude(n));
+  const usageLabel = { self_occupied: 'Self-occupied', rented: 'Rented out', vacant: 'Vacant', under_construction: 'Under construction' }[
+    pd.usage ?? 'self_occupied'
+  ];
+  const fields: { label: string; value: string }[] = [{ label: 'USE', value: usageLabel }];
+  const where = [pd.projectName, pd.city].filter(Boolean).join(', ');
+  if (where) fields.push({ label: 'LOCATION', value: where });
+  if (pd.areaSqft) fields.push({ label: 'AREA', value: `${pd.areaSqft.toLocaleString('en-IN')} sq ft` });
+  if (pd.ownershipPct !== undefined && pd.ownershipPct > 0 && pd.ownershipPct < 100) fields.push({ label: 'YOUR SHARE', value: `${pd.ownershipPct}%` });
+  if (ap?.nowPerSqft !== undefined) fields.push({ label: 'VALUE PER SQ FT', value: money(ap.nowPerSqft) });
+  if (ap) fields.push({ label: 'GAIN OVER COST', value: `${signed(ap.gain)}${privacyMode ? '' : ` (${pct(ap.gainPct)})`}` });
+  if (ap?.cagr !== undefined) fields.push({ label: 'GROWTH PER YEAR', value: `${ap.cagr < 0 && !privacyMode ? '−' : ''}${pct(Math.abs(ap.cagr))}` });
+  if (rt.earnsRent && pd.monthlyRent) fields.push({ label: 'MONTHLY RENT', value: money(pd.monthlyRent) });
+  if (rt.grossYieldPct !== undefined) fields.push({ label: 'GROSS RENTAL YIELD', value: pct(rt.grossYieldPct) });
+  if (rt.netYieldPct !== undefined) fields.push({ label: 'NET YIELD', value: pct(rt.netYieldPct) });
+  if (rt.hasAnyFigures) fields.push({ label: 'NET INCOME / MONTH', value: signed(rt.yourNetMonthly) });
+  if (ln) fields.push({ label: 'LOAN OUTSTANDING', value: money(ln.outstanding) });
+  if (ln) fields.push({ label: 'YOUR EQUITY', value: money(ln.equity) });
+  if (sum.monthlyAfterEmi !== undefined) fields.push({ label: 'NET RENT AFTER EMI', value: signed(sum.monthlyAfterEmi) });
+  if (rt.earnsRent && pd.tenantName) fields.push({ label: 'TENANT', value: pd.tenantName });
+  if (rt.earnsRent && pd.leaseEnd) {
+    const left = rt.leaseDaysLeft;
+    fields.push({
+      label: 'LEASE ENDS',
+      value: `${formatDate(pd.leaseEnd)}${left !== undefined ? (left < 0 ? ' (ended)' : left <= 60 ? ` (${left} d left)` : '') : ''}`,
+    });
+  }
+  return (
+    <div className="bg-surface rounded-2xl border border-line p-5">
+      <p className="text-xs font-semibold tracking-wide text-slate-600 mb-4">PROPERTY DETAILS</p>
+      <div className="grid grid-cols-2 gap-y-4 gap-x-4">
+        {fields.map((f) => (
+          <DetailField key={f.label} label={f.label} value={f.value} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -5043,6 +5258,16 @@ function AssetDetailsForm({
   const closeForm = onClose ? () => { clearDraft(draftKey); onClose(); } : undefined;
   const [name, setName] = useDraftState(draftKey, 'name', initial?.name ?? '');
   const [assetClass, setAssetClass] = useDraftState<AssetClass>(draftKey, 'assetClass', startClass);
+  // EPF has its own section (passbook balance, contributions, projection) instead of the
+  // generic fixed-deposit fields, and its Current Value is the passbook balance.
+  const isEpf = assetClass === 'epf';
+  // PPF likewise has its own section (deposit ledger, term rules, projection) instead of the
+  // generic fixed-deposit fields — PPF interest isn't quarterly-compounded like an FD's.
+  const isPpf = assetClass === 'ppf';
+  const isDepositLike = DEPOSIT_LIKE_CLASSES.has(assetClass) && !isEpf && !isPpf;
+  // Residential property has its own section (purchase cost, valuation, rent, loan, sale tax).
+  const isProperty = assetClass === 'residential_property';
+  const allLiabilities = useLiabilitiesStore((s) => s.liabilities);
   // Collapsed by default when editing an existing asset — shows a
   // colored preview chip with a "Change" link instead of a raw <select>;
   // clicking Change (or, for a new asset, always) reveals the real select.
@@ -5068,6 +5293,13 @@ function AssetDetailsForm({
   const [notes, setNotes] = useDraftState(draftKey, 'notes', initial?.notes ?? '');
   const [excludeFromAllocation, setExcludeFromAllocation] = useDraftState(draftKey, 'excludeFromAllocation', initial?.excludeFromAllocation ?? false);
   const [emergencyFund, setEmergencyFund] = useDraftState(draftKey, 'emergencyFund', initial?.emergencyFund ?? false);
+  const [fundDetails, setFundDetails] = useDraftState<FundDetails>(draftKey, 'fundDetails', initial?.fundDetails ?? {});
+  const [epf, setEpf] = useDraftState<EpfDetails>(draftKey, 'epf', initial?.epf ?? {});
+  const [ppf, setPpf] = useDraftState<PpfDetails>(draftKey, 'ppf', initial?.ppf ?? migrateLegacyPpf(initial));
+  const [property, setProperty] = useDraftState<PropertyDetails>(draftKey, 'property', initial?.property ?? {});
+  const [esop, setEsop] = useDraftState<EsopDetails>(draftKey, 'esop', initial?.esop ?? {});
+  const [targetPrice, setTargetPrice] = useDraftState(draftKey, 'targetPrice', initial?.targetPrice?.toString() ?? '');
+  const [stopLossPrice, setStopLossPrice] = useDraftState(draftKey, 'stopLossPrice', initial?.stopLossPrice?.toString() ?? '');
   const addTag = (raw: string) => {
     const t = raw.trim().replace(/\s+/g, '-').toLowerCase();
     if (t && !tags.includes(t)) setTags((prev) => [...prev, t]);
@@ -5098,7 +5330,7 @@ function AssetDetailsForm({
   useEffect(() => {
     if (!isMarketSelectable || currencyTouchedRef.current) return;
     setCurrency(market === 'US' ? 'USD' : 'INR');
-  }, [market, isMarketSelectable, setCurrency]);
+  }, [market, isMarketSelectable]);
 
   // --- Weight-tracked purchases (Gold / Silver / Platinum) ---------------
   // Each buy is its own lot (grams + amount); totals are summed below.
@@ -5118,14 +5350,14 @@ function AssetDetailsForm({
     if (WEIGHT_TRACKED_CLASSES.has(startClass) && (initial?.quantity || initial?.investedValue)) {
       return [
         {
-          id: crypto.randomUUID(),
+          id: newId(),
           date: initial?.startDate,
           grams: initial?.quantity?.toString() ?? '',
           amount: initial?.investedValue?.toString() ?? '',
         },
       ];
     }
-    return WEIGHT_TRACKED_CLASSES.has(startClass) ? [{ id: crypto.randomUUID(), grams: '', amount: '' }] : [];
+    return WEIGHT_TRACKED_CLASSES.has(startClass) ? [{ id: newId(), grams: '', amount: '' }] : [];
   });
   const isWeightTracked = WEIGHT_TRACKED_CLASSES.has(assetClass);
 
@@ -5153,14 +5385,14 @@ function AssetDetailsForm({
     if (isUnitTrackedClass(startClass) && (initial?.quantity || initial?.avgCost)) {
       return [
         {
-          id: crypto.randomUUID(),
+          id: newId(),
           date: initial?.startDate,
           quantity: initial?.quantity?.toString() ?? '',
           price: initial?.avgCost?.toString() ?? '',
         },
       ];
     }
-    return isUnitTrackedClass(startClass) ? [{ id: crypto.randomUUID(), quantity: '', price: '' }] : [];
+    return isUnitTrackedClass(startClass) ? [{ id: newId(), quantity: '', price: '' }] : [];
   });
   const isUnitTracked = isUnitTrackedClass(assetClass);
   const totalShareQty = Math.round(
@@ -5209,7 +5441,7 @@ function AssetDetailsForm({
   const netShareInvested = isUnitTracked ? netHoldingFromForm.investedValue : totalShareInvested;
 
   const addShareLot = () =>
-    setShareLots((rows) => [...rows, { id: crypto.randomUUID(), quantity: '', price: '' }]);
+    setShareLots((rows) => [...rows, { id: newId(), quantity: '', price: '' }]);
   const removeShareLot = (id: string) =>
     setShareLots((rows) => (rows.length > 1 ? rows.filter((r) => r.id !== id) : rows));
   const updateShareLot = (id: string, patch: Partial<{ date: string; quantity: string; price: string }>) =>
@@ -5394,7 +5626,7 @@ function AssetDetailsForm({
   const totalPurchaseAmount = purchaseLots.reduce((sum, l) => sum + (Number(l.amount) || 0), 0);
 
   const addPurchaseLot = () =>
-    setPurchaseLots((rows) => [...rows, { id: crypto.randomUUID(), grams: '', amount: '' }]);
+    setPurchaseLots((rows) => [...rows, { id: newId(), grams: '', amount: '' }]);
   const removePurchaseLot = (id: string) =>
     setPurchaseLots((rows) => (rows.length > 1 ? rows.filter((r) => r.id !== id) : rows));
   const updatePurchaseLot = (id: string, patch: Partial<{ date: string; grams: string; amount: string }>) =>
@@ -5406,6 +5638,57 @@ function AssetDetailsForm({
   // so today's market rate can differ from cost without being overwritten.
   // For existing assets, preserve the saved current value (don't overwrite with invested amount).
   const valueTouchedRef = useRef(!!initial?.value);
+  // EPF: Current Value follows the passbook balance until the person types a value themselves.
+  const epfBalanceTotal = (epf.employeeBalance ?? 0) + (epf.employerBalance ?? 0);
+  useEffect(() => {
+    if (!isEpf || valueTouchedRef.current) return;
+    setValue(epfBalanceTotal > 0 ? String(Math.round(epfBalanceTotal * 100) / 100) : '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEpf, epfBalanceTotal]);
+  // PPF: the start/maturity dates follow the opening date, and Current Value / Invested are
+  // worked out from the passbook balance + deposit ledger (once there's anything to work from).
+  const ppfNow = useMemo(
+    () => (isPpf ? computePpfNow(ppf, ppfRate(interestRate)) : null),
+    [isPpf, ppf, interestRate]
+  );
+  const ppfAuto = isPpf && !!ppfNow;
+  useEffect(() => {
+    if (!isPpf) return;
+    setStartDate(ppf.openingDate ?? '');
+    setMaturityDate(ppfMaturityDate(ppf.openingDate) ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPpf, ppf.openingDate]);
+  useEffect(() => {
+    if (!isPpf || !ppfNow) return;
+    setValue(String(Math.round(ppfNow.currentValue * 100) / 100));
+    setInvestedValue(String(Math.round(ppfNow.invested * 100) / 100));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPpf, ppfNow?.currentValue, ppfNow?.invested]);
+  // Property: Invested follows the total cost (price + stamp duty + registration + improvements,
+  // your share) once any of it is entered; Current Value follows area × rate when that mode is on;
+  // the start date follows the purchase date so returns are measured from the right day.
+  const propertyCostNow = useMemo(() => (isProperty ? propertyCost(property) : null), [isProperty, property]);
+  const propertyRateValue = useMemo(
+    () => (isProperty && property.valuationMode === 'rate' ? rateBasedValue(property) : undefined),
+    [isProperty, property]
+  );
+  const propertyInvestedAuto = isProperty && !!propertyCostNow && propertyCostNow.yourTotal > 0;
+  const propertyValueAuto = isProperty && propertyRateValue !== undefined;
+  useEffect(() => {
+    if (!isProperty || !property.purchaseDate) return;
+    setStartDate(property.purchaseDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isProperty, property.purchaseDate]);
+  useEffect(() => {
+    if (!propertyInvestedAuto || !propertyCostNow) return;
+    setInvestedValue(String(Math.round(propertyCostNow.yourTotal * 100) / 100));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertyInvestedAuto, propertyCostNow?.yourTotal]);
+  useEffect(() => {
+    if (!propertyValueAuto || propertyRateValue === undefined) return;
+    setValue(String(propertyRateValue));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertyValueAuto, propertyRateValue]);
   useEffect(() => {
     if (!isWeightTracked) return;
     setQuantity(netShareQty > 0 ? String(netShareQty) : '');
@@ -5731,7 +6014,7 @@ function AssetDetailsForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEquityLive, symbol, quantity, market, isMarketSelectable]);
 
-  const estimatedMaturityValue = DEPOSIT_LIKE_CLASSES.has(assetClass)
+  const estimatedMaturityValue = isDepositLike
     ? computeMaturityInfo({
         id: initial?.id ?? '',
         name,
@@ -5783,11 +6066,27 @@ function AssetDetailsForm({
         })
       : undefined;
 
+  // Cost basis + earliest date for the live preview card.
+  const costBasisForPreview =
+    sipProgress && sipProgress.totalInvested > 0
+      ? sipProgress.totalInvested
+      : Number(investedValue) || (Number(quantity) > 0 && Number(avgCost) > 0 ? Number(quantity) * Number(avgCost) : 0);
+  const earliestDateForPreview = [
+    ...(isUnitTracked ? shareLots.map((l) => l.date) : []),
+    ...(isWeightTracked ? purchaseLots.map((l) => l.date) : []),
+    startDate,
+  ]
+    .filter((d): d is string => !!d && /^\d{4}-\d{2}-\d{2}$/.test(d))
+    .sort()[0];
+
   const nameMissing = !name.trim();
   // SIP's Current Value is auto-calculated, so it's never a required
   // hand-typed field — everything else still needs a value to save.
   const valueMissing = !isSip && !value.trim();
-  const hasErrors = nameMissing || valueMissing;
+  // A deposit can't mature on or before the day it starts.
+  const maturityBeforeStart = isDepositLike && !!startDate && !!maturityDate && maturityDate <= startDate;
+  const errorCount = [nameMissing, valueMissing, maturityBeforeStart].filter(Boolean).length;
+  const hasErrors = errorCount > 0;
 
   const submit = () => {
     setAttemptedSubmit(true);
@@ -5803,7 +6102,10 @@ function AssetDetailsForm({
 
     clearDraft(draftKey);
     onSave({
-      id: initial?.id ?? crypto.randomUUID(),
+      // Keep everything this form doesn't edit (household profile, sale history, SIP pause history,
+      // account colour / icon, IPO details…) instead of dropping it on every save.
+      ...(initial ?? {}),
+      id: initial?.id ?? newId(),
       name,
       assetClass,
       value: Number(value),
@@ -5821,13 +6123,22 @@ function AssetDetailsForm({
         costBasis !== undefined && costBasis > 0
           ? ((Number(value) - costBasis) / costBasis) * 100
           : undefined,
-      institution: institution.trim() || undefined,
+      institution: (isEpf ? epf.employer?.trim() : '') || institution.trim() || undefined,
       geography: (geography || undefined) as Asset['geography'],
       subClass: subClass.trim() || undefined,
       tags: tags.length ? tags : undefined,
       notes: notes.trim() || undefined,
       excludeFromAllocation: excludeFromAllocation || undefined,
       emergencyFund: emergencyFund || undefined,
+      fundDetails: FUND_DETAIL_CLASSES.has(assetClass) && Object.values(fundDetails).some((v) => v !== undefined && v !== '')
+        ? fundDetails
+        : undefined,
+      epf: isEpf && Object.values(epf).some((v) => v !== undefined && v !== '') ? epf : undefined,
+      ppf: isPpf && Object.values(ppf).some((v) => v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0)) ? ppf : undefined,
+      property: isProperty && Object.values(property).some((v) => v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0)) ? property : undefined,
+      esop: assetClass === 'esop_rsu' && Object.values(esop).some((v) => v !== undefined && v !== '') ? esop : undefined,
+      targetPrice: isUnitTracked && Number(targetPrice) > 0 ? Number(targetPrice) : undefined,
+      stopLossPrice: isUnitTracked && Number(stopLossPrice) > 0 ? Number(stopLossPrice) : undefined,
       interestRate: interestRate ? Number(interestRate) : undefined,
       startDate: startDate || undefined,
       maturityDate: maturityDate || undefined,
@@ -5946,6 +6257,7 @@ function AssetDetailsForm({
           </button>
       )}
       {isUnitTracked && nameCurrencyField}
+      {!initial && <DuplicateWarning assetClass={assetClass} symbol={isUnitTracked ? symbol : ''} name={name} />}
       <div className={isMarketSelectable ? 'grid grid-cols-2 gap-3 items-start' : ''}>
         {initial ? (
           <Field label="Asset Type">
@@ -6032,7 +6344,7 @@ function AssetDetailsForm({
       </div>
       {!isUnitTracked && nameCurrencyField}
       {isGold && (
-        <Field label="Gold Purity">
+        <FieldGroup label="Gold Purity">
           <div className="grid grid-cols-2 gap-3">
             {(['24k', '22k'] as const).map((purity) => {
               const price =
@@ -6078,7 +6390,7 @@ function AssetDetailsForm({
               this is a global spot estimate, not an exact local jeweller rate. Edit it to override.
             </p>
           )}
-        </Field>
+        </FieldGroup>
       )}
       {isWeightTracked && (
         <div className="space-y-3 border border-line-soft bg-slate-50/60 rounded-xl p-4">
@@ -6203,7 +6515,7 @@ function AssetDetailsForm({
       )}
       {isUnitTracked && (
         <>
-          <Field label={<>Ticker <span className="text-red-500">*</span></>}>
+          <Field label="Ticker">
             <div className="relative">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -6609,6 +6921,18 @@ function AssetDetailsForm({
             </button>
           </div>
           )}
+          <PastePurchases
+            onAdd={(parsed) =>
+              setShareLots((rows) => {
+                // Replace a single untouched empty row instead of leaving it dangling.
+                const keep = rows.filter((r) => r.quantity !== '' || r.price !== '' || r.date);
+                return [
+                  ...keep,
+                  ...parsed.map((l) => ({ id: newId(), date: l.date, quantity: l.quantity, price: l.price })),
+                ];
+              })
+            }
+          />
         </>
       )}
       {isRecurringEligible && (
@@ -6836,7 +7160,42 @@ function AssetDetailsForm({
           )}
         </div>
       )}
-      {DEPOSIT_LIKE_CLASSES.has(assetClass) && (
+      {isEpf && (
+        <EpfSection
+          value={epf}
+          onChange={(next) => {
+            // Editing a balance hands Current Value back to the passbook total.
+            if (next.employeeBalance !== epf.employeeBalance || next.employerBalance !== epf.employerBalance) {
+              valueTouchedRef.current = false;
+            }
+            setEpf(next);
+          }}
+          currency={currency}
+          interestRate={interestRate}
+          onInterestRateChange={setInterestRate}
+        />
+      )}
+      {isPpf && (
+        <PpfSection
+          value={ppf}
+          onChange={setPpf}
+          currency={currency}
+          interestRate={interestRate}
+          onInterestRateChange={setInterestRate}
+          institution={institution}
+          onInstitutionChange={setInstitution}
+        />
+      )}
+      {isProperty && (
+        <PropertySection
+          value={property}
+          onChange={setProperty}
+          currency={currency}
+          assetValue={Number(value) || 0}
+          loans={allLiabilities}
+        />
+      )}
+      {isDepositLike && (
         <div className="space-y-4 border border-line-soft bg-slate-50/60 rounded-xl p-4">
           <div className="grid grid-cols-2 gap-3">
             <Field label="Bank / Institution">
@@ -6869,9 +7228,11 @@ function AssetDetailsForm({
             <Field label="Maturity Date">
               <DateInput
                 value={maturityDate}
+                min={startDate || undefined}
                 onChange={(v) => setMaturityDate(v)}
-                className={inputClass}
+                className={`${inputClass} ${maturityBeforeStart ? errorInputClass : ''}`}
               />
+              {maturityBeforeStart && <p className={errorTextClass}>Maturity date must be after the start date.</p>}
             </Field>
           </div>
           {RECURRING_DEPOSIT_CLASSES.has(assetClass) && (
@@ -6894,13 +7255,25 @@ function AssetDetailsForm({
               <span className="font-semibold text-brand-700">
                 {formatPreciseCurrency(estimatedMaturityValue, currency)}
               </span>{' '}
-              (simple-interest estimate over the full term from start date to maturity date — actual payout may vary)
+              (quarterly-compounded estimate over the full term from start date to maturity date — actual payout may vary)
             </p>
           )}
         </div>
       )}
+      {assetClass === 'esop_rsu' && (
+        <EsopSection
+          value={esop}
+          onChange={setEsop}
+          currency={currency}
+          onApplyValue={(amount, units) => {
+            valueTouchedRef.current = true;
+            setValue(amount.toFixed(2));
+            if (!quantity) setQuantity(String(units));
+          }}
+        />
+      )}
       <div className="grid grid-cols-2 gap-3">
-        <Field label={isSip ? 'Current Value (auto)' : (DEPOSIT_LIKE_CLASSES.has(assetClass) ? 'Maturity Amount (auto)' : 'Current Value')}>
+        <Field label={isSip || ppfAuto || propertyValueAuto ? 'Current Value (auto)' : (isDepositLike ? 'Maturity Amount (auto)' : 'Current Value')}>
           {isSip ? (
             <div className="relative">
               <input
@@ -6922,7 +7295,14 @@ function AssetDetailsForm({
                 />
               )}
             </div>
-          ) : DEPOSIT_LIKE_CLASSES.has(assetClass) ? (
+          ) : ppfAuto || propertyValueAuto ? (
+            <input
+              type="text"
+              readOnly
+              value={value ? formatPreciseCurrency(Number(value), currency) : '—'}
+              className={`${inputClass} bg-slate-50 text-slate-600 cursor-not-allowed`}
+            />
+          ) : isDepositLike ? (
             <div className="relative">
               <input
                 type="text"
@@ -6977,17 +7357,30 @@ function AssetDetailsForm({
               Couldn't fetch a live price for "{symbol.trim()}" — enter the current value manually.
             </p>
           )}
-          {DEPOSIT_LIKE_CLASSES.has(assetClass) && (
+          {isDepositLike && (
             <p className="text-xs text-slate-600 mt-1">Auto-calculated using quarterly compound interest formula</p>
           )}
-          {!isSip && !DEPOSIT_LIKE_CLASSES.has(assetClass) && attemptedSubmit && valueMissing && <p className={errorTextClass}>Current Value is required.</p>}
+          {ppfAuto && (
+            <p className="text-xs text-slate-600 mt-1">Worked out from your passbook balance and deposits above, using PPF's own interest rules.</p>
+          )}
+          {propertyValueAuto && (
+            <p className="text-xs text-slate-600 mt-1">Worked out from your area × rate per sq ft and ownership share above. Switch "Value comes from" to type it yourself.</p>
+          )}
+          {isProperty && !propertyValueAuto && (
+            <p className="text-xs text-slate-600 mt-1">Your share of what the property would sell for today.</p>
+          )}
+          {!isSip && !isDepositLike && attemptedSubmit && valueMissing && <p className={errorTextClass}>Current Value is required.</p>}
         </Field>
         <Field
           label={
             SIP_CLASSES.has(assetClass)
               ? 'Initial Investment Amount'
-              : DEPOSIT_LIKE_CLASSES.has(assetClass)
+              : isDepositLike
                 ? 'Invested Amount'
+              : ppfAuto
+                ? 'Invested (auto, from deposits)'
+              : propertyInvestedAuto
+                ? 'Invested (auto, total cost)'
               : isWeightTracked || isUnitTracked
                 ? 'Invested (auto, from purchases)'
                 : 'Invested (optional)'
@@ -6996,24 +7389,49 @@ function AssetDetailsForm({
           <input
             type="number"
             step="any"
-            value={DEPOSIT_LIKE_CLASSES.has(assetClass) ? value : investedValue}
-            readOnly={isWeightTracked || isUnitTracked}
+            value={isDepositLike ? value : investedValue}
+            readOnly={isWeightTracked || isUnitTracked || ppfAuto || propertyInvestedAuto}
             onChange={(e) => {
-              if (DEPOSIT_LIKE_CLASSES.has(assetClass)) {
+              if (isDepositLike) {
                 valueTouchedRef.current = true;
                 setValue(e.target.value);
-              } else if (!isWeightTracked && !isUnitTracked) {
+              } else if (!isWeightTracked && !isUnitTracked && !ppfAuto && !propertyInvestedAuto) {
                 setInvestedValue(e.target.value);
               }
             }}
-            className={`${inputClass} ${(isWeightTracked || isUnitTracked) && !DEPOSIT_LIKE_CLASSES.has(assetClass) ? 'bg-slate-50 text-slate-600 cursor-not-allowed' : ''}`}
-            placeholder={SIP_CLASSES.has(assetClass) ? '0' : DEPOSIT_LIKE_CLASSES.has(assetClass) ? '0' : 'Auto: Qty × Avg'}
+            className={`${inputClass} ${(isWeightTracked || isUnitTracked || ppfAuto || propertyInvestedAuto) && !isDepositLike ? 'bg-slate-50 text-slate-600 cursor-not-allowed' : ''} ${isDepositLike && attemptedSubmit && valueMissing ? errorInputClass : ''}`}
+            placeholder={SIP_CLASSES.has(assetClass) ? '0' : isDepositLike ? '0' : 'Auto: Qty × Avg'}
           />
-          {DEPOSIT_LIKE_CLASSES.has(assetClass) && (
+          {isDepositLike && (
             <p className="text-xs text-slate-600 mt-1">Principal/Initial deposit amount</p>
           )}
+          {isDepositLike && attemptedSubmit && valueMissing && <p className={errorTextClass}>Invested Amount is required.</p>}
         </Field>
       </div>
+      <LivePreview
+        currency={currency}
+        value={Number(value) || 0}
+        invested={
+          costBasisForPreview
+        }
+        quantity={isUnitTracked || isWeightTracked ? netShareQty : undefined}
+        earliestDate={earliestDateForPreview}
+        targetPrice={Number(targetPrice) || undefined}
+        stopLossPrice={Number(stopLossPrice) || undefined}
+        showReturns={!isDepositLike}
+      />
+      {FUND_DETAIL_CLASSES.has(assetClass) && <FundDetailsSection value={fundDetails} onChange={setFundDetails} />}
+      {isUnitTracked && !isSip && (
+        <PriceLevelsSection
+          currency={currency}
+          targetPrice={targetPrice}
+          stopLossPrice={stopLossPrice}
+          onChange={(p) => {
+            if (p.targetPrice !== undefined) setTargetPrice(p.targetPrice);
+            if (p.stopLossPrice !== undefined) setStopLossPrice(p.stopLossPrice);
+          }}
+        />
+      )}
       <button
         type="button"
         onClick={() => setShowMoreDetails((v) => !v)}
@@ -7043,7 +7461,7 @@ function AssetDetailsForm({
               />
             </Field>
           </div>
-          <Field label="Tags">
+          <FieldGroup label="Tags">
             <div className="min-h-[38px] flex flex-wrap gap-1.5 items-center px-2.5 py-1.5 rounded-lg border border-line bg-surface focus-within:ring-2 focus-within:ring-brand-500">
               {tags.map((t) => (
                 <span
@@ -7081,7 +7499,7 @@ function AssetDetailsForm({
               />
             </div>
             <p className="text-xs text-slate-400 mt-1">Press Enter or comma to add · spaces become hyphens</p>
-          </Field>
+          </FieldGroup>
           <Field label="Notes">
             <textarea
               value={notes}
@@ -7127,7 +7545,7 @@ function AssetDetailsForm({
       )}
       {attemptedSubmit && hasErrors && (
         <p className="text-sm text-red-600 text-center">
-          Please fill in the highlighted field{nameMissing && valueMissing ? 's' : ''} before saving.
+          Please fix the highlighted field{errorCount > 1 ? 's' : ''} before saving.
         </p>
       )}
       {onClose ? (
@@ -7182,7 +7600,12 @@ function LiabilitiesTab({
 
   const handleDelete = async (id: string) => {
     if (!user) return;
-    await removeDoc(user, 'liabilities', id);
+    try {
+      await removeDoc(user, 'liabilities', id);
+    } catch (err) {
+      console.error('Failed to delete liability', err);
+      toast.error('Could not delete this liability. Please check your connection and try again.');
+    }
   };
 
   const confirmDelete = async () => {
@@ -7348,7 +7771,9 @@ function LiabilityDetailsForm({
     setSaving(true);
     try {
       onSave({
-        id: initial?.id ?? crypto.randomUUID(),
+        // Keep what this form doesn't edit (household profile, card colour / icon, last 4 digits…).
+        ...(initial ?? {}),
+        id: initial?.id ?? newId(),
         name,
         liabilityClass,
         outstanding: Number(outstanding),
@@ -7562,13 +7987,16 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
     setSavingSnapshot(true);
     try {
       const snap: Snapshot = {
-        id: todaysSnapshot?.id ?? crypto.randomUUID(),
+        id: todaysSnapshot?.id ?? newId(),
         date: today,
         netWorth,
         totalAssets,
         totalLiabilities,
       };
       await upsertDoc(user, 'snapshots', snap);
+    } catch (err) {
+      console.error('Failed to save snapshot', err);
+      toast.error('Could not save the snapshot. Please check your connection and try again.');
     } finally {
       setSavingSnapshot(false);
     }
@@ -7580,6 +8008,9 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
     try {
       await removeDoc(user, 'snapshots', pendingDelete.id);
       setPendingDelete(null);
+    } catch (err) {
+      console.error('Failed to delete snapshot', err);
+      toast.error('Could not delete this snapshot. Please check your connection and try again.');
     } finally {
       setDeleting(false);
     }
@@ -7949,6 +8380,17 @@ function Field({
       </span>
       {children}
     </label>
+  );
+}
+
+/** Like Field, but a <div>: use it when the content has several buttons (tag chips, purity cards), because
+ *  clicking a <label> activates the first button inside it — e.g. clicking "Tags" removed the first tag. */
+function FieldGroup({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="block min-w-0" role="group">
+      <span className="text-sm font-medium text-slate-500 mb-1 flex items-end min-h-[2.25rem] leading-snug">{label}</span>
+      {children}
+    </div>
   );
 }
 

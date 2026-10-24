@@ -3,6 +3,20 @@ import { resolveLivePrice, resolveSipLiveValue, type SipLiveEntry } from '../sto
 import { goldPricePerGram22k } from './goldPrice';
 import { DEPOSIT_LIKE_CLASSES } from './taxonomy';
 import { toIsoDate } from './date';
+import { computePpfNow, ppfRate } from './ppf';
+
+/**
+ * Reads a stored `yyyy-mm-dd` date as local midnight of that day.
+ *
+ * `new Date('2026-03-01')` is *UTC* midnight, which is 5:30 am (IST) or the previous evening
+ * (the Americas) in local time. Mixed with local-time month stepping, that shifted SIP / RD
+ * start days by a day in some timezones and made the first installment on the start day count
+ * in some places and not in others. Anything that isn't a plain date falls back to `new Date`.
+ */
+export function parseLocalDate(value: string): Date {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(value);
+}
 
 export interface ResolvedAssetValues {
   invested: number | undefined;
@@ -55,7 +69,11 @@ export function resolveAssetValues(
   // shouldn't sit frozen at the number typed in when the asset was added.
   // Falls back to the stored asset.value/investedValue when there isn't
   // enough info (missing rate/start date) so older entries keep working.
-  const isDepositLike = DEPOSIT_LIKE_CLASSES.has(asset.assetClass);
+  // EPF is a passbook balance the person keeps up to date — not a fixed-term deposit that accrues.
+  // PPF with a passbook balance / deposit ledger is valued by its own engine (annual compounding,
+  // 5th-of-month rule); PPF entries without one keep the generic deposit maths.
+  const ppfNow = asset.assetClass === 'ppf' ? computePpfNow(asset.ppf, ppfRate(asset.interestRate)) : null;
+  const isDepositLike = DEPOSIT_LIKE_CLASSES.has(asset.assetClass) && asset.assetClass !== 'epf' && !ppfNow;
   const depositProgress = isDepositLike ? computeDepositProgress(asset) : undefined;
 
   const currentPrice =
@@ -68,7 +86,8 @@ export function resolveAssetValues(
     asset.assetClass === 'sip' &&
     ((asset.sipAmount && asset.sipAmount > 0 && asset.startDate) || (asset.sipTopUps?.length ?? 0) > 0)
       ? computeSipProgress(asset).totalInvested
-      : (depositProgress?.invested ??
+      : (ppfNow?.invested ??
+        depositProgress?.invested ??
         asset.investedValue ??
         (asset.quantity && asset.avgCost && asset.quantity > 0 && asset.avgCost > 0
           ? asset.quantity * asset.avgCost
@@ -80,7 +99,7 @@ export function resolveAssetValues(
       ? asset.quantity * liveGoldPrice
       : livePrice !== undefined && asset.quantity && asset.quantity > 0
         ? asset.quantity * livePrice
-        : (depositProgress?.currentValue ?? asset.value);
+        : (ppfNow?.currentValue ?? depositProgress?.currentValue ?? asset.value);
 
   const pnl = invested !== undefined ? value - invested : asset.pnl;
   const pnlPercent =
@@ -122,7 +141,7 @@ export interface DepositProgress {
  */
 export function computeDepositProgress(asset: Asset, asOf: Date = new Date()): DepositProgress {
   const { startDate, maturityDate, interestRate, assetClass } = asset;
-  const maturityTime = maturityDate ? new Date(maturityDate).getTime() : undefined;
+  const maturityTime = maturityDate ? parseLocalDate(maturityDate).getTime() : undefined;
   const isMatured = maturityTime !== undefined && maturityTime <= asOf.getTime();
 
   if (!startDate || !interestRate || interestRate <= 0) {
@@ -133,7 +152,7 @@ export function computeDepositProgress(asset: Asset, asOf: Date = new Date()): D
   const effectiveAsOf = isMatured ? new Date(maturityTime!) : asOf;
 
   if (assetClass === 'recurring_deposit' && asset.monthlyInstallment && asset.monthlyInstallment > 0) {
-    const start = new Date(startDate);
+    const start = parseLocalDate(startDate);
     let currentValue = 0;
     let invested = 0;
     let candidate = new Date(start);
@@ -142,10 +161,10 @@ export function computeDepositProgress(asset: Asset, asOf: Date = new Date()): D
       (maturityTime === undefined || candidate.getTime() <= maturityTime)
     ) {
       // Count only COMPLETE days
-      const completeDbsElapsed = Math.floor((effectiveAsOf.getTime() - candidate.getTime()) / msPerDay);
+      const completeDaysElapsed = Math.floor((effectiveAsOf.getTime() - candidate.getTime()) / msPerDay);
       invested += asset.monthlyInstallment;
       // Use quarterly compound interest for complete days only
-      const yearsElapsed = completeDbsElapsed / 365.25;
+      const yearsElapsed = completeDaysElapsed / 365.25;
       currentValue +=
         yearsElapsed > 0
           ? asset.monthlyInstallment * Math.pow(1 + interestRate / 400, yearsElapsed * 4)
@@ -165,7 +184,7 @@ export function computeDepositProgress(asset: Asset, asOf: Date = new Date()): D
   }
 
   // Count only COMPLETE days
-  const completeDaysElapsed = Math.floor((effectiveAsOf.getTime() - new Date(startDate).getTime()) / msPerDay);
+  const completeDaysElapsed = Math.floor((effectiveAsOf.getTime() - parseLocalDate(startDate).getTime()) / msPerDay);
   const yearsElapsed = completeDaysElapsed / 365.25;
   // Use quarterly compound interest for complete days only
   const currentValue =
@@ -193,7 +212,7 @@ export interface MaturityInfo {
  */
 export function computeMaturityInfo(asset: Asset): MaturityInfo {
   const { startDate, maturityDate, interestRate } = asset;
-  const isMatured = !!maturityDate && new Date(maturityDate).getTime() <= Date.now();
+  const isMatured = !!maturityDate && parseLocalDate(maturityDate).getTime() <= Date.now();
 
   if (!startDate || !maturityDate || !interestRate || interestRate <= 0) {
     return { maturityAmount: undefined, isMatured };
@@ -206,7 +225,7 @@ export function computeMaturityInfo(asset: Asset): MaturityInfo {
 
   const msPerYear = 365.25 * 24 * 60 * 60 * 1000;
   const termYears =
-    (new Date(maturityDate).getTime() - new Date(startDate).getTime()) / msPerYear;
+    (parseLocalDate(maturityDate).getTime() - parseLocalDate(startDate).getTime()) / msPerYear;
   if (termYears <= 0) {
     return { maturityAmount: undefined, isMatured };
   }
@@ -332,7 +351,7 @@ export function computeSipProgress(asset: Asset, asOf: Date = new Date()): SipPr
     };
   }
 
-  const start = new Date(startDate);
+  const start = parseLocalDate(startDate);
   const day = sipDay && sipDay >= 1 && sipDay <= 31 ? sipDay : start.getDate();
   const step = sipFrequency === 'quarterly' ? 3 : 1;
   const pauseRanges = buildSipPauseRanges(sipPauseHistory, sipPausedAt, asOf);
@@ -421,7 +440,7 @@ export function listSipInstallments(
     points.push({ date: startDate, amount: investedValue });
   }
 
-  const start = new Date(startDate);
+  const start = parseLocalDate(startDate);
   const day = sipDay && sipDay >= 1 && sipDay <= 31 ? sipDay : start.getDate();
   const step = sipFrequency === 'quarterly' ? 3 : 1;
   const pauseRanges = buildSipPauseRanges(sipPauseHistory, sipPausedAt, asOf);
