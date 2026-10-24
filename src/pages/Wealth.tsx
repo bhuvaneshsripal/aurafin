@@ -7163,7 +7163,7 @@ function AssetDetailsForm({
       {isEpf && (
         <EpfSection
           value={epf}
-          onChange={(next) => {
+          onChange={(next: EpfDetails) => {
             // Editing a balance hands Current Value back to the passbook total.
             if (next.employeeBalance !== epf.employeeBalance || next.employerBalance !== epf.employerBalance) {
               valueTouchedRef.current = false;
