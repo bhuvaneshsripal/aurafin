@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 // ⚠️ Replace with the address people should write to about their data.
-const CONTACT_EMAIL = 'sribhuvi6264@gmail.com';
+const CONTACT_EMAIL = 'your-email@example.com';
 const UPDATED = '24 October 2026';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {

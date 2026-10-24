@@ -24,10 +24,20 @@ function startsInSwipeBlocker(el: EventTarget | null): boolean {
   return false;
 }
 
+let swipeFlagTimer = 0;
+
 /** Mobile only: swipe left/right to flip between Overview, Wealth and Money. Renders nothing. */
 export default function SwipeTabs() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+
+  // New page is in: let its slide-in finish, then drop the swipe flag.
+  useEffect(() => {
+    const root = document.documentElement;
+    if (!root.dataset.swipe) return;
+    window.clearTimeout(swipeFlagTimer);
+    swipeFlagTimer = window.setTimeout(() => delete root.dataset.swipe, 300);
+  }, [pathname]);
 
   useEffect(() => {
     const idx = TABS.indexOf(pathname);
@@ -102,8 +112,14 @@ export default function SwipeTabs() {
       const leaving = page;
       page = null;
       const root = document.documentElement;
+      // The slide-in flag must stay on until the new page has actually
+      // mounted (cleared by the pathname effect below). Clearing it on a fixed
+      // timer meant a slow-to-render page (Wealth) mounted *after* it was gone
+      // and fell back to the plain fade-from-transparent — the blank "blink".
+      // This timer is only a safety net if navigation never happens.
       root.dataset.swipe = dx < 0 ? 'next' : 'prev';
-      window.setTimeout(() => delete root.dataset.swipe, 400);
+      window.clearTimeout(swipeFlagTimer);
+      swipeFlagTimer = window.setTimeout(() => delete root.dataset.swipe, 3000);
       window.setTimeout(() => {
         if (leaving && leaving.isConnected && leaving.style.transform) {
           leaving.style.transition = 'transform 200ms cubic-bezier(0.22, 1, 0.36, 1)';

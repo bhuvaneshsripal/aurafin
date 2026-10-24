@@ -12,12 +12,24 @@ const HOLD_MS = 250;
  * the top bar. Tap to toggle. Press and hold for a moment, then drag to put it
  * anywhere on screen; it remembers where you left it. It can be switched off
  * in Settings → Preferences.
+ *
+ * On laptops/desktops (≥768px) it is fixed at the bottom-right: always shown,
+ * not draggable, and the Settings toggle is hidden. Phones keep the above.
  */
 export default function PrivacyFab() {
   const { privacyMode, togglePrivacy } = useUiStore();
   const show = useDisplaySettingsStore((s) => s.floatingEye);
   const savedPos = useDisplaySettingsStore((s) => s.eyePos);
   const setEyePos = useDisplaySettingsStore((s) => s.setEyePos);
+
+  // Laptop/desktop breakpoint — same 768px split the rest of the app uses.
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 768px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    const onChange = () => setIsDesktop(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
 
   const [pos, setPos] = useState<{ x: number; y: number } | null>(savedPos);
   const [dragging, setDragging] = useState(false);
@@ -42,9 +54,10 @@ export default function PrivacyFab() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  if (!show) return null;
+  if (!show && !isDesktop) return null;
 
   const onPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (isDesktop) return; // fixed in place on laptops: plain click only
     const r = e.currentTarget.getBoundingClientRect();
     const d = { id: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top, armed: false, active: false } as NonNullable<typeof drag.current>;
     drag.current = d;
@@ -81,7 +94,7 @@ export default function PrivacyFab() {
 
   // Default (first time): bottom-left, just above the bottom nav on phones;
   // bottom-right on larger screens. Once moved, the saved spot wins.
-  const shown = pos ? clampPos(pos.x, pos.y) : null;
+  const shown = pos && !isDesktop ? clampPos(pos.x, pos.y) : null;
   const style = shown
     ? { left: shown.x, top: shown.y, width: SIZE, height: SIZE }
     : { left: 16, bottom: 'calc(80px + env(safe-area-inset-bottom))', width: SIZE, height: SIZE };
@@ -90,12 +103,13 @@ export default function PrivacyFab() {
     <button
       type="button"
       onPointerDown={onPointerDown}
+      onClick={isDesktop ? togglePrivacy : undefined}
       onPointerMove={onPointerMove}
       onPointerUp={(e) => finish(e, false)}
       onPointerCancel={(e) => finish(e, true)}
       onContextMenu={(e) => e.preventDefault()}
       aria-label={privacyMode ? 'Show amounts' : 'Hide amounts'}
-      title={privacyMode ? 'Show amounts (hold and drag to move)' : 'Hide amounts (hold and drag to move)'}
+      title={isDesktop ? (privacyMode ? 'Show amounts' : 'Hide amounts') : privacyMode ? 'Show amounts (hold and drag to move)' : 'Hide amounts (hold and drag to move)'}
       style={{ ...style, border: '2px solid var(--color-brand-300)', color: 'var(--color-brand-600)', touchAction: 'none', WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
       className={`icon-outline-green mini-fab fixed z-[45] flex items-center justify-center rounded-full shadow-md ${
         shown ? '' : 'md:!left-auto md:!right-4 md:!bottom-4'

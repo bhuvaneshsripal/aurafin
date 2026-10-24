@@ -1191,7 +1191,10 @@ function PreferencesTab() {
       </Card>
       <GoldRateCard />
       <DisplaySizeCard />
-      <FloatingEyeCard />
+      {/* Laptop: the eye is pinned bottom-right, so there's nothing to configure. */}
+      <div className="md:hidden">
+        <FloatingEyeCard />
+      </div>
       <NotificationsCard />
     </>
   );
