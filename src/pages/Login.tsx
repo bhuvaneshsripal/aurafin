@@ -9,6 +9,7 @@ import Modal from '../components/Modal';
 import SignUpScreen from '../components/SignUpScreen';
 import InstallBanner from '../components/InstallBanner';
 import InstallPromptModal from '../components/InstallPromptModal';
+import LoginUpdateButton from '../components/LoginUpdateButton';
 
 // Cinematic growth section: loaded on demand so it adds nothing to the login page's first paint.
 const GrowthJourney = lazy(() => import('../components/growth/GrowthJourney'));
@@ -131,6 +132,7 @@ export default function Login() {
           </span>
         </div>
         <nav className="lp-nav">
+          <LoginUpdateButton />
           <button
             type="button"
             onClick={toggleTheme}
@@ -167,6 +169,11 @@ export default function Login() {
         <Suspense fallback={null}>
           <GrowthJourney />
         </Suspense>
+        <footer className="py-6 text-center text-xs text-ink-2">
+          <a href="/privacy" className="hover:underline">Privacy Policy</a>
+          <span className="mx-2" aria-hidden>·</span>
+          <a href="/terms" className="hover:underline">Terms of Service</a>
+        </footer>
       </main>
 
       <InstallBanner />

@@ -44,6 +44,7 @@ import LockScreen from './components/LockScreen';
 import InstallPromptModal from './components/InstallPromptModal';
 import ErrorBoundary from './components/ErrorBoundary';
 import Login from './pages/Login';
+import LegalPage from './pages/LegalPage';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 import type { Asset, Liability, Goal, Transaction, Snapshot, BudgetItem, FinancialProfile, HouseholdProfile } from './types';
 
@@ -339,6 +340,9 @@ function AppReady({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  // Public policy pages: reachable signed-out (and by Google's verification bot).
+  const legalPath = window.location.pathname.replace(/\/+$/, '');
+  const legalKind = legalPath === '/privacy' ? 'privacy' : legalPath === '/terms' ? 'terms' : null;
   const { user, loading, init } = useAuthStore();
   const initTheme = useUiStore((s) => s.initTheme);
   const initPrivacy = useUiStore((s) => s.initPrivacy);
@@ -356,6 +360,8 @@ export default function App() {
     initDisplaySettings();
     initNotificationPrefs();
   }, [init, initTheme, initPrivacy, initSidebar, initLock, initDisplaySettings, initNotificationPrefs]);
+
+  if (legalKind) return <LegalPage kind={legalKind} />;
 
   if (loading) {
     return null;
