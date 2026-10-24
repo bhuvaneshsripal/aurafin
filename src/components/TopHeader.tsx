@@ -263,7 +263,7 @@ export default function TopHeader() {
 
       <Modal open={confirmOpen} onClose={() => setConfirmOpen(false)} title="Log out of Aurafin?">
         <p className="text-sm text-muted mb-6">
-          You'll need to sign in again to see your dashboard. Your data stays saved in the cloud.
+          You'll need to sign in again to see your dashboard.
         </p>
         <div className="flex gap-2.5">
           <Button variant="secondary" fullWidth onClick={() => setConfirmOpen(false)}>

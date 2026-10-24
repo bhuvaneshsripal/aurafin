@@ -272,7 +272,16 @@ export default function GrowthJourney() {
           // Arriving from below: play backwards unless it is already at the start.
           if (current > 0.0005) lock();
         },
-        onLeave: unlock,
+        onLeave: () => {
+          // Scrolled straight past the section (fast flick, scrollbar drag, End key) before the
+          // animation finished: pull the page back to the section so the animation still plays.
+          if (current < 0.9995) {
+            lock();
+            window.scrollTo(0, startY());
+          } else {
+            unlock();
+          }
+        },
         onLeaveBack: unlock,
       });
 
