@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronDown, Info, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, Plus, Trash2 } from 'lucide-react';
+import InfoTip, { InfoNote } from '../ui/InfoTip';
 import { DateInput, Select, inputClasses } from '../ui';
 import { COMMON_BANKS } from '../../utils/banks';
 import { formatCurrency, formatPreciseCurrency } from '../../utils/privateFormat';
@@ -25,9 +26,11 @@ import type { PpfDetails, PpfDeposit } from '../../types';
 function Field({ label, hint, children }: { label: ReactNode; hint?: ReactNode; children: ReactNode }) {
   return (
     <label className="block min-w-0">
-      <span className="text-sm font-medium text-slate-500 mb-1 flex items-end min-h-[2.25rem] leading-snug">{label}</span>
+      <span className="text-sm font-medium text-slate-500 mb-1 flex items-end gap-1.5 min-h-[2.25rem] leading-snug">
+        {label}
+        {hint && <InfoTip>{hint}</InfoTip>}
+      </span>
       {children}
-      {hint && <p className="text-xs text-slate-500 mt-1">{hint}</p>}
     </label>
   );
 }
@@ -35,10 +38,10 @@ function Field({ label, hint, children }: { label: ReactNode; hint?: ReactNode; 
 function Block({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
   return (
     <div className="space-y-4 border border-line-soft bg-slate-50/60 rounded-xl p-4">
-      <div>
-        <p className="text-sm font-medium text-ink-2">{title}</p>
-        {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
-      </div>
+      <p className="text-sm font-medium text-ink-2 flex items-center gap-1.5">
+        {title}
+        {subtitle && <InfoTip>{subtitle}</InfoTip>}
+      </p>
       {children}
     </div>
   );
@@ -52,8 +55,9 @@ const Row = ({ label, value, strong }: { label: string; value: ReactNode; strong
 );
 
 const Note = ({ tone, children }: { tone: 'info' | 'warn' | 'good'; children: ReactNode }) => {
-  const Icon = tone === 'warn' ? AlertTriangle : tone === 'good' ? CheckCircle2 : Info;
-  const color = tone === 'warn' ? 'text-amber-600' : tone === 'good' ? 'text-emerald-600' : 'text-slate-600';
+  if (tone === 'info') return <InfoNote label="Tip">{children}</InfoNote>;
+  const Icon = tone === 'warn' ? AlertTriangle : CheckCircle2;
+  const color = tone === 'warn' ? 'text-amber-600' : 'text-emerald-600';
   return (
     <p className={`text-xs flex items-start gap-1.5 ${color}`}>
       <Icon size={13} className="shrink-0 mt-0.5" />
@@ -339,9 +343,7 @@ export default function PpfSection({
             </div>
             <Row label="Total deposited" value={money(now.invested)} />
             <Row label="Interest earned in all" value={money(now.interestEarned)} />
-            <p className="text-[11px] text-slate-400 pt-1">
-              Interest is worked out monthly on the balance after your deposits up to the 5th, and added to the balance once a year on 31 March. Current Value follows this unless the account has no balance or deposits logged.
-            </p>
+            <InfoNote className="pt-1">Interest is worked out monthly on the balance after your deposits up to the 5th, and added to the balance once a year on 31 March. Current Value follows this unless the account has no balance or deposits logged.</InfoNote>
           </div>
         ) : (
           <Note tone="info">Add a year-end balance or a deposit and Current Value will be calculated for you. Until then, enter it by hand below.</Note>
@@ -477,9 +479,7 @@ export default function PpfSection({
                 </table>
               </div>
             )}
-            <p className="text-[11px] text-slate-400">
-              Assumes {rate}% throughout; the rate is reset every quarter, so treat this as an estimate. After maturity, extension must be applied for in writing (Form H) within a year of maturity.
-            </p>
+            <InfoNote>Assumes {rate}% throughout; the rate is reset every quarter, so treat this as an estimate. After maturity, extension must be applied for in writing (Form H) within a year of maturity.</InfoNote>
           </div>
         ) : (
           <Note tone="info">Add the opening date and a yearly deposit amount to see a projection.</Note>

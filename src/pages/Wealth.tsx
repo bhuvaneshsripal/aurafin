@@ -29,7 +29,6 @@ import {
   ListFilter,
   ArrowDown,
   ArrowUp,
-  Info,
   Pause,
   Play,
   PlusCircle,
@@ -71,6 +70,7 @@ import { useWealthFilterStore } from '../store/wealthFilterStore';
 import { exportToCsv } from '../utils/exportCsv';
 import { findMergeTarget, findDuplicateGroups, mergeHoldings } from '../utils/mergeHoldings';
 import Modal from '../components/Modal';
+import InfoTip from '../components/ui/InfoTip';
 import LoadingDots from '../components/LoadingDots';
 import { cn } from '../components/ui/cn';
 import {
@@ -573,7 +573,16 @@ function AddWealthPage({
 
   return (
     <div className="max-w-[720px] space-y-4">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start gap-3">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={`Back to ${nounPlural}`}
+          title={`Back to ${nounPlural}`}
+          className="mt-1 h-9 w-9 shrink-0 flex items-center justify-center rounded-full border border-line text-slate-500 hover:text-brand-600 hover:border-brand-600 transition-colors"
+        >
+          <ArrowLeft size={18} />
+        </button>
         <div className="min-w-0">
           <h1 className="text-2xl sm:text-[28px] font-bold tracking-tight text-ink">{`Add ${noun}`}</h1>
           <p className="text-sm text-slate-500 mt-1">
@@ -586,13 +595,6 @@ function AddWealthPage({
             }`}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-ink shrink-0 mt-1.5 whitespace-nowrap"
-        >
-          <ArrowLeft size={14} /> Back to {nounPlural}
-        </button>
       </div>
 
       <div className="w-full flex items-stretch rounded-xl border border-line divide-x divide-line bg-slate-50 dark:bg-slate-800 overflow-hidden">
@@ -3641,9 +3643,11 @@ function HoldingDetailView({
             {currentPrice !== undefined && (
               <span className="text-slate-600">{mPrecise(currentPrice, asset.currency)}</span>
             )}
-            {dayChangePerUnit !== undefined && dayChangePercent !== undefined && (
-              <span className={`ml-1.5 font-medium ${dayChangePerUnit >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                {mSigned(dayChangePerUnit, asset.currency)} ({mPct(dayChangePercent)})
+            {/* Overall profit/loss on the whole holding (not the 1-day move — that stays in the card below). */}
+            {pnl !== undefined && (
+              <span className={`ml-1.5 font-medium ${positive ? 'text-emerald-600' : 'text-red-500'}`}>
+                {mSigned(pnl, asset.currency)}
+                {invested ? ` (${mPct((pnl / invested) * 100)})` : ''}
               </span>
             )}
           </p>
@@ -3804,7 +3808,7 @@ function HoldingDetailView({
             <div className="space-y-3 mt-5">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-slate-600 dark:text-slate-300 flex items-center gap-1">
-                  XIRR <Info size={12} className="text-slate-300" />
+                  XIRR <InfoTip size={12}>XIRR is your annualised return, accounting for the dates of each purchase and sale.</InfoTip>
                 </span>
                 <span className="font-semibold text-ink">{mNum(`${xirr.toFixed(2)}%`)}</span>
               </div>
@@ -4161,8 +4165,12 @@ function BuySellDividendModal({
   const submitBuy = async () => {
     const qtyNum = Number(qty);
     const priceNum = Number(price);
-    if (!qtyNum || qtyNum <= 0 || !priceNum || priceNum <= 0) {
+    if (!Number.isFinite(qtyNum) || !Number.isFinite(priceNum) || !qtyNum || qtyNum <= 0 || !priceNum || priceNum <= 0) {
       setError('Enter a valid quantity and price.');
+      return;
+    }
+    if (date > toIsoDate()) {
+      setError('Purchase date cannot be in the future.');
       return;
     }
     setSaving(true);
@@ -4269,7 +4277,7 @@ function BuySellDividendModal({
     const priceNum = Number(price);
     const feesNum = sellFeesNum;
     const account = accounts.find((a) => a.id === accountId);
-    if (!qtyNum || qtyNum <= 0 || !priceNum || priceNum <= 0) {
+    if (!Number.isFinite(qtyNum) || !Number.isFinite(priceNum) || !qtyNum || qtyNum <= 0 || !priceNum || priceNum <= 0) {
       setError('Enter a valid quantity and price.');
       return;
     }
@@ -5330,7 +5338,7 @@ function AssetDetailsForm({
   useEffect(() => {
     if (!isMarketSelectable || currencyTouchedRef.current) return;
     setCurrency(market === 'US' ? 'USD' : 'INR');
-  }, [market, isMarketSelectable]);
+  }, [market, isMarketSelectable, setCurrency]);
 
   // --- Weight-tracked purchases (Gold / Silver / Platinum) ---------------
   // Each buy is its own lot (grams + amount); totals are summed below.
@@ -6222,19 +6230,24 @@ function AssetDetailsForm({
     <div className={onClose ? 'space-y-5' : 'space-y-4'}>
       {onClose && (
         <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-2xl font-bold text-ink tracking-tight">Edit Asset</h2>
-            <p className="text-muted text-sm mt-0.5">
-              {ASSET_CLASS_LABELS[assetClass] ?? assetClass}
-            </p>
+          <div className="flex items-start gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={closeForm}
+              aria-label="Back to Assets"
+              title="Back to Assets"
+              className="mt-1 h-9 w-9 shrink-0 flex items-center justify-center rounded-full border border-line text-slate-500 hover:text-brand-600 hover:border-brand-600 transition-colors"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <div>
+              <h2 className="text-2xl font-bold text-ink tracking-tight">Edit Asset</h2>
+              <p className="text-muted text-sm mt-0.5">
+                {ASSET_CLASS_LABELS[assetClass] ?? assetClass}
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-3 shrink-0">
-            <button
-              onClick={closeForm}
-              className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-brand-600"
-            >
-              <ArrowLeft size={16} /> Back to Assets
-            </button>
             <button
               type="button"
               onClick={submit}
@@ -6395,16 +6408,11 @@ function AssetDetailsForm({
       {isWeightTracked && (
         <div className="space-y-3 border border-line-soft bg-slate-50/60 rounded-xl p-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <p className="text-sm font-medium text-ink-2">Purchases</p>
-            <p className="text-xs text-slate-500">
-              Total: <span className="font-semibold text-brand-700">{totalGrams || 0} g</span>
+            <p className="text-sm font-medium text-ink-2 flex items-center gap-1.5">Purchases<InfoTip>Bought at a different price? Add another purchase below and the total and average cost update automatically.</InfoTip></p>
+            <p className="text-xs text-slate-500">Total: <span className="font-semibold text-brand-700">{totalGrams || 0} g</span>
               {' · '}
               {formatPreciseCurrency(totalPurchaseAmount, currency)}
-            </p>
-          </div>
-          <p className="text-xs text-slate-500 -mt-1">
-            Bought at a different price? Add another purchase below and the total and average cost update automatically.
-          </p>
+            </p></div>
           <div className="space-y-2.5">
             {purchaseLots.map((lot, i) => {
               const gramsFilled = Number(lot.grams) > 0;
@@ -6673,18 +6681,14 @@ function AssetDetailsForm({
           ) : (
           <div className="space-y-3 border border-line-soft bg-slate-50/60 rounded-xl p-4">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <p className="text-sm font-medium text-ink-2">Purchases</p>
+              <p className="text-sm font-medium text-ink-2 flex items-center gap-1.5">Purchases<InfoTip>Bought at a different price? Add another purchase below and the average cost and returns update automatically.</InfoTip></p>
               <p className="text-xs text-slate-500">
                 Total: <span className="font-semibold text-brand-700">{totalShareQty || 0}</span>
                 {' · Avg. Cost '}
                 <span className="font-semibold text-brand-700">
                   {formatPreciseCurrency(weightedAvgCost, currency)}
                 </span>
-              </p>
-            </div>
-            <p className="text-xs text-slate-500 -mt-1">
-              Bought at a different price? Add another purchase below and the average cost and returns update automatically.
-            </p>
+              </p></div>
             <div className="space-y-2.5">
               {shareLots.map((lot, i) => {
                 const mode = lotInputMode[lot.id] ?? 'qty';
@@ -7255,7 +7259,7 @@ function AssetDetailsForm({
               <span className="font-semibold text-brand-700">
                 {formatPreciseCurrency(estimatedMaturityValue, currency)}
               </span>{' '}
-              (quarterly-compounded estimate over the full term from start date to maturity date — actual payout may vary)
+              <InfoTip>Quarterly-compounded estimate over the full term from start date to maturity date — actual payout may vary.</InfoTip>
             </p>
           )}
         </div>
@@ -7519,10 +7523,8 @@ function AssetDetailsForm({
             <div>
               <div className="flex items-center gap-1.5 text-sm font-medium text-ink">
                 <EyeOff size={14} className="text-slate-500" /> Exclude from allocation
+                <InfoTip>Still counts toward net worth, but ignored in allocation % and recommendations.</InfoTip>
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Still counts toward net worth, but ignored in allocation % and recommendations
-              </p>
             </div>
           </label>
           <label className="flex items-start gap-3 cursor-pointer select-none">
@@ -7535,10 +7537,8 @@ function AssetDetailsForm({
             <div>
               <div className="flex items-center gap-1.5 text-sm font-medium text-ink">
                 <AlertTriangle size={14} className="text-slate-500" /> Part of emergency fund
+                <InfoTip>Tag the holdings you actually earmark for emergencies.</InfoTip>
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Tag the holdings you actually earmark for emergencies.
-              </p>
             </div>
           </label>
         </div>
@@ -7625,6 +7625,20 @@ function LiabilitiesTab({
     }
   };
 
+  // Edit Liability is a normal page inside the content area (like Edit Asset), not an overlay.
+  if (modalOpen && editing) {
+    return (
+      <div className="animate-detail-in">
+        <LiabilityDetailsForm
+          key={editing.id}
+          initial={editing}
+          onSave={handleSave}
+          onClose={() => setModalOpen(false)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -7706,10 +7720,6 @@ function LiabilitiesTab({
         )}
       </Card>
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Edit Liability">
-        {editing && <LiabilityDetailsForm initial={editing} onSave={handleSave} />}
-      </Modal>
-
       <ConfirmDeleteModal
         open={!!pendingDelete}
         onClose={() => setPendingDelete(null)}
@@ -7731,12 +7741,15 @@ function LiabilityDetailsForm({
   initial,
   initialType,
   onBack,
+  onClose,
   onSave,
 }: {
   category?: CategoryDef<LiabilityClass>;
   initial: Liability | null;
   initialType?: LiabilityClass;
   onBack?: () => void;
+  /** Present only on the Edit Liability page: shows the page header with a back arrow on the left. */
+  onClose?: () => void;
   onSave: (l: Liability) => void;
 }) {
   const startClass: LiabilityClass = initial?.liabilityClass ?? initialType ?? 'other_liability';
@@ -7791,9 +7804,9 @@ function LiabilityDetailsForm({
     }
   };
 
-  return (
-    <div className="space-y-4">
-      {onBack && (
+  const fields = (
+    <>
+      {onBack && !onClose && (
         <button
           onClick={onBack}
           className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-brand-600 -mt-1"
@@ -7881,13 +7894,50 @@ function LiabilityDetailsForm({
           placeholder="Any additional details"
         />
       </Field>
-      <button
-        onClick={submit}
-        disabled={saving}
-        className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white"
-      >
-        {saving ? 'Saving...' : 'Save Liability'}
-      </button>
+      {!onClose && (
+        <button
+          onClick={submit}
+          disabled={saving}
+          className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white"
+        >
+          {saving ? 'Saving...' : 'Save Liability'}
+        </button>
+      )}
+    </>
+  );
+
+  if (!onClose) return <div className="space-y-4">{fields}</div>;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3 min-w-0">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Back to Liabilities"
+            title="Back to Liabilities"
+            className="mt-1 h-9 w-9 shrink-0 flex items-center justify-center rounded-full border border-line text-slate-500 hover:text-brand-600 hover:border-brand-600 transition-colors"
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <div>
+            <h2 className="text-2xl font-bold text-ink tracking-tight">Edit Liability</h2>
+            <p className="text-muted text-sm mt-0.5">{LIABILITY_CLASS_LABELS[liabilityClass] ?? liabilityClass}</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={saving}
+          aria-label="Save liability"
+          title="Save"
+          className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white shadow-sm transition-colors"
+        >
+          <Save size={16} />
+        </button>
+      </div>
+      <div className="bg-surface border border-line rounded-2xl p-4 sm:p-6 space-y-4 max-w-[860px]">{fields}</div>
     </div>
   );
 }
@@ -8301,8 +8351,9 @@ function AllocationTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) 
         <>
           <AllocationChart categories={categories} total={total} currency={currency} />
           {currencies.length > 1 && (
-            <p className="mt-3 text-xs text-muted">
-              Showing {currency} only, because amounts in different currencies can't be added together. Switch currency in Analytics.
+            <p className="mt-3 text-xs text-muted flex items-center gap-1.5">
+              Showing {currency} only
+              <InfoTip>Amounts in different currencies can't be added together. Switch currency in Analytics.</InfoTip>
             </p>
           )}
         </>
@@ -8362,10 +8413,13 @@ function AllocationChart({
 
 function Field({
   label,
+  hint,
   children,
   className,
 }: {
   label: React.ReactNode;
+  /** Longer explanation, shown in an "i" popover next to the label instead of as text under the field. */
+  hint?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }) {
@@ -8375,8 +8429,9 @@ function Field({
          the text, so when a field sits next to a shorter label in a grid row
          (e.g. "Interest Rate (%)" beside "Bank / Institution"), both inputs
          still start at the same y position instead of one sitting lower. */}
-      <span className="text-sm font-medium text-slate-500 mb-1 flex items-end min-h-[2.25rem] leading-snug">
+      <span className="text-sm font-medium text-slate-500 mb-1 flex items-end gap-1.5 min-h-[2.25rem] leading-snug">
         {label}
+        {hint && <InfoTip>{hint}</InfoTip>}
       </span>
       {children}
     </label>
@@ -8385,10 +8440,13 @@ function Field({
 
 /** Like Field, but a <div>: use it when the content has several buttons (tag chips, purity cards), because
  *  clicking a <label> activates the first button inside it — e.g. clicking "Tags" removed the first tag. */
-function FieldGroup({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
+function FieldGroup({ label, hint, children }: { label: React.ReactNode; hint?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="block min-w-0" role="group">
-      <span className="text-sm font-medium text-slate-500 mb-1 flex items-end min-h-[2.25rem] leading-snug">{label}</span>
+      <span className="text-sm font-medium text-slate-500 mb-1 flex items-end gap-1.5 min-h-[2.25rem] leading-snug">
+        {label}
+        {hint && <InfoTip>{hint}</InfoTip>}
+      </span>
       {children}
     </div>
   );

@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { AlertTriangle, ChevronDown, ClipboardPaste, Plus, TrendingDown, TrendingUp } from 'lucide-react';
+import InfoTip, { InfoNote } from '../ui/InfoTip';
 import { DateInput, inputClasses } from '../ui';
 import CustomSelect from '../CustomSelect';
 import { useAssetsStore } from '../../store/assetsStore';
@@ -13,9 +14,11 @@ import type { Asset, AssetClass, EsopDetails, FundDetails } from '../../types';
 function Field({ label, children, hint }: { label: ReactNode; children: ReactNode; hint?: ReactNode }) {
   return (
     <label className="block min-w-0">
-      <span className="text-sm font-medium text-slate-500 mb-1 flex items-end min-h-[2.25rem] leading-snug">{label}</span>
+      <span className="text-sm font-medium text-slate-500 mb-1 flex items-end gap-1.5 min-h-[2.25rem] leading-snug">
+        {label}
+        {hint && <InfoTip>{hint}</InfoTip>}
+      </span>
       {children}
-      {hint && <p className="text-xs text-slate-500 mt-1">{hint}</p>}
     </label>
   );
 }
@@ -24,13 +27,20 @@ function Collapsible({ title, subtitle, children, defaultOpen = false }: { title
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="border border-line-soft bg-slate-50/60 rounded-xl">
-      <button type="button" onClick={() => setOpen((v) => !v)} className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left">
-        <span className="min-w-0">
-          <span className="block text-sm font-medium text-ink-2">{title}</span>
-          {subtitle && <span className="block text-xs text-slate-500 mt-0.5">{subtitle}</span>}
+      <div className="w-full flex items-center justify-between gap-3 px-4 py-3 cursor-pointer" onClick={() => setOpen((v) => !v)}>
+        <span className="flex items-center gap-1.5 min-w-0">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+            className="text-left text-sm font-medium text-ink-2"
+            aria-expanded={open}
+          >
+            {title}
+          </button>
+          {subtitle && <InfoTip>{subtitle}</InfoTip>}
         </span>
         <ChevronDown size={16} className={`shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
+      </div>
       {open && <div className="px-4 pb-4 space-y-4">{children}</div>}
     </div>
   );
@@ -269,10 +279,10 @@ export function EsopSection({
 
   return (
     <div className="space-y-4 border border-line-soft bg-slate-50/60 rounded-xl p-4">
-      <div>
-        <p className="text-sm font-medium text-ink-2">Grant &amp; vesting</p>
-        <p className="text-xs text-slate-500 mt-0.5">Enter your grant once — vested units and value are worked out for you.</p>
-      </div>
+      <p className="text-sm font-medium text-ink-2 flex items-center gap-1.5">
+        Grant &amp; vesting
+        <InfoTip>Enter your grant once — vested units and value are worked out for you.</InfoTip>
+      </p>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Employer / company">
           <input value={value.employer ?? ''} onChange={(e) => set({ employer: e.target.value })} className={inputClasses} placeholder="e.g. Acme Technologies" />
@@ -365,7 +375,7 @@ export function EsopSection({
               </button>
             </div>
           )}
-          <p className="text-[11px] text-slate-400">Assumes equal monthly vesting after the cliff. Check your grant letter — actual schedules vary.</p>
+          <InfoNote>Assumes equal monthly vesting after the cliff. Check your grant letter — actual schedules vary.</InfoNote>
         </div>
       )}
     </div>
@@ -405,7 +415,7 @@ export function PriceLevelsSection({
           <AlertTriangle size={12} className="shrink-0 mt-0.5" /> Stop-loss is at or above the target — check the two numbers.
         </p>
       )}
-      <p className="text-xs text-slate-500">Saved with the holding for reference. These don't send notifications.</p>
+      <InfoNote>Saved with the holding for reference. These don't send notifications.</InfoNote>
     </Collapsible>
   );
 }

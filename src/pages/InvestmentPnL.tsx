@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import SharedInfoTip from '../components/ui/InfoTip';
 import CompanyLogo from '../components/CompanyLogo';
 import { Link } from 'react-router-dom';
 import {
@@ -7,7 +8,6 @@ import {
   Wallet,
   PiggyBank,
   BarChart3,
-  Info,
   Search,
   Download,
   ChevronDown,
@@ -112,12 +112,9 @@ function AssetBadge({ asset, size = 36 }: { asset: Asset; size?: number }) {
   );
 }
 
+/** Click/tap/hover "i" with a readable popover (the old native title tooltip never showed on touch). */
 function InfoTip({ text }: { text: string }) {
-  return (
-    <span title={text} className="inline-flex align-middle text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-help ml-1">
-      <Info size={13} />
-    </span>
-  );
+  return <SharedInfoTip className="ml-1.5" size={13}>{text}</SharedInfoTip>;
 }
 
 const TYPE_FILTERS: { key: string; label: string; classes: string[] }[] = [
@@ -206,21 +203,20 @@ function SummaryCard({
       <div className="flex items-center justify-between gap-2">
         <span className="text-[13px] font-medium text-muted flex items-center">
           {label}
-          {tooltip && <InfoTip text={tooltip} />}
+          <InfoTip text={tooltip ?? sublabel} />
         </span>
         <span className="text-faint shrink-0">{icon}</span>
       </div>
       {/* Never truncated: long ₹ figures wrap instead of being cut to "₹21,75,…". */}
       <div className={`font-numeric text-xl sm:text-[22px] leading-7 font-semibold break-words ${toneClass}`}>{value}</div>
-      <div className="flex items-center gap-2 text-xs">
+      {percent && <div className="flex items-center gap-2 text-xs">
         {percent && (
           <span className={`font-medium flex items-center gap-0.5 ${toneClass}`}>
             {tone === 'positive' ? <ArrowUpRight size={13} /> : tone === 'negative' ? <ArrowDownRight size={13} /> : null}
             {percent}
           </span>
         )}
-        <span className="text-muted">{sublabel}</span>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -328,10 +324,12 @@ function PortfolioPerformanceChart({
     <div className="bg-surface rounded-2xl border border-line p-5 shadow-soft">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div>
-          <h3 className="text-[15px] font-semibold text-ink">Portfolio Performance</h3>
-          <p className="text-[12.5px] text-muted">
-            {mode === 'value' ? 'Capital deployed over time, from your actual buys & sells' : 'Realized + unrealized P&L over time'}
-          </p>
+          <h3 className="text-[15px] font-semibold text-ink flex items-center gap-1.5">
+            Portfolio Performance
+            <SharedInfoTip size={14}>
+              {mode === 'value' ? 'Capital deployed over time, from your actual buys & sells' : 'Realized + unrealized P&L over time'}
+            </SharedInfoTip>
+          </h3>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex rounded-lg border border-line p-0.5 bg-slate-50 dark:bg-slate-800">
@@ -1150,8 +1148,12 @@ export default function InvestmentPnL() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Profit & loss"
-        description="Track your complete investment performance, from the very first transaction."
+        title={
+          <span className="inline-flex items-center gap-2">
+            Profit &amp; loss
+            <SharedInfoTip size={16}>Track your complete investment performance, from the very first transaction.</SharedInfoTip>
+          </span>
+        }
         actions={
           <>
             {currencies.length > 1 && (
@@ -1219,6 +1221,7 @@ export default function InvestmentPnL() {
                 value={fmt(portfolio.currentValue, activeCurrency, privacyMode)}
                 sublabel="Current portfolio value"
                 tone="neutral"
+                tooltip="What everything you still hold is worth today, at the latest prices."
                 icon={<BarChart3 size={16} />}
               />
               <SummaryCard

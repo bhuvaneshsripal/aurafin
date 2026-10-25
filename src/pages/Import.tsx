@@ -9,13 +9,14 @@ import {
 import { useAuthStore } from '../store/authStore';
 import { useAssetsStore } from '../store/assetsStore';
 import { bulkUpsertDocs } from '../hooks/useFirestoreSync';
-import { parseSpreadsheetFile, rowsToAssets, type ParsedRow } from '../utils/importParser';
+import { parseSpreadsheetFile, rowsToAssets, type ParsedRow, type ParseOptions } from '../utils/importParser';
 import { fetchLiveQuotes, type LiveQuoteDetail } from '../utils/marketPrices';
 import { formatCurrency, formatPreciseCurrency, hideNumber } from '../utils/privateFormat';
 import { ASSET_TAXONOMY } from '../utils/taxonomy';
 import { exportToCsv, exportToXlsx, IMPORT_TEMPLATE_ROWS } from '../utils/exportCsv';
 import { takePendingImportFile } from '../utils/pendingImportFile';
 import type { AssetClass } from '../types';
+import BrokerLogo from '../components/BrokerLogo';
 import CustomSelect from '../components/CustomSelect';
 import { PageHeader, SegmentedControl } from '../components/ui';
 
@@ -34,19 +35,55 @@ interface Broker {
   steps: { title: string; items: string[] }[];
 }
 
-function genericSteps(name: string): { title: string; items: string[] }[] {
-  return [
-    {
-      title: `Export from ${name}`,
+
+const COLUMN_TIP =
+  'Make sure the file has the stock/fund name or symbol, quantity, and average cost or invested value (current price/value is a bonus)';
+const FALLBACK_TIP =
+  "Can't find an export option? Download the sample on the Standard import tab, paste your holdings in, and upload that";
+
+/** Broker-specific export steps. `web` and `app` are the menu paths; either may be omitted. */
+function exportSteps(
+  name: string,
+  opts: { web?: { url: string; path: string }; app?: string; file?: string }
+): { title: string; items: string[] }[] {
+  const file = opts.file ?? 'Excel/CSV';
+  const out: { title: string; items: string[] }[] = [];
+  if (opts.web) {
+    out.push({
+      title: `Option 1: ${name} website (${file})`,
       items: [
-        `Login to your ${name} account`,
-        'Go to your Portfolio or Holdings page',
-        'Look for an export/download option (CSV or Excel)',
+        `Login to ${opts.web.url}`,
+        opts.web.path,
+        `Choose ${file} as the format and download it`,
+        COLUMN_TIP,
         'Upload the downloaded file below',
       ],
-    },
-  ];
+    });
+  }
+  if (opts.app) {
+    out.push({
+      title: `${opts.web ? 'Option 2' : 'Option 1'}: ${name} mobile app`,
+      items: [
+        `Open the ${name} app and sign in`,
+        opts.app,
+        `Download as ${file}, then share/save it to your phone or email it to yourself`,
+        'Upload the downloaded file below',
+      ],
+    });
+  }
+  out.push({ title: 'Not finding it?', items: [FALLBACK_TIP] });
+  return out;
 }
+
+// Exports that carry no currency / asset-class column get sensible defaults per broker.
+const BROKER_PARSE_HINTS: Record<string, ParseOptions> = {
+  vested: { currency: 'USD', defaultClass: 'stock' },
+  stockal: { currency: 'USD', defaultClass: 'stock' },
+  ibkr: { currency: 'USD', defaultClass: 'stock' },
+  kuvera: { defaultClass: 'equity_mutual_fund' },
+  mfcentral: { defaultClass: 'equity_mutual_fund' },
+  groww: {},
+};
 
 const BROKERS: Broker[] = [
   {
@@ -82,14 +119,24 @@ const BROKERS: Broker[] = [
     color: '#00d09c',
     steps: [
       {
-        title: 'Export from Groww',
+        title: 'Stocks (Excel/CSV)',
         items: [
-          'Open the Groww app or website',
-          'Go to Stocks / Mutual Funds → Holdings',
-          'Tap the export/download icon',
+          'Login to groww.in',
+          'Go to Profile → Reports (Stocks)',
+          'Download the Holdings Statement (or Stocks Order History) as Excel/CSV',
           'Upload the downloaded file below',
         ],
       },
+      {
+        title: 'Mutual Funds',
+        items: [
+          'Login to groww.in',
+          'Go to Mutual Funds → Dashboard → Reports / Download',
+          'Download your holdings or order history as Excel/CSV',
+          'Upload the downloaded file below',
+        ],
+      },
+      { title: 'Not finding it?', items: [FALLBACK_TIP] },
     ],
   },
   {
@@ -97,45 +144,84 @@ const BROKERS: Broker[] = [
     name: 'INDmoney',
     initial: 'I',
     color: '#00b386',
-    steps: genericSteps('INDmoney'),
+    steps: exportSteps('INDmoney', {
+      web: { url: 'indmoney.com', path: 'Go to Portfolio → Stocks (or Mutual Funds) → open the holdings list and use the Download / Export option' },
+      app: 'Go to Portfolio → Stocks / Mutual Funds → Download holdings report',
+    }),
   },
-  { key: 'upstox', name: 'Upstox', initial: 'U', color: '#5e2b97', steps: genericSteps('Upstox') },
+  { key: 'upstox', name: 'Upstox', initial: 'U', color: '#5e2b97', steps: exportSteps('Upstox', {
+      web: { url: 'upstox.com (Reports section)', path: 'Go to Reports → Holdings (or Holdings Statement) and pick today’s date' },
+      app: 'Go to Account → Reports → Holdings Statement',
+    }) },
   {
     key: 'icici',
     name: 'ICICI Direct',
     initial: 'I',
     color: '#e2711d',
-    steps: genericSteps('ICICI Direct'),
+    steps: exportSteps('ICICI Direct', {
+      web: { url: 'icicidirect.com', path: 'Go to Portfolio → Equity → Holdings and click the Download (Excel/CSV) icon' },
+      app: 'Go to Portfolio → Equity → Holdings and tap Download',
+    }),
   },
-  { key: 'cdsl', name: 'CDSL', initial: 'C', color: '#1e40af', steps: genericSteps('CDSL') },
-  { key: 'angelone', name: 'Angel One', initial: 'A', color: '#e64a19', steps: genericSteps('Angel One') },
-  { key: 'aionion', name: 'Aionion', initial: 'A', color: '#16a34a', steps: genericSteps('Aionion') },
+  { key: 'cdsl', name: 'CDSL', initial: 'C', color: '#1e40af', steps: exportSteps('CDSL', {
+      web: { url: 'web.cdslindia.com (CDSL easi / myEasi)', path: 'Go to My Portfolio / Holdings and click Download' },
+    }) },
+  { key: 'angelone', name: 'Angel One', initial: 'A', color: '#e64a19', steps: exportSteps('Angel One', {
+      web: { url: 'trade.angelone.in', path: 'Go to Portfolio → Holdings and click the Download icon (or Reports → Holdings)' },
+      app: 'Go to Profile → Reports → Holdings Statement',
+    }) },
+  { key: 'aionion', name: 'Aionion', initial: 'A', color: '#16a34a', steps: exportSteps('Aionion', {
+      web: { url: 'your Aionion Capital trading portal', path: 'Go to Portfolio / Reports → Holdings and click Export' },
+    }) },
   {
     key: 'chola',
     name: 'Chola Securities',
     initial: '+',
     color: '#7c3aed',
-    steps: genericSteps('Chola Securities'),
+    steps: exportSteps('Chola Securities', {
+      web: { url: 'your Chola Securities trading portal', path: 'Go to Portfolio / Reports → Holdings and click Export' },
+      app: 'Go to Portfolio → Holdings → Download / Export',
+    }),
   },
-  { key: 'mstock', name: 'mstock', initial: 'M', color: '#ea580c', steps: genericSteps('mstock') },
-  { key: '5paisa', name: '5paisa', initial: '5p', color: '#0891b2', steps: genericSteps('5paisa') },
-  { key: 'vested', name: 'Vested', initial: 'V', color: '#059669', steps: genericSteps('Vested') },
+  { key: 'mstock', name: 'mstock', initial: 'M', color: '#ea580c', steps: exportSteps('mStock', {
+      web: { url: 'trade.mstock.com', path: 'Go to Reports → Holdings (Demat holding statement) and click Download / Excel' },
+      app: 'Go to Menu → Reports → Holdings Report',
+    }) },
+  { key: '5paisa', name: '5paisa', initial: '5p', color: '#0891b2', steps: exportSteps('5paisa', {
+      web: { url: '5paisa.com', path: 'Go to Portfolio → Holdings and click the Download icon (or Reports → Holdings)' },
+      app: 'Go to Portfolio → Holdings → Download',
+    }) },
+  { key: 'vested', name: 'Vested', initial: 'V', color: '#059669', steps: exportSteps('Vested', {
+      web: { url: 'vestedfinance.com', path: 'Go to Portfolio → Holdings and click Download (or Reports / Statements)' },
+      app: 'Go to Profile → Reports / Statements → Holdings',
+    }) },
   {
     key: 'tickertape',
     name: 'Tickertape',
     initial: 'T',
     color: '#d97706',
-    steps: genericSteps('Tickertape'),
+    steps: exportSteps('Tickertape', {
+      web: { url: 'tickertape.in', path: 'Open your Portfolio and use the Export / Download option' },
+    }),
   },
-  { key: 'stockal', name: 'Stockal', initial: 'St', color: '#dc2626', steps: genericSteps('Stockal') },
+  { key: 'stockal', name: 'Stockal', initial: 'St', color: '#dc2626', steps: exportSteps('Stockal', {
+      web: { url: 'your Stockal account', path: 'Go to Portfolio → Holdings and click Download / Reports' },
+      app: 'Go to Portfolio → Holdings → Download',
+    }) },
   {
     key: 'ibkr',
     name: 'Interactive Brokers',
     initial: 'IB',
     color: '#b91c1c',
-    steps: genericSteps('Interactive Brokers'),
+    steps: exportSteps('Interactive Brokers', {
+      web: { url: 'Client Portal (ibkr.com)', path: 'Go to Performance & Reports → Statements → Activity → pick Period/Date, Format = CSV, then Run (open positions are included)' },
+      file: 'CSV',
+    }),
   },
-  { key: 'kuvera', name: 'Kuvera', initial: 'K', color: '#7c3aed', steps: genericSteps('Kuvera') },
+  { key: 'kuvera', name: 'Kuvera', initial: 'K', color: '#7c3aed', steps: exportSteps('Kuvera', {
+      web: { url: 'kuvera.in', path: 'Go to Reports → Holdings (or Portfolio → Download report)' },
+      app: 'Go to Reports → Holdings Report',
+    }) },
   {
     key: 'mfcentral',
     name: 'MFCentral CAS',
@@ -147,7 +233,8 @@ const BROKERS: Broker[] = [
         items: [
           'Login to mfcentral.com',
           'Go to Statements → Consolidated Account Statement',
-          'Request and download your CAS (PDF/XLSX)',
+          'Request your CAS (it is emailed, often as a password-protected PDF)',
+          'This importer reads only CSV/Excel — if you only get a PDF, copy the funds into the Standard import sample instead',
           'Upload the downloaded file below',
         ],
       },
@@ -213,7 +300,7 @@ export default function Import() {
     }
     setStatus('parsing');
     try {
-      const parsed = await parseSpreadsheetFile(file);
+      const parsed = await parseSpreadsheetFile(file, BROKER_PARSE_HINTS[selectedBroker.key]);
       if (parsed.length === 0) {
         setStatus('error');
         setErrorMsg('No rows found in that file.');
@@ -329,12 +416,7 @@ export default function Import() {
                       : 'border-line text-ink-2 hover:border-brand-300 dark:hover:border-brand-600'
                   }`}
                 >
-                  <span
-                    className="h-6 w-6 rounded-md flex items-center justify-center text-white text-xs font-bold shrink-0"
-                    style={{ backgroundColor: b.color }}
-                  >
-                    {b.initial}
-                  </span>
+                  <BrokerLogo brokerKey={b.key} initial={b.initial} color={b.color} />
                   <span className="truncate">{b.name}</span>
                 </button>
               ))}

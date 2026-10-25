@@ -23,6 +23,15 @@ export interface ParsedRow {
 // "Qty.", "Avg. cost", "LTP", "Cur. val").
 
 const NAME_HEADERS = [
+  'scrip name',
+  'script name',
+  'security name',
+  'name of the security',
+  'instrument name',
+  'stock/fund',
+  'stock name(s)',
+  'security description',
+  'folio scheme name',
   'name',
   'asset',
   'asset name',
@@ -45,6 +54,19 @@ const NAME_HEADERS = [
 ];
 
 const VALUE_HEADERS = [
+  'current val',
+  'value at market price',
+  'value at market',
+  'market val',
+  'present market value',
+  'current market value',
+  'value (inr)',
+  'current amount',
+  'valuation',
+  'market value (inr)',
+  'value as on',
+  'closing balance value',
+  'current value (inr)',
   'value',
   'amount',
   'current value',
@@ -63,6 +85,22 @@ const VALUE_HEADERS = [
 ];
 
 const QTY_HEADERS = [
+  'net qty',
+  'total qty',
+  'total quantity',
+  'balance qty',
+  'current qty',
+  'holding qty',
+  'qty available',
+  'free qty',
+  'units held',
+  'unit balance',
+  'closing units',
+  'available units',
+  'balance units',
+  'closing balance units',
+  'quantity held',
+  'position',
   'qty',
   'qty.',
   'quantity',
@@ -75,6 +113,14 @@ const QTY_HEADERS = [
 ];
 
 const PRICE_HEADERS = [
+  'current market price',
+  'current rate',
+  'market rate',
+  'latest nav',
+  'close',
+  'last close',
+  'current price (inr)',
+  'closing nav',
   'ltp',
   'last price',
   'last traded price',
@@ -89,6 +135,20 @@ const PRICE_HEADERS = [
 ];
 
 const AVG_PRICE_HEADERS = [
+  'avg rate',
+  'average cost',
+  'average cost price',
+  'avg. cost price',
+  'avg cost price',
+  'average rate',
+  'avg. buy price',
+  'avg buy rate',
+  'cost price',
+  'average nav',
+  'avg nav',
+  'avg. nav',
+  'purchase avg price',
+  'average purchase price',
   'avg. cost',
   'avg cost',
   'average price',
@@ -102,6 +162,20 @@ const AVG_PRICE_HEADERS = [
 ];
 
 const INVESTED_HEADERS = [
+  'value at cost',
+  'cost',
+  'total cost',
+  'total invested',
+  'amount invested',
+  'investment',
+  'investment amount',
+  'cost basis',
+  'buy amount',
+  'total buy value',
+  'purchase amount',
+  'invested amt.',
+  'cost value (inr)',
+  'invested (inr)',
   'invested',
   'invested value',
   'invested amt',
@@ -115,6 +189,23 @@ const INVESTED_HEADERS = [
 ];
 
 const PNL_HEADERS = [
+  'unrealized profit/loss',
+  'unrealised profit/loss',
+  'unrealized p/l',
+  'unrealised p/l',
+  'p/l',
+  'profit & loss',
+  'profit and loss',
+  'net p&l',
+  'overall gain/loss',
+  'gain / loss',
+  'unrealized profit and loss',
+  'unrealized pnl',
+  'unrealised pnl',
+  'current p&l',
+  'overall p&l',
+  'net gain/loss',
+  'unrealized p&l (inr)',
   'p&l',
   'pnl',
   'p & l',
@@ -129,6 +220,18 @@ const PNL_HEADERS = [
 ];
 
 const PNL_PERCENT_HEADERS = [
+  'unrealized p/l %',
+  'unrealised p/l %',
+  'p/l %',
+  'net chg %',
+  '% change',
+  'change %',
+  'overall return %',
+  'absolute return %',
+  'net p&l %',
+  'total return %',
+  'gain/loss %',
+  'overall gain %',
   'p&l %',
   'pnl %',
   'p&l pct',
@@ -144,15 +247,31 @@ const PNL_PERCENT_HEADERS = [
   'net change %',
 ];
 
-const CLASS_HEADERS = ['class', 'asset class', 'category', 'type'];
-const CURRENCY_HEADERS = ['currency', 'ccy'];
-const ISIN_HEADERS = ['isin', 'isin code', 'isin no', 'isin no.'];
+const CLASS_HEADERS = [
+  'asset category',
+  'asset type',
+  'instrument type',
+  'security type',
+  'product type',
+  'segment','class', 'asset class', 'category', 'type'];
+const CURRENCY_HEADERS = [
+  'curr',
+  'currency code','currency', 'ccy'];
+const ISIN_HEADERS = [
+  'isin number',
+  'isin/code','isin', 'isin code', 'isin no', 'isin no.'];
 
 // A distinct trading-symbol column, when the sheet also has a separate full
 // company-name column (Groww's order history has both "Stock name" and
 // "Symbol"; Zerodha's holdings export only has one combined column, which
 // still gets picked up fine since it's also a NAME_HEADERS candidate).
-const SYMBOL_HEADERS = ['symbol', 'tradingsymbol', 'trading symbol', 'ticker', 'stock symbol', 'scrip code'];
+const SYMBOL_HEADERS = [
+  'scrip symbol',
+  'security symbol',
+  'nse symbol',
+  'nse code',
+  'ticker symbol',
+  'stock code','symbol', 'tradingsymbol', 'trading symbol', 'ticker', 'stock symbol', 'scrip code'];
 
 // Some broker exports are a *transaction/order history* (one row per trade,
 // e.g. Groww's "Stocks Order History") rather than a snapshot of current
@@ -167,6 +286,15 @@ const EXECUTION_DATE_HEADERS = ['execution date and time', 'execution date', 'or
 // see one of these and there's no explicit asset-class column, we can
 // safely assume every row in the sheet is an equity holding.
 const EQUITY_EXPORT_SIGNALS = [
+  'cmp',
+  'current market price',
+  'value at market price',
+  'value at cost',
+  'average cost price',
+  'avg rate',
+  'net qty',
+  'nse symbol',
+  'cost price',
   'isin',
   'ltp',
   'tradingsymbol',
@@ -185,7 +313,7 @@ const EQUITY_EXPORT_SIGNALS = [
 // Every header candidate across all the maps above, used to score which
 // row in a raw sheet is most likely the real header row (broker exports
 // like Zerodha Console / Groww put a title + date range above the table).
-const ALL_HEADER_CANDIDATES = new Set([
+const ALL_HEADER_CANDIDATES_RAW = [
   ...NAME_HEADERS,
   ...VALUE_HEADERS,
   ...QTY_HEADERS,
@@ -200,7 +328,8 @@ const ALL_HEADER_CANDIDATES = new Set([
   ...SYMBOL_HEADERS,
   ...ORDER_STATUS_HEADERS,
   ...EXECUTION_DATE_HEADERS,
-]);
+];
+const ALL_HEADER_CANDIDATES = new Set(ALL_HEADER_CANDIDATES_RAW.map(squashHeader));
 
 const CLASS_KEYWORD_MAP: Record<string, AssetClass> = {
   equity: 'stock',
@@ -237,10 +366,37 @@ const CLASS_KEYWORD_MAP: Record<string, AssetClass> = {
   nft: 'nft',
   cash: 'cash',
   savings: 'cash',
+  eq: 'stock',
+  equities: 'stock',
+  stk: 'stock',
+  etfs: 'etf',
+  'mutual funds': 'equity_mutual_fund',
+  mfs: 'equity_mutual_fund',
+  'g-sec': 'government_bond',
+  bonds: 'government_bond',
+  'open positions': 'stock',
 };
 
 function normalizeHeader(h: string) {
-  return h.trim().toLowerCase().replace(/\s+/g, ' ');
+  return h.replace(/^\uFEFF/, '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+// Brokers decorate headers differently ("Avg. Price (₹)", "LTP*", "Qty"):
+// compare on a squashed form with bracketed units and punctuation removed.
+function squashHeader(h: string) {
+  return normalizeHeader(h)
+    .replace(/\([^)]*\)/g, '')
+    .replace(/[^a-z0-9%&]/g, '');
+}
+
+const squashCache = new WeakMap<string[], Set<string>>();
+function squashedSet(list: string[]): Set<string> {
+  let set = squashCache.get(list);
+  if (!set) {
+    set = new Set(list.map(squashHeader));
+    squashCache.set(list, set);
+  }
+  return set;
 }
 
 // Broker holdings exports (Zerodha Console, Groww, etc.) often place a
@@ -259,7 +415,7 @@ function detectHeaderRowIndex(aoa: unknown[][]): number {
     const row = aoa[i];
     if (!row || row.length === 0) continue;
 
-    const cells = row.map((c) => (typeof c === 'string' ? normalizeHeader(c) : ''));
+    const cells = row.map((c) => (typeof c === 'string' ? squashHeader(c) : ''));
     const filledCells = cells.filter((c) => c.length > 0);
     if (filledCells.length < 2) continue;
 
@@ -279,7 +435,14 @@ function detectHeaderRowIndex(aoa: unknown[][]): number {
 }
 
 function findHeaderKey(headers: string[], candidates: string[]): string | undefined {
-  return headers.find((h) => candidates.includes(normalizeHeader(h)));
+  // Exact (normalized) match first so a precise header always beats a fuzzy one.
+  const exact = headers.find((h) => candidates.includes(normalizeHeader(h)));
+  if (exact) return exact;
+  const set = squashedSet(candidates);
+  return headers.find((h) => {
+    const sq = squashHeader(h);
+    return sq.length > 0 && set.has(sq);
+  });
 }
 
 function guessAssetClass(value: unknown): AssetClass | undefined {
@@ -289,14 +452,29 @@ function guessAssetClass(value: unknown): AssetClass | undefined {
 }
 
 function toNumber(value: unknown): number {
-  if (typeof value === 'number') return value;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
   if (typeof value === 'string') {
-    const cleaned = value.replace(/[₹$,\s]/g, '');
-    const n = parseFloat(cleaned);
-    return Number.isFinite(n) ? n : 0;
+    let t = value.trim().replace(/[\u2212\u2013\u2014]/g, '-');
+    // Accounting negatives: (1,234.50) -> -1234.50, and trailing Dr/Cr markers.
+    const paren = /^\(.*\)$/.test(t);
+    t = t.replace(/[₹$€£,\s()%]|rs\.?|inr|usd|dr$|cr$/gi, '');
+    const n = parseFloat(t);
+    if (!Number.isFinite(n)) return 0;
+    return paren ? -Math.abs(n) : n;
   }
   return 0;
 }
+
+/** Like toNumber but returns undefined for blank / non-numeric cells, so a
+ *  missing P&L can be derived instead of being treated as a real zero. */
+function numOrUndef(value: unknown): number | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value === 'string' && !/\d/.test(value)) return undefined;
+  if (typeof value !== 'number' && typeof value !== 'string') return undefined;
+  return toNumber(value);
+}
+
+const TOTAL_ROW_RE = /^(grand\s+)?total\b|^sub-?total\b|^net\s+(total|worth)\b|^summary\b|^disclaimer|^note[s:]|^\*|^report generated|^as on\b|^as of\b/i;
 
 function normalizeText(s: string): string {
   return s.trim().toLowerCase();
@@ -472,7 +650,34 @@ function aggregateTransactionRows(rows: Record<string, unknown>[], keys: TxnKeys
  *     a price column (LTP, or Avg. cost as a fallback) — in which case
  *     the value is computed as Qty x Price.
  */
-export async function parseSpreadsheetFile(file: File): Promise<ParsedRow[]> {
+export interface ParseOptions {
+  /** Currency for sheets that carry no currency column (e.g. Vested / IBKR = USD). */
+  currency?: string;
+  /** Asset class for rows the parser can't classify on its own (e.g. MFCentral = mutual funds). */
+  defaultClass?: AssetClass;
+}
+
+/**
+ * Interactive Brokers Activity Statements are one multi-section CSV: every
+ * line starts with the section name and a Header/Data marker. Rebuild just
+ * the "Open Positions" table as a normal header + rows grid.
+ */
+function extractIbkrOpenPositions(aoa: unknown[][]): unknown[][] | null {
+  const header = aoa.find((r) => r[0] === 'Open Positions' && r[1] === 'Header');
+  if (!header) return null;
+  const cols = header.slice(2).map((c) => String(c ?? ''));
+  const data = aoa
+    .filter(
+      (r) =>
+        r[0] === 'Open Positions' &&
+        r[1] === 'Data' &&
+        (String(r[2] ?? '') === 'Summary' || String(r[2] ?? '') === '')
+    )
+    .map((r) => r.slice(2));
+  return data.length ? [cols, ...data] : null;
+}
+
+export async function parseSpreadsheetFile(file: File, options: ParseOptions = {}): Promise<ParsedRow[]> {
   const XLSX = await import('xlsx');
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: 'array' });
@@ -489,11 +694,24 @@ export async function parseSpreadsheetFile(file: File): Promise<ParsedRow[]> {
     const aoa = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' });
     if (aoa.length === 0) continue;
 
-    const headerRowIndex = detectHeaderRowIndex(aoa);
-    const candidateRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-      defval: '',
-      range: headerRowIndex,
-    });
+    const ibkr = extractIbkrOpenPositions(aoa);
+    let candidateRows: Record<string, unknown>[];
+    if (ibkr) {
+      const [cols, ...body] = ibkr;
+      candidateRows = body.map((r) => {
+        const o: Record<string, unknown> = {};
+        (cols as string[]).forEach((c, i) => {
+          if (c) o[c] = r[i] ?? '';
+        });
+        return o;
+      });
+    } else {
+      const headerRowIndex = detectHeaderRowIndex(aoa);
+      candidateRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+        defval: '',
+        range: headerRowIndex,
+      });
+    }
 
     // Drop blank spacer rows and footer/notes rows that have no data in
     // any recognizable column.
@@ -511,9 +729,19 @@ export async function parseSpreadsheetFile(file: File): Promise<ParsedRow[]> {
 
   const headers = Object.keys(rows[0]);
   const normalizedHeaders = headers.map(normalizeHeader);
+  const equitySignals = squashedSet(EQUITY_EXPORT_SIGNALS);
+  const looksLikeMfExport = normalizedHeaders.some((h) =>
+    ['schemename', 'scheme', 'foliono', 'folio', 'fundname', 'avgnav', 'purchasenav'].includes(squashHeader(h))
+  );
 
   const nameKey = findHeaderKey(headers, NAME_HEADERS);
-  const valueKey = findHeaderKey(headers, VALUE_HEADERS);
+  // Several columns can look like "value" (invested vs current). Prefer the
+  // current/market one, then any non-invested one, and invested only as a last resort.
+  const valueCandidates = headers.filter((h) => squashedSet(VALUE_HEADERS).has(squashHeader(h)));
+  const valueKey =
+    valueCandidates.find((h) => /current|market|cur|present|closing|valuation/.test(squashHeader(h))) ??
+    valueCandidates.find((h) => !/invest|cost|buy|purchase|principal/.test(squashHeader(h))) ??
+    valueCandidates[0];
   const currencyKey = findHeaderKey(headers, CURRENCY_HEADERS);
   const qtyKey = findHeaderKey(headers, QTY_HEADERS);
   const isinKey = findHeaderKey(headers, ISIN_HEADERS);
@@ -555,15 +783,25 @@ export async function parseSpreadsheetFile(file: File): Promise<ParsedRow[]> {
   // No asset-class column at all, but the sheet clearly looks like a
   // broker holdings export -> treat every row as equity by default.
   const looksLikeEquityExport =
-    !classKey && normalizedHeaders.some((h) => EQUITY_EXPORT_SIGNALS.includes(h));
+    !classKey && normalizedHeaders.some((h) => equitySignals.has(squashHeader(h)));
 
-  return rows.map((raw) => {
-    const name = nameKey ? String(raw[nameKey] ?? '').trim() : '';
+  const dataRows = rows.filter((raw) => {
+    const probes = [nameKey, symbolColKey]
+      .filter((k): k is string => !!k)
+      .map((k) => String(raw[k] ?? '').trim())
+      .concat(nameKey || symbolColKey ? [] : [String(Object.values(raw)[0] ?? '').trim()]);
+    return !probes.some((v) => TOTAL_ROW_RE.test(v));
+  });
+
+  return dataRows.map((raw) => {
+    let name = nameKey ? String(raw[nameKey] ?? '').trim() : '';
     // Prefer a distinct trading-symbol column when the sheet has one
     // separate from the display name (e.g. Groww's "Symbol" next to
     // "Stock name"); otherwise fall back to the name itself, matching
     // sheets (like Zerodha's) where one column serves as both.
     const symbol = (symbolColKey ? String(raw[symbolColKey] ?? '').trim() : name).toUpperCase();
+    // Sheets with only a symbol column: show the symbol rather than dropping the row.
+    if (!name && symbol) name = symbol;
 
     const quantity = qtyKey ? toNumber(raw[qtyKey]) : undefined;
     const avgCost = avgPriceKey ? toNumber(raw[avgPriceKey]) : undefined;
@@ -577,10 +815,24 @@ export async function parseSpreadsheetFile(file: File): Promise<ParsedRow[]> {
       if (price > 0) value = quantity * price;
     }
 
+    const isinRaw = isinKey ? String(raw[isinKey] ?? '').trim().toUpperCase() : '';
     const detectedClass = classKey ? guessAssetClass(raw[classKey]) : undefined;
-    const assetClass: AssetClass = detectedClass ?? (looksLikeEquityExport ? 'stock' : 'other');
+    let assetClass: AssetClass;
+    if (detectedClass) {
+      assetClass = detectedClass;
+    } else if (/\b(etf|bees)\b|bees$/i.test(name) || /\bETF\b/i.test(name)) {
+      assetClass = 'etf';
+    } else if (isinRaw.startsWith('INF') || looksLikeMfExport) {
+      assetClass = 'equity_mutual_fund';
+    } else if (looksLikeEquityExport || isinRaw.startsWith('INE')) {
+      assetClass = 'stock';
+    } else {
+      assetClass = options.defaultClass ?? 'other';
+    }
 
-    const currency = currencyKey ? String(raw[currencyKey] ?? 'INR').trim() || 'INR' : 'INR';
+    const currency = currencyKey
+      ? String(raw[currencyKey] ?? '').trim() || options.currency || 'INR'
+      : options.currency || 'INR';
 
     // Invested value: prefer explicit column, else Qty x Avg. cost (full decimal precision).
     let investedValue = investedKey ? toNumber(raw[investedKey]) : 0;
@@ -588,19 +840,22 @@ export async function parseSpreadsheetFile(file: File): Promise<ParsedRow[]> {
       investedValue = quantity * avgCost;
     }
 
+    // No current value/price in the file: fall back to what was invested so the row still imports.
+    if (value <= 0 && investedValue > 0) value = investedValue;
+
     // P&L: prefer an explicit column, else derive from value - invested.
-    let pnl = pnlKey ? toNumber(raw[pnlKey]) : undefined;
+    let pnl = pnlKey ? numOrUndef(raw[pnlKey]) : undefined;
     if (pnl === undefined && investedValue > 0 && value > 0) {
       pnl = value - investedValue;
     }
 
-    let pnlPercent = pnlPercentKey ? toNumber(raw[pnlPercentKey]) : undefined;
+    let pnlPercent = pnlPercentKey ? numOrUndef(raw[pnlPercentKey]) : undefined;
     if (pnlPercent === undefined && pnl !== undefined && investedValue > 0) {
       pnlPercent = (pnl / investedValue) * 100;
     }
 
-    const hasSymbol = looksLikeEquityExport || assetClass === 'stock';
-    const isin = isinKey ? String(raw[isinKey] ?? '').trim().toUpperCase() : '';
+    const hasSymbol = looksLikeEquityExport || assetClass === 'stock' || assetClass === 'etf';
+    const isin = isinRaw;
 
     return {
       raw,
@@ -610,7 +865,7 @@ export async function parseSpreadsheetFile(file: File): Promise<ParsedRow[]> {
       currency,
       valid: name.length > 0 && value > 0,
       symbol: hasSymbol && symbol ? symbol : undefined,
-      isin: hasSymbol && isin ? isin : undefined,
+      isin: isin || undefined,
       quantity: quantity && quantity > 0 ? quantity : undefined,
       avgCost: avgCost && avgCost > 0 ? avgCost : undefined,
       currentPrice: currentPrice && currentPrice > 0 ? currentPrice : undefined,

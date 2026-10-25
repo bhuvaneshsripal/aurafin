@@ -1,6 +1,7 @@
 import { useMemo, type ReactNode } from 'react';
 import { DateInput, inputClasses } from '../ui';
 import { formatCurrency } from '../../utils/privateFormat';
+import InfoTip from '../ui/InfoTip';
 import type { EpfDetails } from '../../types';
 
 export const DEFAULT_EPF_RATE = 8.25;
@@ -8,9 +9,11 @@ export const DEFAULT_EPF_RATE = 8.25;
 function Field({ label, hint, children }: { label: ReactNode; hint?: ReactNode; children: ReactNode }) {
   return (
     <label className="block min-w-0">
-      <span className="text-sm font-medium text-slate-500 mb-1 flex items-end min-h-[2.25rem] leading-snug">{label}</span>
+      <span className="text-sm font-medium text-slate-500 mb-1 flex items-end gap-1.5 min-h-[2.25rem] leading-snug">
+        {label}
+        {hint && <InfoTip>{hint}</InfoTip>}
+      </span>
       {children}
-      {hint && <p className="text-xs text-slate-500 mt-1">{hint}</p>}
     </label>
   );
 }
@@ -71,8 +74,10 @@ export default function EpfSection({
   return (
     <div className="space-y-4 border border-line-soft bg-slate-50/60 rounded-xl p-4">
       <div>
-        <p className="text-sm font-medium text-ink-2">Employees' Provident Fund</p>
-        <p className="text-xs text-slate-500 mt-0.5">Enter your passbook balances; Current Value follows their total.</p>
+        <p className="text-sm font-medium text-ink-2 flex items-center gap-1.5">
+          Employees' Provident Fund
+          <InfoTip>Enter your passbook balances; Current Value follows their total.</InfoTip>
+        </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

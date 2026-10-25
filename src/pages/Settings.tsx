@@ -15,6 +15,7 @@ import { useAppLockStore } from '../store/appLockStore';
 import { useDisplaySettingsStore, FONT_MIN_SCALE, FONT_MAX_SCALE, SCREEN_MIN_SCALE, SCREEN_MAX_SCALE } from '../store/displaySettingsStore';
 import { useGoldSettingsStore } from '../store/goldSettingsStore';
 import { useNotificationPreferencesStore, type NotificationChannelKey } from '../store/notificationPreferencesStore';
+import InfoTip from '../components/ui/InfoTip';
 import PinBoxInput, { type PinBoxInputHandle } from '../components/PinBoxInput';
 import { auth } from '../firebase/config';
 import CurrencySelect from '../components/CurrencySelect';
@@ -443,12 +444,14 @@ function SetPasswordCard() {
 
   return (
     <Card>
-      <h2 className="text-sm font-semibold text-ink mb-1">Set Password</h2>
-      <p className="text-xs text-muted mb-4">
-        {hasPasswordProvider
-          ? 'Update the password you use to sign in with email and password.'
-          : 'Set a password so you can also sign in with email and password, in addition to Google.'}
-      </p>
+      <h2 className="text-sm font-semibold text-ink mb-4 flex items-center gap-1.5">
+        Set Password
+        <InfoTip>
+          {hasPasswordProvider
+            ? 'Update the password you use to sign in with email and password. Pick something you don’t use anywhere else.'
+            : 'Set a password so you can also sign in with email and password, in addition to Google. Your Google sign-in keeps working.'}
+        </InfoTip>
+      </h2>
 
       {mode === 'form' && (
         <>
@@ -636,10 +639,48 @@ function AppLockCard() {
 
   return (
     <Card>
-      <div className="flex gap-3">
-        <Lock size={20} className="text-slate-700 dark:text-slate-300 shrink-0 mt-0.5" />
-        <div>
-          <h2 className="text-sm font-semibold text-ink">App Lock</h2>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3 min-w-0">
+          <Lock size={20} className="text-slate-700 dark:text-slate-300 shrink-0" />
+          <h2 className="text-sm font-semibold text-ink flex items-center gap-1.5">
+            App Lock
+            <InfoTip>
+              Protect Aurafin with a 4-digit PIN. The app locks itself after a minute in the background, and signs you out after 3 wrong PIN attempts, so your net worth stays private if someone else picks up your device.
+            </InfoTip>
+          </h2>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {enabled ? (
+            <>
+              <button
+                onClick={lockNow}
+                className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors bg-brand-600 hover:bg-brand-700 text-white"
+              >
+                <Lock size={16} />
+                Lock Now
+              </button>
+              <button
+                onClick={() => setConfirmDisable(true)}
+                className="bg-cream-100 dark:bg-slate-800 border border-cream-300 dark:border-slate-700 text-ink-2 px-4 py-2 rounded-full text-sm font-medium hover:bg-cream-200 dark:hover:bg-slate-700"
+              >
+                Disable Lock
+              </button>
+              <button
+                onClick={() => setOpen(true)}
+                className="bg-cream-100 dark:bg-slate-800 border border-cream-300 dark:border-slate-700 text-ink-2 px-4 py-2 rounded-full text-sm font-medium hover:bg-cream-200 dark:hover:bg-slate-700"
+              >
+                Change PIN
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setOpen(true)}
+              className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors bg-brand-600 hover:bg-brand-700 text-white"
+            >
+              <Lock size={16} />
+              Set Up PIN
+            </button>
+          )}
         </div>
       </div>
 
@@ -649,40 +690,6 @@ function AppLockCard() {
           <span className="text-sm font-medium text-brand-600">App Lock is enabled</span>
         </div>
       )}
-
-      <div className="flex gap-3 mt-4">
-        {enabled ? (
-          <>
-            <button
-              onClick={lockNow}
-              className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors bg-brand-600 hover:bg-brand-700 text-white"
-            >
-              <Lock size={16} />
-              Lock Now
-            </button>
-            <button
-              onClick={() => setConfirmDisable(true)}
-              className="bg-cream-100 dark:bg-slate-800 border border-cream-300 dark:border-slate-700 text-ink-2 px-4 py-2 rounded-full text-sm font-medium hover:bg-cream-200 dark:hover:bg-slate-700"
-            >
-              Disable Lock
-            </button>
-            <button
-              onClick={() => setOpen(true)}
-              className="bg-cream-100 dark:bg-slate-800 border border-cream-300 dark:border-slate-700 text-ink-2 px-4 py-2 rounded-full text-sm font-medium hover:bg-cream-200 dark:hover:bg-slate-700"
-            >
-              Change PIN
-            </button>
-          </>
-        ) : (
-          <button
-            onClick={() => setOpen(true)}
-            className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors bg-brand-600 hover:bg-brand-700 text-white"
-          >
-            <Lock size={16} />
-            Set Up PIN
-          </button>
-        )}
-      </div>
 
       <Modal open={open} onClose={() => setOpen(false)} title="Set Up App Lock">
         <div className="space-y-4">
@@ -794,15 +801,16 @@ function SharedAccessCard() {
         <Users size={20} className="text-slate-700 dark:text-slate-300 shrink-0 mt-0.5" />
         <div className="flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-sm font-semibold text-ink">Shared Access</h2>
+            <h2 className="text-sm font-semibold text-ink flex items-center gap-1.5">
+              Shared Access
+              <InfoTip>
+                Share your financial data with up to 5 trusted people — spouse, financial advisor, CA, or anyone you choose. Each person gets View Only or Full Access. This feature is on the way — check back soon.
+              </InfoTip>
+            </h2>
             <span className="text-xs font-medium text-brand-600 bg-brand-50 dark:bg-brand-500/10 dark:text-brand-400 px-2 py-0.5 rounded-full">
               Coming Soon
             </span>
           </div>
-          <p className="text-xs text-muted mt-1">
-            Share your financial data with up to 5 trusted people — spouse, financial advisor, CA, or
-            anyone you choose. Each person gets View Only or Full Access.
-          </p>
         </div>
       </div>
 
@@ -826,9 +834,6 @@ function SharedAccessCard() {
           Send Invite
         </button>
       </div>
-      <p className="text-xs text-muted mt-2">
-        This feature is on the way — check back soon.
-      </p>
     </Card>
   );
 }

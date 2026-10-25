@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronDown, Info, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, Plus, Trash2 } from 'lucide-react';
+import InfoTip, { InfoNote } from '../ui/InfoTip';
 import { DateInput, Select, inputClasses } from '../ui';
 import { formatCurrency, formatPreciseCurrency } from '../../utils/privateFormat';
 import { formatDate, toIsoDate } from '../../utils/date';
@@ -23,9 +24,11 @@ import type { Liability, PropertyDetails, PropertyImprovement } from '../../type
 function Field({ label, hint, children }: { label: ReactNode; hint?: ReactNode; children: ReactNode }) {
   return (
     <label className="block min-w-0">
-      <span className="text-sm font-medium text-slate-500 mb-1 flex items-end min-h-[2.25rem] leading-snug">{label}</span>
+      <span className="text-sm font-medium text-slate-500 mb-1 flex items-end gap-1.5 min-h-[2.25rem] leading-snug">
+        {label}
+        {hint && <InfoTip>{hint}</InfoTip>}
+      </span>
       {children}
-      {hint && <p className="text-xs text-slate-500 mt-1">{hint}</p>}
     </label>
   );
 }
@@ -33,10 +36,10 @@ function Field({ label, hint, children }: { label: ReactNode; hint?: ReactNode; 
 function Block({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
   return (
     <div className="space-y-4 border border-line-soft bg-slate-50/60 rounded-xl p-4">
-      <div>
-        <p className="text-sm font-medium text-ink-2">{title}</p>
-        {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
-      </div>
+      <p className="text-sm font-medium text-ink-2 flex items-center gap-1.5">
+        {title}
+        {subtitle && <InfoTip>{subtitle}</InfoTip>}
+      </p>
       {children}
     </div>
   );
@@ -47,16 +50,23 @@ function FoldBlock({ title, subtitle, badge, defaultOpen = false, children }: { 
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="border border-line-soft bg-slate-50/60 rounded-xl p-4 space-y-4">
-      <button type="button" onClick={() => setOpen((v) => !v)} className="w-full flex items-start justify-between gap-3 text-left" aria-expanded={open}>
-        <span>
-          <span className="block text-sm font-medium text-ink-2">{title}</span>
-          {subtitle && <span className="block text-xs text-slate-500 mt-0.5">{subtitle}</span>}
+      <div className="w-full flex items-start justify-between gap-3 cursor-pointer" onClick={() => setOpen((v) => !v)}>
+        <span className="flex items-center gap-1.5 min-w-0">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+            className="text-left text-sm font-medium text-ink-2"
+            aria-expanded={open}
+          >
+            {title}
+          </button>
+          {subtitle && <InfoTip>{subtitle}</InfoTip>}
         </span>
         <span className="flex items-center gap-2 shrink-0">
           {badge}
           <ChevronDown size={16} className={`text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
         </span>
-      </button>
+      </div>
       {open && <div className="space-y-4">{children}</div>}
     </div>
   );
@@ -70,8 +80,9 @@ const Row = ({ label, value, strong }: { label: ReactNode; value: ReactNode; str
 );
 
 const Note = ({ tone, children }: { tone: 'info' | 'warn' | 'good'; children: ReactNode }) => {
-  const Icon = tone === 'warn' ? AlertTriangle : tone === 'good' ? CheckCircle2 : Info;
-  const color = tone === 'warn' ? 'text-amber-600' : tone === 'good' ? 'text-emerald-600' : 'text-slate-600';
+  if (tone === 'info') return <InfoNote label="Tip">{children}</InfoNote>;
+  const Icon = tone === 'warn' ? AlertTriangle : CheckCircle2;
+  const color = tone === 'warn' ? 'text-amber-600' : 'text-emerald-600';
   return (
     <p className={`text-xs flex items-start gap-1.5 ${color}`}>
       <Icon size={13} className="shrink-0 mt-0.5" />
@@ -321,7 +332,7 @@ export default function PropertySection({
               ))}
             </ul>
           ) : (
-            <p className="text-[11px] text-slate-400">Money spent after buying adds to your cost — and lowers the tax on a future sale.</p>
+            <InfoNote>Money spent after buying adds to your cost — and lowers the tax on a future sale.</InfoNote>
           )}
         </div>
 
@@ -366,7 +377,7 @@ export default function PropertySection({
               <Row label={`Growth per year over ${appreciation.years.toFixed(1)} yrs`} value={`${appreciation.cagr >= 0 ? '' : '−'}${pct1(Math.abs(appreciation.cagr))}`} />
             )}
             {appreciation.nowPerSqft !== undefined && <Row label="Value per sq ft today" value={money(appreciation.nowPerSqft)} />}
-            <p className="text-[11px] text-slate-400 pt-1">Measured against everything you've spent (price, stamp duty, registration, improvements), so it's a fair view of what the property has made you.</p>
+            <InfoNote className="pt-1">Measured against everything you've spent (price, stamp duty, registration, improvements), so it's a fair view of what the property has made you.</InfoNote>
           </div>
         ) : (
           <Note tone="info">Add the purchase price and today's value to see your gain and yearly growth.</Note>
@@ -451,7 +462,7 @@ export default function PropertySection({
                 <Row label="Growth + net yield (approx. total return a year)" value={pct1(appreciation.cagr + rental.netYieldPct)} strong />
               </div>
             )}
-            <p className="text-[11px] text-slate-400 pt-1">Residential rent in India typically yields 2–4% of value a year, so growth in the price does most of the work.</p>
+            <InfoNote className="pt-1">Residential rent in India typically yields 2–4% of value a year, so growth in the price does most of the work.</InfoNote>
           </div>
         ) : (
           <Note tone="info">Add rent or running costs to see yield and monthly net income.</Note>
@@ -497,7 +508,7 @@ export default function PropertySection({
             {loan.emi !== undefined && rental.hasAnyFigures && rental.yourNetMonthly - loan.emi < 0 && (
               <Note tone="warn">The property doesn't pay for its own loan — you top up {money(loan.emi - rental.yourNetMonthly)} every month.</Note>
             )}
-            {linkedLoan && loan.emi === undefined && <p className="text-[11px] text-slate-400">Add the EMI and interest rate on the loan to see the monthly split and payoff date.</p>}
+            {linkedLoan && loan.emi === undefined && <InfoNote>Add the EMI and interest rate on the loan to see the monthly split and payoff date.</InfoNote>}
           </div>
         )}
       </FoldBlock>
@@ -544,9 +555,7 @@ export default function PropertySection({
                 {sale.regime === 'ltcg_flat' && <Row label="Long-term gain tax (12.5% + cess)" value={`− ${money(sale.tax ?? 0)}`} />}
                 {sale.regime === 'ltcg_indexed' && <Row label="Long-term gain tax (20% with indexation + cess)" value={`− ${money(sale.tax ?? 0)}`} />}
                 {sale.indexationAllowed && sale.taxFlat !== undefined && sale.taxIndexed !== undefined && (
-                  <p className="text-[11px] text-slate-400">
-                    Bought before 23 Jul 2024, so you can pick: {money(sale.taxFlat)} at 12.5% without indexation, or {money(sale.taxIndexed)} at 20% with indexation (cost raised to {money(sale.indexedCost ?? 0)}). The lower is shown.
-                  </p>
+                  <InfoNote>Bought before 23 Jul 2024, so you can pick: {money(sale.taxFlat)} at 12.5% without indexation, or {money(sale.taxIndexed)} at 20% with indexation (cost raised to {money(sale.indexedCost ?? 0)}). The lower is shown.</InfoNote>
                 )}
                 {sale.afterTax !== undefined && <Row label="After tax" value={money(sale.afterTax)} />}
                 {loan && <Row label="Pay off the loan" value={`− ${money(loan.outstanding)}`} />}
@@ -557,9 +566,7 @@ export default function PropertySection({
                 )}
               </>
             )}
-            <p className="text-[11px] text-slate-400 pt-1">
-              An estimate for a resident individual — surcharge isn't included. A long-term gain can be reduced or removed by buying another residential house (Section 54) or investing in specified bonds (Section 54EC, up to ₹50 lakh); check with a tax professional before selling.
-            </p>
+            <InfoNote className="pt-1">An estimate for a resident individual — surcharge isn't included. A long-term gain can be reduced or removed by buying another residential house (Section 54) or investing in specified bonds (Section 54EC, up to ₹50 lakh); check with a tax professional before selling.</InfoNote>
           </div>
         )}
       </FoldBlock>
@@ -585,7 +592,7 @@ export default function PropertySection({
                 <li>Counts only your {Math.round(share * 1000) / 10}% share, before income tax, loan payments and any sale tax.</li>
               </ul>
             )}
-            <p className="text-[11px] text-slate-400">A what-if, not a forecast — property prices vary widely by city and locality.</p>
+            <InfoNote>A what-if, not a forecast — property prices vary widely by city and locality.</InfoNote>
           </div>
         ) : (
           <Note tone="info">Add today's value to see a projection.</Note>
