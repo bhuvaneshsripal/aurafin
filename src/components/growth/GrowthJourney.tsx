@@ -188,6 +188,7 @@ export default function GrowthJourney() {
       // moves at a limited speed, so it can never be skipped by scrolling fast. Once it has
       // played to the end (or back to the start) the page scrolls on normally.
       const MAX_RATE = 1 / 8; // fastest possible: the whole journey in ~8 seconds
+      const AUTO_RATE = 1 / 11; // hands-free speed: the journey plays by itself in ~11 seconds
       const LEAD = 0.05; // how far input may run ahead of what is on screen
       const SCREENS = 4; // scroll distance (in screen heights) that equals the whole journey
       let current = 0; // what is on screen
@@ -269,8 +270,8 @@ export default function GrowthJourney() {
           if (current < 0.9995) lock();
         },
         onEnterBack: () => {
-          // Arriving from below: play backwards unless it is already at the start.
-          if (current > 0.0005) lock();
+          // Arriving from below: finish playing forward if it was left part-way.
+          if (current < 0.9995) lock();
         },
         onLeave: () => {
           // Scrolled straight past the section (fast flick, scrollbar drag, End key) before the
@@ -287,6 +288,15 @@ export default function GrowthJourney() {
 
       const tick = (_time: number, deltaMs: number) => {
         const dt = Math.min(deltaMs, 100) / 1000;
+        // Hands-free: while the section is on screen the journey advances by itself, so nobody
+        // has to scroll to see it. Scroll / swipe / keys still speed it up (within LEAD).
+        if (target < 1) {
+          const r = wrap.getBoundingClientRect();
+          const vh = window.innerHeight;
+          if (r.top < vh * 0.35 && r.bottom > vh * 0.5) {
+            target = Math.min(1, current + LEAD, target + AUTO_RATE * dt);
+          }
+        }
         const diff = target - current;
         if (diff === 0) return;
         if (Math.abs(diff) < 0.00005) {
