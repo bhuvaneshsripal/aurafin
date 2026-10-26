@@ -81,7 +81,7 @@ export default function Dashboard() {
   const privacyMode = useUiStore((s) => s.privacyMode);
   const assetsServerConfirmed = useSyncStatusStore((s) => s.assetsServerConfirmed);
   const liabilitiesServerConfirmed = useSyncStatusStore((s) => s.liabilitiesServerConfirmed);
-  const transactionsServerConfirmed = useSyncStatusStore((s) => s.transactionsServerConfirmed);
+  const transactionsLoaded = useSyncStatusStore((s) => !!s.loadedCollections['transactions']);
   const goalsServerConfirmed = useSyncStatusStore((s) => s.goalsServerConfirmed);
   // Assets/liabilities loading from the server isn't the whole picture — if
   // any asset is priced live (a stock/fund symbol, or a linked SIP), Net
@@ -190,7 +190,7 @@ export default function Dashboard() {
   // slow mobile connection, where the loading window is long enough to see.
   const wealthDataKnown =
     assetsServerConfirmed && liabilitiesServerConfirmed;
-  const cashflowDataKnown = transactionsServerConfirmed;
+  const cashflowDataKnown = transactionsLoaded;
   const goalsDataKnown = goalsServerConfirmed;
   const hasWealth = assets.length > 0 || liabilities.length > 0;
 

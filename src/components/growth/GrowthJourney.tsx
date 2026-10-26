@@ -1,11 +1,8 @@
 import { Component, lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { gsap } from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { band, formatLakh, ramp, scrollState, sipProjection, smooth } from './growthMath';
 import { detectGraphicsTier, type GraphicsTier } from './deviceTier';
 import './growth.css';
-
-gsap.registerPlugin(ScrollTrigger);
 
 // The 3D engine (three.js + R3F) only downloads when this section nears the viewport.
 const GrowthScene = lazy(() => import('./GrowthScene'));
@@ -48,7 +45,7 @@ class SceneBoundary extends Component<
 /**
  * 2D fallback for devices without WebGL, weak hardware, or reduced-motion
  * preference. Driven by the same --gj-p CSS variable as the 3D scene's
- * progress, so it still animates with scroll (or shows its final frame).
+ * progress, so it still autoplays (or shows its final frame).
  */
 function FallbackArt() {
   const bars = [
@@ -140,8 +137,7 @@ export default function GrowthJourney() {
     return () => io.disconnect();
   }, []);
 
-  // Scroll-linked timeline. The section pins while progress runs 0 → 1,
-  // and scrub ties every change to the scroll position (reverses on scroll up).
+  // Time-driven timeline: progress runs 0 → 1 on its own while the section is visible.
   useEffect(() => {
     const wrap = wrapRef.current;
     const stage = stageRef.current;
@@ -182,142 +178,34 @@ export default function GrowthJourney() {
       };
 
       render(0);
-      // ---- Guided scroll -------------------------------------------------------------------
-      // When the section reaches the top of the screen, page scrolling is held in place and the
-      // person's scroll / swipe / arrow-key input drives the animation instead. The animation
-      // moves at a limited speed, so it can never be skipped by scrolling fast. Once it has
-      // played to the end (or back to the start) the page scrolls on normally.
-      const MAX_RATE = 1 / 8; // fastest possible: the whole journey in ~8 seconds
-      const AUTO_RATE = 1 / 11; // hands-free speed: the journey plays by itself in ~11 seconds
-      const LEAD = 0.05; // how far input may run ahead of what is on screen
-      const SCREENS = 4; // scroll distance (in screen heights) that equals the whole journey
-      let current = 0; // what is on screen
-      let target = 0; // where input wants it to be
-      let locked = false;
-      let touchY = 0;
+      // ---- Autoplay ------------------------------------------------------------------------
+      // The journey plays by itself, on a timer, while the section is on screen. Scrolling only
+      // moves the page: it never speeds up, skips, pauses or reverses the animation.
+      const DURATION = 14; // seconds for the whole journey
+      let current = 0;
+      let visible = false;
 
-      let st: ScrollTrigger | undefined;
-      const startY = () => st?.start ?? window.scrollY;
-
-      const push = (deltaPx: number): boolean => {
-        // Returns true when the animation used the input (so the page must not scroll).
-        if (deltaPx > 0 && current >= 0.9995) return false;
-        if (deltaPx < 0 && current <= 0.0005) return false;
-        const next = target + deltaPx / (window.innerHeight * SCREENS);
-        target = Math.min(1, Math.max(0, current - LEAD, Math.min(next, current + LEAD)));
-        return true;
-      };
-
-      const onWheel = (e: WheelEvent) => {
-        const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1;
-        if (push(e.deltaY * unit)) e.preventDefault();
-        else unlock();
-      };
-      const onTouchStart = (e: TouchEvent) => {
-        touchY = e.touches[0].clientY;
-      };
-      const onTouchMove = (e: TouchEvent) => {
-        const y = e.touches[0].clientY;
-        const d = touchY - y;
-        touchY = y;
-        if (push(d * 1.4)) {
-          if (e.cancelable) e.preventDefault();
-        } else unlock();
-      };
-      const onKey = (e: KeyboardEvent) => {
-        const vh = window.innerHeight;
-        const d =
-          e.key === 'ArrowDown' ? vh * 0.2 :
-          e.key === 'ArrowUp' ? -vh * 0.2 :
-          e.key === 'PageDown' || (e.key === ' ' && !e.shiftKey) ? vh * 0.6 :
-          e.key === 'PageUp' || (e.key === ' ' && e.shiftKey) ? -vh * 0.6 : 0;
-        if (!d) return;
-        if (push(d)) e.preventDefault();
-        else unlock();
-      };
-      // Keeps the page still while locked (covers scrollbar dragging and other scroll sources).
-      const onScrollHold = () => {
-        if (locked && Math.abs(window.scrollY - startY()) > 1) window.scrollTo(0, startY());
-      };
-
-      const lock = () => {
-        if (locked) return;
-        locked = true;
-        window.scrollTo(0, startY());
-        window.addEventListener('wheel', onWheel, { passive: false });
-        window.addEventListener('touchstart', onTouchStart, { passive: true });
-        window.addEventListener('touchmove', onTouchMove, { passive: false });
-        window.addEventListener('keydown', onKey);
-        window.addEventListener('scroll', onScrollHold, { passive: true });
-      };
-      function unlock() {
-        if (!locked) return;
-        locked = false;
-        window.removeEventListener('wheel', onWheel);
-        window.removeEventListener('touchstart', onTouchStart);
-        window.removeEventListener('touchmove', onTouchMove);
-        window.removeEventListener('keydown', onKey);
-        window.removeEventListener('scroll', onScrollHold);
-      }
-
-      st = ScrollTrigger.create({
-        trigger: wrap,
-        start: 'top top',
-        end: '+=2',
-        invalidateOnRefresh: true,
-        onEnter: () => {
-          // Arriving from above: play from the start unless it has already finished.
-          if (current < 0.9995) lock();
+      const io = new IntersectionObserver(
+        ([entry]) => {
+          visible = entry.isIntersecting;
         },
-        onEnterBack: () => {
-          // Arriving from below: finish playing forward if it was left part-way.
-          if (current < 0.9995) lock();
-        },
-        onLeave: () => {
-          // Scrolled straight past the section (fast flick, scrollbar drag, End key) before the
-          // animation finished: pull the page back to the section so the animation still plays.
-          if (current < 0.9995) {
-            lock();
-            window.scrollTo(0, startY());
-          } else {
-            unlock();
-          }
-        },
-        onLeaveBack: unlock,
-      });
+        { threshold: 0.5 },
+      );
+      io.observe(wrap);
 
       const tick = (_time: number, deltaMs: number) => {
-        const dt = Math.min(deltaMs, 100) / 1000;
-        // Hands-free: while the section is on screen the journey advances by itself, so nobody
-        // has to scroll to see it. Scroll / swipe / keys still speed it up (within LEAD).
-        if (target < 1) {
-          const r = wrap.getBoundingClientRect();
-          const vh = window.innerHeight;
-          if (r.top < vh * 0.35 && r.bottom > vh * 0.5) {
-            target = Math.min(1, current + LEAD, target + AUTO_RATE * dt);
-          }
-        }
-        const diff = target - current;
-        if (diff === 0) return;
-        if (Math.abs(diff) < 0.00005) {
-          current = target;
-        } else {
-          current += Math.sign(diff) * Math.min(Math.abs(diff), MAX_RATE * dt);
-        }
+        if (!visible || current >= 1) return;
+        current = Math.min(1, current + Math.min(deltaMs, 100) / 1000 / DURATION);
         render(current);
       };
       gsap.ticker.add(tick);
       cleanupTick = () => {
         gsap.ticker.remove(tick);
-        unlock();
+        io.disconnect();
       };
     }, wrap);
 
-    // Re-measure once the page-in fade has settled, so pin positions are exact.
-    const refreshTimer = window.setTimeout(() => ScrollTrigger.refresh(), 800);
-
     return () => {
-      window.clearTimeout(refreshTimer);
       cleanupTick();
       ctx.revert();
       scrollState.progress = 0;

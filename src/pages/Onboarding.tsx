@@ -37,9 +37,27 @@ export default function Onboarding() {
   const step: StepKey = STEPS[stepIndex];
 
   const [age, setAge] = useState('');
-  const [income, setIncome] = useState('');
-  const [expense, setExpense] = useState('');
-  const [savings, setSavings] = useState('');
+  const [income, setIncomeRaw] = useState('');
+  const [expense, setExpenseRaw] = useState('');
+  const [savings, setSavingsRaw] = useState('');
+  // Savings is calculated (income - expense) until the person types their own figure.
+  const [savingsManual, setSavingsManual] = useState(false);
+
+  const autoSavings = (inc: string, exp: string) =>
+    inc === '' || exp === '' ? '' : String(Math.max(0, (Number(inc) || 0) - (Number(exp) || 0)));
+  const setIncome = (v: string) => {
+    setIncomeRaw(v);
+    if (!savingsManual) setSavingsRaw(autoSavings(v, expense));
+  };
+  const setExpense = (v: string) => {
+    setExpenseRaw(v);
+    if (!savingsManual) setSavingsRaw(autoSavings(income, v));
+  };
+  const setSavings = (v: string) => {
+    // Clearing the box hands control back to the automatic calculation.
+    setSavingsManual(v !== '');
+    setSavingsRaw(v === '' ? autoSavings(income, expense) : v);
+  };
 
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
 
@@ -114,6 +132,7 @@ export default function Onboarding() {
               setExpense={setExpense}
               savings={savings}
               setSavings={setSavings}
+              savingsAuto={!savingsManual && savings !== ''}
               onBack={() => goTo(0)}
               onSkip={() => goTo(2)}
               onSkipAll={skipAll}
@@ -133,6 +152,13 @@ export default function Onboarding() {
               onSkipAll={skipAll}
               onSave={() => goTo(3)}
               onImportBroker={goImport}
+              onPickCategory={(cat) => {
+                // Hand straight over to the real Add Asset flow (type tiles, then the details form).
+                completeOnboarding();
+                navigate('/wealth', {
+                  state: { startAddAsset: cat.key, startStep: cat.types.length <= 1 ? 'details' : 'type' },
+                });
+              }}
             />
           )}
 
@@ -234,6 +260,7 @@ interface ProfileStepProps {
   setExpense: (v: string) => void;
   savings: string;
   setSavings: (v: string) => void;
+  savingsAuto: boolean;
   onBack: () => void;
   onSkip: () => void;
   onSkipAll: () => void;
@@ -249,6 +276,7 @@ function ProfileStep({
   setExpense,
   savings,
   setSavings,
+  savingsAuto,
   onBack,
   onSkip,
   onSkipAll,
@@ -284,6 +312,7 @@ function ProfileStep({
           value={savings}
           onChange={setSavings}
           placeholder="e.g. 30,000"
+          auto={savingsAuto}
         />
       </div>
 
@@ -297,22 +326,30 @@ function Field({
   value,
   onChange,
   placeholder,
+  auto = false,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   placeholder: string;
+  /** Value was calculated automatically: shown with a green outline and an "Auto" tag. Still editable. */
+  auto?: boolean;
 }) {
   return (
     <div>
-      <label className="block text-xs text-muted mb-1.5">{label}</label>
+      <label className="flex items-center justify-between text-xs text-muted mb-1.5">
+        <span>{label}</span>
+        {auto && <span className="text-[11px] font-medium text-brand-600">Auto · income − expense</span>}
+      </label>
       <input
         type="number"
         inputMode="decimal"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full border border-line bg-white dark:bg-slate-800 rounded-lg px-3.5 py-2.5 text-sm text-ink placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+        className={`w-full border bg-white dark:bg-slate-800 rounded-lg px-3.5 py-2.5 text-sm text-ink placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-brand-500 ${
+          auto ? 'border-brand-600 ring-1 ring-brand-600' : 'border-line'
+        }`}
       />
     </div>
   );
@@ -326,19 +363,17 @@ function AssetsStep({
   onSkipAll,
   onSave,
   onImportBroker,
+  onPickCategory,
 }: {
   selected: string[];
   setSelected: (v: string[]) => void;
+  onPickCategory: (cat: (typeof ASSET_TAXONOMY)[number]) => void;
   onBack: () => void;
   onSkip: () => void;
   onSkipAll: () => void;
   onSave: () => void;
   onImportBroker: (file: File) => void;
 }) {
-  const toggle = (key: string) => {
-    setSelected(selected.includes(key) ? selected.filter((k) => k !== key) : [...selected, key]);
-  };
-
   // Clicking "Import from Broker" opens the OS file picker immediately —
   // no intermediate screen to click through first. The file is handed off
   // to the /import page (see pendingImportFile) once one is chosen.
@@ -393,18 +428,14 @@ function AssetsStep({
       <p className="text-xs text-muted mb-2">Asset Type</p>
       <div className="grid grid-cols-2 gap-3">
         {ASSET_TAXONOMY.map((cat) => {
-          const isSelected = selected.includes(cat.key);
           const Icon = cat.icon;
           return (
             <button
               key={cat.key}
               type="button"
-              onClick={() => toggle(cat.key)}
-              className={`flex flex-col items-center gap-1.5 rounded-xl border p-4 text-center transition-colors ${
-                isSelected
-                  ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/30'
-                  : 'border-line hover:bg-surface-hover'
-              }`}
+              onClick={() => onPickCategory(cat)}
+              className="flex flex-col items-center gap-1.5 rounded-xl border border-line p-4 text-center transition-colors hover:bg-surface-hover hover:border-brand-500"
+
             >
               <Icon size={18} className="text-slate-600 dark:text-slate-300" />
               <span className="text-sm font-medium text-ink">{cat.label}</span>
@@ -416,7 +447,7 @@ function AssetsStep({
         })}
       </div>
 
-      <StepNav onBack={onBack} onSkip={onSkip} onSkipAll={onSkipAll} onNext={onSave} nextLabel="Save" nextDisabled={selected.length === 0} />
+      <StepNav onBack={onBack} onSkip={onSkip} onSkipAll={onSkipAll} onNext={onSave} nextLabel="Continue" />
     </div>
   );
 }

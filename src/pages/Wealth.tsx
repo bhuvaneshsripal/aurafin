@@ -376,13 +376,14 @@ export default function Wealth() {
   // via navigation state so this page can jump straight into Step 2 of the
   // add flow instead of making the person pick the category again.
   useEffect(() => {
-    const startAddAsset = (location.state as { startAddAsset?: string } | null)?.startAddAsset;
+    const navState = location.state as { startAddAsset?: string; startStep?: 'type' | 'details' } | null;
+    const startAddAsset = navState?.startAddAsset;
     if (startAddAsset) {
       setStartCategoryKey(startAddAsset);
       const next = new URLSearchParams(searchParams);
       next.set('add', '1');
       next.set('entry', 'asset');
-      next.set('step', 'details');
+      next.set('step', navState?.startStep ?? 'details');
       next.set('cat', startAddAsset);
       navigate({ pathname: location.pathname, search: next.toString() }, { replace: true, state: null });
     }
@@ -1097,7 +1098,19 @@ function AssetsTab({
   const togglePrivacy = useUiStore((s) => s.togglePrivacy);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Asset | null>(null);
-  useModalBackClose(modalOpen, () => setModalOpen(false));
+  // When Edit was opened from a holding's detail page, closing it (phone Back, the arrow, or
+  // after saving) returns to that detail page instead of dropping to the assets list.
+  const editReturnRef = useRef<Asset | null>(null);
+  const closeEdit = () => {
+    setModalOpen(false);
+    const back = editReturnRef.current;
+    editReturnRef.current = null;
+    if (back) {
+      setListReturning(false);
+      setViewingAsset(back);
+    }
+  };
+  useModalBackClose(modalOpen, closeEdit);
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(() => searchParams.get('q') ?? '');
   const isSearching = search.trim().length > 0;
@@ -1618,7 +1631,7 @@ function AssetsTab({
     if (!user) return;
     try {
       await upsertDoc(user, 'assets', asset);
-      setModalOpen(false);
+      closeEdit();
     } catch (err) {
       console.error('Failed to save asset', err);
       toast.error('Could not save this asset. Please check your connection and try again.');
@@ -1814,7 +1827,8 @@ function AssetsTab({
         .filter((r): r is (typeof sortedRows)[number] => !!r))
     : sortedRows;
 
-  const openEdit = (a: Asset) => {
+  const openEdit = (a: Asset, fromDetail = false) => {
+    editReturnRef.current = fromDetail ? a : null;
     // Remember the list's scroll spot (unless we came from a detail page,
     // which already saved it) so Back returns to the same place.
     if (!viewingAsset) listScrollPosRef.current = window.scrollY;
@@ -1831,7 +1845,7 @@ function AssetsTab({
           key={editing.id}
           initial={editing}
           onSave={handleSave}
-          onClose={() => setModalOpen(false)}
+          onClose={closeEdit}
         />
       </div>
     );
@@ -1853,7 +1867,7 @@ function AssetsTab({
       onBack: closeViewing,
       onEdit: (a: Asset) => {
         setViewingAsset(null);
-        openEdit(a);
+        openEdit(a, true);
       },
       onDelete: async (id: string) => {
         await handleDelete(id);
@@ -2558,16 +2572,6 @@ function AssetsTab({
                             skeleton
                           ) : (
                             <div className="flex items-center justify-end gap-3">
-                              {marketOpen && r.previousClose !== undefined && r.currentPrice !== undefined && (
-                                <span className="hidden xl:block">
-                                  <Sparkline
-                                    seed={a.symbol ?? a.id}
-                                    previousClose={r.previousClose}
-                                    currentPrice={dayChangeResetActive ? r.previousClose : r.currentPrice}
-                                    progress={dayChangeResetActive ? 0 : marketSessionProgress}
-                                  />
-                                </span>
-                              )}
                               <div>
                                 <div className="font-normal text-ink">
                                   {r.currentPrice !== undefined

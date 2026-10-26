@@ -142,11 +142,13 @@ export default function TransactionsTab() {
   const allTransactions = useTransactionsStore((s) => s.transactions);
   const user = useAuthStore((s) => s.user);
   const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
-  const transactionsServerConfirmed = useSyncStatusStore((s) => s.transactionsServerConfirmed);
+  // Income / expense totals come from saved entries, not live prices, so show them as soon as the
+  // first snapshot (cache or server) has arrived instead of waiting for server confirmation.
+  const transactionsLoaded = useSyncStatusStore((s) => !!s.loadedCollections['transactions']);
   // Same "already known, or server-confirmed empty" reasoning as
   // Dashboard.tsx — otherwise this briefly flashes "0 in · 0 out" while
   // transactions are still loading, most visible on a slower connection.
-  const cashflowDataKnown = transactionsServerConfirmed;
+  const cashflowDataKnown = transactionsLoaded;
   const transactions = useMemo(
     () => (activeProfileId ? allTransactions.filter((t) => t.profileId === activeProfileId) : allTransactions),
     [allTransactions, activeProfileId]

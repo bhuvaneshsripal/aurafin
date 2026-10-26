@@ -287,10 +287,7 @@ export default function TopHeader() {
       </Modal>
 
       {signingOut && (
-        <div className="animate-backdrop-in fixed inset-0 z-[200] flex flex-col items-center justify-center gap-3 bg-page">
-          <img src="/logo-icon.png" alt="Aurafin" className="h-12 w-12 rounded-full object-cover" />
-          <p className="text-sm font-medium text-muted">Logging out…</p>
-        </div>
+        <div className="animate-backdrop-in fixed inset-0 z-[200] flex flex-col items-center justify-center gap-3 bg-page"></div>
       )}
     </>
   );

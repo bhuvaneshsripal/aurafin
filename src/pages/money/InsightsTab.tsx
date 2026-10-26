@@ -83,12 +83,14 @@ export default function InsightsTab() {
   const allTransactions = useTransactionsStore((s) => s.transactions);
   const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
   const budgetItems = useBudgetStore((s) => s.items);
-  const transactionsServerConfirmed = useSyncStatusStore((s) => s.transactionsServerConfirmed);
+  // Income / expense totals come from saved entries, not live prices, so show them as soon as the
+  // first snapshot (cache or server) has arrived instead of waiting for server confirmation.
+  const transactionsLoaded = useSyncStatusStore((s) => !!s.loadedCollections['transactions']);
   const privacyMode = useUiStore((s) => s.privacyMode);
   // Same "already known, or server-confirmed empty" reasoning as
   // Dashboard.tsx — otherwise Income/Spent briefly flash ₹0 while
   // transactions are still loading.
-  const cashflowDataKnown = transactionsServerConfirmed;
+  const cashflowDataKnown = transactionsLoaded;
   const thisMonth = toIsoMonth();
   const [month, setMonth] = useState(thisMonth);
   const [flow, setFlow] = useState<TransactionType>('expense');

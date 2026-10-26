@@ -64,8 +64,8 @@ export async function showSystemNotification(title: string, body: string, tag: s
   const options: NotificationOptions & { vibrate?: number[]; renotify?: boolean } = {
     body,
     tag,
-    icon: '/favicon-192.png',
-    badge: '/favicon-192.png',
+    icon: '/logo-icon.png',
+    badge: '/notification-badge.png',
     vibrate: [120, 60, 120],
     renotify: true,
   };
