@@ -140,7 +140,7 @@ import { fetchLivePrices, fetchFxRate, searchStockSymbols, type StockSearchResul
 import { buildCategoryBreakdown, type CategoryBreakdown } from '../utils/portfolioAnalytics';
 import { useAnalyticsData } from './analytics/useAnalyticsData';
 import CategoryBreakdownList from './analytics/CategoryBreakdown';
-import { useDayChangeResetWindow, useMarketSessionProgress, useIsMarketOpen } from '../utils/marketHours';
+import { useDayChangeResetWindow } from '../utils/marketHours';
 import { useUrlTab } from '../hooks/useUrlTab';
 import CompanyLogo from '../components/CompanyLogo';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
@@ -253,109 +253,6 @@ function defaultAssetClassRank(a: Asset): number {
  */
 function formatGrams(qty: number): string {
   return (Math.round(qty * 10000) / 10000).toString();
-}
-
-/** Tiny deterministic PRNG (mulberry32) seeded from a string, so a given
- *  holding's sparkline jaggedness looks the same on every render/refresh
- *  instead of reshuffling — same idea as a real chart being stable
- *  between renders. */
-function seededRandom(seed: string): () => number {
-  let h = 1779033703 ^ seed.length;
-  for (let i = 0; i < seed.length; i++) {
-    h = Math.imul(h ^ seed.charCodeAt(i), 3432918353);
-    h = (h << 13) | (h >>> 19);
-  }
-  return () => {
-    h = Math.imul(h ^ (h >>> 16), 2246822507);
-    h = Math.imul(h ^ (h >>> 13), 3266489909);
-    h ^= h >>> 16;
-    return (h >>> 0) / 4294967296;
-  };
-}
-
-/**
- * Builds a jagged, broker-app-style sparkline for a holding. There's no
- * free source of real intraday tick history for NSE symbols (only the
- * current price + previous close), so the path in between is synthetic —
- * but the two endpoints are pinned exactly to the real previous close and
- * real current price, so the overall slope, direction, and total % move
- * always stay accurate even though the individual ticks are stylized.
- * The jitter is deterministic per holding (seeded, not re-randomized on
- * every 10s price refresh) so the line doesn't visibly reshuffle.
- */
-function buildSparklinePath(
-  seed: string,
-  previousClose: number,
-  currentPrice: number,
-  progress: number,
-  width = 108,
-  height = 32
-): string {
-  const rand = seededRandom(seed);
-  // Jaggedness resolution stays fixed regardless of how much of the
-  // session has elapsed — only how much of the *width* the line covers
-  // changes with progress. Otherwise, early in the day there are too few
-  // points to draw anything but a single straight diagonal segment.
-  const points = 10;
-  const priceRange = Math.abs(currentPrice - previousClose) || previousClose * 0.004 || 1;
-  const vals: number[] = [];
-  for (let i = 0; i < points; i++) {
-    const t = i / (points - 1);
-    const base = previousClose + (currentPrice - previousClose) * t;
-    if (i === 0 || i === points - 1) {
-      // Endpoints stay exact: the line always starts at the real previous
-      // close and ends at the real current price, wherever "now" falls.
-      vals.push(base);
-    } else {
-      const jitter = (rand() - 0.5) * priceRange * 1.1;
-      vals.push(base + jitter);
-    }
-  }
-  const min = Math.min(...vals);
-  const max = Math.max(...vals);
-  const range = max - min || 1;
-  const pad = 3;
-  // The line is squeezed into just the elapsed fraction of the width —
-  // e.g. ~20% across if the market's been open ~20% of the session —
-  // rather than being stretched to fill the whole column before the
-  // trading day is actually over. A small floor keeps something visible
-  // right at open instead of a zero-width line.
-  const visibleWidth = Math.max(6, width * Math.min(1, Math.max(0, progress)));
-  return vals
-    .map((v, i) => {
-      const x = (i / (points - 1)) * visibleWidth;
-      const y = pad + (1 - (v - min) / range) * (height - pad * 2);
-      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(' ');
-}
-
-/** Small inline sparkline used in the Holdings table — see buildSparklinePath.
- *  width/height are overridable so the compact mobile list can use a
- *  smaller version than the desktop table without duplicating the component. */
-function Sparkline({
-  seed,
-  previousClose,
-  currentPrice,
-  progress,
-  width = 108,
-  height = 32,
-}: {
-  seed: string;
-  previousClose: number;
-  currentPrice: number;
-  progress: number;
-  width?: number;
-  height?: number;
-}) {
-  const trendUp = currentPrice >= previousClose;
-  const path = buildSparklinePath(seed, previousClose, currentPrice, progress, width, height);
-  const stroke = trendUp ? '#10b981' : '#ef4444';
-  return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="shrink-0" aria-hidden="true">
-      <path d={path} fill="none" stroke={stroke} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
 }
 
 export default function Wealth() {
@@ -1049,8 +946,6 @@ function AssetsTab({
   const livePrices = useLivePricesStore((s) => s.prices);
   const previousCloses = useLivePricesStore((s) => s.previousCloses);
   const dayChangeResetActive = useDayChangeResetWindow();
-  const marketSessionProgress = useMarketSessionProgress();
-  const marketOpen = useIsMarketOpen();
   const sipValues = useLivePricesStore((s) => s.sipValues);
   const pricesAttempted = useLivePricesStore((s) => s.pricesAttempted);
   const sipValuesAttempted = useLivePricesStore((s) => s.sipValuesAttempted);

@@ -10,7 +10,7 @@ import {
   sendPasswordResetEmail,
   type User,
 } from 'firebase/auth';
-import { auth, googleProvider } from '../firebase/config';
+import { auth, googleProvider, isFirebaseConfigured } from '../firebase/config';
 import { useSyncStatusStore } from './syncStatusStore';
 import { clearDataBackups } from '../utils/dataBackup';
 
@@ -120,6 +120,14 @@ const cachedUser = readCachedUser();
 // re-ran and re-rendered redundantly.
 let authInitialized = false;
 
+function assertFirebaseConfigured() {
+  if (!isFirebaseConfigured) {
+    throw Object.assign(new Error('Firebase environment settings are missing.'), {
+      code: 'auth/configuration-not-found',
+    });
+  }
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   // Hydrate synchronously from the last known session so the very first
   // render already has a user (when one exists) instead of starting blank
@@ -131,6 +139,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   init: () => {
     if (authInitialized) return;
     authInitialized = true;
+    if (!isFirebaseConfigured) {
+      writeCachedUser(null);
+      set({ user: null, loading: false, verifying: false, needsOnboarding: false });
+      return;
+    }
 
     let resolved = false;
     onAuthStateChanged(
@@ -169,6 +182,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }, fallbackDelay);
   },
   loginWithGoogle: async () => {
+    assertFirebaseConfigured();
     const result = await signInWithPopup(auth, googleProvider);
     if (getAdditionalUserInfo(result)?.isNewUser) {
       safeSet(onboardingKey(result.user.uid), 'true');
@@ -176,14 +190,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
   loginWithEmail: async (email, password) => {
+    assertFirebaseConfigured();
     await signInWithEmailAndPassword(auth, email, password);
   },
   registerWithEmail: async (email, password) => {
+    assertFirebaseConfigured();
     const result = await createUserWithEmailAndPassword(auth, email, password);
     safeSet(onboardingKey(result.user.uid), 'true');
     set({ needsOnboarding: true });
   },
   resetPassword: async (email) => {
+    assertFirebaseConfigured();
     try {
       await sendPasswordResetEmail(auth, email.trim());
     } catch (e) {
@@ -194,6 +211,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
   loginAsGuest: async () => {
+    assertFirebaseConfigured();
     const result = await signInAnonymously(auth);
     // Guests need to see onboarding/intro questions just like new sign-ups
     safeSet(onboardingKey(result.user.uid), 'true');

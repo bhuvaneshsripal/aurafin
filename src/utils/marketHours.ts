@@ -37,13 +37,15 @@ export const MARKET_HOLIDAYS = new Set<string>([
 
 /** Current wall-clock time in India (Asia/Kolkata), regardless of the
  *  device's own timezone. */
+const istTimeFormatter = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Kolkata',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
+
 export function getIstTimeOfDay(now: Date = new Date()): { hour: number; minute: number } {
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Asia/Kolkata',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(now);
+  const parts = istTimeFormatter.formatToParts(now);
   const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? '0');
   const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? '0');
   return { hour, minute };
@@ -53,14 +55,16 @@ export function getIstTimeOfDay(now: Date = new Date()): { hour: number; minute:
  *  weekday (1 = Monday ... 7 = Sunday), independent of the device's own
  *  timezone/locale. Used to key "have we already sent this week's digest"
  *  so it fires once per Saturday rather than every time the check runs. */
+const istDateFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Kolkata',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  weekday: 'short',
+});
+
 export function getIstDateInfo(now: Date = new Date()): { dateKey: string; isoWeekday: number } {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Kolkata',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    weekday: 'short',
-  }).formatToParts(now);
+  const parts = istDateFormatter.formatToParts(now);
   const year = parts.find((p) => p.type === 'year')?.value ?? '1970';
   const month = parts.find((p) => p.type === 'month')?.value ?? '01';
   const day = parts.find((p) => p.type === 'day')?.value ?? '01';
@@ -106,8 +110,8 @@ export function useDayChangeResetWindow(): boolean {
  *  sparkline at all. */
 export function isMarketOpen(now: Date = new Date()): boolean {
   const { hour, minute } = getIstTimeOfDay(now);
-  const { isoWeekday } = getIstDateInfo(now);
-  if (isoWeekday > 5 || MARKET_HOLIDAYS.has(getIstDateInfo(now).dateKey)) return false; // weekend or listed holiday
+  const { dateKey, isoWeekday } = getIstDateInfo(now);
+  if (isoWeekday > 5 || MARKET_HOLIDAYS.has(dateKey)) return false; // weekend or listed holiday
   const minutesSinceMidnight = hour * 60 + minute;
   const marketOpen = MARKET_OPEN_HOUR * 60 + MARKET_OPEN_MINUTE;
   const marketClose = MARKET_CLOSE_HOUR * 60 + MARKET_CLOSE_MINUTE;

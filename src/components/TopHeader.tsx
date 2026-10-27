@@ -12,7 +12,7 @@ import ProfileSwitcher from './ProfileSwitcher';
 import AppLogo from './AppLogo';
 import GlobalSearch from './GlobalSearch';
 import NotificationBell from './NotificationBell';
-import MarketTicker, { MarketTickerMarquee } from './MarketTicker';
+import MarketTicker, { MarketTickerMarquee, useIndexQuotes } from './MarketTicker';
 import { Button, IconButton } from './ui';
 import UpdateDot from './UpdateDot';
 import { PortfolioExportModal } from './PortfolioExportModal';
@@ -32,6 +32,9 @@ export default function TopHeader() {
   const lockNow = useAppLockStore((s) => s.lockNow);
   const navigate = useNavigate();
   const location = useLocation();
+  // Both responsive ticker layouts stay mounted; share one request loop instead
+  // of letting the hidden desktop/mobile copy poll the market API as well.
+  const tickerQuotes = useIndexQuotes();
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -120,7 +123,7 @@ export default function TopHeader() {
         {/* Desktop */}
         {/* Market indices, then the globe button (opens the All Indices page). */}
         <div className="hidden md:flex flex-1 items-center gap-3 min-w-0">
-          <MarketTicker />
+          <MarketTicker quotes={tickerQuotes} />
           <IconButton
             label="All indices"
             onClick={() => navigate('/indices')}
@@ -266,7 +269,7 @@ export default function TopHeader() {
       </div>
 
       {/* Mobile only: scrolling index strip pinned just under the top bar. */}
-      <MarketTickerMarquee id="app-marquee" className="md:hidden sticky top-14 z-20" />
+      <MarketTickerMarquee id="app-marquee" className="md:hidden sticky top-14 z-20" quotes={tickerQuotes} />
 
       <PortfolioExportModal open={reportOpen} onClose={() => setReportOpen(false)} />
 

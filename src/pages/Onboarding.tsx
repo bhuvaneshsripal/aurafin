@@ -59,8 +59,6 @@ export default function Onboarding() {
     setSavingsRaw(v === '' ? autoSavings(income, expense) : v);
   };
 
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
-
   const goTo = (i: number) => setStepIndex(Math.max(0, Math.min(STEPS.length - 1, i)));
 
   const saveProfile = async () => {
@@ -77,11 +75,7 @@ export default function Onboarding() {
 
   const finish = () => {
     completeOnboarding();
-    if (selectedTypes[0]) {
-      navigate('/wealth', { state: { startAddAsset: selectedTypes[0] } });
-    } else {
-      navigate('/');
-    }
+    navigate('/');
   };
 
   const skipAll = () => {
@@ -145,8 +139,6 @@ export default function Onboarding() {
 
           {step === 'assets' && (
             <AssetsStep
-              selected={selectedTypes}
-              setSelected={setSelectedTypes}
               onBack={() => goTo(1)}
               onSkip={() => goTo(3)}
               onSkipAll={skipAll}
@@ -356,8 +348,6 @@ function Field({
 }
 
 function AssetsStep({
-  selected,
-  setSelected,
   onBack,
   onSkip,
   onSkipAll,
@@ -365,8 +355,6 @@ function AssetsStep({
   onImportBroker,
   onPickCategory,
 }: {
-  selected: string[];
-  setSelected: (v: string[]) => void;
   onPickCategory: (cat: (typeof ASSET_TAXONOMY)[number]) => void;
   onBack: () => void;
   onSkip: () => void;

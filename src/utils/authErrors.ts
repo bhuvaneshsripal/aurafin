@@ -4,6 +4,7 @@
 // `.code` field (present on every Firebase Auth error) to plain, professional
 // copy, and only falls back to a generic message for anything unrecognized.
 const AUTH_ERROR_MESSAGES: Record<string, string> = {
+  'auth/configuration-not-found': 'Sign-in is not configured in this installation. Add the Firebase environment settings and reload.',
   'auth/invalid-email': 'That email address doesn\u2019t look right. Please check it and try again.',
   'auth/user-disabled': 'This account has been disabled. Please contact support if you think that\u2019s a mistake.',
   'auth/user-not-found': 'We couldn\u2019t find an account with that email. Check the address or sign up instead.',

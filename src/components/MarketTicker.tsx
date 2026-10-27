@@ -52,7 +52,8 @@ function readCachedQuotes(): IndexQuote[] | undefined {
   }
 }
 
-function useIndexQuotes() {
+// eslint-disable-next-line react/only-export-components -- shared by the responsive ticker variants
+export function useIndexQuotes() {
   const [quotes, setQuotes] = useState<IndexQuote[] | null | undefined>(readCachedQuotes); // undefined = loading
 
   useEffect(() => {
@@ -155,8 +156,7 @@ function renderItems(quotes: IndexQuote[] | null | undefined) {
 }
 
 /** Desktop: static strip in the top bar. */
-export default function MarketTicker() {
-  const quotes = useIndexQuotes();
+export default function MarketTicker({ quotes }: { quotes: IndexQuote[] | null | undefined }) {
   const items = renderItems(quotes);
 
   // Static strip, always the full "NAME  level  ±points (±pct%)", spread evenly.
@@ -173,8 +173,15 @@ export default function MarketTicker() {
 /** Mobile: a thin one-line bar under the top bar. Each index shows
  *  NAME  level  ±points (±pct%) on a single line, and the person swipes the
  *  bar sideways to see all three (NIFTY, SENSEX, BANKNIFTY). */
-export function MarketTickerMarquee({ className, id }: { className?: string; id?: string }) {
-  const quotes = useIndexQuotes();
+export function MarketTickerMarquee({
+  className,
+  id,
+  quotes,
+}: {
+  className?: string;
+  id?: string;
+  quotes: IndexQuote[] | null | undefined;
+}) {
   return (
     <div
       id={id}

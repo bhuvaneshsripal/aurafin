@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Eye, EyeOff, Moon, Sun } from 'lucide-react';
 import { useUiStore } from '../store/uiStore';
 import { useAuthStore } from '../store/authStore';
@@ -13,6 +13,39 @@ import LoginUpdateButton from '../components/LoginUpdateButton';
 
 // Cinematic growth section: loaded on demand so it adds nothing to the login page's first paint.
 const GrowthJourney = lazy(() => import('../components/growth/GrowthJourney'));
+
+/** Keep GSAP and the cinematic section off the initial login download. */
+function DeferredGrowthJourney() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [nearView, setNearView] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || nearView) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      setNearView(true);
+      return;
+    }
+    const io = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setNearView(true);
+        io.disconnect();
+      }
+    }, { rootMargin: '800px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [nearView]);
+
+  return (
+    <div ref={ref} className="w-full">
+      {nearView && (
+        <Suspense fallback={null}>
+          <GrowthJourney />
+        </Suspense>
+      )}
+    </div>
+  );
+}
 
 function FieldError({ message }: { message: string }) {
   return (
@@ -206,9 +239,7 @@ export default function Login() {
           <LoginShowcase onCta={() => openAuth('register')} />
         </div>
         <StockAnalysisArticle />
-        <Suspense fallback={null}>
-          <GrowthJourney />
-        </Suspense>
+        <DeferredGrowthJourney />
         <footer className="py-6 text-center text-xs text-ink-2">
           <a href="/privacy" className="hover:underline">Privacy Policy</a>
           <span className="mx-2" aria-hidden>·</span>

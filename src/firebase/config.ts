@@ -7,8 +7,18 @@ import { isSupported, getAnalytics, type Analytics } from 'firebase/analytics';
 // Create a project at https://console.firebase.google.com, enable
 // Authentication (Email/Password + Google) and Firestore, then paste
 // the config values below or into a .env file (see .env.example).
+export const isFirebaseConfigured = Boolean(
+  import.meta.env.VITE_FIREBASE_API_KEY &&
+  import.meta.env.VITE_FIREBASE_PROJECT_ID &&
+  import.meta.env.VITE_FIREBASE_APP_ID
+);
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? '',
+  // Firebase throws synchronously for an empty API key, before React's error
+  // boundary can render. A non-empty placeholder keeps a misconfigured/local
+  // installation on the login screen, where auth actions report a usable
+  // error instead of leaving a blank page. Real deployments use the env value.
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'firebase-not-configured',
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ?? '',
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ?? '',
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ?? '',
