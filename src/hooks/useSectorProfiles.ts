@@ -47,7 +47,7 @@ export function useSectorProfiles(assets: Asset[]) {
           const chunk = entries.slice(i, i + BATCH);
           try {
             const res = await fetch(
-              `/api/market/sector?market=${market}&symbols=${encodeURIComponent(chunk.map(([, v]) => v.symbol).join(','))}`
+              `/api/market/valuation?mode=sector&market=${market}&symbols=${encodeURIComponent(chunk.map(([, v]) => v.symbol).join(','))}`
             );
             if (!res.ok) continue; // leave uncached → retried next visit
             const data = (await res.json()) as Record<string, SectorProfile | null>;

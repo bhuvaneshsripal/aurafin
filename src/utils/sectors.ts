@@ -7,7 +7,7 @@ import type { Asset } from '../types';
  *   1. its asset class (physical gold / SGB / silver are the Gold / Silver sector),
  *   2. the built-in NSE/US symbol map below,
  *   3. the company profile Yahoo Finance publishes (sector + industry, fetched via
- *      /api/market/sector and cached on the device),
+ *      /api/market/valuation?mode=sector and cached on the device),
  *   4. keywords in the fund / ETF name.
  * Anything that still can't be placed is shown as "Unclassified" rather than guessed.
  */
@@ -67,7 +67,7 @@ const RAW_MAP: Record<string, string> = {
     'SUNPHARMA DRREDDY CIPLA DIVISLAB LUPIN AUROPHARMA TORNTPHARM ZYDUSLIFE ALKEM MANKIND BIOCON GLENMARK APOLLOHOSP MAXHEALTH FORTIS LALPATHLAB METROPOLIS ABBOTINDIA IPCALAB LAURUSLABS GRANULES NATCOPHARM AJANTPHARM SYNGENE PFIZER GLAXO SANOFI JBCHEPHARM GLAND KIMS NARAYANA RAINBOW MEDANTA THYROCARE ERIS CAPLIPOINT SUVEN ' +
     'JNJ PFE UNH LLY MRK ABBV TMO ABT',
   fmcg:
-    'HINDUNILVR ITC NESTLEIND BRITANNIA DABUR MARICO GODREJCP COLPAL TATACONSUM UBL UNITDSPR MCDOWELL-N VBL RADICO EMAMILTD PATANJALI BIKAJI GILLETTE PGHH HATSUN JYOTHYLAB BAJAJCON AWL ZYDUSWELL GODFRYPHLP VSTIND ' +
+    'HINDUNILVR ITC NESTLEIND BRITANNIA DABUR MARICO GODREJCP COLPAL TATACONSUM UBL UNITDSPR MCDOWELL-N VBL RADICO EMAMILTD PATANJALI BIKAJI GILLETTE PGHH HATSUN JYOTHYLAB BAJAJCON AWL ZYDUSWELL GODFRYPHLP VSTIND CUPID ' +
     'KO PEP PG WMT COST PM MDLZ',
   auto:
     'MARUTI TATAMOTORS M&M BAJAJ-AUTO EICHERMOT HEROMOTOCO TVSMOTOR ASHOKLEY BOSCHLTD MOTHERSON BALKRISIND MRF APOLLOTYRE CEATLTD SONACOMS UNOMINDA ESCORTS TIINDIA ENDURANCE EXIDEIND ARE&M OLAELEC TATAMTRDVR FORCEMOT SUNDRMFAST JKTYRE MINDACORP ' +
@@ -81,7 +81,7 @@ const RAW_MAP: Record<string, string> = {
     'TATASTEEL JSWSTEEL HINDALCO VEDL SAIL JINDALSTEL NMDC HINDZINC NATIONALUM APLAPOLLO JSL LLOYDSME WELCORP RATNAMANI MOIL JINDALSAW GVKPIL SHYAMMETL ' +
     'FCX AA NUE X CLF',
   gold:
-    'MUTHOOTFIN MANAPPURAM KALYANKJIL SENCO THANGAMAYL PNGJL RAJESHEXPO GOLDIAM SKYGOLD MOTISONS TBZ RBZJEWEL ' +
+    'MUTHOOTFIN MANAPPURAM KALYANKJIL SENCO THANGAMAYL PNGJL LALITHAA LALITHAAJEWELLERY RAJESHEXPO GOLDIAM SKYGOLD MOTISONS TBZ RBZJEWEL ' +
     'GOLDBEES GOLDIETF GOLDCASE AXISGOLD HDFCGOLD KOTAKGOLD SBIGETS LICMFGOLD GOLDSHARE QGOLDHALF BSLGOLDETF TATAGOLD GOLD1 ' +
     'NEM AEM FNV WPM GFI KGC GDX GDXJ GLD IAU SGOL',
   silver: 'SILVERBEES SILVERIETF SILVER1 HDFCSILVER AXISILVER ' + 'SLV PAAS AG HL',
@@ -91,7 +91,7 @@ const RAW_MAP: Record<string, string> = {
     'SIEMENS ABB HAL BEL BDL MAZDOCK COCHINSHIP GRSE BHEL CUMMINSIND THERMAX HONAUT POLYCAB KEI HAVELLS CGPOWER BEML ASTRAMICRO DATAPATTNS ZENTEC PARAS ELGIEQUIP KIRLOSENG LAKSHMIMACH GRINDWELL AIAENG SKFINDIA TIMKEN DIXON FINCABLES APARINDS SOLARINDS HBLENGINE BHARATFORG KAYNES AMBER VOLTAMP TRIVENI GENUSPOWER ' +
     'BA LMT RTX GE CAT DE HON',
   realty: 'DLF GODREJPROP OBEROIRLTY PRESTIGE PHOENIXLTD LODHA MACROTECH BRIGADE SOBHA MAHLIFE SIGNATURE ANANTRAJ DBREALTY KOLTEPATIL',
-  telecom: 'BHARTIARTL IDEA INDUSTOWER TATACOMM HFCL TEJASNET RAILTEL ROUTE TTML STLTECH ' + 'T VZ TMUS',
+  telecom: 'BHARTIARTL IDEA VODAFONEIDEA VI JIOPLATFORMS JIO INDUSTOWER TATACOMM HFCL TEJASNET RAILTEL ROUTE TTML STLTECH ' + 'T VZ TMUS',
   chemicals:
     'PIDILITIND SRF UPL AARTIIND DEEPAKNTR NAVINFLUOR TATACHEM PIIND ATUL VINATIORG CHAMBLFERT COROMANDEL FACT RCF GNFC GSFC SUMICHEM CLEAN BASF ALKYLAMINE FINEORG GALAXYSURF TATVA ANURAS BALAMINES LXCHEM PCBL',
   cement: 'ULTRACEMCO GRASIM AMBUJACEM ACC SHREECEM DALBHARAT JKCEMENT RAMCOCEM JKLAKSHMI NUVOCO HEIDELBERG BIRLACORPN STARCEMENT SAGCEM ORIENTCEM CERA KAJARIACER CENTURYPLY GREENPANEL ASTRAL SUPREMEIND',
@@ -119,6 +119,20 @@ export function normaliseSymbol(symbol: string | undefined): string {
 export function sectorFromSymbol(symbol: string | undefined): string | undefined {
   const s = normaliseSymbol(symbol);
   return s ? SYMBOL_SECTOR.get(s) : undefined;
+}
+
+// ------------------------------------------------------- company-name rules
+/** Fallback for stocks whose ticker isn't in the map and that Yahoo has no profile for (e.g. brand-new listings). */
+const NAME_RULES: [RegExp, string][] = [
+  [/jewel|jewell?ers|\bgold\b/i, 'gold'],
+  [/jio platforms|\bjio\b|vodafone|bharti airtel|\bairtel\b|\bidea\b|telecom|tower corp/i, 'telecom'],
+  [/cupid/i, 'fmcg'],
+];
+
+export function sectorFromCompanyName(name: string | undefined): string | undefined {
+  if (!name) return undefined;
+  for (const [re, sector] of NAME_RULES) if (re.test(name)) return sector;
+  return undefined;
 }
 
 // ------------------------------------------------------------ Yahoo mapping
@@ -244,7 +258,7 @@ export function classifyAsset(asset: Asset, profiles: Record<string, SectorProfi
       const mapped = p ? mapYahooSector(p.sector, p.industry) : undefined;
       if (mapped) return mapped;
     }
-    return sectorFromName(nameHay) ?? 'unclassified';
+    return sectorFromCompanyName(asset.name) ?? sectorFromName(nameHay) ?? 'unclassified';
   }
 
   // ETF / mutual fund / index fund / SIP / hybrid

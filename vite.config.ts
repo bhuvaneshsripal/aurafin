@@ -11,6 +11,8 @@ import { fetchLiveGoldPricePerGram24k } from './api/_lib/gold.js'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
 import { fetchFundamentals } from './api/_lib/fundamentals.js'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
+import { fetchSectors } from './api/_lib/sector.js'
+// @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
 import { fetchIndices } from './api/_lib/indices.js'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
 import { resolveLogo } from './api/_lib/logo.js'
@@ -71,6 +73,17 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
         res.setHeader('Cache-Control', 'public, max-age=2592000, immutable')
         res.end(logo.buffer)
       } catch { res.statusCode = 502; res.end() }
+      return
+    }
+
+    if (url.pathname === '/api/market/valuation' && url.searchParams.get('mode') === 'sector') {
+      try {
+        const data = await fetchSectors(url.searchParams.get('symbols'), url.searchParams.get('market'))
+        if (!data) { send(400, { error: 'Missing symbols' }); return }
+        send(200, data)
+      } catch {
+        send(502, { error: 'Could not reach the sector source' })
+      }
       return
     }
 
