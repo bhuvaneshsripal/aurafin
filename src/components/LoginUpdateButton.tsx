@@ -3,8 +3,7 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
 import { RefreshCw } from 'lucide-react';
 import { hardRefresh } from '../utils/hardRefresh';
 import { useUpdateStore } from '../store/updateStore';
-
-const CHECK_EVERY_MS = 5 * 60 * 1000;
+import { startUpdateChecks } from '../utils/updateChecks';
 
 /** Small "Update" button for the login page's top bar. UpdateBanner only lives
  *  inside the signed-in shell, so signed-out visitors would never hear about a
@@ -20,26 +19,19 @@ export default function LoginUpdateButton() {
   } = useRegisterSW({
     onRegisteredSW(_url, reg) {
       if (!reg) return;
-      const check = () => {
-        if (navigator.onLine === false) return;
-        void reg.update().catch(() => {});
-      };
-      const onVisible = () => {
-        if (document.visibilityState === 'visible') check();
-      };
-      const id = window.setInterval(check, CHECK_EVERY_MS);
-      document.addEventListener('visibilitychange', onVisible);
-      window.addEventListener('online', check);
-      cleanupRef.current = () => {
-        window.clearInterval(id);
-        document.removeEventListener('visibilitychange', onVisible);
-        window.removeEventListener('online', check);
-      };
+      cleanupRef.current?.();
+      cleanupRef.current = startUpdateChecks(reg);
     },
   });
 
   // Stop polling when the login page goes away (the app shell starts its own).
-  useEffect(() => () => cleanupRef.current?.(), []);
+  useEffect(
+    () => () => {
+      cleanupRef.current?.();
+      cleanupRef.current = null;
+    },
+    []
+  );
 
   const setUpdateAvailable = useUpdateStore((s) => s.setUpdateAvailable);
   useEffect(() => {

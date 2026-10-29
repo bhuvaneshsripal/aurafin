@@ -100,6 +100,7 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import CurrencySelect from '../components/CurrencySelect';
 import CustomSelect from '../components/CustomSelect';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
+import { usePauseHoverOnScroll } from '../hooks/usePauseHoverOnScroll';
 import { ACCOUNT_TYPES, resolveAccountIcon, type AccountType } from '../utils/accountVisuals';
 import type { Asset, AssetClass, EpfDetails, PpfDetails, PropertyDetails, EsopDetails, FundDetails, DividendKind, Liability, LiabilityClass, Snapshot, Transaction } from '../types';
 import { useTransactionsStore } from '../store/transactionsStore';
@@ -991,6 +992,8 @@ function AssetsTab({
   const user = useAuthStore((s) => s.user);
   const privacyMode = useUiStore((s) => s.privacyMode);
   const togglePrivacy = useUiStore((s) => s.togglePrivacy);
+  // Long holdings list: stop rows re-running hover while the page scrolls.
+  usePauseHoverOnScroll();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Asset | null>(null);
   // When Edit was opened from a holding's detail page, closing it (phone Back, the arrow, or
@@ -1833,7 +1836,7 @@ function AssetsTab({
             </div>
             <Button
               variant="secondary"
-              className="hidden md:inline-flex"
+              className="max-md:hidden"
               leftIcon={<BarChart2 size={15} />}
               onClick={() => setTab('allocation')}
             >
@@ -2377,7 +2380,10 @@ function AssetsTab({
               </button>
             </div>
           )}
-          <Card padding="none" className="hidden sm:block overflow-hidden">
+          <Card
+            padding="none"
+            className={cn('hidden sm:block overflow-hidden', !draggingId && 'scroll-pause-hover')}
+          >
             <TableContainer>
               <Table className="min-w-[1020px]">
                 <THead>
@@ -8157,8 +8163,12 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
                     <span
                       className={`h-2 w-2 rounded-full shrink-0 ${snap.netWorth >= 0 ? 'bg-positive' : 'bg-negative'}`}
                     />
-                    <span className="text-sm font-medium text-ink min-w-0 truncate">{formatDate(snap.date)}</span>
-                    {isBaseline && <Badge variant="neutral">Baseline</Badge>}
+                    {/* Phones: the "Baseline" badge sits under the date so the
+                        date is never truncated. sm and up: side by side. */}
+                    <div className="min-w-0 flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-3">
+                      <span className="text-sm font-medium text-ink min-w-0 max-w-full truncate">{formatDate(snap.date)}</span>
+                      {isBaseline && <Badge variant="neutral">Baseline</Badge>}
+                    </div>
                     <span className="ml-auto font-numeric text-sm font-semibold text-ink shrink-0">
                       {maskPreciseAmount(snap.netWorth, 'INR', privacyMode)}
                     </span>

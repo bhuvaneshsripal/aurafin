@@ -5,8 +5,7 @@ import { useExitPresence } from '../hooks/useExitPresence';
 import { hardRefresh } from '../utils/hardRefresh';
 import { useUpdateStore } from '../store/updateStore';
 import { useSwipeDismiss } from '../hooks/useSwipeDismiss';
-
-const CHECK_EVERY_MS = 5 * 60 * 1000;
+import { startUpdateChecks } from '../utils/updateChecks';
 
 /** Four-point sparkle used in the notice's icon badge. */
 function SparkleIcon({ size = 26 }: { size?: number }) {
@@ -25,27 +24,31 @@ function SparkleIcon({ size = 26 }: { size?: number }) {
 /** Top notice shown when a newer version of the app has been deployed.
  *  The new service worker installs in the background and waits; tapping
  *  "Update" activates it and reloads, so nothing changes under the user
- *  mid-task. The app re-checks for a new deploy every few minutes and
- *  whenever the tab/app comes back to the foreground. */
+ *  mid-task. The app re-checks for a new deploy every 30 seconds while it is
+ *  on screen and immediately whenever it comes back to the foreground (see
+ *  utils/updateChecks). */
 export default function UpdateBanner() {
   const [updating, setUpdating] = useState(false);
+  const stopChecksRef = useRef<(() => void) | null>(null);
   const {
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
   } = useRegisterSW({
     onRegisteredSW(_url, reg) {
       if (!reg) return;
-      const check = () => {
-        if (navigator.onLine === false) return;
-        void reg.update().catch(() => {});
-      };
-      window.setInterval(check, CHECK_EVERY_MS);
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') check();
-      });
-      window.addEventListener('online', check);
+      stopChecksRef.current?.();
+      stopChecksRef.current = startUpdateChecks(reg);
     },
   });
+
+  // Stop checking when the banner goes away (it starts again on the next mount).
+  useEffect(
+    () => () => {
+      stopChecksRef.current?.();
+      stopChecksRef.current = null;
+    },
+    []
+  );
 
   // Dismissing the banner doesn't clear the red dots: the update is still pending.
   const setUpdateAvailable = useUpdateStore((s) => s.setUpdateAvailable);

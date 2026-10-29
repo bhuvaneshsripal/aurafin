@@ -390,6 +390,13 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   opacity: 0.6;
 }
 
+/* Long lists (e.g. the Wealth holdings table): while the page is scrolling, rows
+   ignore the pointer so they don't re-run hover/hit-testing as they pass under
+   the cursor. Mouse-type devices only; set by hooks/usePauseHoverOnScroll. */
+@media (hover: hover) {
+  html[data-scrolling] .scroll-pause-hover { pointer-events: none; }
+}
+
 /* Slim, quiet scrollbars where the browser draws them. */
 * {
   scrollbar-width: thin;
@@ -1232,7 +1239,9 @@ input.global-search-input:focus,
 .lp-brand-logo { width: 2rem; height: 2rem; border-radius: 9999px; }
 .lp-brand-name { font-size: 1.5rem; line-height: 1; }
 .lp-nav { display: flex; gap: 0.6rem; }
-.lp-nav-btn { font-size: 0.875rem; font-weight: 500; padding: 0.5rem 1.15rem; border-radius: 9999px; }
+.lp-nav-btn { font-size: 0.875rem; font-weight: 500; padding: 0.5rem 1.15rem; border-radius: 9999px; white-space: nowrap; }
+/* Very narrow phones (≤ 380px): slightly tighter buttons so "Sign up" stays on one line. */
+@media (max-width: 380px) { .lp-nav-btn { padding: 0.5rem 0.9rem; } }
 .lp-nav-outline { border: 1.5px solid currentColor; background: transparent; }
 .lp-theme-btn {
   width: 2.5rem; height: 2.5rem; flex-shrink: 0; border-radius: 9999px; cursor: pointer;
