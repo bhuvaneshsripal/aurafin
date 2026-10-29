@@ -104,10 +104,10 @@ export default function ProjectionTab({ data }: { data: AnalyticsData }) {
               <YAxis tick={chart.tick} axisLine={false} tickLine={false} width={64} tickFormatter={(v) => formatAxisAmount(Number(v), currency)} />
               <Tooltip {...chart.tooltip} formatter={(v) => (Array.isArray(v) ? `${formatCompact(v[0], currency)} – ${formatCompact(v[1], currency)}` : formatCompact(Number(v), currency))} labelFormatter={(l) => `Year ${l}`} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Area type="monotone" dataKey="band" name="10th–90th pct" stroke="none" fill={chart.primary} fillOpacity={0.12} />
-              <Line type="monotone" dataKey="Median" stroke={chart.primary} strokeWidth={2.25} dot={false} />
-              <Line type="monotone" dataKey="Expected" stroke={chart.warning} strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
-              {hasTarget && <Line type="monotone" dataKey="Target" name="Target (inflated)" stroke={chart.negative} strokeWidth={1.5} dot={false} />}
+              <Area type="monotone" dataKey="band" isAnimationActive={false} name="10th–90th pct" stroke="none" fill={chart.primary} fillOpacity={0.12} />
+              <Line type="monotone" dataKey="Median" isAnimationActive={false} stroke={chart.primary} strokeWidth={2.25} dot={false} />
+              <Line type="monotone" dataKey="Expected" isAnimationActive={false} stroke={chart.warning} strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
+              {hasTarget && <Line type="monotone" dataKey="Target" isAnimationActive={false} name="Target (inflated)" stroke={chart.negative} strokeWidth={1.5} dot={false} />}
             </ComposedChart>
           </ResponsiveContainer>
         </div>

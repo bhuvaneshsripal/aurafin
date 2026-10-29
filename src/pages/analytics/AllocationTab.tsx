@@ -84,7 +84,7 @@ export default function AllocationTab({ data }: { data: AnalyticsData }) {
           <div className="h-56">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={categories} dataKey="value" nameKey="label" innerRadius={55} outerRadius={85} paddingAngle={2} stroke="none">
+                <Pie data={categories} isAnimationActive={false} dataKey="value" nameKey="label" innerRadius={55} outerRadius={85} paddingAngle={2} stroke="none">
                   {categories.map((s) => (
                     <Cell key={s.key} fill={s.color} />
                   ))}
@@ -154,8 +154,8 @@ export default function AllocationTab({ data }: { data: AnalyticsData }) {
                   <YAxis type="category" dataKey="name" tick={chart.tick} width={92} axisLine={false} tickLine={false} />
                   <Tooltip {...chart.tooltip} formatter={(v) => `${v}%`} />
                   <ReferenceLine x={0} stroke={chart.axis} />
-                  <Bar dataKey="Current" fill={chart.primary} radius={[0, 4, 4, 0]} barSize={9} />
-                  <Bar dataKey="Target" fill="var(--color-line)" radius={[0, 4, 4, 0]} barSize={9} />
+                  <Bar dataKey="Current" isAnimationActive={false} fill={chart.primary} radius={[0, 4, 4, 0]} barSize={9} />
+                  <Bar dataKey="Target" isAnimationActive={false} fill="var(--color-line)" radius={[0, 4, 4, 0]} barSize={9} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

@@ -267,7 +267,11 @@ export default defineConfig({
         // xlsx is loaded on demand; /logo.png is a 1.5 MB master image that
         // nothing in the app references, so don't make every first-time
         // visitor download it in the background (it is still served normally).
-        globIgnores: ['**/xlsx-*.js', '**/logo.png'],
+        // The 3D login scene (three.js, ~1 MB), PDF export (jspdf + html2canvas
+        // + dompurify) and the Indices page are only needed on demand — they are
+        // cached the first time they are actually used (see runtimeCaching)
+        // instead of being downloaded up-front by every first-time visitor.
+        globIgnores: ['**/xlsx-*.js', '**/logo.png', '**/GrowthScene-*.js', '**/jspdf*.js', '**/html2canvas-*.js', '**/index.es-*.js', '**/purify-*.js'],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
@@ -280,6 +284,17 @@ export default defineConfig({
         clientsClaim: true,
         cleanupOutdatedCaches: true,
         runtimeCaching: [
+          {
+            // Heavy on-demand chunks left out of the precache above: fetched
+            // once when first needed, then served from cache.
+            urlPattern: ({ url }) => /\/assets\/(xlsx|GrowthScene|jspdf|html2canvas|index\.es|purify)[-.]/.test(url.pathname),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'lazy-heavy-chunks',
+              expiration: { maxEntries: 12, maxAgeSeconds: 30 * 24 * 60 * 60 },
+              cacheableResponse: { statuses: [200] },
+            },
+          },
           {
             // The top-bar ticker polls once a second. It must always hit the
             // network (the app keeps its own last-quote copy for offline),

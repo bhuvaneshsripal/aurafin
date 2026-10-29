@@ -46,11 +46,13 @@ import UpdateBanner from './components/UpdateBanner';
 import LockScreen from './components/LockScreen';
 import InstallPromptModal from './components/InstallPromptModal';
 import ErrorBoundary from './components/ErrorBoundary';
-import Login from './pages/Login';
-import LegalPage from './pages/LegalPage';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 import type { Asset, Liability, Goal, Transaction, Snapshot, BudgetItem, FinancialProfile, HouseholdProfile } from './types';
 
+// Signed-out-only / rarely-visited screens stay out of the main bundle so
+// the common path (an already signed-in user) parses less JS at startup.
+const Login = lazyWithRetry(() => import('./pages/Login'));
+const LegalPage = lazyWithRetry(() => import('./pages/LegalPage'));
 const dashboardImport = () => import('./pages/Dashboard');
 const Dashboard = lazyWithRetry(dashboardImport);
 // Start downloading the default route's code right away, in parallel with
@@ -383,14 +385,14 @@ export default function App() {
     initNotificationPrefs();
   }, [init, initTheme, initPrivacy, initSidebar, initLock, initDisplaySettings, initNotificationPrefs]);
 
-  if (legalKind) return <LegalPage kind={legalKind} />;
+  if (legalKind) return <Suspense fallback={null}><LegalPage kind={legalKind} /></Suspense>;
 
   if (loading) {
     return null;
   }
 
   if (!user) {
-    return <Login />;
+    return <Suspense fallback={null}><Login /></Suspense>;
   }
 
   return (

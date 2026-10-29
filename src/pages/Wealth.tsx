@@ -8092,7 +8092,7 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
                   />
                   <Area
                     type="monotone"
-                    dataKey="netWorth"
+                    dataKey="netWorth" isAnimationActive={false}
                     stroke={change < 0 ? chart.negative : chart.primary}
                     strokeWidth={2}
                     fill={change < 0 ? chart.negativeSoft : chart.primarySoft}

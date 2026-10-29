@@ -363,8 +363,8 @@ export default function InsightsTab() {
                 <XAxis dataKey="label" tick={chart.tick} axisLine={false} tickLine={false} />
                 <YAxis tick={chart.tick} axisLine={false} tickLine={false} width={44} tickFormatter={(v) => (privacyMode ? '' : compact(Number(v)))} />
                 <Tooltip formatter={tooltipMoney} {...chart.tooltip} cursor={{ fill: 'var(--color-surface-hover)' }} />
-                <Bar dataKey="income" name="Income" fill={chart.primary} radius={[4, 4, 0, 0]} maxBarSize={28} />
-                <Bar dataKey="expense" name="Spent" fill="#f97316" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                <Bar dataKey="income" isAnimationActive={false} name="Income" fill={chart.primary} radius={[4, 4, 0, 0]} maxBarSize={28} />
+                <Bar dataKey="expense" isAnimationActive={false} name="Spent" fill="#f97316" radius={[4, 4, 0, 0]} maxBarSize={28} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -404,7 +404,7 @@ export default function InsightsTab() {
             <div className="w-full sm:w-56 h-56 shrink-0 relative">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={byCategory} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92} paddingAngle={2} stroke="none">
+                  <Pie data={byCategory} isAnimationActive={false} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92} paddingAngle={2} stroke="none">
                     {byCategory.map((c, i) => (
                       <Cell
                         key={c.key}
@@ -537,7 +537,7 @@ export default function InsightsTab() {
                   {...chart.tooltip}
                   cursor={{ fill: 'var(--color-surface-hover)' }}
                 />
-                <Bar dataKey="spent" name="Spent" fill="#f97316" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="spent" isAnimationActive={false} name="Spent" fill="#f97316" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

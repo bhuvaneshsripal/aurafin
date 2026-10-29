@@ -239,7 +239,7 @@ function CalcShell({
               <XAxis dataKey="year" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} width={70} />
               <Tooltip formatter={(v) => formatCurrency(Number(v))} />
-              <Line type="monotone" dataKey="value" stroke="#16a35d" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="value" isAnimationActive={false} stroke="#16a35d" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         )}

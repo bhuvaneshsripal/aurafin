@@ -49,7 +49,7 @@ import {
   chart,
 } from '../components/ui';
 import { ASSET_CLASS_LABELS, maskAmount } from '../utils/currency';
-import { formatAxisAmount, formatCurrency, formatPercentMagnitude, formatSignedCurrency, formatPreciseCurrency, hideNumber } from '../utils/privateFormat';
+import { formatAxisAmount, formatPercentMagnitude, formatSignedCurrency, formatPreciseCurrency, hideNumber } from '../utils/privateFormat';
 import { ASSET_CLASS_TO_CATEGORY } from '../utils/taxonomy';
 import { resolveAssetValues } from '../utils/assetValues';
 import type { Goal, Snapshot, Transaction } from '../types';
@@ -394,13 +394,6 @@ function ChartTooltip({
 
 type Range = '3M' | '6M' | '1Y' | 'ALL';
 
-const RANGE_LABEL: Record<Range, string> = {
-  '3M': 'the last 3 months',
-  '6M': 'the last 6 months',
-  '1Y': 'the last 12 months',
-  ALL: 'your full history',
-};
-
 /** Tooltip for the Net worth over time chart. Unlike the generic
  *  ChartTooltip above, this also looks up the *previous* real history
  *  point (by date, in the currently-displayed series) so it can show the
@@ -515,10 +508,7 @@ function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
 
   const first = data[0];
   const last = data[data.length - 1];
-  const hasTrend = data.length >= 2;
-  const change = hasTrend ? last.netWorth - first.netWorth : 0;
-  const changePct = hasTrend && first.netWorth !== 0 ? (change / first.netWorth) * 100 : 0;
-  const isDown = change < 0;
+  const isDown = data.length >= 2 && last.netWorth - first.netWorth < 0;
   const lineColor = isDown ? chart.negative : chart.primary;
   const fillColor = isDown ? chart.negativeSoft : chart.primarySoft;
 
@@ -541,22 +531,10 @@ function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
     return [minV - pad, maxV + pad];
   }, [data]);
 
-  // With the eye closed the whole "Up/Down … over …" sentence is hidden (it
-  // would reveal both the direction and size of the change), leaving a neutral line.
-  const showTrendSummary = hasTrend && !privacyMode;
-  const summary = !showTrendSummary
-    ? 'Your net worth across the selected period.'
-    : `${change >= 0 ? 'Up' : 'Down'} ${formatCurrency(Math.abs(change), 'INR', { fractionDigits: 0 })} (${formatPercentMagnitude(changePct, 1)}) over ${RANGE_LABEL[range]}`;
-
   return (
     <Card padding="lg" className="h-full">
       <CardHeader
         title="Net worth over time"
-        description={
-          <span className={showTrendSummary ? (change >= 0 ? 'text-positive font-medium' : 'text-negative font-medium') : ''}>
-            {summary}
-          </span>
-        }
         actions={
           allHistory.length >= 2 ? (
             <SegmentedControl<Range>
