@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/api/market/global-indices",
+      "destination": "/api/market/indices?mode=global"
+    },
+    {
+      "source": "/api/market/indian-indices",
+      "destination": "/api/market/indices?mode=indian"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
