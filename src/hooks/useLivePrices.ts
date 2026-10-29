@@ -8,6 +8,8 @@ import { isMarketOpen } from '../utils/marketHours';
  *  prices can't change outside trading hours, so back off to once a minute. */
 const LIVE_REFRESH_MS = 5_000;
 const IDLE_REFRESH_MS = 60_000;
+/** Hidden tab / app in the background: refresh the saved prices once a minute. */
+const BACKGROUND_REFRESH_MS = 60_000;
 
 /**
  * Polls Yahoo Finance for equity holdings with a symbol + quantity.
@@ -20,6 +22,7 @@ export function useLivePrices() {
   const setLoading = useLivePricesStore((s) => s.setLoading);
   const setPricesAttempted = useLivePricesStore((s) => s.setPricesAttempted);
   const fetching = useRef(false);
+  const fetchStartedAt = useRef(0);
 
   const equityAssets = assets.filter((a) => a.symbol && a.quantity && a.quantity > 0);
   // Key off symbol+isin so a newly-added ISIN (e.g. after a re-import) triggers a refresh.
@@ -37,8 +40,10 @@ export function useLivePrices() {
     let generation = 0;
 
     const refresh = async () => {
-      if (fetching.current) return;
+      // Watchdog: even if something ever stalls, never stay "busy" past 30s.
+      if (fetching.current && Date.now() - fetchStartedAt.current < 30_000) return;
       fetching.current = true;
+      fetchStartedAt.current = Date.now();
       setLoading(true);
       try {
         const lookups: PriceLookup[] = equityAssets.map((a) => ({
@@ -57,12 +62,15 @@ export function useLivePrices() {
         if (Object.keys(prices).length > 0) {
           // Skip the store write (and the app-wide re-render it triggers)
           // when nothing actually moved since the last poll.
+          // (setPrices merges, so only the symbols that actually came back are compared.)
           const prev = useLivePricesStore.getState().prices;
-          const changed =
-            Object.keys(prices).length !== Object.keys(prev).length ||
-            Object.entries(prices).some(([k, v]) => prev[k] !== v);
+          const changed = Object.entries(prices).some(([k, v]) => prev[k] !== v);
           if (changed) setPrices(prices);
-          else setLoading(false);
+          else {
+            // Nothing moved, but the cache is still confirmed current.
+            useLivePricesStore.setState({ pricesUpdatedAt: Date.now() });
+            setLoading(false);
+          }
           if (Object.keys(previousCloses).length > 0) setPreviousCloses(previousCloses);
         } else {
           setLoading(false);
@@ -78,14 +86,19 @@ export function useLivePrices() {
     // Chained setTimeout (not setInterval): the next poll is scheduled only
     // after the previous one finishes, so slow responses never pile up.
     let timer: ReturnType<typeof setTimeout>;
+    let lastRun = 0;
     const loop = async () => {
       if (stopped) return;
       // Only the newest loop run may schedule the next one, so becoming
       // visible mid-request can't leave two poll chains running.
       const myGeneration = ++generation;
-      if (!document.hidden) await refresh();
+      // In the background, only refresh if a minute has passed since the last fetch.
+      if (!document.hidden || Date.now() - lastRun >= BACKGROUND_REFRESH_MS) {
+        lastRun = Date.now();
+        await refresh();
+      }
       if (stopped || myGeneration !== generation) return;
-      timer = setTimeout(loop, isMarketOpen() ? LIVE_REFRESH_MS : IDLE_REFRESH_MS);
+      timer = setTimeout(loop, document.hidden ? BACKGROUND_REFRESH_MS : isMarketOpen() ? LIVE_REFRESH_MS : IDLE_REFRESH_MS);
     };
     const onVisible = () => {
       if (!document.hidden) {
@@ -94,11 +107,18 @@ export function useLivePrices() {
       }
     };
     document.addEventListener('visibilitychange', onVisible);
+    // Back online (Wi-Fi reconnect, wake from sleep): fetch right away.
+    const onOnline = () => {
+      clearTimeout(timer);
+      loop();
+    };
+    window.addEventListener('online', onOnline);
     loop();
     return () => {
       stopped = true;
       clearTimeout(timer);
       document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', onOnline);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lookupKey, setPrices, setPreviousCloses, setLoading, setPricesAttempted]);

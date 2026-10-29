@@ -22,6 +22,9 @@ interface LivePricesState {
   /** Keyed by mfapi.in scheme code (i.e. the asset's `symbol` for SIPs). */
   sipValues: Record<string, SipLiveEntry>;
   lastUpdated: number | null;
+  /** When `prices` last received a real quote (not SIP/gold) — used to tell a
+   *  fresh cache from one that's hours or days old. */
+  pricesUpdatedAt: number | null;
   loading: boolean;
   /** True once the first equity-price fetch cycle has finished (success or
    *  failure) since the app loaded. Lets the UI hold off showing Net Worth /
@@ -63,6 +66,7 @@ export const useLivePricesStore = create<LivePricesState>()(
       previousCloses: {},
       sipValues: {},
       lastUpdated: null,
+      pricesUpdatedAt: null,
       loading: false,
       pricesAttempted: false,
       sipValuesAttempted: false,
@@ -70,7 +74,17 @@ export const useLivePricesStore = create<LivePricesState>()(
       setGoldAttempted: (goldAttempted) => {
         if (get().goldAttempted !== goldAttempted) set({ goldAttempted });
       },
-      setPrices: (prices) => set({ prices, lastUpdated: Date.now(), loading: false }),
+      // MERGE into the existing map. A poll where one symbol's request failed
+      // used to replace the whole map, silently dropping that symbol — its row
+      // then fell back to the old saved value (a wrong number) until the next
+      // poll got lucky. Now the last good live price is kept instead.
+      setPrices: (prices) =>
+        set((s) => ({
+          prices: { ...s.prices, ...prices },
+          lastUpdated: Date.now(),
+          pricesUpdatedAt: Date.now(),
+          loading: false,
+        })),
       setPreviousCloses: (previousCloses) => {
         const prev = get().previousCloses;
         const changed = Object.entries(previousCloses).some(([k, v]) => prev[k] !== v);
@@ -113,6 +127,7 @@ export const useLivePricesStore = create<LivePricesState>()(
         previousCloses: s.previousCloses,
         sipValues: s.sipValues,
         lastUpdated: s.lastUpdated,
+        pricesUpdatedAt: s.pricesUpdatedAt,
         goldPricePerGram: s.goldPricePerGram,
         goldPriceAsOf: s.goldPriceAsOf,
       }),
@@ -147,4 +162,12 @@ export function resolveSipLiveValue(
 ): SipLiveEntry | undefined {
   if (!symbol) return undefined;
   return sipValues[symbol.trim()];
+}
+
+/** A cached price map only counts as "ready to show" if it is this recent;
+ *  older than that, screens wait for the first real fetch (a second or two)
+ *  instead of flashing yesterday's numbers. */
+export const PRICE_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
+export function isPriceCacheFresh(pricesUpdatedAt: number | null, now: number = Date.now()): boolean {
+  return pricesUpdatedAt !== null && now - pricesUpdatedAt <= PRICE_CACHE_MAX_AGE_MS;
 }

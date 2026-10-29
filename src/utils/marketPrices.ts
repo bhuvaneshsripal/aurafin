@@ -1,3 +1,5 @@
+import { fetchWithTimeout } from './fetchWithTimeout';
+
 /**
  * Live equity quote endpoint. Tries NSE India's own API first, falls
  * back to Yahoo Finance automatically if NSE is unavailable — see
@@ -107,7 +109,7 @@ async function searchYahooSymbol(query: string): Promise<string | null> {
 
   let resolved: string | null = null;
   try {
-    const res = await fetch(`${SEARCH_BASE}?q=${encodeURIComponent(query)}`);
+    const res = await fetchWithTimeout(`${SEARCH_BASE}?q=${encodeURIComponent(query)}`);
     if (res.ok) {
       const json = await res.json();
       const quotes: { symbol?: string; quoteType?: string; exchDisp?: string }[] =
@@ -129,24 +131,27 @@ async function searchYahooSymbol(query: string): Promise<string | null> {
 }
 
 async function fetchQuote(symbol: string, market: 'IN' | 'US' = 'IN'): Promise<LiveQuoteDetail | null> {
-  try {
-    const res = await fetch(
-      `${QUOTE_BASE}/${encodeURIComponent(symbol)}?market=${market}`
-    );
-    if (!res.ok) return null;
+  // One quick retry: a single dropped/slow request must not leave this
+  // holding without a live price (it would fall back to its old saved value).
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetchWithTimeout(`${QUOTE_BASE}/${encodeURIComponent(symbol)}?market=${market}`);
+      if (!res.ok) continue;
 
-    const json = await res.json();
-    const price = json?.price;
-    if (typeof price !== 'number' || !Number.isFinite(price)) return null;
-    const previousClose = json?.previousClose;
+      const json = await res.json();
+      const price = json?.price;
+      if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) continue;
+      const previousClose = json?.previousClose;
 
-    return {
-      price,
-      previousClose: typeof previousClose === 'number' && Number.isFinite(previousClose) ? previousClose : undefined,
-    };
-  } catch {
-    return null;
+      return {
+        price,
+        previousClose: typeof previousClose === 'number' && Number.isFinite(previousClose) ? previousClose : undefined,
+      };
+    } catch {
+      /* timeout / network error → retry once */
+    }
   }
+  return null;
 }
 
 /**

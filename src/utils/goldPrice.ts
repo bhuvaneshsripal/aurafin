@@ -3,6 +3,8 @@
  * upstream sources and important caveats (global spot estimate, not an
  * exact city retail rate).
  */
+import { fetchWithTimeout } from './fetchWithTimeout';
+
 const GOLD_BASE = '/api/market/gold';
 
 // Standard jewellery-trade purity ratio: 22K gold is 22/24 parts pure gold
@@ -22,7 +24,7 @@ export interface LiveGoldPrice {
 
 export async function fetchLiveGoldPrice(): Promise<LiveGoldPrice | null> {
   try {
-    const res = await fetch(GOLD_BASE);
+    const res = await fetchWithTimeout(GOLD_BASE);
     if (!res.ok) return null;
     const json = await res.json();
     const price = json?.pricePerGram24k;

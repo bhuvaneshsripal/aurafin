@@ -1,3 +1,4 @@
+import { readCache, writeCache, CACHE_NAMES } from '../utils/fetchCache';
 import { useCallback, useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import Modal from './Modal';
@@ -17,6 +18,7 @@ interface Row {
 }
 
 const POLL_MS = 30_000;
+const cachedGlobal = () => readCache<Row[]>(CACHE_NAMES.global);
 const fmt = (n: number | undefined) =>
   n === undefined ? '—' : n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -44,8 +46,11 @@ const td = 'px-4 py-4 text-right tabular-nums text-ink-2 whitespace-nowrap';
 /** Global indices table (opened from the globe button in the top bar):
  *  Index name · Last traded · Day change · High · Low · Open · Prev. close. */
 export default function GlobalIndicesModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [rows, setRows] = useState<Row[] | null | undefined>(undefined); // undefined = loading
-  const [asOf, setAsOf] = useState<Date | null>(null);
+  const [rows, setRows] = useState<Row[] | null | undefined>(() => cachedGlobal()?.data); // undefined = loading
+  const [asOf, setAsOf] = useState<Date | null>(() => {
+    const c = cachedGlobal();
+    return c ? new Date(c.at) : null;
+  });
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
@@ -55,6 +60,7 @@ export default function GlobalIndicesModal({ open, onClose }: { open: boolean; o
       if (!res.ok) throw new Error(String(res.status));
       const json = await res.json();
       if (!Array.isArray(json?.indices)) throw new Error('bad payload');
+      writeCache(CACHE_NAMES.global, json.indices);
       setRows(json.indices);
       setAsOf(new Date());
     } catch {

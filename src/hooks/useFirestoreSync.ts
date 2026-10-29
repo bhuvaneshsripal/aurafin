@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, deleteField, writeBatch, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuthStore } from '../store/authStore';
@@ -9,9 +9,14 @@ import { useSyncStatusStore } from '../store/syncStatusStore';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useSnapshotsStore } from '../store/snapshotsStore';
+import { useLivePricesStore } from '../store/livePricesStore';
+import { resolveAssetValues } from '../utils/assetValues';
+import { isFullySold } from '../utils/investmentPnl';
 import { toIsoDate } from '../utils/date';
 import { readBackup, writeBackup } from '../utils/dataBackup';
-import { applyPending, confirmPending, pendingFor, pendingItem, recordPending } from '../utils/pendingWrites';
+import { allPending, applyPending, confirmPending, pendingFor, pendingItem, recordPending } from '../utils/pendingWrites';
+import { getNetworkQuality, useNetworkStore } from '../store/networkStore';
+import { toast } from '../store/toastStore';
 import type { HouseholdProfile, Snapshot } from '../types';
 
 /** Every subcollection kept under users/{uid} that DataSync listens to.
@@ -224,6 +229,79 @@ export function useFirestoreCollectionSync<T extends { id: string }>(
   }, [uid, anonymous, collectionName, setLocal, onSyncChange, markCollectionLoaded, markCollectionServerConfirmed]);
 }
 
+/** Shown when a save is kept on the device because the connection is weak. */
+const QUEUED_MSG = 'Low network — saved on this device. It will sync when your connection is back.';
+const OFFLINE_MSG = 'No network — saved on this device. It will sync when you are back online.';
+const FAILED_MSG = "Couldn't save to the server right now. Your change is kept and will retry.";
+
+/** True when a save should be queued instead of awaited. Firestore's write
+ *  promises only resolve once the SERVER acknowledges, so on a weak or dead
+ *  connection awaiting them would leave the Save button hanging. */
+function shouldQueue(): boolean {
+  return getNetworkQuality() !== 'good';
+}
+
+function announceQueued() {
+  toast.bottom.info(getNetworkQuality() === 'offline' ? OFFLINE_MSG : QUEUED_MSG, 5000);
+}
+
+/** Sends a write without blocking the caller. The journal entry (see
+ *  utils/pendingWrites.ts) is removed once the server confirms; if the write
+ *  fails outright, the entry stays so it is retried on reconnect/startup. */
+function sendInBackground(send: Promise<unknown>, onConfirmed: () => void) {
+  send.then(onConfirmed).catch((err) => {
+    console.warn('Queued save failed, will retry when the connection returns.', err);
+    toast.bottom.error(FAILED_MSG, 5000);
+  });
+}
+
+let flushing = false;
+
+/** Re-sends every journaled save/delete for `uid`. Returns how many it sent. */
+export async function flushPendingWrites(uid: string): Promise<number> {
+  if (flushing) return 0;
+  const list = allPending(uid);
+  if (list.length === 0) return 0;
+  flushing = true;
+  try {
+    await Promise.all(
+      list.map((p) => {
+        const ref = doc(db, 'users', uid, p.col, p.id);
+        const send = p.op === 'del' ? deleteDoc(ref) : setDoc(ref, toWrite(pendingItem(p)), { merge: true });
+        return send.then(() => confirmPending(uid, p.col, p.id, p.at));
+      })
+    );
+    return list.length;
+  } finally {
+    flushing = false;
+  }
+}
+
+/** When the connection comes back, pushes everything that was saved while it
+ *  was weak/offline and tells the user it synced. Mount once (see DataSync). */
+export function usePendingFlush() {
+  const user = useAuthStore((s) => s.user);
+  const quality = useNetworkStore((s) => s.quality);
+  const uid = user?.uid;
+  const guest = isAnonymousUser(user);
+
+  useEffect(() => {
+    if (!uid || guest || quality !== 'good') return;
+    if (allPending(uid).length === 0) return;
+    let cancelled = false;
+    flushPendingWrites(uid)
+      .then((n) => {
+        if (n > 0 && !cancelled) toast.bottom.success('Back online — your saved changes are synced.', 4000);
+      })
+      .catch(() => {
+        /* still unreachable: entries stay journaled and retry on the next change */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [uid, guest, quality]);
+}
+
 /** undefined -> deleteField() so a cleared form field is really removed. */
 function toWrite(item: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -295,7 +373,15 @@ export async function upsertDoc<T extends { id: string }>(
   const ref = doc(db, 'users', uid, collectionName, item.id);
   // Journal first (synchronous), so a refresh right after Save keeps the edit.
   const token = recordPending(uid, collectionName, item.id, 'set', item as Record<string, unknown>);
-  await setDoc(ref, toWrite(item as Record<string, unknown>), { merge: true });
+  const send = setDoc(ref, toWrite(item as Record<string, unknown>), { merge: true });
+  if (shouldQueue()) {
+    // Weak/no connection: the edit is already journaled (and in Firestore's
+    // offline queue), so close the form now and let it sync later.
+    sendInBackground(send, () => confirmPending(uid, collectionName, item.id, token));
+    announceQueued();
+    return;
+  }
+  await send;
   confirmPending(uid, collectionName, item.id, token);
 }
 
@@ -336,8 +422,15 @@ export async function bulkUpsertDocs<T extends { id: string }>(
       const ref = doc(db, 'users', uid, collectionName, item.id);
       batch.set(ref, item, { merge: true });
     });
-    await batch.commit();
-    chunk.forEach((item, n) => confirmPending(uid, collectionName, item.id, tokens[n]));
+    const commit = batch.commit();
+    const confirmChunk = () => chunk.forEach((item, n) => confirmPending(uid, collectionName, item.id, tokens[n]));
+    if (shouldQueue()) {
+      sendInBackground(commit, confirmChunk);
+      announceQueued();
+      continue;
+    }
+    await commit;
+    confirmChunk();
   }
 }
 
@@ -357,7 +450,13 @@ export async function removeDoc(uidOrUser: string | { uid: string; isAnonymous?:
   // For regular users, remove from Firestore
   const ref = doc(db, 'users', uid, collectionName, id);
   const token = recordPending(uid, collectionName, id, 'del');
-  await deleteDoc(ref);
+  const send = deleteDoc(ref);
+  if (shouldQueue()) {
+    sendInBackground(send, () => confirmPending(uid, collectionName, id, token));
+    announceQueued();
+    return;
+  }
+  await send;
   confirmPending(uid, collectionName, id, token);
 }
 
@@ -455,40 +554,52 @@ export function useAutoNetWorthHistory() {
   const liabilitiesServerConfirmed = useSyncStatusStore((s) => s.liabilitiesServerConfirmed);
   const snapshots = useSnapshotsStore((s) => s.snapshots);
   const addOrUpdate = useSnapshotsStore((s) => s.addOrUpdate);
+  // Live market inputs — the same ones the Overview "Net worth" card uses.
+  // Recording the *stored* asset.value here made the graph flat while the
+  // headline number moved with the market; using live values makes today's
+  // point (and so the whole line) follow real price volatility.
+  const livePrices = useLivePricesStore((s) => s.prices);
+  const sipValues = useLivePricesStore((s) => s.sipValues);
+  const goldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
+  const pricesAttempted = useLivePricesStore((s) => s.pricesAttempted);
+  const lastWriteRef = useRef(0);
 
   useEffect(() => {
     if (!user) return;
-    // Wait until both collections have delivered (or been forced past) a
-    // real first load. Recording before then would write a false ₹0 entry
-    // for today from the still-empty initial store state, silently
-    // clobbering (or hiding behind) real history.
     if (!assetsServerConfirmed || !liabilitiesServerConfirmed) return;
-    // An account with nothing entered yet isn't a real "₹0 net worth" data
-    // point — don't record one.
     if (assets.length === 0 && liabilities.length === 0) return;
+    // Don't record a stale (pre-live-price) number as today's value if
+    // the app holds live-priced assets and the first price fetch hasn't
+    // finished — it would be corrected seconds later and leave a blip.
+    const hasLivePriced = assets.some((a) => a.symbol && a.quantity && a.quantity > 0);
+    if (hasLivePriced && !pricesAttempted) return;
 
-    const totalAssets = assets.reduce((sum, a) => sum + a.value, 0);
-    // Liabilities may genuinely be empty for a user who only tracks
-    // assets — that's not "unavailable" data, it's a real total of 0, so
-    // net worth still just falls back to totalAssets exactly as the
-    // reduce below already produces.
+    const totalAssets = assets
+      .filter((a) => !isFullySold(a))
+      .reduce((sum, a) => sum + resolveAssetValues(a, livePrices, sipValues, goldPricePerGram).value, 0);
     const totalLiabilities = liabilities.reduce((sum, l) => sum + l.outstanding, 0);
     const netWorth = totalAssets - totalLiabilities;
 
     const today = toIsoDate();
     const existing = snapshots.find((s) => s.date === today);
 
-    // Never write a duplicate — only touch Firestore (and the store) when
-    // today's entry doesn't exist yet or the totals actually changed.
+    // Round to whole paise so float noise never triggers a write.
+    const same = (a: number, b: number) => Math.abs(a - b) < 0.5;
     if (
       existing &&
-      existing.netWorth === netWorth &&
-      existing.totalAssets === totalAssets &&
-      existing.totalLiabilities === totalLiabilities
+      same(existing.netWorth, netWorth) &&
+      same(existing.totalAssets, totalAssets) &&
+      same(existing.totalLiabilities, totalLiabilities)
     ) {
       return;
     }
 
+    // Prices tick every few seconds — throttle Firestore writes for
+    // pure market movement to one per minute (the local store still
+    // updates every tick, so the chart moves live). Structural changes
+    // (new today entry, liabilities changed) are written immediately.
+    const structural = !existing || !same(existing.totalLiabilities, totalLiabilities);
+    const now = Date.now();
     const entry: Snapshot = {
       id: existing?.id ?? crypto.randomUUID(),
       date: today,
@@ -496,13 +607,24 @@ export function useAutoNetWorthHistory() {
       totalAssets,
       totalLiabilities,
     };
-    // Optimistic local update so today's point/chart reflects the change
-    // immediately — matters most for guest accounts, whose localStorage
-    // write below isn't picked back up by a live listener the way a
-    // signed-in user's Firestore write is.
     addOrUpdate(entry);
-    upsertDoc(user, 'snapshots', entry);
-  }, [user, assets, liabilities, assetsServerConfirmed, liabilitiesServerConfirmed, snapshots, addOrUpdate]);
+    if (structural || now - lastWriteRef.current >= 60_000) {
+      lastWriteRef.current = now;
+      upsertDoc(user, 'snapshots', entry);
+    }
+  }, [
+    user,
+    assets,
+    liabilities,
+    assetsServerConfirmed,
+    liabilitiesServerConfirmed,
+    snapshots,
+    addOrUpdate,
+    livePrices,
+    sipValues,
+    goldPricePerGram,
+    pricesAttempted,
+  ]);
 }
 
 /**

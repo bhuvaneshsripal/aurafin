@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNetworkStore } from '../store/networkStore';
 
 export type NetworkQuality = 'good' | 'low' | 'offline';
 
@@ -89,6 +90,12 @@ export function useNetworkQuality(): NetworkQuality {
     };
   }, [online]);
 
-  if (!online) return 'offline';
-  return slow ? 'low' : 'good';
+  const quality: NetworkQuality = !online ? 'offline' : slow ? 'low' : 'good';
+
+  // Publish for non-React code (see store/networkStore.ts).
+  useEffect(() => {
+    useNetworkStore.getState().setQuality(quality);
+  }, [quality]);
+
+  return quality;
 }

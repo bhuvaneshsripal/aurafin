@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { usePinnedTooltip, isTouchDevice, type ChartClickState } from '../hooks/usePinnedTooltip';
 import PinnedChartTooltip from '../components/PinnedChartTooltip';
 import { isFullySold, computeHoldingPnl, isInvestmentHolding, computePortfolioPnl } from '../utils/investmentPnl';
@@ -17,6 +17,7 @@ import {
   PieChart,
   Pie,
   Cell,
+  usePlotArea,
 } from 'recharts';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
@@ -168,8 +169,12 @@ export default function Dashboard() {
   // by selling, so Net worth − Total invested always equals Profit / loss.
   const netWorthShown = includeSold ? netWorth + soldAmount : netWorth;
   const netWorthPnl = includeSold ? portfolioPnl.totalPnl : portfolioPnl.unrealizedPnl;
-  // Percent is measured against the Total invested shown on this card.
-  const netWorthPnlPercent = investedShown > 0 ? (netWorthPnl / investedShown) * 100 : 0;
+  // Percent comes straight from the Performance page's engine so both screens
+  // show the same figure. (Total invested above includes Cash & Savings at face
+  // value so it reconciles with Net worth, but cash earns no P&L — dividing by
+  // it diluted the return, e.g. 3.56% here vs 4.89% on Performance.)
+  const netWorthPnlPercent =
+    (includeSold ? portfolioPnl.totalReturnPercent : portfolioPnl.unrealizedPnlPercent) ?? 0;
 
   const thisMonth = toIsoMonth();
   const monthIncome = transactions
@@ -445,6 +450,16 @@ function NetWorthTooltip({
   );
 }
 
+/** Lives inside the chart purely to report the plot area (the pixel box the
+ *  line is drawn in) so taps can be mapped to a data point without relying on
+ *  recharts' own click state — which is built from hover and is unreliable on
+ *  touch screens. */
+function PlotAreaProbe({ areaRef }: { areaRef: { current: { x: number; width: number } | null } }) {
+  const area = usePlotArea();
+  areaRef.current = area ? { x: area.x, width: area.width } : null;
+  return null;
+}
+
 function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
   // Real, stored history only — the same `snapshots` collection the manual
   // "Take Snapshot" action writes to, plus (via useAutoNetWorthHistory,
@@ -454,6 +469,7 @@ function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
   const snapshots = useSnapshotsStore((s) => s.snapshots);
   const [range, setRange] = useState<Range>('ALL');
   const pin = usePinnedTooltip();
+  const plotAreaRef = useRef<{ x: number; width: number } | null>(null);
 
   const allHistory = useMemo(() => {
     const sorted = [...snapshots].sort((a: Snapshot, b: Snapshot) => a.date.localeCompare(b.date));
@@ -473,6 +489,29 @@ function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
     const iso = toIsoDate(cutoff);
     return allHistory.filter((s) => s.date >= iso);
   }, [allHistory, range]);
+
+  // Tap / click → nearest data point, computed from the pointer position.
+  const handleChartTap = (e: ReactMouseEvent<HTMLDivElement>) => {
+    // Taps on the pinned tooltip itself are handled by its own onClick (close).
+    if ((e.target as HTMLElement).closest('[data-pinned-tip]')) return;
+    const area = plotAreaRef.current;
+    const box = e.currentTarget.getBoundingClientRect();
+    if (!area || data.length === 0 || area.width <= 0) {
+      pin.hidePinned();
+      return;
+    }
+    const relX = e.clientX - box.left;
+    // Outside the plot (e.g. on the y-axis labels) → unpin.
+    if (relX < area.x - 8 || relX > area.x + area.width + 8) {
+      pin.hidePinned();
+      return;
+    }
+    const ratio = Math.min(Math.max((relX - area.x) / area.width, 0), 1);
+    const idx = data.length === 1 ? 0 : Math.round(ratio * (data.length - 1));
+    const label = data[idx].date;
+    const x = data.length === 1 ? area.x + area.width / 2 : area.x + (idx / (data.length - 1)) * area.width;
+    pin.setPinned((prev) => (prev?.label === label ? null : { label, x }));
+  };
 
   const first = data[0];
   const last = data[data.length - 1];
@@ -494,7 +533,9 @@ function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
     const maxV = Math.max(...values);
     const mid = (minV + maxV) / 2 || 1;
     const rawSpan = maxV - minV;
-    const minSpan = Math.max(Math.abs(mid) * 0.06, 1);
+    // 0.5% floor (was 6%) so day-to-day market volatility is visible
+    // instead of being flattened into a straight line.
+    const minSpan = Math.max(Math.abs(mid) * 0.005, 1);
     const span = Math.max(rawSpan, minSpan);
     const pad = span * 0.2;
     return [minV - pad, maxV + pad];
@@ -552,13 +593,15 @@ function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
           description="Your net-worth history will appear here as you build your financial timeline."
         />
       ) : (
-        <div className="h-[220px] -ml-2 relative" ref={pin.containerRef}>
+        <div
+          className="h-[220px] -ml-2 relative cursor-pointer"
+          style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
+          ref={pin.containerRef}
+          onClick={handleChartTap}
+        >
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart
-              data={data}
-              margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-              onClick={(state) => pin.handleChartClick(state as ChartClickState)}
-            >
+            <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <PlotAreaProbe areaRef={plotAreaRef} />
               <CartesianGrid stroke={chart.grid} strokeDasharray="3 3" vertical={false} />
               <XAxis
                 dataKey="date"

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Building2 } from 'lucide-react';
+import { useFittedLogo } from '../utils/logoFit';
 
 interface Props {
   symbol?: string;
@@ -49,6 +50,9 @@ export default function CompanyLogo({ symbol, name, market = 'IN', isin, size = 
   const [attempt, setAttempt] = useState(0);
   const src = stage === 0 ? local : stage === 1 && onlineBase ? (attempt ? `${onlineBase}&r=${attempt}` : onlineBase) : null;
   const [loaded, setLoaded] = useState(() => (src ? loadedSrcs.has(src) : false));
+  // Same logo, re-centred and filled edge to edge in its own background colour
+  // (no white rims); until it is ready, or if it can't be read, the original shows.
+  const fit = useFittedLogo(src);
 
   // Back-off retry timer, and a fresh start whenever the connection returns.
   useEffect(() => {
@@ -78,9 +82,9 @@ export default function CompanyLogo({ symbol, name, market = 'IN', isin, size = 
   return (
     <span
       className="relative shrink-0 inline-flex items-center justify-center rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-white"
-      style={{ width: size, height: size }}
+      style={{ width: size, height: size, backgroundColor: fit?.bg }}
     >
-      {!loaded && (
+      {!loaded && !fit && (
         stage === 2 ? (
           <Building2 size={Math.round(size * 0.5)} className="text-slate-300 dark:text-slate-600" aria-hidden />
         ) : (
@@ -89,8 +93,8 @@ export default function CompanyLogo({ symbol, name, market = 'IN', isin, size = 
       )}
       {src && (
         <img
-          key={src}
-          src={src}
+          key={fit ? 'fit' : src}
+          src={fit ? fit.url : src}
           alt=""
           loading="lazy"
           decoding="async"
@@ -99,8 +103,8 @@ export default function CompanyLogo({ symbol, name, market = 'IN', isin, size = 
             setLoaded(true);
           }}
           onError={onError}
-          className="absolute inset-0 w-full h-full object-contain p-[3px] bg-white"
-          style={{ opacity: loaded ? 1 : 0, transition: loadedSrcs.has(src) ? 'none' : 'opacity 200ms ease-out' }}
+          className={`absolute inset-0 w-full h-full ${fit ? 'object-cover' : 'object-contain p-[3px] bg-white'}`}
+          style={{ opacity: loaded || fit ? 1 : 0, transition: fit || loadedSrcs.has(src) ? 'none' : 'opacity 200ms ease-out' }}
         />
       )}
     </span>

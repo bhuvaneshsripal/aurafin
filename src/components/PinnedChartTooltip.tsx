@@ -23,6 +23,7 @@ export default function PinnedChartTooltip({
 
   return (
     <div
+      data-pinned-tip
       onClick={onHide}
       className="absolute top-0 z-10 cursor-pointer"
       style={{ left, transform: 'translateX(-50%)' }}

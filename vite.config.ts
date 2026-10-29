@@ -287,6 +287,15 @@ export default defineConfig({
             },
           },
           {
+            // Live prices (stock quotes + gold rate) must NEVER come from the
+            // service worker's cache. With NetworkFirst + a 3s timeout, one slow
+            // response made the worker hand back a saved quote — up to 7 days
+            // old — which looked like a real live price until a hard refresh
+            // cleared the cache. The app keeps its own last-known copy.
+            urlPattern: ({ url }) => url.pathname.startsWith('/api/market/chart/') || url.pathname === '/api/market/gold',
+            handler: 'NetworkOnly',
+          },
+          {
             urlPattern: ({ url }) => url.pathname.startsWith('/api/market'),
             handler: 'NetworkFirst',
             options: {

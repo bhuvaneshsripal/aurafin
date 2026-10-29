@@ -2,14 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { hardRefresh } from '../utils/hardRefresh';
 
 /**
- * The Aurafin coin logo. Auto-rotates a full turn every 4s as a subtle
- * brand flourish, and clicking/tapping it triggers a hard refresh of the app.
- * The auto-rotation bumps `spinKey`; keying the <img> on it remounts the
- * element so the CSS animation restarts cleanly.
+ * The Aurafin coin logo. Flips like a coin every 4s as a subtle brand
+ * flourish, and clicking/tapping it flips it once more and then triggers a
+ * hard refresh of the app (clears cached prices + service worker, reloads).
+ * Each flip bumps `spinKey`; keying the <img> on it remounts the element so
+ * the CSS animation restarts cleanly.
  */
 export default function AppLogo({ className }: { className?: string }) {
   const [spinKey, setSpinKey] = useState(0);
   const intervalRef = useRef<number | null>(null);
+  const refreshing = useRef(false);
 
   useEffect(() => {
     intervalRef.current = window.setInterval(() => {
@@ -24,8 +26,19 @@ export default function AppLogo({ className }: { className?: string }) {
     <button
       type="button"
       onClick={() => {
+        // Ignore repeat taps while a refresh is already on its way.
+        if (refreshing.current) return;
+        refreshing.current = true;
+        // Stop the idle flips and play one flip, then refresh — the short
+        // pause lets the flip be seen before the page reloads.
+        if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
         setSpinKey((k) => k + 1);
-        void hardRefresh();
+        window.setTimeout(() => {
+          void hardRefresh().then((ok) => {
+            // Offline / server unreachable: stay on the page and re-arm.
+            if (!ok) refreshing.current = false;
+          });
+        }, 600);
       }}
       aria-label="Aurafin"
       title="Aurafin"

@@ -44,9 +44,15 @@ export function useLiveGoldPrice() {
       setGoldAttempted(true);
     };
 
-    refresh();
+    let lastRun = Date.now();
+    const run = () => {
+      lastRun = Date.now();
+      void refresh();
+    };
+    run();
     const id = setInterval(() => {
-      if (!document.hidden) refresh();
+      // In the background, refresh the saved rate once a minute instead of every 30s.
+      if (!document.hidden || Date.now() - lastRun >= 60_000) run();
     }, REFRESH_MS);
     // Catch up immediately when the app comes back to the foreground.
     const onVisible = () => {

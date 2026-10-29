@@ -100,6 +100,15 @@ export default function BottomNav() {
     };
   }, []);
 
+  // Tell the page layout the bar is hidden so it can stop reserving room for it
+  // (see `html[data-typing] #main-content` in index.css).
+  useEffect(() => {
+    const root = document.documentElement;
+    if (typing) root.setAttribute('data-typing', '');
+    else root.removeAttribute('data-typing');
+    return () => root.removeAttribute('data-typing');
+  }, [typing]);
+
   useEffect(() => {
     if (!moreOpen) return;
     const onKey = (e: KeyboardEvent) => {

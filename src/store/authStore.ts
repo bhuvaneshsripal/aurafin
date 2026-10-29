@@ -1,3 +1,4 @@
+import { removePushSubscription } from '../hooks/usePushSubscription';
 import { create } from 'zustand';
 import {
   onAuthStateChanged,
@@ -215,6 +216,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         safeRemove(`aurafin-guest-${currentUser.uid}-${collection}`);
       });
     }
+    // Stop server alerts for this account on this device (needs the session, so before signOut).
+    if (currentUser && (currentUser as any).isAnonymous !== true) await removePushSubscription(currentUser.uid);
     await signOut(auth);
     writeCachedUser(null);
     clearDataBackups(); // don't leave this account's last-known data on the device

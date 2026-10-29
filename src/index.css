@@ -654,18 +654,26 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   animation: backdrop-in var(--dur-fast) ease-out;
 }
 
-/* Brand mark: one full turn, used for both the automatic 4s tick and the
-   click-triggered spin (AppLogo restarts this by remounting the <img>). */
+/* Brand mark: one coin-style flip (turns around its vertical axis), used for
+   both the automatic 4s tick and the click-triggered flip (AppLogo restarts
+   this by remounting the <img>). */
 @keyframes logo-spin {
   from {
-    transform: rotate(0deg);
+    transform: perspective(240px) rotateY(0deg);
   }
   to {
-    transform: rotate(360deg);
+    transform: perspective(240px) rotateY(360deg);
   }
 }
 .animate-logo-spin {
   animation: logo-spin 0.7s cubic-bezier(0.45, 0, 0.2, 1);
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-logo-spin {
+    animation: none;
+  }
 }
 
 @keyframes fab-in {
@@ -1455,3 +1463,12 @@ input.global-search-input:focus,
 .su-switch { margin: 1.5rem 0 0; text-align: center; color: var(--su-muted); font-size: 0.95rem; }
 .su-switch button { background: none; border: 0; color: var(--su-brand); font-weight: 600; cursor: pointer; padding: 0; }
 @media (max-width: 480px) { .su-card { padding: 1.75rem 1.25rem; border-radius: 1.25rem; } }
+
+/* While a text field is focused the bottom nav is hidden (see BottomNav), so
+   the room the page keeps clear for it becomes a blank gap under the last card
+   on phones. Drop that reserve until the field loses focus. */
+@media (max-width: 767px) {
+  html[data-typing] #main-content {
+    padding-bottom: 2rem;
+  }
+}

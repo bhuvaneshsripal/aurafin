@@ -25,6 +25,8 @@ function writeHistory(h: HistoryItem[]) {
   try { localStorage.setItem(HISTORY_KEY, JSON.stringify(h)); } catch { /* storage unavailable */ }
 }
 const num = (s: string) => (s.trim() === '' ? NaN : Number(s));
+/** Give up on a symbol lookup after this long and report it as unreachable. */
+const SEARCH_TIMEOUT_MS = 10_000;
 
 function Field({ label, src, children }: { label: string; src?: Src; children: React.ReactNode }) {
   return (
@@ -44,7 +46,11 @@ export default function Valuation() {
   const [query, setQuery] = useState('');
   const [exchange, setExchange] = useState<'NSE' | 'BSE'>('NSE');
   const [suggestions, setSuggestions] = useState<StockSearchResult[]>([]);
-  const [searching, setSearching] = useState(false);
+  // What the last symbol lookup was for, and whether it failed. Lets the list say
+  // "searching", "no matches" or "couldn't search" for the text in the box instead of
+  // falling back to something unrelated (e.g. recent searches).
+  const [lastSearch, setLastSearch] = useState<{ q: string; failed: boolean } | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<FundamentalsResponse | null>(null);
@@ -88,9 +94,10 @@ export default function Valuation() {
   const pickedRef = useRef<string | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
+  // Whether the dropdown under the search box (matches / status / recent searches) is open.
+  const [listOpen, setListOpen] = useState(false);
 
-  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => {
+  const set =(k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setF((p) => ({ ...p, [k]: e.target.value }));
     setSrc((p) => ({ ...p, [k]: 'you' }));
   };
@@ -98,23 +105,27 @@ export default function Valuation() {
   // Debounced symbol search (same endpoint the Add Asset form uses).
   useEffect(() => {
     const q = query.trim();
-    if (q.length < 3 || q === pickedRef.current) { setSuggestions([]); setSearching(false); return; }
-    setSearching(true);
+    if (q.length < 3 || q === pickedRef.current) { setSuggestions([]); setLastSearch(null); return; }
     let cancelled = false;
+    let giveUp: ReturnType<typeof setTimeout> | undefined;
     const t = setTimeout(() => {
-      searchStockSymbols(q, 'IN').then((r) => {
+      // A stalled connection must not leave "Searching…" on screen forever.
+      const timeout = new Promise<null>((resolve) => { giveUp = setTimeout(() => resolve(null), SEARCH_TIMEOUT_MS); });
+      Promise.race([searchStockSymbols(q, 'IN'), timeout]).then((r) => {
+        clearTimeout(giveUp);
         if (cancelled) return; // a newer keystroke or a pick made this result stale
+        // null = the lookup itself failed (offline, upstream down); [] = it worked but found nothing.
         setSuggestions(r ?? []);
-        setSearching(false);
+        setLastSearch({ q, failed: r === null });
       });
     }, 350);
-    return () => { cancelled = true; clearTimeout(t); };
-  }, [query]);
+    return () => { cancelled = true; clearTimeout(t); clearTimeout(giveUp); };
+  }, [query, retryTick]);
 
   // Close the list when clicking anywhere outside the search box.
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) { setSuggestions([]); setHistoryOpen(false); }
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setListOpen(false);
     };
     document.addEventListener('mousedown', onDown);
     document.addEventListener('touchstart', onDown as unknown as EventListener);
@@ -126,7 +137,7 @@ export default function Valuation() {
     const ex: 'NSE' | 'BSE' = /\.BO$/i.test(symbol) ? 'BSE' : 'NSE';
     pickedRef.current = bare;
     setSuggestions([]);
-    setSearching(false);
+    setLastSearch(null);
     setQuery(bare);
     setExchange(ex);
     load(bare, ex);
@@ -136,7 +147,7 @@ export default function Valuation() {
     const id = ++reqId.current;
     pickedRef.current = symbol.replace(/\.(NS|BO)$/i, '');
     setSuggestions([]);
-    setHistoryOpen(false);
+    setListOpen(false);
     setLoading(true);
     setError(null);
     try {
@@ -202,8 +213,31 @@ export default function Valuation() {
     [f, roundEps, cyclical, weakPe, data, edited, src, growthNote]
   );
 
+  // --- What the dropdown shows for the text in the box -------------------------------
+  // Typing: matches for that text, or a plain "searching / no matches / couldn't search"
+  // line. Recent searches only appear when the box is empty (or holds a stock already
+  // picked), or — while typing — when they actually match what was typed.
+  const q = query.trim();
+  const typing = q.length > 0 && q !== pickedRef.current; // searching, not a settled pick
+  const longEnough = q.length >= 3;
+  const searching = typing && longEnough && lastSearch?.q !== q;
+  // Matches for an earlier, related text (still typing) stay up until the new lookup
+  // answers; matches for unrelated text never do.
+  const related = lastSearch !== null && (q.startsWith(lastSearch.q) || lastSearch.q.startsWith(q));
+  const showSuggestions = listOpen && typing && longEnough && related && suggestions.length > 0;
+  const notice: 'short' | 'searching' | 'failed' | 'empty' | null =
+    !listOpen || !typing || showSuggestions ? null
+    : !longEnough ? 'short'
+    : lastSearch?.q !== q ? 'searching'
+    : lastSearch.failed ? 'failed'
+    : 'empty';
+  const needle = q.toLowerCase();
+  const recents = typing
+    ? history.filter((h) => h.symbol.toLowerCase().includes(needle) || h.name.toLowerCase().includes(needle))
+    : history;
+  const showRecents = listOpen && !showSuggestions && recents.length > 0;
   // Until a stock is searched (or a lookup is running / failed), show nothing but the search box.
-  const searchActive = historyOpen || suggestions.length > 0;
+  const searchActive = showSuggestions || notice !== null || showRecents;
   const started = loading || data !== null || error !== null;
   const years = Math.round(num(f.years)) || 5;
   const maxBar = Math.max(num(f.price) || 0, result.levels.find((l) => l.key === 'X/2')?.target || 0);
@@ -216,7 +250,7 @@ export default function Valuation() {
       {searchActive && createPortal(
         <div
           aria-hidden="true"
-          onClick={() => { setSuggestions([]); setHistoryOpen(false); }}
+          onClick={() => setListOpen(false)}
           className="animate-backdrop-in fixed inset-0 z-[45] bg-slate-900/40"
         />,
         document.body,
@@ -230,15 +264,15 @@ export default function Valuation() {
               ref={inputRef}
               placeholder="Search"
               value={query}
-              onChange={(e) => { pickedRef.current = null; setHistoryOpen(false); setQuery(e.target.value.toUpperCase()); }}
-              onFocus={() => setHistoryOpen(true)}
-              onClick={() => setHistoryOpen(true)}
+              onChange={(e) => { pickedRef.current = null; setListOpen(true); setQuery(e.target.value.toUpperCase()); }}
+              onFocus={() => setListOpen(true)}
+              onClick={() => setListOpen(true)}
               className="uppercase placeholder:normal-case pr-10"
               autoCapitalize="characters"
               spellCheck={false}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && query.trim()) load(query.trim());
-                if (e.key === 'Escape') { setSuggestions([]); setHistoryOpen(false); }
+                if (e.key === 'Escape') setListOpen(false);
               }}
               aria-label="Search company or ticker"
             />
@@ -247,45 +281,88 @@ export default function Valuation() {
                 type="button"
                 aria-label="Clear search"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => { pickedRef.current = null; setQuery(''); setSuggestions([]); setHistoryOpen(true); inputRef.current?.focus(); }}
+                onClick={() => { pickedRef.current = null; setQuery(''); setSuggestions([]); setLastSearch(null); setListOpen(true); inputRef.current?.focus(); }}
                 className="absolute right-0 top-0 flex h-10 sm:h-9 w-10 items-center justify-center text-muted hover:text-ink"
               >
                 <X size={16} />
               </button>
             )}
-            {historyOpen && suggestions.length === 0 && history.length > 0 && (
-              <div className="absolute z-20 left-0 right-0 mt-1 overflow-hidden rounded-xl border border-line bg-surface shadow-lg">
-                <div className="flex items-center justify-between px-3 pt-2 pb-1 text-xs text-muted">
-                  <span className="flex items-center gap-1"><History size={13} />Recent searches</span>
-                  <button type="button" onClick={() => { setHistory([]); persistHistory([]); setHistoryOpen(false); }} className="px-1 py-1 hover:text-ink">Clear all</button>
-                </div>
-                <ul>
-                  {history.map((h) => (
-                    <li key={`${h.symbol}-${h.exchange}`}>
-                      <button
-                        type="button"
-                        onClick={() => { setQuery(h.symbol); setHistoryOpen(false); load(h.symbol, h.exchange); }}
-                        className="w-full text-left px-3 py-2.5 hover:bg-surface-hover text-sm break-words"
-                      >
-                        <span className="font-semibold">{h.symbol}</span>
-                        <span className="text-muted"> · {h.name} · {h.exchange}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+            {searchActive && (
+              <div
+                data-testid="search-list"
+                className="absolute z-20 left-0 right-0 mt-1 max-h-72 overflow-auto overscroll-contain rounded-xl border border-line bg-surface shadow-lg"
+              >
+                {showSuggestions && (
+                  <ul>
+                    {suggestions.map((s) => (
+                      <li key={s.symbol}>
+                        <button type="button" onClick={() => pick(s.symbol)} className="w-full text-left px-3 py-2.5 hover:bg-surface-hover text-sm break-words">
+                          <span className="font-semibold">{s.symbol.replace(/\.(NS|BO)$/, '')}</span>
+                          <span className="text-muted"> · {s.name}{s.exchDisp ? ` · ${s.exchDisp}` : ''}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {notice && (
+                  <div role="status" aria-live="polite" className="px-3 py-3 text-sm space-y-2">
+                    {notice === 'short' && <p className="text-muted">Type at least 3 letters to search all stocks.</p>}
+                    {notice === 'searching' && (
+                      <p className="flex items-center gap-2 text-muted"><Loader2 size={14} className="animate-spin shrink-0" />Searching for “{q}”…</p>
+                    )}
+                    {notice === 'failed' && (
+                      <p className="text-red-600">Couldn’t reach stock search — check your connection and try again.</p>
+                    )}
+                    {notice === 'empty' && (
+                      <p className="text-muted">No matches for “{q}”. Try the company name instead — or it may be a very recent listing that hasn’t been indexed yet.</p>
+                    )}
+                    {(notice === 'failed' || notice === 'empty') && (
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 font-medium">
+                        {notice === 'failed' && (
+                          <button
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => { setLastSearch(null); setRetryTick((t) => t + 1); }}
+                            className="text-brand-600 hover:text-brand-700"
+                          >
+                            Try again
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => load(q)}
+                          className="text-brand-600 hover:text-brand-700"
+                        >
+                          Try “{q}” anyway
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {showRecents && (
+                  <div className={notice ? 'border-t border-line-soft' : undefined}>
+                    <div className="flex items-center justify-between px-3 pt-2 pb-1 text-xs text-muted">
+                      <span className="flex items-center gap-1"><History size={13} />Recent searches</span>
+                      <button type="button" onClick={() => { setHistory([]); persistHistory([]); setListOpen(false); }} className="px-1 py-1 hover:text-ink">Clear all</button>
+                    </div>
+                    <ul>
+                      {recents.map((h) => (
+                        <li key={`${h.symbol}-${h.exchange}`}>
+                          <button
+                            type="button"
+                            onClick={() => { setQuery(h.symbol); setListOpen(false); load(h.symbol, h.exchange); }}
+                            className="w-full text-left px-3 py-2.5 hover:bg-surface-hover text-sm break-words"
+                          >
+                            <span className="font-semibold">{h.symbol}</span>
+                            <span className="text-muted"> · {h.name} · {h.exchange}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
-            )}
-            {suggestions.length > 0 && (
-              <ul className="absolute z-20 left-0 right-0 mt-1 max-h-60 sm:max-h-64 overflow-auto overscroll-contain rounded-xl border border-line bg-surface shadow-lg">
-                {suggestions.map((s) => (
-                  <li key={s.symbol}>
-                    <button type="button" onClick={() => { setHistoryOpen(false); pick(s.symbol); }} className="w-full text-left px-3 py-2.5 hover:bg-surface-hover text-sm break-words">
-                      <span className="font-semibold">{s.symbol.replace(/\.(NS|BO)$/, '')}</span>
-                      <span className="text-muted"> · {s.name}{s.exchDisp ? ` · ${s.exchDisp}` : ''}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
             )}
           </div>
           <Button onClick={() => query.trim() && load(query.trim())} loading={loading} className="w-full sm:w-auto shrink-0">Get valuation</Button>

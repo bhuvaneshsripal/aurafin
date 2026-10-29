@@ -1,0 +1,23 @@
+# Wakes the push sender every 5 minutes on weekdays during Indian market hours
+# (03:30-11:30 UTC = 09:00-17:00 IST). GitHub's schedule can run a few minutes
+# late, which the alert windows tolerate.
+#
+# Add two repository secrets (Settings > Secrets and variables > Actions):
+#   APP_URL      e.g. https://aurafin-five.vercel.app   (no trailing slash)
+#   CRON_SECRET  the same value as the CRON_SECRET env var on Vercel
+name: Push alerts
+
+on:
+  schedule:
+    - cron: '*/5 3-11 * * 1-5'
+  workflow_dispatch: {}
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the push sender
+        run: |
+          curl --fail --silent --show-error --max-time 60 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.APP_URL }}/api/push/send"

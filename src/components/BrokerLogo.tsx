@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useFittedLogo } from '../utils/logoFit';
 
 /** Website of each broker — used to fetch its own brand icon when no local file is provided. */
 const BROKER_DOMAINS: Record<string, string | string[]> = {
@@ -50,6 +51,7 @@ export default function BrokerLogo({
   ];
   const [stage, setStage] = useState(0);
   const src = sources[stage];
+  const fit = useFittedLogo(src);
 
   if (!src) {
     return (
@@ -63,21 +65,26 @@ export default function BrokerLogo({
   }
 
   return (
-    <img
-      key={src}
-      src={src}
-      alt=""
-      width={size}
-      height={size}
-      loading="lazy"
-      decoding="async"
-      onError={() => setStage((s) => s + 1)}
-      onLoad={(e) => {
-        // The icon service answers unknown sites with a tiny generic globe; treat that as "not found".
-        if (stage > 0 && e.currentTarget.naturalWidth <= 16 && e.currentTarget.src.includes('google.com/s2/favicons')) setStage((s) => s + 1);
-      }}
-      className="rounded-md object-contain bg-white shrink-0"
-      style={{ width: size, height: size }}
-    />
+    <span
+      className="inline-flex shrink-0 overflow-hidden rounded-md bg-white"
+      style={{ width: size, height: size, backgroundColor: fit?.bg }}
+    >
+      <img
+        key={fit ? 'fit' : src}
+        src={fit ? fit.url : src}
+        alt=""
+        width={size}
+        height={size}
+        loading="lazy"
+        decoding="async"
+        onError={() => setStage((s) => s + 1)}
+        onLoad={(e) => {
+          // The icon service answers unknown sites with a tiny generic globe; treat that as "not found".
+          if (stage > 0 && e.currentTarget.naturalWidth <= 16 && e.currentTarget.src.includes('google.com/s2/favicons')) setStage((s) => s + 1);
+        }}
+        className={`${fit ? 'object-cover' : 'object-contain p-0.5'} w-full h-full`}
+        style={{ width: size, height: size }}
+      />
+    </span>
   );
 }

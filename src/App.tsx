@@ -21,14 +21,17 @@ import {
   useAppLockSync,
   useWealthFilterSync,
   useAutoNetWorthHistory,
+  usePendingFlush,
   assignOrphanDataToProfile,
   ALL_USER_COLLECTIONS,
 } from './hooks/useFirestoreSync';
 import { useLivePrices } from './hooks/useLivePrices';
+import { useBackgroundDataCache } from './hooks/useBackgroundDataCache';
 import { useLiveSipValues } from './hooks/useLiveSipValues';
 import { useLiveGoldPrice } from './hooks/useLiveGoldPrice';
 import { useWeeklyDigestScheduler } from './hooks/useWeeklyDigestScheduler';
 import { useMarketAlerts } from './hooks/useMarketAlerts';
+import { usePushSubscription } from './hooks/usePushSubscription';
 import { useDailyHardRefresh } from './hooks/useDailyHardRefresh';
 import { useScrollRestoration } from './hooks/useScrollRestoration';
 import Sidebar from './components/Sidebar';
@@ -217,6 +220,8 @@ function WeeklyDigestSync() {
 
 function MarketAlertsSync() {
   useMarketAlerts();
+  // Lets the server reach this device with alerts even when the app is closed.
+  usePushSubscription();
   return null;
 }
 
@@ -245,6 +250,10 @@ function DataSync() {
   useAvatarSync();
   useAppLockSync();
   useWealthFilterSync();
+  // Pushes saves made while the network was weak/offline once it returns.
+  usePendingFlush();
+  // Keeps the saved market tables fresh (once a minute) for offline viewing.
+  useBackgroundDataCache();
   // Auto-records today's net worth as real history whenever assets/
   // liabilities change — see useAutoNetWorthHistory for why this needs to
   // be mounted after the sync-status flags it waits on are wired up above.

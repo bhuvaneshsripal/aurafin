@@ -65,7 +65,15 @@ export default async function handler(req, res) {
 
   try {
     const result = await searchIndia(q);
-    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=3600');
+    // Only a complete answer with matches is kept for long. An incomplete one (an
+    // upstream failed) or an empty one (e.g. a share listed since) is rechecked soon,
+    // so a hiccup can't leave a search stuck on "no results".
+    const cache = result.partial
+      ? 's-maxage=15'
+      : result.quotes.length === 0
+        ? 's-maxage=60'
+        : 's-maxage=300, stale-while-revalidate=3600';
+    res.setHeader('Cache-Control', cache);
     res.status(200).json(result);
   } catch {
     res.status(502).json({ error: 'Could not reach NSE or Yahoo Finance' });

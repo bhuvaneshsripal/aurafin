@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import IndicesTable, { type IndicesVariant } from '../components/IndicesTable';
 import { MAP_BORDERS, MAP_COUNTRIES, MAP_GLOBE, MAP_LAND, MAP_VIEWBOX } from '../utils/worldMapPaths';
 import { cn } from '../components/ui/cn';
+import { readCache, writeCache, CACHE_NAMES } from '../utils/fetchCache';
 
 const TABS: { key: IndicesVariant; label: string }[] = [
   { key: 'indian', label: 'Indian Indices' },
@@ -15,8 +16,22 @@ const DOWN = '#f0572d';
 const MAP_CODE: Record<string, string> = { HK: 'CN' };
 
 /** Per-country colour for the Global tab: green if its indices are net up today, orange if down. */
+function colorsFrom(indices: { region?: string; price: number; previousClose?: number }[]): Record<string, string> {
+  const sum: Record<string, number> = {};
+  for (const r of indices) {
+    if (!r.region || !r.previousClose) continue;
+    const code = MAP_CODE[r.region] ?? r.region;
+    sum[code] = (sum[code] ?? 0) + (r.price - r.previousClose) / r.previousClose;
+  }
+  return Object.fromEntries(Object.entries(sum).map(([c, v]) => [c, v >= 0 ? UP : DOWN]));
+}
+
 function useGlobalMarketColors(enabled: boolean) {
-  const [colors, setColors] = useState<Record<string, string>>({});
+  // Start from the last saved data so the map is coloured even with no network.
+  const [colors, setColors] = useState<Record<string, string>>(() => {
+    const c = readCache<{ region?: string; price: number; previousClose?: number }[]>(CACHE_NAMES.global);
+    return c ? colorsFrom(c.data) : {};
+  });
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
@@ -25,13 +40,8 @@ function useGlobalMarketColors(enabled: boolean) {
         const res = await fetch('/api/market/global-indices');
         const json = await res.json();
         if (cancelled || !Array.isArray(json?.indices)) return;
-        const sum: Record<string, number> = {};
-        for (const r of json.indices as { region?: string; price: number; previousClose?: number }[]) {
-          if (!r.region || !r.previousClose) continue;
-          const code = MAP_CODE[r.region] ?? r.region;
-          sum[code] = (sum[code] ?? 0) + (r.price - r.previousClose) / r.previousClose;
-        }
-        setColors(Object.fromEntries(Object.entries(sum).map(([c, v]) => [c, v >= 0 ? UP : DOWN])));
+        writeCache(CACHE_NAMES.global, json.indices);
+        setColors(colorsFrom(json.indices));
       } catch {
         /* keep whatever was drawn last */
       }

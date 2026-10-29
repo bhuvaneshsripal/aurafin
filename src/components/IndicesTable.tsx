@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { readCache, writeCache, CACHE_NAMES } from '../utils/fetchCache';
 import { RefreshCw } from 'lucide-react';
 import CountryFlag from './CountryFlag';
 import IndexIcon from './IndexIcon';
@@ -57,7 +58,8 @@ const td = 'px-4 py-4 text-right tabular-nums text-ink-2 whitespace-nowrap';
 
 /** Index table: Index name · Last traded · Day change · High · Low · Open · Prev. Close. */
 export default function IndicesTable({ variant }: { variant: IndicesVariant }) {
-  const [rows, setRows] = useState<Row[] | null | undefined>(undefined); // undefined = loading
+  // Start from the last saved table (if any) so a weak/no connection still shows data.
+  const [rows, setRows] = useState<Row[] | null | undefined>(() => readCache<Row[]>(CACHE_NAMES[variant])?.data);
   const [loading, setLoading] = useState(false);
   const indianOpen = useIsMarketOpen();
 
@@ -98,6 +100,7 @@ export default function IndicesTable({ variant }: { variant: IndicesVariant }) {
       if (!Array.isArray(json?.indices)) throw new Error('bad payload');
       // Same numbers as the table already shows (market closed, no tick yet):
       // hand React back the old array so it skips re-rendering every cell.
+      writeCache(CACHE_NAMES[variant], json.indices);
       if (seq === requestSeq.current) {
         setRows((prev) =>
           Array.isArray(prev) && JSON.stringify(prev) === JSON.stringify(json.indices) ? prev : json.indices
@@ -112,7 +115,7 @@ export default function IndicesTable({ variant }: { variant: IndicesVariant }) {
   }, [variant]);
 
   useEffect(() => {
-    setRows(undefined);
+    setRows(readCache<Row[]>(CACHE_NAMES[variant])?.data);
     load();
     let timer: number;
     let stopped = false;

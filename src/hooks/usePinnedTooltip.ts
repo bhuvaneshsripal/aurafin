@@ -64,6 +64,7 @@ export function usePinnedTooltip() {
     containerRef,
     pinned,
     handleChartClick,
+    setPinned,
     hidePinned: () => setPinned(null),
   };
 }

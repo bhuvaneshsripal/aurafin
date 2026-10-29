@@ -21,10 +21,20 @@ const SCREEN_KEY = 'aurafin-screen-scale';
 const EYE_SHOW_KEY = 'aurafin-floating-eye';
 const EYE_POS_KEY = 'aurafin-floating-eye-pos';
 
-function readEyePos(): { x: number; y: number } | null {
+/**
+ * Where the floating eye was left. `x` is px from the left edge. With
+ * `anchor: 'bottom'`, `y` is px from the bottom edge of the screen: the bottom
+ * is the same place in the browser and in the installed app (the browser's
+ * address bar only changes the top), so the eye stays put when switching.
+ * Older saves have no anchor: there `y` was px from the top.
+ */
+export type EyePos = { x: number; y: number; anchor?: 'bottom' };
+
+function readEyePos(): EyePos | null {
   try {
     const p = JSON.parse(localStorage.getItem(EYE_POS_KEY) ?? 'null');
-    return p && Number.isFinite(p.x) && Number.isFinite(p.y) ? { x: p.x, y: p.y } : null;
+    if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return null;
+    return p.anchor === 'bottom' ? { x: p.x, y: p.y, anchor: 'bottom' } : { x: p.x, y: p.y };
   } catch {
     return null;
   }
@@ -53,10 +63,10 @@ interface DisplaySettingsState {
   screenScale: number;
   /** Show the floating (draggable) eye button on screen. */
   floatingEye: boolean;
-  /** Where the floating eye was left (px from top-left); null = default corner. */
-  eyePos: { x: number; y: number } | null;
+  /** Where the floating eye was left; null = default corner. */
+  eyePos: EyePos | null;
   setFloatingEye: (on: boolean) => void;
-  setEyePos: (pos: { x: number; y: number } | null) => void;
+  setEyePos: (pos: EyePos | null) => void;
   init: () => void;
   increaseFont: () => void;
   decreaseFont: () => void;

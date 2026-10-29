@@ -114,3 +114,8 @@ export function pendingItem(p: Pending): Record<string, unknown> {
   for (const c of p.cleared ?? []) item[c] = undefined;
   return item;
 }
+
+/** Every unconfirmed save/delete for this user, across all collections. */
+export function allPending(uid: string): Pending[] {
+  return Object.values(readAll(uid));
+}

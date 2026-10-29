@@ -15,13 +15,16 @@ const IN_EXCHANGES = new Set(['NSI', 'BSE']);
 const isIndianSymbol = (symbol) => /\.(NS|BO)$/i.test(symbol ?? '');
 const baseOf = (symbol) => String(symbol ?? '').replace(/\.(NS|BO)$/i, '').toUpperCase();
 
+// Both helpers return null when the upstream itself failed (blocked, timed out,
+// bad status) and [] when it answered but found nothing. The difference matters:
+// a failure must never be remembered as "no results".
 async function searchYahooIndia(q) {
   try {
     const upstream = await fetch(
       `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=10&newsCount=0`,
       { headers: { 'User-Agent': 'Mozilla/5.0' } }
     );
-    if (!upstream.ok) return [];
+    if (!upstream.ok) return null;
     const data = await upstream.json();
     return (Array.isArray(data?.quotes) ? data.quotes : [])
       .filter(
@@ -38,7 +41,7 @@ async function searchYahooIndia(q) {
         quoteType: r.quoteType,
       }));
   } catch {
-    return [];
+    return null;
   }
 }
 
@@ -46,11 +49,15 @@ async function safeNse(q) {
   try {
     return (await searchNseSymbol(q)).quotes;
   } catch {
-    return [];
+    return null;
   }
 }
 
-/** Returns { quotes } or throws only if every upstream failed outright. */
+/**
+ * Returns { quotes, partial } or throws if every upstream failed outright.
+ * `partial` is true when some (not all) lookups failed, so the list may be
+ * incomplete and shouldn't be cached for long.
+ */
 export async function searchIndia(query) {
   const q = String(query ?? '').trim();
   const variants = [q];
@@ -64,9 +71,15 @@ export async function searchIndia(query) {
     Promise.all(variants.slice(0, 2).map(searchYahooIndia)),
   ]);
 
+  const lists = [...nseLists, ...yahooLists];
+  const failed = lists.filter((l) => l === null).length;
+  // Every lookup failed: report it (the handler answers 502, which isn't cached)
+  // instead of returning an empty list that looks like "nothing matches".
+  if (failed === lists.length) throw new Error('NSE and Yahoo Finance lookups all failed');
+
   const seen = new Set();
   const quotes = [];
-  for (const r of [...nseLists.flat(), ...yahooLists.flat()]) {
+  for (const r of lists.filter(Boolean).flat()) {
     const key = baseOf(r.symbol);
     if (!key || seen.has(key)) continue;
     seen.add(key);
@@ -84,5 +97,5 @@ export async function searchIndia(query) {
     return 3;
   };
   quotes.sort((a, b) => score(a) - score(b));
-  return { quotes: quotes.slice(0, 10) };
+  return { quotes: quotes.slice(0, 10), partial: failed > 0 };
 }

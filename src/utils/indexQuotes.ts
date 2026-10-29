@@ -28,6 +28,9 @@ export type IndexQuotesState = IndexQuote[] | null | undefined;
 const LIVE_MS = 1_000; // market open: refresh every second
 const IDLE_MS = 30_000; // market closed: nothing moves, so poll lazily
 const CACHE_KEY = 'aurafin.tickerQuotes';
+/** Hidden tab / app in the background: still refresh the saved copy once a minute. */
+const BACKGROUND_MS = 60_000;
+let lastFetchAt = 0;
 /** Persisting to localStorage is synchronous; once every few seconds is plenty. */
 const CACHE_WRITE_EVERY_MS = 5_000;
 
@@ -100,7 +103,9 @@ function startPolling(): () => void {
   const tick = async () => {
     const myGeneration = ++generation;
     const startedAt = Date.now();
-    if (document.visibilityState !== 'hidden') {
+    const hidden = document.visibilityState === 'hidden';
+    if (!hidden || startedAt - lastFetchAt >= BACKGROUND_MS) {
+      lastFetchAt = startedAt;
       const q = await fetchIndexQuotes();
       if (q) {
         lastGood = q;

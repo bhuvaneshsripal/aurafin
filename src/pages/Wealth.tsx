@@ -53,7 +53,7 @@ import {
 import { useAssetsStore } from '../store/assetsStore';
 import { useSnapshotsStore } from '../store/snapshotsStore';
 import SplitAmount from '../components/SplitAmount';
-import { useLivePricesStore, resolvePreviousClose } from '../store/livePricesStore';
+import { useLivePricesStore, resolvePreviousClose, isPriceCacheFresh } from '../store/livePricesStore';
 import { formatDate, formatLocaleDate, toIsoDate } from '../utils/date';
 import { newId } from '../utils/id';
 import { goldPricePerGram22k } from '../utils/goldPrice';
@@ -64,6 +64,7 @@ import { useSyncStatusStore } from '../store/syncStatusStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useAuthStore } from '../store/authStore';
 import { useUiStore } from '../store/uiStore';
+import SectorAllocationCard from '../components/SectorAllocationCard';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import { upsertDoc, removeDoc, saveWealthFilters } from '../hooks/useFirestoreSync';
 import { useWealthFilterStore } from '../store/wealthFilterStore';
@@ -961,8 +962,13 @@ function AssetsTab({
   // shows instantly and the background refresh corrects it silently if not.
   const liveEquityAssets = allAssets.filter((a) => a.symbol && a.quantity && a.quantity > 0);
   const hasLivePriced = liveEquityAssets.length > 0;
+  // A cached price only counts if it is recent — otherwise wait for the real fetch
+  // rather than briefly showing numbers from hours or days ago.
+  const pricesUpdatedAt = useLivePricesStore((s) => s.pricesUpdatedAt);
   const pricesCached =
-    hasLivePriced && liveEquityAssets.every((a) => livePrices[a.symbol!.toUpperCase()] !== undefined);
+    hasLivePriced &&
+    isPriceCacheFresh(pricesUpdatedAt) &&
+    liveEquityAssets.every((a) => livePrices[a.symbol!.toUpperCase()] !== undefined);
   const sipLinkedAssets = allAssets.filter(
     (a) => a.assetClass === 'sip' && a.symbol && /^\d+$/.test(a.symbol)
   );
@@ -4739,6 +4745,7 @@ function AssetDetailPage({
   const livePrices = useLivePricesStore((s) => s.prices);
   const sipValues = useLivePricesStore((s) => s.sipValues);
   const pricesAttempted = useLivePricesStore((s) => s.pricesAttempted);
+  const pricesUpdatedAtDetail = useLivePricesStore((s) => s.pricesUpdatedAt);
   const sipValuesAttempted = useLivePricesStore((s) => s.sipValuesAttempted);
   const liveGoldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
   const goldPriceError = useLivePricesStore((s) => s.goldPriceError);
@@ -4767,7 +4774,8 @@ function AssetDetailPage({
     ? sipValuesAttempted || sipValues[asset.symbol!.trim()] !== undefined
     : isGoldAsset
       ? liveGoldPricePerGram !== null || goldPriceError
-      : pricesAttempted || livePrices[(asset.symbol ?? '').toUpperCase()] !== undefined;
+      : pricesAttempted ||
+        (isPriceCacheFresh(pricesUpdatedAtDetail) && livePrices[(asset.symbol ?? '').toUpperCase()] !== undefined);
   const valuePending = isLivePricedAsset && !priceReady;
   const category = ASSET_CLASS_TO_CATEGORY[asset.assetClass];
   const positive = (pnl ?? 0) >= 0;
@@ -8259,6 +8267,7 @@ function AllocationTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) 
       ) : (
         <>
           <AllocationChart categories={categories} total={total} currency={currency} />
+          <SectorAllocationCard items={allocItems} currency={currency} />
           {currencies.length > 1 && (
             <p className="mt-3 text-xs text-muted flex items-center gap-1.5">
               Showing {currency} only
