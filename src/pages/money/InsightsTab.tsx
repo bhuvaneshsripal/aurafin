@@ -20,7 +20,7 @@ import { useSyncStatusStore } from '../../store/syncStatusStore';
 import { useHouseholdProfilesStore } from '../../store/householdProfilesStore';
 import { useUiStore } from '../../store/uiStore';
 import { maskAmount } from '../../utils/currency';
-import { formatDate, toIsoMonth } from '../../utils/date';
+import { formatDate, formatLocaleDate, toIsoMonth } from '../../utils/date';
 import Amount from '../../components/Amount';
 import LoadingDots from '../../components/LoadingDots';
 import { chart } from '../../components/ui/chartTheme';
@@ -31,7 +31,7 @@ const COLORS = ['#16a35d', '#3b82f6', '#f5b942', '#f97316', '#8b5cf6', '#ef4444'
 
 function monthLabel(month: string, short = false) {
   const [y, m] = month.split('-').map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString('en-IN', short ? { month: 'short' } : { month: 'long', year: 'numeric' });
+  return formatLocaleDate(new Date(y, m - 1, 1), 'en-IN', short ? { month: 'short' } : { month: 'long', year: 'numeric' });
 }
 
 function shiftMonth(month: string, delta: number) {

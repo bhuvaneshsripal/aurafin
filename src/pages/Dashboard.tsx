@@ -28,7 +28,7 @@ import { useUiStore } from '../store/uiStore';
 import { useSyncStatusStore } from '../store/syncStatusStore';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import GoldPriceCard from '../components/GoldPriceCard';
-import { formatDate, toIsoDate, toIsoMonth } from '../utils/date';
+import { formatDate, formatLocaleDate, toIsoDate, toIsoMonth } from '../utils/date';
 import {
   Badge,
   Card,
@@ -350,7 +350,7 @@ export default function Dashboard() {
 
 function monthLabel(month: string) {
   const [y, m] = month.split('-').map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString('en-IN', { month: 'short' });
+  return formatLocaleDate(new Date(y, m - 1, 1), 'en-IN', { month: 'short' });
 }
 
 function shortDate(iso: string) {
@@ -563,7 +563,7 @@ function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
               <XAxis
                 dataKey="date"
                 tickFormatter={(d: string) =>
-                  new Date(`${d}T00:00:00`).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
+                  formatLocaleDate(new Date(`${d}T00:00:00`), 'en-IN', { month: 'short', day: 'numeric' })
                 }
                 tick={chart.tick}
                 axisLine={false}

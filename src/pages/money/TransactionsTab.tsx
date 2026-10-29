@@ -22,7 +22,7 @@ import { useHouseholdProfilesStore } from '../../store/householdProfilesStore';
 import { useSyncStatusStore } from '../../store/syncStatusStore';
 import { upsertDoc, removeDoc } from '../../hooks/useFirestoreSync';
 import { exportToCsv, exportToXlsx } from '../../utils/exportCsv';
-import { formatDate, toIsoDate } from '../../utils/date';
+import { formatDate, formatLocaleDate, toIsoDate } from '../../utils/date';
 import Modal from '../../components/Modal';
 import ConfirmDeleteModal from '../../components/ConfirmDeleteModal';
 import Amount from '../../components/Amount';
@@ -53,6 +53,17 @@ const PERIODS: { key: Period; label: string }[] = [
   { key: 'custom', label: 'Custom' },
 ];
 
+// The list used to draw EVERY transaction at once (~30 DOM nodes each). With a few
+// hundred entries that froze the page for a second on open and made scrolling
+// choppy on phones; with thousands it was far worse. Now the first batch is drawn
+// straight away and more are added just before you scroll to them — it looks and
+// behaves the same, but only what you can reach is in the DOM.
+const ROWS_PER_BATCH = 60;
+// Remembered while the app is open, so coming back to this page after visiting
+// another one re-draws as many rows as you had scrolled through and the saved
+// scroll position (see useScrollRestoration) still lands in the right place.
+let rememberedRowLimit = ROWS_PER_BATCH;
+
 const pad = (n: number) => String(n).padStart(2, '0');
 const monthOf = (iso: string) => iso.slice(0, 7);
 const shiftMonth = (ym: string, n: number) => {
@@ -65,7 +76,7 @@ const monthEnd = (ym: string) => {
   return `${ym}-${pad(d.getDate())}`;
 };
 const monthLabel = (ym: string) =>
-  new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)) - 1, 1).toLocaleDateString('en-IN', {
+  formatLocaleDate(new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)) - 1, 1), 'en-IN', {
     month: 'long',
     year: 'numeric',
   });
@@ -126,7 +137,7 @@ function dayHeading(iso: string) {
   const yest = new Date();
   yest.setDate(yest.getDate() - 1);
   if (iso === toIsoDate(yest)) return 'Yesterday';
-  return dt.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+  return formatLocaleDate(dt, 'en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 function pctChange(cur: number, prev: number): { value: string; up: boolean } | undefined {
@@ -175,6 +186,24 @@ export default function TransactionsTab() {
   const [sortKey, setSortKey] = useState<'date' | 'amount'>('date');
   const [sortDesc, setSortDesc] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // How many rows are drawn (see ROWS_PER_BATCH). Starts over whenever the filters,
+  // period, search or sort change, so a new result list begins at its top.
+  const [rowLimit, setRowLimit] = useState(rememberedRowLimit);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const resultKey = [period, anchor, customFrom, customTo, query, typeFilter, categoryFilter, sortKey, sortDesc, activeProfileId].join('|');
+  const lastResultKey = useRef(resultKey);
+  useEffect(() => {
+    if (lastResultKey.current === resultKey) return;
+    lastResultKey.current = resultKey;
+    setRowLimit(ROWS_PER_BATCH);
+  }, [resultKey]);
+  useEffect(() => {
+    rememberedRowLimit = rowLimit;
+  }, [rowLimit]);
+  // Without IntersectionObserver (very old browsers) there is no way to know when to
+  // draw more, so just draw everything like before.
+  const canLoadMore = typeof IntersectionObserver !== 'undefined';
 
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
@@ -258,6 +287,41 @@ export default function TransactionsTab() {
     }
     return out;
   }, [visible, sortKey]);
+
+  // The part of the list that is actually drawn right now.
+  const effectiveLimit = canLoadMore ? rowLimit : Infinity;
+  const shown = useMemo(() => {
+    if (groups) {
+      const shownGroups: typeof groups = [];
+      let rows = 0;
+      for (const g of groups) {
+        if (rows >= effectiveLimit) break;
+        shownGroups.push(g);
+        rows += g.items.length;
+      }
+      return { groups: shownGroups, flat: null, rows };
+    }
+    const flat = visible.slice(0, effectiveLimit);
+    return { groups: null, flat, rows: flat.length };
+  }, [groups, visible, effectiveLimit]);
+  const hasMoreRows = shown.rows < visible.length;
+
+  // When the bottom of what is drawn gets close to the screen, draw the next batch.
+  // The observer is re-created after every batch, so if the end of the list is still
+  // close to the screen (tall window, short rows) it immediately asks for another.
+  useEffect(() => {
+    if (!hasMoreRows || !canLoadMore) return;
+    const el = loadMoreRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setRowLimit((n) => n + ROWS_PER_BATCH);
+      },
+      { rootMargin: '1200px 0px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMoreRows, canLoadMore, shown.rows]);
 
   const filtersActive = typeFilter !== 'all' || !!categoryFilter || !!query.trim();
   const clearFilters = () => {
@@ -726,8 +790,8 @@ export default function TransactionsTab() {
             />
             Select all
           </div>
-          {groups ? (
-            groups.map((g) => (
+          {shown.groups ? (
+            shown.groups.map((g) => (
               <div key={g.date}>
                 <div className="flex items-center justify-between px-3 sm:px-4 py-1.5 bg-slate-50 dark:bg-slate-800/40 border-b border-line-soft text-xs">
                   <span className="font-semibold text-slate-600 dark:text-slate-300">{dayHeading(g.date)}</span>
@@ -740,8 +804,10 @@ export default function TransactionsTab() {
               </div>
             ))
           ) : (
-            <ul className="divide-y divide-line-soft">{visible.map((t) => renderRow(t, true))}</ul>
+            <ul className="divide-y divide-line-soft">{shown.flat!.map((t) => renderRow(t, true))}</ul>
           )}
+          {/* Invisible marker: when it nears the screen, the next batch of rows is drawn. */}
+          {hasMoreRows && <div ref={loadMoreRef} aria-hidden="true" className="h-px" />}
         </Card>
       )}
 

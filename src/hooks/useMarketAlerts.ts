@@ -5,6 +5,7 @@ import { useAlertsStore, type AlertKind } from '../store/alertsStore';
 import { resolveLivePrice, resolvePreviousClose, useLivePricesStore } from '../store/livePricesStore';
 import { getIstDateInfo, getIstTimeOfDay, isMarketOpen } from '../utils/marketHours';
 import { formatCurrency } from '../utils/currency';
+import { fetchIndexQuotes, getRecentIndexQuotes, type IndexQuote } from '../utils/indexQuotes';
 
 /** Price-move levels (%) that trigger a holding alert, in either direction. */
 const LEVELS = [2, 5];
@@ -19,24 +20,13 @@ const CLOSE = [15 * 60 + 30, 17 * 60];
 
 const fmt = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export interface IndexQuote {
-  key: string;
-  name: string;
-  price: number;
-  previousClose?: number;
-  /** Today's opening level, when the data source provides it. */
-  open?: number;
-}
+export type { IndexQuote };
 
+/** Latest index levels. Reuses the top-bar ticker's copy when it is fresh (the
+ *  ticker refreshes every second during market hours), so the alert check no
+ *  longer sends its own request every few seconds on top of it. */
 export async function loadIndices(): Promise<IndexQuote[]> {
-  try {
-    const res = await fetch(`/api/market/indices?_=${Date.now()}`, { cache: 'no-store' });
-    if (!res.ok) return [];
-    const json = await res.json();
-    return Array.isArray(json?.indices) ? json.indices : [];
-  } catch {
-    return [];
-  }
+  return getRecentIndexQuotes(4_000) ?? (await fetchIndexQuotes()) ?? [];
 }
 
 function indexLine(indices: IndexQuote[], withChange: boolean): string {

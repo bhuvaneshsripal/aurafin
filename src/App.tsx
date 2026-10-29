@@ -264,10 +264,12 @@ function DataSync() {
   useEffect(() => {
     if (!user || profiles.length !== 1) return;
     const soleProfileId = profiles[0].id;
-    assignOrphanDataToProfile(user.uid, 'assets', assets, soleProfileId);
-    assignOrphanDataToProfile(user.uid, 'liabilities', liabilities, soleProfileId);
-    assignOrphanDataToProfile(user.uid, 'goals', goals, soleProfileId);
-    assignOrphanDataToProfile(user.uid, 'transactions', transactions, soleProfileId);
+    // Pass the user (not just the uid) so a guest's records are stamped in
+    // their on-device storage instead of being sent to Firestore.
+    assignOrphanDataToProfile(user, 'assets', assets, soleProfileId);
+    assignOrphanDataToProfile(user, 'liabilities', liabilities, soleProfileId);
+    assignOrphanDataToProfile(user, 'goals', goals, soleProfileId);
+    assignOrphanDataToProfile(user, 'transactions', transactions, soleProfileId);
   }, [user, profiles, assets, liabilities, goals, transactions]);
 
   // Offline-safe fallback: if the server never confirms (no connection),

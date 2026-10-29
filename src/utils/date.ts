@@ -21,6 +21,29 @@
  *    formatted directly.
  */
 
+const localeDateFormatters = new Map<string, Intl.DateTimeFormat>();
+
+/**
+ * Same result as `date.toLocaleDateString(locale, options)`, but reuses one
+ * Intl.DateTimeFormat per locale + options instead of building a new one on
+ * every call. Building the formatter is the slow part (tens of microseconds on
+ * a desktop, a millisecond or more on a mid-range phone), and charts call their
+ * axis-label formatter for every data point on every render, so a chart with
+ * 120 points was creating 120 formatters each time it drew. Always pass at
+ * least one date field (weekday/year/month/day) in `options`.
+ */
+export function formatLocaleDate(date: Date, locale: string, options: Intl.DateTimeFormatOptions): string {
+  // toLocaleDateString() returns "Invalid Date" for a bad date; Intl's format() would throw.
+  if (Number.isNaN(date.getTime())) return 'Invalid Date';
+  const cacheKey = `${locale}|${JSON.stringify(options)}`;
+  let formatter = localeDateFormatters.get(cacheKey);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(locale, options);
+    localeDateFormatters.set(cacheKey, formatter);
+  }
+  return formatter.format(date);
+}
+
 /** Local calendar date as "YYYY-MM-DD" — the timezone-safe replacement for
  *  `date.toISOString().slice(0, 10)`. That pattern reads the *UTC* calendar
  *  day, which silently shifts a whole day earlier for anyone in a positive

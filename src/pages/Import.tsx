@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useAssetsStore } from '../store/assetsStore';
+import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import { bulkUpsertDocs } from '../hooks/useFirestoreSync';
 import { parseSpreadsheetFile, rowsToAssets, type ParsedRow, type ParseOptions } from '../utils/importParser';
 import { fetchLiveQuotes, type LiveQuoteDetail } from '../utils/marketPrices';
@@ -267,6 +268,7 @@ function applyLiveQuote(row: ParsedRow, quoteMap: Map<string, LiveQuoteDetail>):
 
 export default function Import() {
   const user = useAuthStore((s) => s.user);
+  const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
   const existingAssets = useAssetsStore((s) => s.assets);
   const [importTab, setImportTab] = useState<'broker' | 'standard'>('broker');
   const [selectedBroker, setSelectedBroker] = useState<Broker>(BROKERS[0]);
@@ -366,7 +368,12 @@ export default function Import() {
     setStatus('saving');
     try {
       const { assets, updatedCount, addedCount } = rowsToAssets(rows, existingAssets, matchExisting);
-      await bulkUpsertDocs(user, 'assets', assets);
+      // File imported holdings under the profile that's selected right now, like
+      // the Add Asset form does — otherwise they have no owner and don't show
+      // up when a specific profile is selected. Holdings that already belong to
+      // a profile keep it.
+      const stamped = activeProfileId ? assets.map((a) => (a.profileId ? a : { ...a, profileId: activeProfileId })) : assets;
+      await bulkUpsertDocs(user, 'assets', stamped);
       setImportResult({ updated: updatedCount, added: addedCount });
       setStatus('done');
     } catch (e) {

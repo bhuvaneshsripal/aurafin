@@ -30,24 +30,25 @@ const POLL_MS = 30_000;
 // Indian indices refresh every 2 seconds while the market is open.
 const LIVE_POLL_MS = 2_000;
 
-const fmt = (n: number | undefined) =>
-  n === undefined ? '—' : n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Built once: `n.toLocaleString(locale, options)` creates a new Intl.NumberFormat
+// on every call, and this table formats ~7 numbers per row on every refresh
+// (every 2 seconds while the market is open).
+const levelFormatter = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt = (n: number | undefined) => (n === undefined ? '—' : levelFormatter.format(n));
+
+const stampFormatter = new Intl.DateTimeFormat('en-IN', {
+  timeZone: 'Asia/Kolkata',
+  day: '2-digit',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: true,
+});
 
 /** "12 Oct, 11:59 AM" in India time. */
 function stamp(ms: number | undefined) {
   if (!ms) return '';
-  const p = Object.fromEntries(
-    new Intl.DateTimeFormat('en-IN', {
-      timeZone: 'Asia/Kolkata',
-      day: '2-digit',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    })
-      .formatToParts(new Date(ms))
-      .map((x) => [x.type, x.value])
-  );
+  const p = Object.fromEntries(stampFormatter.formatToParts(new Date(ms)).map((x) => [x.type, x.value]));
   return `${p.day} ${p.month}, ${p.hour}:${p.minute} ${String(p.dayPeriod).toUpperCase()}`;
 }
 
@@ -95,7 +96,13 @@ export default function IndicesTable({ variant }: { variant: IndicesVariant }) {
       if (!res.ok) throw new Error(String(res.status));
       const json = await res.json();
       if (!Array.isArray(json?.indices)) throw new Error('bad payload');
-      if (seq === requestSeq.current) setRows(json.indices);
+      // Same numbers as the table already shows (market closed, no tick yet):
+      // hand React back the old array so it skips re-rendering every cell.
+      if (seq === requestSeq.current) {
+        setRows((prev) =>
+          Array.isArray(prev) && JSON.stringify(prev) === JSON.stringify(json.indices) ? prev : json.indices
+        );
+      }
     } catch {
       // Keep the last good table on a failed refresh.
       if (seq === requestSeq.current) setRows((prev) => (Array.isArray(prev) ? prev : null));

@@ -21,7 +21,7 @@ import { useHouseholdProfilesStore } from '../../store/householdProfilesStore';
 import { upsertDoc, removeDoc } from '../../hooks/useFirestoreSync';
 import { BUDGET_CATEGORIES, budgetKey, canonicalCategory } from '../../utils/budgetCategories';
 import { formatCurrency, hideNumber } from '../../utils/privateFormat';
-import { toIsoMonth } from '../../utils/date';
+import { formatLocaleDate, toIsoMonth } from '../../utils/date';
 import { cn } from '../../components/ui/cn';
 import type { BudgetItem } from '../../types';
 
@@ -29,7 +29,7 @@ import type { BudgetItem } from '../../types';
 
 function monthLabel(month: string) {
   const [y, m] = month.split('-').map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  return formatLocaleDate(new Date(y, m - 1, 1), 'en-US', { month: 'long', year: 'numeric' });
 }
 
 function shiftMonth(month: string, delta: number) {

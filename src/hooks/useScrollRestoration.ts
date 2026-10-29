@@ -59,18 +59,37 @@ export function useScrollRestoration() {
     // than trying to capture it once on the way out — by the time an
     // effect for the *next* route would run, this route's DOM (and its
     // scroll position) is already gone.
-    const onScroll = () => {
-      scrollMemory.set(key, window.scrollY);
+    //
+    // The in-memory Map is updated on every event (it's free), but the
+    // sessionStorage copy used for "restore after a refresh" is written only
+    // once scrolling settles. sessionStorage is synchronous: writing it on
+    // every scroll event (dozens per second) was stealing time from the main
+    // thread mid-scroll, which shows up as stutter on phones. It is also saved
+    // right away when the page is hidden/unloaded so a refresh still lands
+    // exactly where you were.
+    let saveTimer: number | undefined;
+    const save = () => {
+      window.clearTimeout(saveTimer);
       try {
         sessionStorage.setItem(SESSION_KEY, JSON.stringify({ key, top: window.scrollY }));
       } catch {
         /* best-effort */
       }
     };
+    const onScroll = () => {
+      scrollMemory.set(key, window.scrollY);
+      window.clearTimeout(saveTimer);
+      saveTimer = window.setTimeout(save, 200);
+    };
     window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('pagehide', save);
     return () => {
       cancelAnimationFrame(raf);
+      // Drop a pending save instead of running it: by now the next page may
+      // already be on screen, and saving then would record the wrong position.
+      window.clearTimeout(saveTimer);
       window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('pagehide', save);
     };
   }, [key]);
 }

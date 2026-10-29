@@ -34,7 +34,10 @@ function ssRemove(key: string) {
  * reloads the tab once (picking up the new deployment's chunk list) rather
  * than surfacing the error every time.
  */
-export function lazyWithRetry<T extends ComponentType<unknown>>(
+// `any` props (same as React.lazy's own signature) so components that take
+// props can be lazy-loaded too; with `unknown` only prop-less pages type-checked.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function lazyWithRetry<T extends ComponentType<any>>(
   factory: () => Promise<{ default: T }>
 ) {
   return lazy(async () => {

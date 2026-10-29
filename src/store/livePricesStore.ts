@@ -53,7 +53,12 @@ interface LivePricesState {
 
 export const useLivePricesStore = create<LivePricesState>()(
   persist(
-    (set) => ({
+    // NOTE on the guards below: with the `persist` middleware EVERY set() call
+    // serialises the cached prices and writes them to localStorage
+    // synchronously — even when nothing changed. The poll loops call these
+    // setters every few seconds, so each one skips the set() entirely when the
+    // value is already what it should be.
+    (set, get) => ({
       prices: {},
       previousCloses: {},
       sipValues: {},
@@ -62,23 +67,38 @@ export const useLivePricesStore = create<LivePricesState>()(
       pricesAttempted: false,
       sipValuesAttempted: false,
       goldAttempted: false,
-      setGoldAttempted: (goldAttempted) => set({ goldAttempted }),
+      setGoldAttempted: (goldAttempted) => {
+        if (get().goldAttempted !== goldAttempted) set({ goldAttempted });
+      },
       setPrices: (prices) => set({ prices, lastUpdated: Date.now(), loading: false }),
-      setPreviousCloses: (previousCloses) =>
-        set((s) => ({ previousCloses: { ...s.previousCloses, ...previousCloses } })),
+      setPreviousCloses: (previousCloses) => {
+        const prev = get().previousCloses;
+        const changed = Object.entries(previousCloses).some(([k, v]) => prev[k] !== v);
+        if (changed) set({ previousCloses: { ...prev, ...previousCloses } });
+      },
       setSipValues: (sipValues) =>
         set((s) => ({ sipValues: { ...s.sipValues, ...sipValues }, lastUpdated: Date.now() })),
-      setLoading: (loading) => set({ loading }),
-      setPricesAttempted: (pricesAttempted) => set({ pricesAttempted }),
-      setSipValuesAttempted: (sipValuesAttempted) => set({ sipValuesAttempted }),
+      setLoading: (loading) => {
+        if (get().loading !== loading) set({ loading });
+      },
+      setPricesAttempted: (pricesAttempted) => {
+        if (get().pricesAttempted !== pricesAttempted) set({ pricesAttempted });
+      },
+      setSipValuesAttempted: (sipValuesAttempted) => {
+        if (get().sipValuesAttempted !== sipValuesAttempted) set({ sipValuesAttempted });
+      },
       goldPricePerGram: null,
       goldPriceAsOf: null,
       goldPriceLoading: false,
       goldPriceError: false,
       setGoldPrice: (goldPricePerGram, goldPriceAsOf) =>
         set({ goldPricePerGram, goldPriceAsOf, goldPriceLoading: false, goldPriceError: false }),
-      setGoldPriceLoading: (goldPriceLoading) => set({ goldPriceLoading }),
-      setGoldPriceError: (goldPriceError) => set({ goldPriceError }),
+      setGoldPriceLoading: (goldPriceLoading) => {
+        if (get().goldPriceLoading !== goldPriceLoading) set({ goldPriceLoading });
+      },
+      setGoldPriceError: (goldPriceError) => {
+        if (get().goldPriceError !== goldPriceError) set({ goldPriceError });
+      },
     }),
     {
       // Cache the last real fetched prices across page loads/refreshes, so

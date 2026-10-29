@@ -251,7 +251,10 @@ export default defineConfig({
         // even offline. Firebase/auth calls always go to the network.
         importScripts: ['/notification-sw.js'],
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
-        globIgnores: ['**/xlsx-*.js'],
+        // xlsx is loaded on demand; /logo.png is a 1.5 MB master image that
+        // nothing in the app references, so don't make every first-time
+        // visitor download it in the background (it is still served normally).
+        globIgnores: ['**/xlsx-*.js', '**/logo.png'],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
@@ -352,18 +355,25 @@ export default defineConfig({
     },
   },
   build: {
-    rollupOptions: {
+    rolldownOptions: {
       output: {
-        manualChunks(id: string) {
-          if (id.includes('node_modules')) {
-            if (id.includes('recharts') || id.includes('d3-')) return 'charts';
-            if (id.includes('firebase')) return 'firebase';
-            if (id.includes('xlsx')) return 'xlsx';
-            if (id.includes('framer-motion')) return 'motion';
-            if (id.includes('react-dom') || id.includes('react-router') || id.includes('/react/') || id.includes('zustand')) {
-              return 'vendor';
-            }
-          }
+        // Explicit chunk groups. `priority` decides who claims a shared module
+        // first: the app-wide libraries (React, router, zustand, clsx) must be
+        // claimed by `vendor` BEFORE `charts` runs, otherwise the charts group
+        // swallows React as one of recharts' dependencies, and every page —
+        // including the login screen — then has to download the whole charts
+        // library (~430 KB) before it can render anything.
+        codeSplitting: {
+          groups: [
+            {
+              name: 'vendor',
+              test: /node_modules[\\/](react|react-dom|scheduler|react-router|react-router-dom|react-is|use-sync-external-store|zustand|clsx)[\\/]/,
+              priority: 40,
+            },
+            { name: 'firebase', test: /node_modules[\\/](firebase|@firebase)[\\/]/, priority: 30 },
+            { name: 'xlsx', test: /node_modules[\\/]xlsx[\\/]/, priority: 20 },
+            { name: 'charts', test: /node_modules[\\/](recharts|d3-[^\\/]+)[\\/]/, priority: 10 },
+          ],
         },
       },
     },

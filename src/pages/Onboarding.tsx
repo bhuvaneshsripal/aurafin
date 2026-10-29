@@ -59,7 +59,7 @@ export default function Onboarding() {
     setSavingsRaw(v === '' ? autoSavings(income, expense) : v);
   };
 
-  const goTo = (i: number) => setStepIndex(Math.max(0, Math.min(STEPS.length - 1, i)));
+  const goTo =(i: number) => setStepIndex(Math.max(0, Math.min(STEPS.length - 1, i)));
 
   const saveProfile = async () => {
     if (!user) return;

@@ -10,7 +10,7 @@ import {
   sendPasswordResetEmail,
   type User,
 } from 'firebase/auth';
-import { auth, googleProvider, isFirebaseConfigured } from '../firebase/config';
+import { auth, googleProvider } from '../firebase/config';
 import { useSyncStatusStore } from './syncStatusStore';
 import { clearDataBackups } from '../utils/dataBackup';
 
@@ -31,7 +31,13 @@ function onboardingKey(uid: string) {
 // optimistically for a frame or two, since it grants no access by itself -
 // Firestore's security rules are enforced against the real Firebase ID
 // token, not against anything read from here.
-type CachedUser = Pick<User, 'uid' | 'email' | 'displayName' | 'photoURL'>;
+//
+// `isAnonymous` is kept too: a guest's data lives in localStorage while a signed-in
+// user's lives in Firestore, so the very first render (before Firebase confirms the
+// session) must already know which kind of account this is. Without it, a guest
+// was briefly treated as a normal user on every reload — their saved data was
+// looked up in Firestore, found nothing, and showed an empty account for a moment.
+type CachedUser = Pick<User, 'uid' | 'email' | 'displayName' | 'photoURL'> & { isAnonymous?: boolean };
 
 const CACHED_USER_KEY = 'aurafin-cached-user';
 
@@ -83,6 +89,7 @@ function writeCachedUser(user: User | null) {
       email: user.email,
       displayName: user.displayName,
       photoURL: user.photoURL,
+      isAnonymous: user.isAnonymous,
     };
     localStorage.setItem(CACHED_USER_KEY, JSON.stringify(cached));
   } catch {
@@ -120,14 +127,6 @@ const cachedUser = readCachedUser();
 // re-ran and re-rendered redundantly.
 let authInitialized = false;
 
-function assertFirebaseConfigured() {
-  if (!isFirebaseConfigured) {
-    throw Object.assign(new Error('Firebase environment settings are missing.'), {
-      code: 'auth/configuration-not-found',
-    });
-  }
-}
-
 export const useAuthStore = create<AuthState>((set, get) => ({
   // Hydrate synchronously from the last known session so the very first
   // render already has a user (when one exists) instead of starting blank
@@ -139,11 +138,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   init: () => {
     if (authInitialized) return;
     authInitialized = true;
-    if (!isFirebaseConfigured) {
-      writeCachedUser(null);
-      set({ user: null, loading: false, verifying: false, needsOnboarding: false });
-      return;
-    }
 
     let resolved = false;
     onAuthStateChanged(
@@ -182,7 +176,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }, fallbackDelay);
   },
   loginWithGoogle: async () => {
-    assertFirebaseConfigured();
     const result = await signInWithPopup(auth, googleProvider);
     if (getAdditionalUserInfo(result)?.isNewUser) {
       safeSet(onboardingKey(result.user.uid), 'true');
@@ -190,17 +183,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
   loginWithEmail: async (email, password) => {
-    assertFirebaseConfigured();
     await signInWithEmailAndPassword(auth, email, password);
   },
   registerWithEmail: async (email, password) => {
-    assertFirebaseConfigured();
     const result = await createUserWithEmailAndPassword(auth, email, password);
     safeSet(onboardingKey(result.user.uid), 'true');
     set({ needsOnboarding: true });
   },
   resetPassword: async (email) => {
-    assertFirebaseConfigured();
     try {
       await sendPasswordResetEmail(auth, email.trim());
     } catch (e) {
@@ -211,7 +201,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
   loginAsGuest: async () => {
-    assertFirebaseConfigured();
     const result = await signInAnonymously(auth);
     // Guests need to see onboarding/intro questions just like new sign-ups
     safeSet(onboardingKey(result.user.uid), 'true');

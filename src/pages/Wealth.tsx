@@ -54,7 +54,7 @@ import { useAssetsStore } from '../store/assetsStore';
 import { useSnapshotsStore } from '../store/snapshotsStore';
 import SplitAmount from '../components/SplitAmount';
 import { useLivePricesStore, resolvePreviousClose } from '../store/livePricesStore';
-import { formatDate, toIsoDate } from '../utils/date';
+import { formatDate, formatLocaleDate, toIsoDate } from '../utils/date';
 import { newId } from '../utils/id';
 import { goldPricePerGram22k } from '../utils/goldPrice';
 import { computeHoldingPnl, isFullySold } from '../utils/investmentPnl';
@@ -103,7 +103,7 @@ import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { ACCOUNT_TYPES, resolveAccountIcon, type AccountType } from '../utils/accountVisuals';
 import type { Asset, AssetClass, EpfDetails, PpfDetails, PropertyDetails, EsopDetails, FundDetails, DividendKind, Liability, LiabilityClass, Snapshot, Transaction } from '../types';
 import { useTransactionsStore } from '../store/transactionsStore';
-import { maskPreciseAmount, maskAmount } from '../utils/currency';
+import { maskPreciseAmount, maskAmount, formatLocaleNumber } from '../utils/currency';
 import { formatPreciseCurrency, formatAxisAmount, formatPercentMagnitude, formatSignedCurrency, hideNumber } from '../utils/privateFormat';
 import {
   ASSET_TAXONOMY,
@@ -2402,7 +2402,7 @@ function AssetsTab({
                       qty > 0
                         ? WEIGHT_TRACKED_CLASSES.has(a.assetClass)
                           ? `${formatGrams(qty)} g`
-                          : hideNumber(qty.toLocaleString('en-IN', { maximumFractionDigits: 4 }))
+                          : hideNumber(formatLocaleNumber(qty, 'en-IN', { maximumFractionDigits: 4 }))
                         : '—';
                     const isBeingDragged = draggingId === a.id;
                     const pending = isAssetLivePriced(a) && !totalsReady;
@@ -7845,7 +7845,7 @@ function LiabilityDetailsForm({
 function monthLabel(ym: string): string {
   const [y, m] = ym.split('-').map(Number);
   if (!y || !m) return ym;
-  return new Date(y, m - 1, 1).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+  return formatLocaleDate(new Date(y, m - 1, 1), 'en-IN', { month: 'short', year: 'numeric' });
 }
 
 function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
@@ -7923,7 +7923,7 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   }, [data]);
 
   const trackingSinceLabel = sortedAsc[0]
-    ? new Date(`${sortedAsc[0].date}T00:00:00`).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
+    ? formatLocaleDate(new Date(`${sortedAsc[0].date}T00:00:00`), 'en-IN', { month: 'short', year: 'numeric' })
     : null;
 
   const [savingSnapshot, setSavingSnapshot] = useState(false);
@@ -8050,7 +8050,7 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
                   <XAxis
                     dataKey="date"
                     tickFormatter={(d: string) =>
-                      new Date(`${d}T00:00:00`).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
+                      formatLocaleDate(new Date(`${d}T00:00:00`), 'en-IN', { month: 'short', day: 'numeric' })
                     }
                     tick={chart.tick}
                     axisLine={false}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type ReactNode } from 'react';
+import { useState, useEffect, useRef, Suspense, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   updateProfile,
@@ -49,7 +49,12 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useUrlTab } from '../hooks/useUrlTab';
 import CustomSelect from '../components/CustomSelect';
 import { PageHeader } from '../components/ui';
-import { PortfolioExportModal } from '../components/PortfolioExportModal';
+import { lazyWithRetry } from '../utils/lazyWithRetry';
+
+// Loaded only when "Report" is tapped: the PDF report pulls in the charts library.
+const PortfolioExportModal = lazyWithRetry(() =>
+  import('../components/PortfolioExportModal').then((m) => ({ default: m.PortfolioExportModal }))
+);
 
 type Tab = 'account' | 'preferences' | 'profiles' | 'data';
 
@@ -1254,10 +1259,10 @@ function ProfilesTab() {
     if (!user) return;
     setClaimingId(profileId);
     try {
-      await assignOrphanDataToProfile(user.uid, 'assets', allAssets, profileId);
-      await assignOrphanDataToProfile(user.uid, 'liabilities', allLiabilities, profileId);
-      await assignOrphanDataToProfile(user.uid, 'goals', allGoals, profileId);
-      await assignOrphanDataToProfile(user.uid, 'transactions', allTransactions, profileId);
+      await assignOrphanDataToProfile(user, 'assets', allAssets, profileId);
+      await assignOrphanDataToProfile(user, 'liabilities', allLiabilities, profileId);
+      await assignOrphanDataToProfile(user, 'goals', allGoals, profileId);
+      await assignOrphanDataToProfile(user, 'transactions', allTransactions, profileId);
     } finally {
       setClaimingId(null);
     }
@@ -1277,10 +1282,10 @@ function ProfilesTab() {
     setMoveMenuFor(null);
     setMovingId(fromProfileId);
     try {
-      await reassignProfileData(user.uid, 'assets', allAssets, fromProfileId, toProfileId);
-      await reassignProfileData(user.uid, 'liabilities', allLiabilities, fromProfileId, toProfileId);
-      await reassignProfileData(user.uid, 'goals', allGoals, fromProfileId, toProfileId);
-      await reassignProfileData(user.uid, 'transactions', allTransactions, fromProfileId, toProfileId);
+      await reassignProfileData(user, 'assets', allAssets, fromProfileId, toProfileId);
+      await reassignProfileData(user, 'liabilities', allLiabilities, fromProfileId, toProfileId);
+      await reassignProfileData(user, 'goals', allGoals, fromProfileId, toProfileId);
+      await reassignProfileData(user, 'transactions', allTransactions, fromProfileId, toProfileId);
     } finally {
       setMovingId(null);
     }
@@ -1324,7 +1329,7 @@ function ProfilesTab() {
     if (!user) return;
     // Persisted account-wide (not just this device), so any other device
     // signing into this account opens straight to this profile too.
-    await setDefaultProfile(user.uid, profiles.map((p) => p.id), id);
+    await setDefaultProfile(user, profiles.map((p) => p.id), id);
   };
 
   const handleDelete = async (id: string) => {
@@ -1591,7 +1596,7 @@ function DataTab() {
     if (!user || confirmText !== 'DELETE') return;
     setStatus('deleting');
     try {
-      await deleteAllUserData(user.uid);
+      await deleteAllUserData(user);
       closeModal();
     } catch {
       setStatus('error');
@@ -1866,7 +1871,11 @@ export default function Settings() {
           {tab === 'data' && <DataTab />}
         </div>
       </div>
-      <PortfolioExportModal open={reportOpen} onClose={() => setReportOpen(false)} />
+      {reportOpen && (
+        <Suspense fallback={null}>
+          <PortfolioExportModal open={reportOpen} onClose={() => setReportOpen(false)} />
+        </Suspense>
+      )}
     </div>
   );
 }

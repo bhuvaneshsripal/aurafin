@@ -4,6 +4,7 @@ import { useAssetsStore } from '../../store/assetsStore';
 import { useLiabilitiesStore } from '../../store/liabilitiesStore';
 import { useAuthStore } from '../../store/authStore';
 import { useSyncStatusStore } from '../../store/syncStatusStore';
+import { useHouseholdProfilesStore } from '../../store/householdProfilesStore';
 import { upsertDoc, removeDoc } from '../../hooks/useFirestoreSync';
 import Modal from '../../components/Modal';
 import ConfirmDeleteModal from '../../components/ConfirmDeleteModal';
@@ -51,6 +52,10 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
   const assets = useAssetsStore((s) => s.assets);
   const liabilities = useLiabilitiesStore((s) => s.liabilities);
   const user = useAuthStore((s) => s.user);
+  // New accounts belong to whichever profile is selected. Dashboard / Wealth /
+  // Analytics hide records without a profileId once a profile is chosen, so an
+  // unstamped account would show here but vanish from that profile's net worth.
+  const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
   const assetsServerConfirmed = useSyncStatusStore((s) => s.assetsServerConfirmed);
   const liabilitiesServerConfirmed = useSyncStatusStore((s) => s.liabilitiesServerConfirmed);
   // Same "already known, or server-confirmed empty" reasoning as
@@ -157,6 +162,7 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
         icon: form.icon,
         balanceAsOf: form.balanceAsOf,
         isDefaultAccount: accounts.length === 0,
+        profileId: activeProfileId ?? undefined,
         updatedAt: Date.now(),
       };
       await upsertDoc(user, 'liabilities', liability);
@@ -174,6 +180,7 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
         accountType: form.type,
         balanceAsOf: form.balanceAsOf,
         isDefaultAccount: accounts.length === 0,
+        profileId: activeProfileId ?? undefined,
         updatedAt: Date.now(),
       };
       await upsertDoc(user, 'assets', asset);

@@ -16,6 +16,7 @@ import { useAuthStore } from '../store/authStore';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useSnapshotsStore } from '../store/snapshotsStore';
+import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import { upsertDoc } from '../hooks/useFirestoreSync';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { buttonClasses, DateInput, inputClasses } from './ui';
@@ -203,6 +204,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function TransactionForm({ type, onDone }: { type: TransactionType; onDone: () => void }) {
   const user = useAuthStore((s) => s.user);
+  const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
   const [category, setCategory] = useState('');
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('INR');
@@ -229,6 +231,10 @@ function TransactionForm({ type, onDone }: { type: TransactionType; onDone: () =
         amount: value,
         currency,
         date,
+        // Same as the Money page's own Add form: file it under the profile
+        // that's currently selected. Without this the record had no owner and
+        // was hidden from every profile-specific view (Money, Overview...).
+        profileId: activeProfileId ?? undefined,
       };
       await upsertDoc(user, 'transactions', t);
       onDone();

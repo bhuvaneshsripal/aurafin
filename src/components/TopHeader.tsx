@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Moon, Sun, Globe, Eye, EyeOff, ChevronDown, MoreVertical, Settings as SettingsIcon, Lock, LogOut, FileText } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
@@ -12,10 +12,18 @@ import ProfileSwitcher from './ProfileSwitcher';
 import AppLogo from './AppLogo';
 import GlobalSearch from './GlobalSearch';
 import NotificationBell from './NotificationBell';
-import MarketTicker, { MarketTickerMarquee, useIndexQuotes } from './MarketTicker';
+import MarketTicker, { MarketTickerMarquee } from './MarketTicker';
 import { Button, IconButton } from './ui';
 import UpdateDot from './UpdateDot';
-import { PortfolioExportModal } from './PortfolioExportModal';
+import { lazyWithRetry } from '../utils/lazyWithRetry';
+
+// The PDF report drags in the whole charts library (~400 KB). It is only
+// needed when someone actually taps "Export report", so it is loaded on demand
+// instead of being part of the always-on header bundle that every page (and
+// the login screen) has to download first.
+const PortfolioExportModal = lazyWithRetry(() =>
+  import('./PortfolioExportModal').then((m) => ({ default: m.PortfolioExportModal }))
+);
 
 const menuPanel =
   'animate-menu-in absolute right-0 mt-2 bg-surface border border-line rounded-xl shadow-lg overflow-hidden z-30';
@@ -32,9 +40,6 @@ export default function TopHeader() {
   const lockNow = useAppLockStore((s) => s.lockNow);
   const navigate = useNavigate();
   const location = useLocation();
-  // Both responsive ticker layouts stay mounted; share one request loop instead
-  // of letting the hidden desktop/mobile copy poll the market API as well.
-  const tickerQuotes = useIndexQuotes();
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -123,7 +128,7 @@ export default function TopHeader() {
         {/* Desktop */}
         {/* Market indices, then the globe button (opens the All Indices page). */}
         <div className="hidden md:flex flex-1 items-center gap-3 min-w-0">
-          <MarketTicker quotes={tickerQuotes} />
+          <MarketTicker />
           <IconButton
             label="All indices"
             onClick={() => navigate('/indices')}
@@ -269,9 +274,13 @@ export default function TopHeader() {
       </div>
 
       {/* Mobile only: scrolling index strip pinned just under the top bar. */}
-      <MarketTickerMarquee id="app-marquee" className="md:hidden sticky top-14 z-20" quotes={tickerQuotes} />
+      <MarketTickerMarquee id="app-marquee" className="md:hidden sticky top-14 z-20" />
 
-      <PortfolioExportModal open={reportOpen} onClose={() => setReportOpen(false)} />
+      {reportOpen && (
+        <Suspense fallback={null}>
+          <PortfolioExportModal open={reportOpen} onClose={() => setReportOpen(false)} />
+        </Suspense>
+      )}
 
       <Modal open={confirmOpen} onClose={() => setConfirmOpen(false)} title="Log out of Aurafin?">
         <p className="text-sm text-muted mb-6">

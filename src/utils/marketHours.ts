@@ -35,18 +35,28 @@ export const MARKET_HOLIDAYS = new Set<string>([
   '2026-12-25', // Christmas
 ]);
 
+// Intl.DateTimeFormat construction is slow (tens of microseconds on a desktop,
+// a millisecond or more on a low-end phone, and timeZone makes it slower
+// still). These helpers run on every poll tick and every render of the live
+// price UI, so each formatter is built once, on first use, and then reused.
+let istTimeFormatter: Intl.DateTimeFormat | undefined;
+let istDateFormatter: Intl.DateTimeFormat | undefined;
+let sessionLabelFormatter: Intl.DateTimeFormat | undefined;
+
 /** Current wall-clock time in India (Asia/Kolkata), regardless of the
  *  device's own timezone. */
-const istTimeFormatter = new Intl.DateTimeFormat('en-GB', {
-  timeZone: 'Asia/Kolkata',
-  hour: '2-digit',
-  minute: '2-digit',
-  hour12: false,
-});
-
 export function getIstTimeOfDay(now: Date = new Date()): { hour: number; minute: number } {
+  if (!istTimeFormatter) {
+    istTimeFormatter = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Kolkata',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  }
   const parts = istTimeFormatter.formatToParts(now);
-  const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? '0');
+  // `% 24`: some engines print midnight as "24" with hour12:false.
+  const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? '0') % 24;
   const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? '0');
   return { hour, minute };
 }
@@ -55,15 +65,16 @@ export function getIstTimeOfDay(now: Date = new Date()): { hour: number; minute:
  *  weekday (1 = Monday ... 7 = Sunday), independent of the device's own
  *  timezone/locale. Used to key "have we already sent this week's digest"
  *  so it fires once per Saturday rather than every time the check runs. */
-const istDateFormatter = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'Asia/Kolkata',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  weekday: 'short',
-});
-
 export function getIstDateInfo(now: Date = new Date()): { dateKey: string; isoWeekday: number } {
+  if (!istDateFormatter) {
+    istDateFormatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      weekday: 'short',
+    });
+  }
   const parts = istDateFormatter.formatToParts(now);
   const year = parts.find((p) => p.type === 'year')?.value ?? '1970';
   const month = parts.find((p) => p.type === 'month')?.value ?? '01';
@@ -138,13 +149,16 @@ export function getLastSessionLabel(now: Date = new Date()): string {
       MARKET_HOLIDAYS.has(day.toISOString().slice(0, 10))
     );
   }
-  return new Intl.DateTimeFormat('en-IN', {
-    timeZone: 'UTC',
-    weekday: 'short',
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  }).format(day);
+  if (!sessionLabelFormatter) {
+    sessionLabelFormatter = new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'UTC',
+      weekday: 'short',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  }
+  return sessionLabelFormatter.format(day);
 }
 
 /** Reactive version of isMarketOpen — re-checks every 30s so the sparkline

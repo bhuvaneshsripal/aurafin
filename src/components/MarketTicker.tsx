@@ -1,17 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { cn } from './ui/cn';
-import { isMarketOpen } from '../utils/marketHours';
-
-interface IndexQuote {
-  key: string;
-  name: string;
-  price: number;
-  previousClose?: number;
-}
-
-const LIVE_MS = 1_000; // market open: refresh every second
-const IDLE_MS = 30_000; // market closed: nothing moves, so poll lazily
-
+import { useIndexQuotes, type IndexQuote } from '../utils/indexQuotes';
 
 const ORDER = [
   { key: 'nifty', name: 'NIFTY' },
@@ -19,90 +8,17 @@ const ORDER = [
   { key: 'banknifty', name: 'BANKNIFTY' },
 ];
 
-async function loadIndices(): Promise<IndexQuote[] | null> {
-  try {
-    // Abort a hung request so one slow response can't freeze the updates.
-    const ctrl = new AbortController();
-    const abort = window.setTimeout(() => ctrl.abort(), 4000);
-    const res = await fetch(`/api/market/indices?_=${Date.now()}`, { cache: 'no-store', signal: ctrl.signal }).finally(() =>
-      window.clearTimeout(abort)
-    );
-    if (!res.ok) return null;
-    const json = await res.json();
-    return Array.isArray(json?.indices) ? json.indices : null;
-  } catch {
-    return null;
-  }
-}
+// One shared formatter: `n.toLocaleString(locale, options)` builds a brand-new
+// Intl.NumberFormat on every call, and this runs ~9 times per strip on every
+// 1-second price update.
+const levelFormatter = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt = (n: number) => levelFormatter.format(n);
 
-const fmt = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-/** One-line index strip: NAME  level  ±change (±pct%). Polled every second
- *  during market hours (30s otherwise) while the tab is visible. */
-const CACHE_KEY = 'aurafin.tickerQuotes';
-
-/** Last good quotes from the previous visit, so a refresh shows numbers straight away. */
-function readCachedQuotes(): IndexQuote[] | undefined {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    const parsed = raw ? JSON.parse(raw) : null;
-    return Array.isArray(parsed) && parsed.length ? parsed : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-// eslint-disable-next-line react/only-export-components -- shared by the responsive ticker variants
-export function useIndexQuotes() {
-  const [quotes, setQuotes] = useState<IndexQuote[] | null | undefined>(readCachedQuotes); // undefined = loading
-
-  useEffect(() => {
-    let cancelled = false;
-    let timer: number | undefined;
-    // Generation token: restarting the loop (tab becomes visible again) bumps
-    // it, so a request still in flight from the previous chain can't also
-    // schedule its own next tick -- otherwise every tab switch could leave an
-    // extra poller running forever.
-    let generation = 0;
-    // Chained timeouts (not setInterval) so a slow response never overlaps the next request.
-    const tick = async () => {
-      const myGeneration = ++generation;
-      const startedAt = Date.now();
-      if (document.visibilityState !== 'hidden') {
-        const q = await loadIndices();
-        // Keep showing the last good values if a refresh fails.
-        if (!cancelled && myGeneration === generation) setQuotes((prev) => q ?? (Array.isArray(prev) ? prev : null));
-        if (q) {
-          try {
-            localStorage.setItem(CACHE_KEY, JSON.stringify(q));
-          } catch {
-            /* storage unavailable — fine, just no instant paint next time */
-          }
-        }
-      }
-      // Count the interval from when the request started (not finished), so
-      // a 400ms response still gives a true one-second cadence.
-      const interval = isMarketOpen() ? LIVE_MS : IDLE_MS;
-      if (!cancelled && myGeneration === generation) {
-        timer = window.setTimeout(tick, Math.max(0, interval - (Date.now() - startedAt)));
-      }
-    };
-    tick();
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') {
-        window.clearTimeout(timer);
-        tick();
-      }
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
-  }, []);
-  return quotes;
-}
+// Quotes come from the shared poller in utils/indexQuotes: polled every second
+// during market hours (30s otherwise) while the tab is visible, with ONE
+// request loop no matter how many strips are on screen. (The desktop strip and
+// the mobile strip below are both always mounted — one is hidden by CSS — so
+// they used to run two separate pollers.)
 
 /** Price that briefly flashes green/red whenever the number changes, so a
  *  live update is visible without watching the digits. */
@@ -156,7 +72,8 @@ function renderItems(quotes: IndexQuote[] | null | undefined) {
 }
 
 /** Desktop: static strip in the top bar. */
-export default function MarketTicker({ quotes }: { quotes: IndexQuote[] | null | undefined }) {
+export default function MarketTicker() {
+  const quotes = useIndexQuotes();
   const items = renderItems(quotes);
 
   // Static strip, always the full "NAME  level  ±points (±pct%)", spread evenly.
@@ -173,15 +90,8 @@ export default function MarketTicker({ quotes }: { quotes: IndexQuote[] | null |
 /** Mobile: a thin one-line bar under the top bar. Each index shows
  *  NAME  level  ±points (±pct%) on a single line, and the person swipes the
  *  bar sideways to see all three (NIFTY, SENSEX, BANKNIFTY). */
-export function MarketTickerMarquee({
-  className,
-  id,
-  quotes,
-}: {
-  className?: string;
-  id?: string;
-  quotes: IndexQuote[] | null | undefined;
-}) {
+export function MarketTickerMarquee({ className, id }: { className?: string; id?: string }) {
+  const quotes = useIndexQuotes();
   return (
     <div
       id={id}

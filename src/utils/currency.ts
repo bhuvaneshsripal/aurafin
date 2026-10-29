@@ -41,6 +41,51 @@ export interface FormatCurrencyOptions {
   fractionDigits?: number;
 }
 
+/** Building an Intl.NumberFormat is the slow part of formatting a number
+ *  (tens of microseconds on a desktop, a millisecond or more on a mid-range
+ *  phone), and formatCurrency runs for every amount on screen — hundreds of
+ *  times per render of a holdings/transactions list, and again on every live
+ *  price tick. Build each (locale, currency, digits) formatter once and reuse
+ *  it; `.format()` itself is cheap. A currency code the browser rejects is
+ *  remembered as `null` so it takes the fallback path without re-throwing. */
+const currencyFormatters = new Map<string, Intl.NumberFormat | null>();
+
+function getCurrencyFormatter(currency: string, fractionDigits: number): Intl.NumberFormat | null {
+  const locale = currency === 'INR' ? 'en-IN' : 'en-US';
+  const cacheKey = `${locale}|${currency}|${fractionDigits}`;
+  let formatter = currencyFormatters.get(cacheKey);
+  if (formatter === undefined) {
+    try {
+      formatter = new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency,
+        minimumFractionDigits: fractionDigits,
+        maximumFractionDigits: fractionDigits,
+        useGrouping: true,
+      });
+    } catch {
+      formatter = null;
+    }
+    currencyFormatters.set(cacheKey, formatter);
+  }
+  return formatter;
+}
+
+const numberFormatters = new Map<string, Intl.NumberFormat>();
+
+/** Same result as `value.toLocaleString(locale, options)`, but reuses one
+ *  Intl.NumberFormat per locale + options instead of building a new one on
+ *  every call — for per-row numbers (share quantities etc.) in long lists. */
+export function formatLocaleNumber(value: number, locale?: string, options?: Intl.NumberFormatOptions): string {
+  const cacheKey = `${locale ?? ''}|${options ? JSON.stringify(options) : ''}`;
+  let formatter = numberFormatters.get(cacheKey);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, options);
+    numberFormatters.set(cacheKey, formatter);
+  }
+  return formatter.format(value);
+}
+
 export function formatCurrency(
   value: number,
   currency: string = 'INR',
@@ -49,21 +94,14 @@ export function formatCurrency(
   const fractionDigits = options?.fractionDigits ?? 0;
   // NaN / Infinity (e.g. from a 0/0 upstream) must never reach the UI as "₹NaN".
   if (!Number.isFinite(value)) value = 0;
-  try {
-    return new Intl.NumberFormat(currency === 'INR' ? 'en-IN' : 'en-US', {
-      style: 'currency',
-      currency,
-      minimumFractionDigits: fractionDigits,
-      maximumFractionDigits: fractionDigits,
-      useGrouping: true,
-    }).format(value);
-  } catch {
-    return `${currency} ${value.toLocaleString(undefined, {
-      minimumFractionDigits: fractionDigits,
-      maximumFractionDigits: fractionDigits,
-      useGrouping: true,
-    })}`;
-  }
+  const formatter = getCurrencyFormatter(currency, fractionDigits);
+  if (formatter) return formatter.format(value);
+  // The browser doesn't know this currency code: show "<CODE> 1,234" instead of crashing.
+  return `${currency} ${value.toLocaleString(undefined, {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+    useGrouping: true,
+  })}`;
 }
 
 /** Invested amounts, avg cost, and live prices — always show paise/cents. */

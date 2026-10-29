@@ -4,7 +4,7 @@
  *  the Insights tab body (which uses the start/end bounds to filter
  *  transactions) stay in sync without duplicating the date math. */
 
-import { formatDate } from './date';
+import { formatDate, formatLocaleDate } from './date';
 
 export type InsightsRangeKey = 'thisMonth' | 'lastMonth' | '3m' | '6m' | '12m' | 'ytd' | 'custom';
 
@@ -43,11 +43,11 @@ function endOfMonth(y: number, m: number): Date {
 }
 
 function monthYear(d: Date): string {
-  return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  return formatLocaleDate(d, 'en-US', { month: 'long', year: 'numeric' });
 }
 
 function shortMonthYear(d: Date): string {
-  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  return formatLocaleDate(d, 'en-US', { month: 'short', year: 'numeric' });
 }
 
 function formatDateShort(iso: string): string {

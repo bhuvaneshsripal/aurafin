@@ -12,7 +12,7 @@ import { useSnapshotsStore } from '../store/snapshotsStore';
 import { toIsoDate } from '../utils/date';
 import { readBackup, writeBackup } from '../utils/dataBackup';
 import { applyPending, confirmPending, pendingFor, pendingItem, recordPending } from '../utils/pendingWrites';
-import type { Snapshot } from '../types';
+import type { HouseholdProfile, Snapshot } from '../types';
 
 /** Every subcollection kept under users/{uid} that DataSync listens to.
  *  Exported so App.tsx can check that every one of them has completed its
@@ -71,6 +71,32 @@ export function saveGuestData<T>(uid: string, collectionName: string, items: T[]
 }
 
 /**
+ * A signed-in (Firestore) user's writes come back to the screen on their own:
+ * the onSnapshot listener fires straight away and refills the store. A guest's
+ * writes only go to localStorage, which nothing watches — so before this, a
+ * guest who saved an asset, goal or transaction saw nothing change until they
+ * refreshed the page. While a guest is signed in, each collection's sync hook
+ * registers its store setter here, and guest writes call it with the new list.
+ */
+const guestStoreSetters = new Map<string, (items: any[]) => void>();
+
+function refreshGuestStore(collectionName: string, items: unknown[]) {
+  guestStoreSetters.get(collectionName)?.(items);
+}
+
+/** Guest equivalent of `deleteAllUserData`: empties every collection in localStorage and in the stores. */
+function clearGuestData(uid: string) {
+  for (const collectionName of ALL_USER_COLLECTIONS) {
+    try {
+      localStorage.removeItem(getGuestStorageKey(uid, collectionName));
+    } catch {
+      /* storage unavailable — nothing to clear */
+    }
+    refreshGuestStore(collectionName, []);
+  }
+}
+
+/**
  * Generic two-way sync between a Firestore subcollection at
  * users/{uid}/{collectionName} and a local Zustand store slice.
  *
@@ -121,7 +147,11 @@ export function useFirestoreCollectionSync<T extends { id: string }>(
       onSyncChange?.(false);
       markCollectionLoaded(collectionName);
       markCollectionServerConfirmed(collectionName);
-      return;
+      // Let guest writes (upsertDoc/removeDoc/...) refresh this store — see guestStoreSetters.
+      guestStoreSetters.set(collectionName, setLocal as (items: any[]) => void);
+      return () => {
+        if (guestStoreSetters.get(collectionName) === (setLocal as unknown)) guestStoreSetters.delete(collectionName);
+      };
     }
 
     // For regular users, sync with Firestore
@@ -234,6 +264,7 @@ export async function upsertDoc<T extends { id: string }>(
       ? items.map((i) => (i.id === item.id ? mergeWithDeletes(existing, item) : i))
       : [...items, item];
     saveGuestData(uid, collectionName, updated);
+    refreshGuestStore(collectionName, updated);
     return;
   }
 
@@ -284,8 +315,14 @@ export async function bulkUpsertDocs<T extends { id: string }>(
   // For guests, save all items to localStorage
   if (isGuest) {
     const existing = loadGuestData<T>(uid, collectionName);
-    const merged = existing.filter((e) => !items.some((i) => i.id === e.id));
-    saveGuestData(uid, collectionName, [...merged, ...items]);
+    // Replace in place (new records go on the end) so an update doesn't
+    // reshuffle the order of everything else.
+    const incoming = new Map(items.map((i) => [i.id, i]));
+    const replaced = existing.map((e) => incoming.get(e.id) ?? e);
+    const existingIds = new Set(existing.map((e) => e.id));
+    const updated = [...replaced, ...items.filter((i) => !existingIds.has(i.id))];
+    saveGuestData(uid, collectionName, updated);
+    refreshGuestStore(collectionName, updated);
     return;
   }
 
@@ -313,6 +350,7 @@ export async function removeDoc(uidOrUser: string | { uid: string; isAnonymous?:
     const items = loadGuestData<any>(uid, collectionName);
     const filtered = items.filter((i) => i.id !== id);
     saveGuestData(uid, collectionName, filtered);
+    refreshGuestStore(collectionName, filtered);
     return;
   }
 
@@ -604,7 +642,19 @@ export async function saveWealthFilters(
  * batch. This is what makes "Set default" in Settings apply everywhere the
  * account is signed in, not just on the device that set it.
  */
-export async function setDefaultProfile(uid: string, allProfileIds: string[], defaultId: string) {
+export async function setDefaultProfile(
+  uidOrUser: string | { uid: string; isAnonymous?: boolean },
+  allProfileIds: string[],
+  defaultId: string
+) {
+  const uid = typeof uidOrUser === 'string' ? uidOrUser : uidOrUser.uid;
+  // A guest's profiles live in localStorage, not Firestore.
+  if (typeof uidOrUser === 'object' && isAnonymousUser(uidOrUser)) {
+    const updated = loadGuestData<HouseholdProfile>(uid, 'profiles').map((p) => ({ ...p, isDefault: p.id === defaultId }));
+    saveGuestData(uid, 'profiles', updated);
+    refreshGuestStore('profiles', updated);
+    return;
+  }
   const batch = writeBatch(db);
   allProfileIds.forEach((id) => {
     const ref = doc(db, 'users', uid, 'profiles', id);
@@ -621,7 +671,7 @@ export async function setDefaultProfile(uid: string, allProfileIds: string[], de
  * exists, unassigned data is left alone rather than guessed at.
  */
 export async function assignOrphanDataToProfile<T extends { id: string; profileId?: string }>(
-  uid: string,
+  uidOrUser: string | { uid: string; isAnonymous?: boolean },
   collectionName: string,
   items: T[],
   profileId: string
@@ -629,7 +679,7 @@ export async function assignOrphanDataToProfile<T extends { id: string; profileI
   const orphans = items.filter((item) => !item.profileId);
   if (!orphans.length) return;
   await bulkUpsertDocs(
-    uid,
+    uidOrUser,
     collectionName,
     orphans.map((item) => ({ ...item, profileId }))
   );
@@ -641,7 +691,7 @@ export async function assignOrphanDataToProfile<T extends { id: string; profileI
  * under the wrong profile).
  */
 export async function reassignProfileData<T extends { id: string; profileId?: string }>(
-  uid: string,
+  uidOrUser: string | { uid: string; isAnonymous?: boolean },
   collectionName: string,
   items: T[],
   fromProfileId: string,
@@ -650,7 +700,7 @@ export async function reassignProfileData<T extends { id: string; profileId?: st
   const matching = items.filter((item) => item.profileId === fromProfileId);
   if (!matching.length) return;
   await bulkUpsertDocs(
-    uid,
+    uidOrUser,
     collectionName,
     matching.map((item) => ({ ...item, profileId: toProfileId }))
   );
@@ -662,7 +712,13 @@ export async function reassignProfileData<T extends { id: string; profileId?: st
  * onSnapshot listeners in DataSync pick up the deletions automatically and
  * clear out the local stores, so there's nothing else to reset by hand.
  */
-export async function deleteAllUserData(uid: string) {
+export async function deleteAllUserData(uidOrUser: string | { uid: string; isAnonymous?: boolean }) {
+  const uid = typeof uidOrUser === 'string' ? uidOrUser : uidOrUser.uid;
+  // A guest's data lives in localStorage — there is nothing in Firestore to delete.
+  if (typeof uidOrUser === 'object' && isAnonymousUser(uidOrUser)) {
+    clearGuestData(uid);
+    return;
+  }
   for (const collectionName of ALL_USER_COLLECTIONS) {
     const colRef = collection(db, 'users', uid, collectionName);
     const snap = await getDocs(colRef);
