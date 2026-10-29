@@ -1,4 +1,4 @@
-import { defineConfig, type Connect, type ViteDevServer, type PreviewServer } from 'vite'
+import { defineConfig, type Plugin, type Connect, type ViteDevServer, type PreviewServer } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -224,9 +224,27 @@ function marketApiDevPlugin() {
   }
 }
 
+// One id per build. It is baked into the app and also written to /version.json,
+// so a running app can compare itself with the deployed one in a few bytes
+// (see utils/updateChecks) instead of waiting for the service worker to
+// download the whole new version before it can say "update available".
+const BUILD_ID = `${(process.env.VERCEL_GIT_COMMIT_SHA ?? '').slice(0, 10)}-${Date.now().toString(36)}`
+
+function versionFilePlugin(): Plugin {
+  return {
+    name: 'aurafin-version-file',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ id: BUILD_ID }) })
+    },
+  }
+}
+
 export default defineConfig({
+  define: { __BUILD_ID__: JSON.stringify(BUILD_ID) },
   plugins: [
     react(),
+    versionFilePlugin(),
     tailwindcss(),
     marketApiDevPlugin(),
     VitePWA({

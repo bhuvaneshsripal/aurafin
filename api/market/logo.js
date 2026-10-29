@@ -2,10 +2,16 @@
 import { resolveLogo } from '../_lib/logo.js';
 
 export default async function handler(req, res) {
-  const symbol = String(req.query.symbol ?? '').trim();
+  const rawSymbol = String(req.query.symbol ?? '').trim();
+  const rawName = String(req.query.name ?? '').trim();
   // Tickers are short and made of letters, digits and a few separators; anything
-  // else can't be a real symbol and must never be spliced into upstream URLs.
-  if (!symbol || !/^[A-Za-z0-9&_.-]{1,24}$/.test(symbol)) { res.status(400).end(); return; }
+  // else must never be spliced into upstream URLs. Funds/ETFs often arrive as
+  // "HDFCAMC - HDFCNIFTY" or a bare name, so the last clean token is used as the
+  // ticker and the full name still drives the fund-house (AMC) match.
+  const tokens = (s) => s.split(/[^A-Za-z0-9&_.]+/).filter((t) => /^[A-Za-z0-9&_.-]{1,24}$/.test(t));
+  const valid = /^[A-Za-z0-9&_.-]{1,24}$/.test(rawSymbol);
+  const symbol = valid ? rawSymbol : (tokens(rawSymbol).pop() ?? tokens(rawName)[0] ?? '');
+  if (!symbol) { res.status(400).end(); return; }
   const market = String(req.query.market ?? 'IN').toUpperCase() === 'US' ? 'US' : 'IN';
   if (req.query.debug) {
     const trace = [];

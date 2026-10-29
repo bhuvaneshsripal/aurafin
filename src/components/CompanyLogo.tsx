@@ -42,11 +42,11 @@ const RETRY_DELAYS_MS = [2000, 6000, 15000];
  *  slot stays a neutral placeholder icon (no fake initials/colours). */
 export default function CompanyLogo({ symbol, name, market = 'IN', isin, size = 32 }: Props) {
   const local = symbol || name ? localLogoFor(symbol ?? '', name) : null;
-  // Same rule the server enforces (api/market/logo.js). Names like
-  // "HDFCAMC - HDFCNIFTY" (funds/ETFs) can never match, so skip the request
-  // instead of firing a guaranteed 400 and retrying it three times.
-  const onlineBase = symbol && /^[A-Za-z0-9&_.-]{1,24}$/.test(symbol)
-    ? `/api/market/logo?symbol=${encodeURIComponent(symbol)}&market=${market}${isin ? `&isin=${encodeURIComponent(isin)}` : ''}&name=${encodeURIComponent(name ?? '')}`
+  // Funds/ETFs often have symbols like "HDFCAMC - HDFCNIFTY" or none at all.
+  // The server cleans those up and matches the fund house from the name, so
+  // ask whenever there is a symbol or a name to go on.
+  const onlineBase = symbol || name
+    ? `/api/market/logo?symbol=${encodeURIComponent(symbol ?? '')}&market=${market}${isin ? `&isin=${encodeURIComponent(isin)}` : ''}&name=${encodeURIComponent(name ?? '')}`
     : null;
   // 0 = try local (if any), 1 = online lookup, 2 = gave up
   const [stage, setStage] = useState<0 | 1 | 2>(local ? 0 : onlineBase ? 1 : 2);

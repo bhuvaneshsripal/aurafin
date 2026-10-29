@@ -24,11 +24,13 @@ function SparkleIcon({ size = 26 }: { size?: number }) {
 /** Top notice shown when a newer version of the app has been deployed.
  *  The new service worker installs in the background and waits; tapping
  *  "Update" activates it and reloads, so nothing changes under the user
- *  mid-task. The app re-checks for a new deploy every 30 seconds while it is
+ *  mid-task. The app checks for a new deploy every 10 seconds while it is
  *  on screen and immediately whenever it comes back to the foreground (see
  *  utils/updateChecks). */
 export default function UpdateBanner() {
   const [updating, setUpdating] = useState(false);
+  // True as soon as the version ping sees a newer deploy, before the new service worker has finished installing.
+  const [stale, setStale] = useState(false);
   const stopChecksRef = useRef<(() => void) | null>(null);
   const {
     needRefresh: [needRefresh, setNeedRefresh],
@@ -37,7 +39,7 @@ export default function UpdateBanner() {
     onRegisteredSW(_url, reg) {
       if (!reg) return;
       stopChecksRef.current?.();
-      stopChecksRef.current = startUpdateChecks(reg);
+      stopChecksRef.current = startUpdateChecks(reg, () => setStale(true));
     },
   });
 
@@ -52,16 +54,21 @@ export default function UpdateBanner() {
 
   // Dismissing the banner doesn't clear the red dots: the update is still pending.
   const setUpdateAvailable = useUpdateStore((s) => s.setUpdateAvailable);
+  const show = needRefresh || stale;
   useEffect(() => {
-    if (needRefresh) setUpdateAvailable(true);
-  }, [needRefresh, setUpdateAvailable]);
+    if (show) setUpdateAvailable(true);
+  }, [show, setUpdateAvailable]);
 
-  const { mounted, closing } = useExitPresence(needRefresh, 180);
+  const dismiss = () => {
+    setNeedRefresh(false);
+    setStale(false);
+  };
+  const { mounted, closing } = useExitPresence(show, 180);
   // Swipe left / right / up to put the notice away.
-  const swipe = useSwipeDismiss(() => setNeedRefresh(false), 'up');
+  const swipe = useSwipeDismiss(dismiss, 'up');
   useEffect(() => {
-    if (needRefresh) swipe.reset();
-  }, [needRefresh, swipe.reset]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (show) swipe.reset();
+  }, [show, swipe.reset]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // On phones the top bar and the index strip are pinned to the screen, so
   // the notice reserves its own height (--update-h) and they slide down by
@@ -88,12 +95,13 @@ export default function UpdateBanner() {
 
   const onUpdate = () => {
     setUpdating(true);
-    // Normally the page reloads as soon as the new worker takes over. If
-    // that doesn't happen, fall back to a full cache-clearing refresh.
-    void updateServiceWorker(true);
+    // New worker already waiting: activate it and the page reloads. If the
+    // notice came from the quick version ping and the worker is still
+    // downloading, go straight to the full refresh instead of waiting.
+    if (needRefresh) void updateServiceWorker(true);
     window.setTimeout(() => {
       void hardRefresh().then((ok) => { if (!ok) setUpdating(false); });
-    }, 4000);
+    }, needRefresh ? 4000 : 0);
   };
 
   return (
@@ -134,7 +142,7 @@ export default function UpdateBanner() {
         </button>
         <button
           type="button"
-          onClick={() => setNeedRefresh(false)}
+          onClick={dismiss}
           aria-label="Dismiss"
           className="tap-scale shrink-0 h-8 w-8 inline-flex items-center justify-center rounded-lg text-[#6b7a90] hover:text-[#0b2420] dark:hover:text-white transition-colors"
         >

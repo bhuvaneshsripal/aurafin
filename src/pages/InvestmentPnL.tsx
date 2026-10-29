@@ -97,7 +97,7 @@ function formatShortDate(iso: string | undefined) {
 function AssetBadge({ asset, size = 36 }: { asset: Asset; size?: number }) {
   // Listed stocks/ETFs get their real company logo (or the branded monogram
   // CompanyLogo falls back to), same as the Wealth list.
-  if (asset.symbol && MARKET_SELECTABLE_CLASSES.has(asset.assetClass)) {
+  if ((asset.symbol || asset.assetClass === 'etf') && MARKET_SELECTABLE_CLASSES.has(asset.assetClass)) {
     return <CompanyLogo symbol={asset.symbol} name={asset.name} market={asset.market ?? 'IN'} isin={asset.isin} size={size} />;
   }
   const color = ASSET_CLASS_COLORS[asset.assetClass] ?? '#64748b';

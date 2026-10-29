@@ -12,6 +12,7 @@ import { startUpdateChecks } from '../utils/updateChecks';
  *  the app is up to date. */
 export default function LoginUpdateButton() {
   const [updating, setUpdating] = useState(false);
+  const [stale, setStale] = useState(false);
   const cleanupRef = useRef<(() => void) | null>(null);
   const {
     needRefresh: [needRefresh],
@@ -20,7 +21,7 @@ export default function LoginUpdateButton() {
     onRegisteredSW(_url, reg) {
       if (!reg) return;
       cleanupRef.current?.();
-      cleanupRef.current = startUpdateChecks(reg);
+      cleanupRef.current = startUpdateChecks(reg, () => setStale(true));
     },
   });
 
@@ -34,18 +35,19 @@ export default function LoginUpdateButton() {
   );
 
   const setUpdateAvailable = useUpdateStore((s) => s.setUpdateAvailable);
+  const show = needRefresh || stale;
   useEffect(() => {
-    if (needRefresh) setUpdateAvailable(true);
-  }, [needRefresh, setUpdateAvailable]);
+    if (show) setUpdateAvailable(true);
+  }, [show, setUpdateAvailable]);
 
-  if (!needRefresh) return null;
+  if (!show) return null;
 
   const onUpdate = () => {
     setUpdating(true);
-    void updateServiceWorker(true);
+    if (needRefresh) void updateServiceWorker(true);
     window.setTimeout(() => {
       void hardRefresh().then((ok) => { if (!ok) setUpdating(false); });
-    }, 4000);
+    }, needRefresh ? 4000 : 0);
   };
 
   return (

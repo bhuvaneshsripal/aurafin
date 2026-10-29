@@ -14,31 +14,49 @@ const isinCache = new Map(); // symbol -> ISIN (successful lookups only)
 const AMC_DOMAINS = [
   [/KOTAK/, 'kotakmf.com'],
   [/HDFC/, 'hdfcfund.com'],
-  [/NIPPON|BEES$|^CPSEETF|^NETF/, 'mf.nipponindiaim.com'],
-  [/ICICI|^I?PRU/, 'icicipruamc.com'],
+  [/NIPPON|RELIANCE ?(ETF|MF|MUTUAL)|BEES$|^CPSEETF|^NETF|^LIQUIDBEES/, 'mf.nipponindiaim.com'],
+  [/ICICI|PRUDENTIAL|^I?PRU|IETF$/, 'icicipruamc.com'],
   [/^SETF|\bSBI\b|^SBI/, 'sbimf.com'],
   [/AXIS/, 'axismf.com'],
   [/^UTI|\bUTI\b/, 'utimf.com'],
-  [/MIRAE|^MAM|^MON100|^MONIFTY/, 'miraeassetmf.co.in'],
-  [/MOTILAL|^MOM\d|^MOSMALL|^MOVALUE|^MOREALTY|^MOLOWVOL/, 'motilaloswalmf.com'],
+  [/MIRAE|^MAM|^MON100|^MONIFTY|^MAFANG|^MAHKTECH|^MAKEJRI/, 'miraeassetmf.co.in'],
+  [/MOTILAL|^MOM\d|^MOSMALL|^MOVALUE|^MOREALTY|^MOLOWVOL|^MOM100|^MOMENTUM/, 'motilaloswalmf.com'],
   [/\bDSP\b|^DSP/, 'dspim.com'],
-  [/ABSL|BIRLA/, 'mutualfund.adityabirlacapital.com'],
+  [/ABSL|BIRLA|SUN ?LIFE/, 'mutualfund.adityabirlacapital.com'],
   [/TATA/, 'tatamutualfund.com'],
   [/\bLIC\b|^LIC/, 'licmf.com'],
   [/INVESCO/, 'invescomutualfund.com'],
   [/QUANTUM/, 'quantumamc.com'],
-  [/EDELWEISS|BHARAT ?22|^EBBETF|^EBANKNIFTY/, 'edelweissmf.com'],
-  [/ZERODHA|^LIQUIDCASE|^GOLDCASE/, 'zerodhafundhouse.com'],
+  [/EDELWEISS|BHARAT ?22|^EBBETF|^EBANKNIFTY|^BHARATBOND/, 'edelweissmf.com'],
+  [/ZERODHA|^LIQUIDCASE|^GOLDCASE|^SILVERCASE/, 'zerodhafundhouse.com'],
   [/GROWW/, 'growwmf.com'],
   [/BANDHAN|IDFC/, 'bandhanmf.com'],
-  [/FRANKLIN/, 'franklintempletonindia.com'],
+  [/FRANKLIN|TEMPLETON/, 'franklintempletonindia.com'],
   [/HSBC/, 'assetmanagement.hsbc.co.in'],
   [/SUNDARAM/, 'sundarammutual.com'],
   [/BAJAJ/, 'bajajamc.com'],
   [/PPFAS|PARAG/, 'amc.ppfas.com'],
+  [/CANARA/, 'canararobeco.com'],
+  [/MAHINDRA/, 'mahindramanulife.com'],
+  [/BARODA|\bBNP\b/, 'barodabnpparibasmf.in'],
+  [/UNION/, 'unionmf.com'],
+  [/NAVI/, 'navimutualfund.com'],
+  [/SAMCO/, 'samcomf.com'],
+  [/HELIOS/, 'heliosmf.in'],
+  [/WHITE ?OAK/, 'mf.whiteoakindia.com'],
+  [/\bPGIM\b|^PGIM/, 'pgimindiamf.com'],
+  [/JM FINANCIAL|^JM /, 'jmfinancialmf.com'],
+  [/360 ?ONE/, '360.one'],
+  [/TAURUS/, 'taurusmutualfund.com'],
+  [/TRUST ?MF|TRUSTMF/, 'trustmf.com'],
+  [/\bITI\b/, 'itiamc.com'],
+  [/SHRIRAM/, 'shriramamc.in'],
 ];
 function amcDomainFor(base, name) {
-  const hay = `${base} ${String(name ?? '').toUpperCase()}`;
+  const nm = String(name ?? '').toUpperCase();
+  const hay = `${base} ${nm}`;
+  // The fund's own name is the most reliable clue ("HDFC NIFTY 50 ETF"), then the ticker.
+  for (const [re, d] of AMC_DOMAINS) if (re.test(nm)) return d;
   for (const [re, d] of AMC_DOMAINS) if (re.test(base) || re.test(hay)) return d;
   return null;
 }
@@ -162,7 +180,11 @@ export async function resolveLogo(rawSymbol, market = 'IN', knownIsin, trace, na
   trace?.push({ step: 'website', domain: domain ?? null });
   if (!domain) return null;
   return firstByPriority([
-    () => fetchImage(`https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${domain}&size=128`, 300),
-    () => fetchImage(`https://icons.duckduckgo.com/ip3/${domain}.ico`, 300),
+    () => fetchImage(`https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${domain}&size=128`, 200),
+    () => fetchImage(`https://www.google.com/s2/favicons?domain=${domain}&sz=128`, 200),
+    () => fetchImage(`https://icons.duckduckgo.com/ip3/${domain}.ico`, 200),
+    () => fetchImage(`https://favicone.com/${domain}?s=128`, 200),
+    () => fetchImage(`https://${domain}/apple-touch-icon.png`, 200),
+    () => fetchImage(`https://${domain}/favicon.ico`, 200),
   ]);
 }

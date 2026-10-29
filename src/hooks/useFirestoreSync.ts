@@ -4,6 +4,7 @@ import { db } from '../firebase/config';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
 import { useAppLockStore, readGuestAppLock } from '../store/appLockStore';
+import { useDisplaySettingsStore, type EyePos } from '../store/displaySettingsStore';
 import { useWealthFilterStore, type WealthFilterSelection } from '../store/wealthFilterStore';
 import { useSyncStatusStore } from '../store/syncStatusStore';
 import { useAssetsStore } from '../store/assetsStore';
@@ -917,4 +918,63 @@ export function subscribeSearchHistory(
 export async function saveSearchHistory(user: { uid: string; isAnonymous?: boolean }, items: string[]) {
   if (isAnonymousUser(user)) return;
   await setDoc(doc(db, 'users', user.uid, 'meta', 'searchHistory'), { items }, { merge: false });
+}
+
+
+function sameEyePos(a: EyePos | null, b: EyePos | null): boolean {
+  if (!a || !b) return a === b;
+  return a.x === b.x && a.y === b.y && (a.anchor ?? '') === (b.anchor ?? '');
+}
+
+/**
+ * Keeps the floating eye's position in users/{uid}/meta/floatingEye so it sits
+ * in the same place everywhere the account is signed in. Without this the spot
+ * lived only in each browser's own localStorage, and the installed app and
+ * Chrome (separate storage) each remembered a different one.
+ * Guests have no cross-device account, so they keep the local-only behaviour.
+ */
+export function useFloatingEyeSync() {
+  const user = useAuthStore((s) => s.user);
+
+  useEffect(() => {
+    if (!user || isAnonymousUser(user)) return;
+    const ref = doc(db, 'users', user.uid, 'meta', 'floatingEye');
+    const store = useDisplaySettingsStore;
+    let remote: EyePos | null | undefined; // undefined = nothing heard from the account yet
+
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        const d = snap.data();
+        const next: EyePos | null =
+          d && Number.isFinite(d.x) && Number.isFinite(d.y)
+            ? d.anchor === 'bottom' ? { x: d.x, y: d.y, anchor: 'bottom' } : { x: d.x, y: d.y }
+            : null;
+        const first = remote === undefined;
+        remote = next;
+        if (next) {
+          if (!sameEyePos(store.getState().eyePos, next)) store.getState().syncEyePosFromRemote(next);
+        } else if (first && store.getState().eyePos) {
+          // Account has no saved spot yet: this device's spot becomes the shared one.
+          const local = store.getState().eyePos!;
+          setDoc(ref, { x: local.x, y: local.y, anchor: local.anchor ?? null }).catch(() => {});
+        } else if (!first && store.getState().eyePos) {
+          store.getState().syncEyePosFromRemote(null); // reset on another device
+        }
+      },
+      () => { /* offline / permission: keep the local spot */ }
+    );
+
+    // Push this device's moves/resets up to the account.
+    const unsubStore = store.subscribe((state, prev) => {
+      if (state.eyePos === prev.eyePos || remote === undefined) return;
+      if (sameEyePos(state.eyePos, remote)) return;
+      remote = state.eyePos;
+      const pos = state.eyePos;
+      const write = pos ? setDoc(ref, { x: pos.x, y: pos.y, anchor: pos.anchor ?? null }) : deleteDoc(ref);
+      write.catch(() => {});
+    });
+
+    return () => { unsub(); unsubStore(); };
+  }, [user]);
 }

@@ -2293,7 +2293,7 @@ function AssetsTab({
                   className="grid grid-cols-[1fr_auto] items-center gap-2 px-4 py-3 active:bg-slate-50 dark:active:bg-slate-800/40 cursor-pointer select-none"
                 >
                   <div className="min-w-0 flex items-center gap-2.5">
-                    {MARKET_SELECTABLE_CLASSES.has(a.assetClass) && a.symbol && (
+                    {MARKET_SELECTABLE_CLASSES.has(a.assetClass) && (a.symbol || a.assetClass === 'etf') && (
                       <CompanyLogo symbol={a.symbol} name={a.name} market={a.market ?? 'IN'} isin={a.isin} size={30} />
                     )}
                     <div className="min-w-0">
@@ -2456,7 +2456,7 @@ function AssetsTab({
                                 isBeingDragged ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
                               }`}
                             />
-                            {MARKET_SELECTABLE_CLASSES.has(a.assetClass) && a.symbol && (
+                            {MARKET_SELECTABLE_CLASSES.has(a.assetClass) && (a.symbol || a.assetClass === 'etf') && (
                               <CompanyLogo symbol={a.symbol} name={a.name} market={a.market ?? 'IN'} isin={a.isin} size={34} />
                             )}
                             <div className="min-w-0">
@@ -3543,7 +3543,7 @@ function HoldingDetailView({
       {/* Symbol row — name + last price/day-change, styled after a
           brokerage app's holding header. */}
       <div className="flex items-center gap-3 px-1">
-        {asset.symbol && MARKET_SELECTABLE_CLASSES.has(asset.assetClass) && (
+        {(asset.symbol || asset.assetClass === 'etf') && MARKET_SELECTABLE_CLASSES.has(asset.assetClass) && (
           <CompanyLogo symbol={asset.symbol} name={asset.name} market={asset.market ?? 'IN'} isin={asset.isin} size={44} />
         )}
         <div className="min-w-0 flex-1">

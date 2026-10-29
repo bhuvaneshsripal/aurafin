@@ -67,6 +67,8 @@ interface DisplaySettingsState {
   eyePos: EyePos | null;
   setFloatingEye: (on: boolean) => void;
   setEyePos: (pos: EyePos | null) => void;
+  /** Apply a position that arrived from the account (another device/browser). Saved locally only; never written back. */
+  syncEyePosFromRemote: (pos: EyePos | null) => void;
   init: () => void;
   increaseFont: () => void;
   decreaseFont: () => void;
@@ -86,6 +88,13 @@ export const useDisplaySettingsStore = create<DisplaySettingsState>((set, get) =
     set({ floatingEye: on });
   },
   setEyePos: (pos) => {
+    try {
+      if (pos) localStorage.setItem(EYE_POS_KEY, JSON.stringify(pos));
+      else localStorage.removeItem(EYE_POS_KEY);
+    } catch { /* best-effort */ }
+    set({ eyePos: pos });
+  },
+  syncEyePosFromRemote: (pos) => {
     try {
       if (pos) localStorage.setItem(EYE_POS_KEY, JSON.stringify(pos));
       else localStorage.removeItem(EYE_POS_KEY);

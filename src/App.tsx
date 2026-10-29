@@ -19,6 +19,7 @@ import {
   useFirestoreCollectionSync,
   useAvatarSync,
   useAppLockSync,
+  useFloatingEyeSync,
   useWealthFilterSync,
   useAutoNetWorthHistory,
   usePendingFlush,
@@ -252,6 +253,7 @@ function DataSync() {
   useAvatarSync();
   useAppLockSync();
   useWealthFilterSync();
+  useFloatingEyeSync();
   // Pushes saves made while the network was weak/offline once it returns.
   usePendingFlush();
   // Keeps the saved market tables fresh (once a minute) for offline viewing.
