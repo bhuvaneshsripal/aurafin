@@ -28,13 +28,14 @@ const EYE_POS_KEY = 'aurafin-floating-eye-pos';
  * address bar only changes the top), so the eye stays put when switching.
  * Older saves have no anchor: there `y` was px from the top.
  */
-export type EyePos = { x: number; y: number; anchor?: 'bottom' };
+export type EyePos = { x: number; y: number; anchor?: 'bottom'; /** When the person last dragged it (ms). Newest move wins across devices. */ at?: number };
 
 function readEyePos(): EyePos | null {
   try {
     const p = JSON.parse(localStorage.getItem(EYE_POS_KEY) ?? 'null');
     if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return null;
-    return p.anchor === 'bottom' ? { x: p.x, y: p.y, anchor: 'bottom' } : { x: p.x, y: p.y };
+    const at = Number.isFinite(p.at) ? { at: p.at as number } : {};
+    return p.anchor === 'bottom' ? { x: p.x, y: p.y, anchor: 'bottom', ...at } : { x: p.x, y: p.y, ...at };
   } catch {
     return null;
   }

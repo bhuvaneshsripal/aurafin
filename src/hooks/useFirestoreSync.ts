@@ -941,6 +941,8 @@ export function useFloatingEyeSync() {
     const ref = doc(db, 'users', user.uid, 'meta', 'floatingEye');
     const store = useDisplaySettingsStore;
     let remote: EyePos | null | undefined; // undefined = nothing heard from the account yet
+    const writeRemote = (pos: EyePos) =>
+      setDoc(ref, { x: pos.x, y: pos.y, anchor: pos.anchor ?? null, at: pos.at ?? 0 }).catch(() => {});
 
     const unsub = onSnapshot(
       ref,
@@ -948,17 +950,30 @@ export function useFloatingEyeSync() {
         const d = snap.data();
         const next: EyePos | null =
           d && Number.isFinite(d.x) && Number.isFinite(d.y)
-            ? d.anchor === 'bottom' ? { x: d.x, y: d.y, anchor: 'bottom' } : { x: d.x, y: d.y }
+            ? {
+                x: d.x,
+                y: d.y,
+                ...(d.anchor === 'bottom' ? { anchor: 'bottom' as const } : {}),
+                ...(Number.isFinite(d.at) ? { at: d.at as number } : {}),
+              }
             : null;
         const first = remote === undefined;
         remote = next;
+        const local = store.getState().eyePos;
         if (next) {
-          if (!sameEyePos(store.getState().eyePos, next)) store.getState().syncEyePosFromRemote(next);
-        } else if (first && store.getState().eyePos) {
+          // First contact: the spot that was dragged most recently wins, so the
+          // place you last put it is where every device ends up. (A device
+          // that has only an old save with no move time never overrides the account.)
+          if (first && local && (local.at ?? 0) > (next.at ?? 0) && !sameEyePos(local, next)) {
+            remote = local;
+            writeRemote(local);
+          } else if (!sameEyePos(local, next)) {
+            store.getState().syncEyePosFromRemote(next);
+          }
+        } else if (first && local) {
           // Account has no saved spot yet: this device's spot becomes the shared one.
-          const local = store.getState().eyePos!;
-          setDoc(ref, { x: local.x, y: local.y, anchor: local.anchor ?? null }).catch(() => {});
-        } else if (!first && store.getState().eyePos) {
+          writeRemote(local);
+        } else if (!first && local) {
           store.getState().syncEyePosFromRemote(null); // reset on another device
         }
       },
@@ -971,8 +986,8 @@ export function useFloatingEyeSync() {
       if (sameEyePos(state.eyePos, remote)) return;
       remote = state.eyePos;
       const pos = state.eyePos;
-      const write = pos ? setDoc(ref, { x: pos.x, y: pos.y, anchor: pos.anchor ?? null }) : deleteDoc(ref);
-      write.catch(() => {});
+      if (pos) writeRemote(pos);
+      else deleteDoc(ref).catch(() => {});
     });
 
     return () => { unsub(); unsubStore(); };

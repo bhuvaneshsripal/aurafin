@@ -11,6 +11,7 @@
 // Needs these environment variables (see PUSH_SETUP.md):
 //   FIREBASE_SERVICE_ACCOUNT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY,
 //   VAPID_SUBJECT, CRON_SECRET
+import { createHash } from 'node:crypto';
 import webpush from 'web-push';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -84,7 +85,13 @@ async function pushTo(subs, payload) {
   await Promise.all(
     subs.map(async ({ ref, sub }) => {
       try {
-        await webpush.sendNotification(sub, JSON.stringify(payload), { TTL: 3600, urgency: 'high' });
+        // TTL: the push service holds the message for a phone that is off or
+        // offline and hands it over the moment the phone reconnects (an hour
+        // was too short: a phone offline over lunch missed everything).
+        // Topic: a newer message with the same tag replaces an older one that
+        // is still waiting, so a reconnecting phone gets the latest, not a pile.
+        const topic = payload.tag ? createHash('sha1').update(String(payload.tag)).digest('base64url').slice(0, 32) : undefined;
+        await webpush.sendNotification(sub, JSON.stringify(payload), { TTL: payload.ttl ?? 6 * 3600, urgency: 'high', ...(topic ? { topic } : {}) });
         sent++;
       } catch (err) {
         // The device unsubscribed / the browser dropped it: forget it.
@@ -141,6 +148,7 @@ export default async function handler(req, res) {
         tag: 'aurafin-test',
         url: '/',
         force: true,
+        ttl: 3600,
       });
       return res.status(200).json(summary);
     }

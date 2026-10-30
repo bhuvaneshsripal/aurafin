@@ -39,7 +39,6 @@ import Sidebar from './components/Sidebar';
 import TopHeader from './components/TopHeader';
 import { useVisualViewportOffset } from './hooks/useVisualViewportOffset';
 import BottomNav from './components/BottomNav';
-import SwipeTabs from './components/SwipeTabs';
 import PrivacyFab from './components/PrivacyFab';
 import Toaster from './components/Toaster';
 import NetworkBanner from './components/NetworkBanner';
@@ -179,7 +178,6 @@ function AppShell() {
         </main>
       </div>
       <BottomNav />
-      <SwipeTabs />
       <Toaster />
       <NetworkBanner />
       <PrivacyFab />

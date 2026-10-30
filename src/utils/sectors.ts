@@ -23,7 +23,8 @@ export interface SectorDef {
 /** The sectors that are ALWAYS listed (0% when you hold nothing in them). */
 export const CORE_SECTORS: SectorDef[] = [
   { key: 'banking', label: 'Banking', note: 'Public & private banks', color: '#0f766e' },
-  { key: 'financial', label: 'Financial services', note: 'NBFCs, insurance, AMCs, brokers, exchanges', color: '#0e7490' },
+  { key: 'financial', label: 'Finance', note: 'NBFCs, insurance, housing finance, fintech lenders', color: '#0e7490' },
+  { key: 'capmarket', label: 'Capital markets', note: 'Exchanges, brokers, asset managers, depositories', color: '#0284c7' },
   { key: 'it', label: 'IT & technology', note: 'IT services, software, semiconductors', color: '#2563eb' },
   { key: 'pharma', label: 'Pharma & healthcare', note: 'Pharma, hospitals, diagnostics', color: '#7c3aed' },
   { key: 'fmcg', label: 'FMCG', note: 'Packaged food, personal care, beverages, tobacco', color: '#c2410c' },
@@ -31,10 +32,11 @@ export const CORE_SECTORS: SectorDef[] = [
   { key: 'oilgas', label: 'Oil, gas & coal', note: 'Refining, exploration, gas utilities, coal', color: '#475569' },
   { key: 'power', label: 'Power & utilities', note: 'Generation, transmission, renewables', color: '#ca8a04' },
   { key: 'metals', label: 'Metals & mining', note: 'Steel, aluminium, zinc, copper, mining', color: '#64748b' },
-  { key: 'gold', label: 'Gold', note: 'Gold ETFs/funds, SGBs, physical gold, gold-loan & jewellery companies, gold miners', color: '#d4a017' },
-  { key: 'silver', label: 'Silver', note: 'Silver ETFs/funds, physical silver, silver miners', color: '#94a3b8' },
+  { key: 'gold', label: 'Gold', note: 'Gold ETFs, gold-loan & jewellery companies, gold miners', color: '#d4a017' },
+  { key: 'silver', label: 'Silver', note: 'Silver ETFs and silver miners', color: '#94a3b8' },
   { key: 'infra', label: 'Infrastructure', note: 'Construction, EPC, ports, railways, logistics', color: '#0369a1' },
-  { key: 'capgoods', label: 'Capital goods & defence', note: 'Industrial machinery, electricals, defence', color: '#4f46e5' },
+  { key: 'capgoods', label: 'Capital goods', note: 'Industrial machinery, electricals, engineering', color: '#4f46e5' },
+  { key: 'defence', label: 'Defence & aerospace', note: 'Defence manufacturers, shipyards, aerospace', color: '#be123c' },
   { key: 'realty', label: 'Realty', note: 'Real-estate developers', color: '#be185d' },
   { key: 'telecom', label: 'Telecom', note: 'Telecom operators & equipment', color: '#0891b2' },
   { key: 'chemicals', label: 'Chemicals & fertilisers', note: 'Specialty chemicals, agrochemicals, fertilisers', color: '#15803d' },
@@ -49,6 +51,9 @@ export const EXTRA_SECTORS: SectorDef[] = [
   { key: 'unclassified', label: 'Unclassified', note: "Sector couldn't be determined", color: '#9ca3af' },
 ];
 
+/** The sectors tracked first, always shown at the top in this order (even at 0%). */
+export const PRIORITY_SECTORS = ['banking', 'financial', 'capmarket', 'auto', 'it', 'capgoods', 'defence', 'pharma', 'power', 'gold'];
+
 export const ALL_SECTORS: SectorDef[] = [...CORE_SECTORS, ...EXTRA_SECTORS];
 export const SECTOR_BY_KEY = new Map(ALL_SECTORS.map((s) => [s.key, s]));
 
@@ -58,8 +63,10 @@ const RAW_MAP: Record<string, string> = {
     'HDFCBANK ICICIBANK SBIN KOTAKBANK AXISBANK INDUSINDBK BANKBARODA PNB CANBK UNIONBANK IDFCFIRSTB FEDERALBNK BANDHANBNK AUBANK RBLBANK YESBANK IDBI BANKINDIA INDIANB CENTRALBK MAHABANK UCOBANK SOUTHBANK KARURVYSYA CUB TMB DCBBANK IOB UJJIVANSFB EQUITASBNK CSBBANK PSB JKBANK ' +
     'JPM BAC WFC C',
   financial:
-    'BAJFINANCE BAJAJFINSV HDFCLIFE SBILIFE ICICIGI ICICIPRULI SBICARD CHOLAFIN SHRIRAMFIN PFC RECLTD IRFC LICHSGFIN HDFCAMC JIOFIN CDSL BSE ANGELONE MOTILALOFS LICI NAM-INDIA POLICYBZR PAYTM M&MFIN POONAWALLA ABCAPITAL IIFL CAMS KFINTECH NUVAMA 360ONE IREDA HUDCO MFSL STARHEALTH GICRE NIACL CRISIL ICRA MCX PNBHOUSING CANFINHOME AAVAS HOMEFIRST CREDITACC SPANDANA PIRAMAL ' +
-    'V MA BRK-B GS MS AXP PYPL BLK',
+    'BAJFINANCE BAJAJFINSV HDFCLIFE SBILIFE ICICIGI ICICIPRULI SBICARD CHOLAFIN SHRIRAMFIN PFC RECLTD IRFC LICHSGFIN JIOFIN LICI POLICYBZR PAYTM M&MFIN POONAWALLA ABCAPITAL IIFL IREDA HUDCO MFSL STARHEALTH GICRE NIACL PNBHOUSING CANFINHOME AAVAS HOMEFIRST CREDITACC SPANDANA PIRAMAL MONEYVIEW PHONEPE PINELABS PAYU MOBIKWIK FIVESTAR SBFC AADHARHFC APTUS PROTEAN PAISALO MASFIN FUSION SATIN CREDAGRI RELIGARE SUNDARMFIN TATACAP TATACAPITAL NIVABUPA ICICIPRULI GODIGIT' +
+    'V MA BRK-B AXP PYPL',
+  capmarket:
+    'BSE CDSL ANGELONE MOTILALOFS NUVAMA 360ONE CAMS KFINTECH MCX HDFCAMC NAM-INDIA ABSLAMC UTIAMC CRISIL ICRA ANANDRATHI PRUDENT GS MS BLK SCHW ICE CME',
   it:
     'TCS INFY WIPRO HCLTECH TECHM LTIM LTTS PERSISTENT COFORGE MPHASIS OFSS KPITTECH TATAELXSI CYIENT BSOFT ZENSARTECH SONATSOFTW MASTEK INTELLECT TANLA NEWGEN ECLERX HAPPSTMNDS RATEGAIN LATENTVIEW ' +
     'AAPL MSFT GOOGL GOOG NVDA META AMD INTC ORCL CRM ADBE CSCO IBM AVGO QCOM TSM MU PLTR SNOW NOW',
@@ -88,10 +95,13 @@ const RAW_MAP: Record<string, string> = {
   infra:
     'LT ADANIPORTS IRCON RVNL RITES NBCC NCC KEC KALPATPOWR IRB GMRAIRPORT GMRINFRA CONCOR HGINFRA PNCINFRA ASHOKA JWL TITAGARH ENGINERSIN GPPL JSWINFRA ADANIENT TEXRAIL',
   capgoods:
-    'SIEMENS ABB HAL BEL BDL MAZDOCK COCHINSHIP GRSE BHEL CUMMINSIND THERMAX HONAUT POLYCAB KEI HAVELLS CGPOWER BEML ASTRAMICRO DATAPATTNS ZENTEC PARAS ELGIEQUIP KIRLOSENG LAKSHMIMACH GRINDWELL AIAENG SKFINDIA TIMKEN DIXON FINCABLES APARINDS SOLARINDS HBLENGINE BHARATFORG KAYNES AMBER VOLTAMP TRIVENI GENUSPOWER ' +
-    'BA LMT RTX GE CAT DE HON',
+    'SIEMENS ABB BHEL CUMMINSIND THERMAX HONAUT POLYCAB KEI HAVELLS CGPOWER ELGIEQUIP KIRLOSENG LAKSHMIMACH GRINDWELL AIAENG SKFINDIA TIMKEN DIXON FINCABLES APARINDS SOLARINDS HBLENGINE BHARATFORG KAYNES AMBER VOLTAMP TRIVENI GENUSPOWER' +
+    'GE CAT DE HON',
+  defence:
+    'HAL BEL BDL MAZDOCK COCHINSHIP GRSE BEML ASTRAMICRO DATAPATTNS ZENTEC PARAS ' +
+    'BA LMT RTX NOC GD',
   realty: 'DLF GODREJPROP OBEROIRLTY PRESTIGE PHOENIXLTD LODHA MACROTECH BRIGADE SOBHA MAHLIFE SIGNATURE ANANTRAJ DBREALTY KOLTEPATIL',
-  telecom: 'BHARTIARTL IDEA VODAFONEIDEA VI JIOPLATFORMS JIO INDUSTOWER TATACOMM HFCL TEJASNET RAILTEL ROUTE TTML STLTECH ' + 'T VZ TMUS',
+  telecom: 'BHARTIARTL BHARTIHEXA IDEA VODAFONEIDEA VI JIOPLATFORMS JIOPLATFORM JIOPL JIO INDUSTOWER TATACOMM HFCL TEJASNET RAILTEL ROUTE TTML STLTECH ' + 'T VZ TMUS',
   chemicals:
     'PIDILITIND SRF UPL AARTIIND DEEPAKNTR NAVINFLUOR TATACHEM PIIND ATUL VINATIORG CHAMBLFERT COROMANDEL FACT RCF GNFC GSFC SUMICHEM CLEAN BASF ALKYLAMINE FINEORG GALAXYSURF TATVA ANURAS BALAMINES LXCHEM PCBL',
   cement: 'ULTRACEMCO GRASIM AMBUJACEM ACC SHREECEM DALBHARAT JKCEMENT RAMCOCEM JKLAKSHMI NUVOCO HEIDELBERG BIRLACORPN STARCEMENT SAGCEM ORIENTCEM CERA KAJARIACER CENTURYPLY GREENPANEL ASTRAL SUPREMEIND',
@@ -124,8 +134,15 @@ export function sectorFromSymbol(symbol: string | undefined): string | undefined
 // ------------------------------------------------------- company-name rules
 /** Fallback for stocks whose ticker isn't in the map and that Yahoo has no profile for (e.g. brand-new listings). */
 const NAME_RULES: [RegExp, string][] = [
+  [/muthoot|manappuram/i, 'gold'],
   [/jewel|jewell?ers|\bgold\b/i, 'gold'],
-  [/jio platforms|\bjio\b|vodafone|bharti airtel|\bairtel\b|\bidea\b|telecom|tower corp/i, 'telecom'],
+  // Telecom operators — checked before anything Yahoo says (it files Jio under internet / IT).
+  [/jio platforms|^jio\b|reliance jio|vodafone|bharti airtel|\bairtel\b|telecom|tower corp|indus towers/i, 'telecom'],
+  // Banks, then lenders / fintech / insurers / brokers (Moneyview, Paytm, Bajaj Finance...).
+  [/asset management|\bamc\b|stock ?broking|\bbroking\b|capital markets|\bwealth\b|depositor(y|ies)|stock exchange/i, 'capmarket'],
+  [/\bbank\b|\bbancorp\b/i, 'banking'],
+  [/money ?view|fintech|\bfinance\b|\bfinserv|financial services|\binsurance\b|\bnbfc\b|micro ?finance|housing finance|asset management|\bamc\b|stock ?broking|\bbroking\b|\blending\b|\bcredit\b|\bpayments?\b|wealth|\bcapital markets\b/i, 'financial'],
+  [/defen[cs]e|aerospace|shipbuilders|ordnance/i, 'defence'],
   [/cupid/i, 'fmcg'],
 ];
 
@@ -143,9 +160,12 @@ export function mapYahooSector(sector?: string | null, industry?: string | null)
   if (/^gold/i.test(ind)) return 'gold';
   if (/^silver/i.test(ind)) return 'silver';
   if (/internet retail|luxury|apparel|footwear|restaurants|lodging|leisure|travel|specialty retail|department|home improvement|furnishings|household appliances|entertainment|broadcasting|publishing|advertising|gambling|resorts|personal services|education/i.test(ind)) return 'consumer';
+  if (/telecom|communication equipment/i.test(ind)) return 'telecom';
   if (/banks/i.test(ind)) return 'banking';
-  if (/insurance|asset management|capital markets|credit services|mortgage|financial|exchanges|shell/i.test(ind)) return 'financial';
-  if (/information technology|software|computer|semiconductor|electronic components|communication equipment|consumer electronics|scientific & technical|internet content/i.test(ind)) return 'it';
+  if (/asset management|capital markets|financial data|exchanges/i.test(ind)) return 'capmarket';
+  if (/fintech|payment|lending|credit|financial/i.test(ind)) return 'financial';
+  if (/insurance|credit services|mortgage|financial|shell/i.test(ind)) return 'financial';
+  if (/information technology|software|computer|semiconductor|electronic components|consumer electronics|scientific & technical|internet content/i.test(ind)) return 'it';
   if (/drug|biotech|medical|healthcare|diagnostic|pharma|health information/i.test(ind)) return 'pharma';
   if (/auto/i.test(ind)) return 'auto';
   if (/oil & gas|coal|uranium/i.test(ind)) return 'oilgas';
@@ -154,7 +174,8 @@ export function mapYahooSector(sector?: string | null, industry?: string | null)
   if (/chemicals|agricultural inputs/i.test(ind)) return 'chemicals';
   if (/building materials|cement/i.test(ind)) return 'cement';
   if (/engineering|construction|infrastructure|railroads|airports|marine|trucking|freight|conglomerates|airlines|waste/i.test(ind)) return 'infra';
-  if (/aerospace|defense|machinery|electrical equipment|tools|industrial|metal fabrication|business equipment|building products/i.test(ind)) return 'capgoods';
+  if (/aerospace|defense/i.test(ind)) return 'defence';
+  if (/machinery|electrical equipment|tools|industrial|metal fabrication|business equipment|building products/i.test(ind)) return 'capgoods';
   if (/telecom/i.test(ind)) return 'telecom';
   if (/real estate/i.test(ind)) return 'realty';
   if (/packaged foods|household|beverages|tobacco|confectioners|farm products|grocery|personal products|food distribution/i.test(ind)) return 'fmcg';
@@ -183,6 +204,7 @@ export function sectorFromName(text: string): string | undefined {
   if (/\bsilver/.test(t)) return 'silver';
   if (/nasdaq|s&p ?500|\bsp500\b|\bnyse\b|\bfang\b|hang seng|\bchina\b|msci (world|eafe|em)|international|global|\bus\b equity|\bus\b|overseas|world/.test(t)) return 'international';
   if (/psu bank|private bank|bank/.test(t)) return 'banking';
+  if (/capital market/.test(t)) return 'capmarket';
   if (/financial services|fin ?serv|\bfinancial\b|\bnbfc\b|insurance/.test(t)) return 'financial';
   if (/pharma|health|hospital/.test(t)) return 'pharma';
   if (/\bnifty it\b|\bit etf\b|\bit fund\b|infotech|information tech|technology|digital/.test(t)) return 'it';
@@ -194,7 +216,8 @@ export function sectorFromName(text: string): string | undefined {
   if (/metal|mining/.test(t)) return 'metals';
   if (/oil|energy|\bgas\b/.test(t)) return 'oilgas';
   if (/power|utilit/.test(t)) return 'power';
-  if (/defence|defense|manufactur|capital goods|industrial|\bpse\b|cpse/.test(t)) return 'capgoods';
+  if (/defence|defense|aerospace/.test(t)) return 'defence';
+  if (/manufactur|capital goods|industrial|\bpse\b|cpse/.test(t)) return 'capgoods';
   if (/telecom|communication/.test(t)) return 'telecom';
   if (/chemical/.test(t)) return 'chemicals';
   if (/cement/.test(t)) return 'cement';
@@ -202,20 +225,15 @@ export function sectorFromName(text: string): string | undefined {
 }
 
 // ----------------------------------------------------------- classification
-/** Asset classes included in the sector view (market-linked holdings + metals). */
+/** Asset classes included in the sector view: stocks and ETFs only.
+ *  Mutual funds, index funds, hybrid funds, SIPs and commodities (physical gold,
+ *  SGBs, physical silver) are deliberately left out. */
 export const SECTOR_ASSET_CLASSES = new Set<string>([
   'stock',
   'etf',
   'international_equity',
-  'equity_mutual_fund',
-  'index_fund',
-  'hybrid_mutual_fund',
-  'sip',
   'ipo_pre_ipo',
   'equity_other',
-  'gold',
-  'sovereign_gold_bond',
-  'silver',
 ]);
 
 /** Classes whose sector comes from a company profile (single stocks). */
@@ -244,7 +262,17 @@ export interface SectorProfile {
 }
 
 /** Final sector key for one holding. `profiles` = cached Yahoo lookups by profileKey(). */
-export function classifyAsset(asset: Asset, profiles: Record<string, SectorProfile | null | undefined>): string {
+export function classifyAsset(
+  asset: Asset,
+  profiles: Record<string, SectorProfile | null | undefined>,
+  customs: SectorDef[] = []
+): string {
+  // Sectors you typed yourself win: a holding whose name or symbol contains the typed text goes there.
+  if (customs.length) {
+    const hay = `${asset.name ?? ''} ${asset.symbol ?? ''}`.toLowerCase();
+    const hit = customs.find((c) => hay.includes(c.label.toLowerCase()));
+    if (hit) return hit.key;
+  }
   if (asset.assetClass === 'gold' || asset.assetClass === 'sovereign_gold_bond') return 'gold';
   if (asset.assetClass === 'silver') return 'silver';
 
@@ -253,12 +281,16 @@ export function classifyAsset(asset: Asset, profiles: Record<string, SectorProfi
   if (SINGLE_STOCK_CLASSES.has(asset.assetClass)) {
     const bySymbol = sectorFromSymbol(asset.symbol);
     if (bySymbol) return bySymbol;
+    // The company's own name beats Yahoo's profile, which files some businesses
+    // under the wrong heading (Jio as internet/IT, Moneyview as software).
+    const byCompany = sectorFromCompanyName(asset.name);
+    if (byCompany) return byCompany;
     if (asset.symbol) {
       const p = profiles[profileKey(asset)];
       const mapped = p ? mapYahooSector(p.sector, p.industry) : undefined;
       if (mapped) return mapped;
     }
-    return sectorFromCompanyName(asset.name) ?? sectorFromName(nameHay) ?? 'unclassified';
+    return sectorFromName(nameHay) ?? 'unclassified';
   }
 
   // ETF / mutual fund / index fund / SIP / hybrid
@@ -285,14 +317,16 @@ export interface SectorRow extends SectorDef {
 
 export function buildSectorAllocation(
   items: { asset: Asset; value: number }[],
-  profiles: Record<string, SectorProfile | null | undefined>
+  profiles: Record<string, SectorProfile | null | undefined>,
+  trackedKeys: string[] = PRIORITY_SECTORS,
+  customs: SectorDef[] = []
 ): { total: number; rows: SectorRow[] } {
   const eligible = items.filter((i) => isSectorAsset(i.asset) && i.value > 0);
   const total = eligible.reduce((s, i) => s + i.value, 0);
 
   const bucket = new Map<string, { value: number; holdings: SectorHolding[] }>();
   for (const { asset, value } of eligible) {
-    const key = classifyAsset(asset, profiles);
+    const key = classifyAsset(asset, profiles, customs);
     const b = bucket.get(key) ?? { value: 0, holdings: [] };
     b.value += value;
     b.holdings.push({ id: asset.id, name: asset.name, value, pct: total > 0 ? (value / total) * 100 : 0 });
@@ -309,9 +343,23 @@ export function buildSectorAllocation(
     };
   };
 
-  const core = CORE_SECTORS.map(make);
-  const extra = EXTRA_SECTORS.map(make).filter((r) => r.value > 0);
-  const rows = [...core, ...extra].sort((a, b) => b.value - a.value);
-  // Sectors with nothing held keep the fixed order above (stable sort).
-  return { total, rows };
+  // Tracked sectors come first in their own order (shown even at 0%); every
+  // other sector is listed only when something is held in it, biggest first.
+  const priority = trackedKeys.map((k) => SECTOR_BY_KEY.get(k) ?? customs.find((c) => c.key === k)).filter((d): d is SectorDef => !!d).map(make);
+  const rest = ALL_SECTORS.filter((d) => !trackedKeys.includes(d.key))
+    .map(make)
+    .filter((r) => r.value > 0)
+    .sort((a, b) => b.value - a.value);
+  return { total, rows: [...priority, ...rest] };
+}
+
+const CUSTOM_COLORS = ['#0d9488', '#e11d48', '#7c3aed', '#ea580c', '#0284c7', '#65a30d', '#c026d3', '#ca8a04'];
+
+/** Turns typed sectors into rows definitions (stable colour per name). */
+export function customSectorDefs(customs: Record<string, { label: string }>): SectorDef[] {
+  return Object.entries(customs).map(([key, c]) => {
+    let h = 0;
+    for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return { key, label: c.label, note: `Holdings with “${c.label}” in the name`, color: CUSTOM_COLORS[h % CUSTOM_COLORS.length] };
+  });
 }

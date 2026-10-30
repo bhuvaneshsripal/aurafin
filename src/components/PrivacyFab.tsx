@@ -149,7 +149,7 @@ export default function PrivacyFab() {
     setDragging(false);
     if (d.armed) {
       // A hold (with or without movement) is never a tap.
-      if (d.active && latestPos.current) setEyePos({ x: latestPos.current.x, y: latestPos.current.b, anchor: 'bottom' });
+      if (d.active && latestPos.current) setEyePos({ x: latestPos.current.x, y: latestPos.current.b, anchor: 'bottom', at: Date.now() });
       else setPos(toSpot(savedPos)); // held but never moved: back exactly where it was saved
       return;
     }

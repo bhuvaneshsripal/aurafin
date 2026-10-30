@@ -5,8 +5,8 @@ import { hideNumber } from '../../utils/privateFormat';
 import type { CategoryBreakdown as Category } from '../../utils/portfolioAnalytics';
 
 /** Category rows (Equity, Debt, …). Tap a category with more than one asset class to see Direct Stock / ETF / SIP etc. inside it. */
-export default function CategoryBreakdownList({ categories, currency }: { categories: Category[]; currency: string }) {
-  const [open, setOpen] = useState<Record<string, boolean>>({});
+export default function CategoryBreakdownList({ categories, currency, defaultOpen = [] }: { categories: Category[]; currency: string; defaultOpen?: string[] }) {
+  const [open, setOpen] = useState<Record<string, boolean>>(() => Object.fromEntries(defaultOpen.map((k) => [k, true])));
 
   return (
     <ul className="divide-y divide-line-soft">

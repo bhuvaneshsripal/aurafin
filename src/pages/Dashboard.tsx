@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { usePinnedTooltip, isTouchDevice, type ChartClickState } from '../hooks/usePinnedTooltip';
 import PinnedChartTooltip from '../components/PinnedChartTooltip';
 import { isFullySold, computeHoldingPnl, isInvestmentHolding, computePortfolioPnl } from '../utils/investmentPnl';
@@ -483,31 +483,80 @@ function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
     return allHistory.filter((s) => s.date >= iso);
   }, [allHistory, range]);
 
-  // Tap / click → nearest data point, computed from the pointer position.
+  // Pixel x (relative to the chart box) → nearest data point, or null when the
+  // pointer is outside the plot (e.g. on the y-axis labels).
+  const pointAt = (clientX: number, box: DOMRect) => {
+    const area = plotAreaRef.current;
+    if (!area || data.length === 0 || area.width <= 0) return null;
+    const relX = clientX - box.left;
+    if (relX < area.x - 8 || relX > area.x + area.width + 8) return null;
+    const ratio = Math.min(Math.max((relX - area.x) / area.width, 0), 1);
+    const idx = data.length === 1 ? 0 : Math.round(ratio * (data.length - 1));
+    const x = data.length === 1 ? area.x + area.width / 2 : area.x + (idx / (data.length - 1)) * area.width;
+    return { label: data[idx].date, x };
+  };
+
+  // Mouse click → nearest data point (toggles). Touch is handled by the
+  // pointer handlers below so a finger can also be dragged along the line.
+  const justTouchedRef = useRef(false);
   const handleChartTap = (e: ReactMouseEvent<HTMLDivElement>) => {
     // Taps on the pinned tooltip itself are handled by its own onClick (close).
     if ((e.target as HTMLElement).closest('[data-pinned-tip]')) return;
-    const area = plotAreaRef.current;
-    const box = e.currentTarget.getBoundingClientRect();
-    if (!area || data.length === 0 || area.width <= 0) {
+    // The click that follows a touch was already handled on pointer up.
+    if (justTouchedRef.current) {
+      justTouchedRef.current = false;
+      return;
+    }
+    const pt = pointAt(e.clientX, e.currentTarget.getBoundingClientRect());
+    if (!pt) {
       pin.hidePinned();
       return;
     }
-    const relX = e.clientX - box.left;
-    // Outside the plot (e.g. on the y-axis labels) → unpin.
-    if (relX < area.x - 8 || relX > area.x + area.width + 8) {
+    pin.setPinned((prev) => (prev?.label === pt.label ? null : pt));
+  };
+
+  // Touch / pen: press to pick a point, then slide the finger along the chart
+  // and the selected point (and its values) follows. Lifting leaves it pinned;
+  // tapping the same point again clears it. Vertical swipes still scroll the
+  // page (touch-action: pan-y) and simply cancel the gesture.
+  const dragRef = useRef<{ startX: number; startLabel: string | null; moved: boolean } | null>(null);
+  const handlePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'mouse') return;
+    if ((e.target as HTMLElement).closest('[data-pinned-tip]')) return;
+    const pt = pointAt(e.clientX, e.currentTarget.getBoundingClientRect());
+    justTouchedRef.current = true;
+    if (!pt) {
+      dragRef.current = null;
       pin.hidePinned();
       return;
     }
-    const ratio = Math.min(Math.max((relX - area.x) / area.width, 0), 1);
-    const idx = data.length === 1 ? 0 : Math.round(ratio * (data.length - 1));
-    const label = data[idx].date;
-    const x = data.length === 1 ? area.x + area.width / 2 : area.x + (idx / (data.length - 1)) * area.width;
-    pin.setPinned((prev) => (prev?.label === label ? null : { label, x }));
+    dragRef.current = { startX: e.clientX, startLabel: pin.pinned?.label ?? null, moved: false };
+    pin.setPinned(pt);
+  };
+  const handlePointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag || e.pointerType === 'mouse') return;
+    if (Math.abs(e.clientX - drag.startX) > 6) drag.moved = true;
+    if (!drag.moved) return;
+    const pt = pointAt(e.clientX, e.currentTarget.getBoundingClientRect());
+    if (pt) pin.setPinned((prev) => (prev?.label === pt.label && prev.x === pt.x ? prev : pt));
+  };
+  const handlePointerEnd = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    if (!drag || e.pointerType === 'mouse') return;
+    // A plain tap on the point that was already pinned closes it.
+    if (e.type === 'pointerup' && !drag.moved && drag.startLabel !== null && drag.startLabel === pin.pinned?.label) {
+      pin.hidePinned();
+    }
+    window.setTimeout(() => { justTouchedRef.current = false; }, 400);
   };
 
   const first = data[0];
   const last = data[data.length - 1];
+  // While a point is pinned / being dragged, the figure above the chart follows it.
+  const selected = pin.pinned ? data.find((d) => d.date === pin.pinned!.label) : undefined;
+  const shown = selected ?? last;
   const isDown = data.length >= 2 && last.netWorth - first.netWorth < 0;
   const lineColor = isDown ? chart.negative : chart.primary;
   const fillColor = isDown ? chart.negativeSoft : chart.primarySoft;
@@ -555,10 +604,10 @@ function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
       {data.length > 0 && (
         <div className="flex items-baseline gap-2 mb-3">
           <span className="text-xs text-muted">
-            {data.length === 1 ? 'Only data point' : 'Latest'} · {formatDate(last.date)}
+            {selected ? 'Selected' : data.length === 1 ? 'Only data point' : 'Latest'} · {formatDate(shown.date)}
           </span>
           <span className="font-numeric text-lg font-semibold text-ink">
-            {privacyMode ? '••••••' : formatPreciseCurrency(last.netWorth)}
+            {privacyMode ? '••••••' : formatPreciseCurrency(shown.netWorth)}
           </span>
         </div>
       )}
@@ -572,10 +621,14 @@ function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
         />
       ) : (
         <div
-          className="h-[220px] -ml-2 relative cursor-pointer"
-          style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
+          className="h-[220px] -ml-2 relative cursor-pointer select-none"
+          style={{ touchAction: 'pan-y', WebkitTapHighlightColor: 'transparent', WebkitUserSelect: 'none' }}
           ref={pin.containerRef}
           onClick={handleChartTap}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerEnd}
+          onPointerCancel={handlePointerEnd}
         >
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>

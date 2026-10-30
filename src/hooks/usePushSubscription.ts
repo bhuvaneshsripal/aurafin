@@ -53,6 +53,9 @@ export async function removePushSubscription(uid: string): Promise<void> {
 export function usePushSubscription() {
   const user = useAuthStore((s) => s.user);
   const enabled = useAlertsStore((s) => s.enabled);
+  // Bumped whenever the app returns to the foreground so the device re-checks
+  // its registration (browsers can rotate or drop a push subscription).
+  const [refreshTick, setRefreshTick] = useState(0);
   const [permission, setPermission] = useState<NotificationPermission>(() =>
     typeof Notification === 'undefined' ? 'denied' : Notification.permission
   );
@@ -76,6 +79,12 @@ export function usePushSubscription() {
       window.removeEventListener('focus', sync);
       document.removeEventListener('visibilitychange', sync);
     };
+  }, []);
+
+  useEffect(() => {
+    const bump = () => { if (document.visibilityState === 'visible') setRefreshTick((n) => n + 1); };
+    document.addEventListener('visibilitychange', bump);
+    return () => document.removeEventListener('visibilitychange', bump);
   }, []);
 
   const uid = user?.uid;
@@ -103,6 +112,13 @@ export function usePushSubscription() {
         }
         if (cancelled) return;
         const json = sub.toJSON();
+        const regKey = `aurafin-push-reg:${uid}`;
+        const stamp = `${sub.endpoint}|${JSON.stringify(json.keys ?? {})}`;
+        // Already saved this exact subscription within the last day: nothing to write.
+        try {
+          const prev = JSON.parse(localStorage.getItem(regKey) ?? 'null');
+          if (prev && prev.stamp === stamp && Date.now() - prev.at < 24 * 3600 * 1000) return;
+        } catch { /* ignore */ }
         await setDoc(
           doc(db, 'users', uid, 'pushSubscriptions', await deviceId(sub.endpoint)),
           {
@@ -114,6 +130,7 @@ export function usePushSubscription() {
           },
           { merge: true }
         );
+        try { localStorage.setItem(regKey, JSON.stringify({ stamp, at: Date.now() })); } catch { /* ignore */ }
       } catch (err) {
         console.warn('Could not register for push notifications.', err);
       }
@@ -121,5 +138,28 @@ export function usePushSubscription() {
     return () => {
       cancelled = true;
     };
-  }, [uid, guest, enabled, permission]);
+  }, [uid, guest, enabled, permission, refreshTick]);
+}
+
+export type PushTestResult = {
+  ok: boolean;
+  /** What is configured on the server. */
+  server?: { vapid: boolean; serviceAccount: boolean; cronSecret: boolean };
+  devices: number;
+  sent: number;
+  error?: string;
+};
+
+/** Asks the server to push a test notification to every device signed in to this account. */
+export async function sendTestPush(): Promise<PushTestResult> {
+  try {
+    const { auth } = await import('../firebase/config');
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) return { ok: false, devices: 0, sent: 0, error: 'Sign in first.' };
+    const res = await fetch('/api/push/test', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+    const body = await res.json().catch(() => ({}));
+    return { devices: 0, sent: 0, ...body, ok: !!body.ok, error: body.error };
+  } catch (err) {
+    return { ok: false, devices: 0, sent: 0, error: err instanceof Error ? err.message : 'Network error' };
+  }
 }

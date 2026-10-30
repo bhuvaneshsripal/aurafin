@@ -51,3 +51,21 @@ server's copy is skipped, so you don't get doubles.
   that alert's window.
 - Add a Firestore rule? Not needed: the existing `users/{uid}/{collection}` rule
   already covers `pushSubscriptions`, and the server uses admin access.
+
+## Checking it works (Settings > "Alerts when the app is closed")
+Open Settings, tap **Send a test notification**, then close the app. The card
+tells you what is missing (server keys, no registered device, notifications
+blocked) instead of staying silent.
+
+## Phone offline or switched off
+Alerts are held by Google/Apple/Mozilla's push service for up to 6 hours and
+delivered the moment the phone reconnects. A newer alert with the same tag
+replaces an older one still waiting, so you get the latest, not a pile.
+
+## If alerts suddenly stop
+- GitHub pauses scheduled workflows after 60 days with no repo activity. Open
+  the Actions tab and re-enable "Push alerts" (or push any commit).
+- A free alternative to the GitHub schedule: cron-job.org, calling
+  `APP_URL/api/push/send` every 5 minutes with the header
+  `Authorization: Bearer <CRON_SECRET>`.
+- Open the app once on the device: it re-registers itself with the push service.

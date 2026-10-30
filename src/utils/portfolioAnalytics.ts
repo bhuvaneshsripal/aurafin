@@ -135,6 +135,20 @@ export function allocateNewMoney(rows: DriftRow[], total: number, newMoney: numb
   return out;
 }
 
+/** Distinct colours for the asset classes inside Equity, so Direct Stock, SIP, ETF… never share one shade. */
+export const EQUITY_SUB_COLORS: Record<string, string> = {
+  stock: '#16a35d',
+  sip: '#0ea5e9',
+  etf: '#f59e0b',
+  equity_mutual_fund: '#8b5cf6',
+  index_fund: '#ec4899',
+  hybrid_mutual_fund: '#14b8a6',
+  international_equity: '#ef4444',
+  esop_rsu: '#84cc16',
+  ipo_pre_ipo: '#f97316',
+  equity_other: '#64748b',
+};
+
 /** One asset class inside a category, e.g. "Direct Stock" inside "Equity". */
 export interface SubSlice {
   assetClass: string;
@@ -169,7 +183,7 @@ export function buildCategoryBreakdown(items: ValuedAsset[]): { total: number; c
       .map(([assetClass, value]) => ({
         assetClass,
         label: ASSET_CLASS_LABELS[assetClass] ?? assetClass,
-        color: ASSET_CLASS_COLORS[assetClass] ?? s.color,
+        color: (s.key === 'equity' ? EQUITY_SUB_COLORS[assetClass] : undefined) ?? ASSET_CLASS_COLORS[assetClass] ?? s.color,
         value,
         pct: total > 0 ? (value / total) * 100 : 0,
         pctOfCategory: s.value > 0 ? (value / s.value) * 100 : 0,

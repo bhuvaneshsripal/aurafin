@@ -14,6 +14,7 @@ import { useAvatarStore } from '../store/avatarStore';
 import { useAppLockStore } from '../store/appLockStore';
 import { useDisplaySettingsStore, FONT_MIN_SCALE, FONT_MAX_SCALE, SCREEN_MIN_SCALE, SCREEN_MAX_SCALE } from '../store/displaySettingsStore';
 import { useGoldSettingsStore } from '../store/goldSettingsStore';
+import { pushSupported, sendTestPush, type PushTestResult } from '../hooks/usePushSubscription';
 import { useNotificationPreferencesStore, type NotificationChannelKey } from '../store/notificationPreferencesStore';
 import InfoTip from '../components/ui/InfoTip';
 import PinBoxInput, { type PinBoxInputHandle } from '../components/PinBoxInput';
@@ -1084,6 +1085,53 @@ const NOTIFICATION_ROWS: { title: string; channels: NotificationChannel[] }[] = 
   },
 ];
 
+/** Lets the person check that alerts reach this phone even when the app is closed. */
+function ClosedAppAlertsCard() {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<PushTestResult | null>(null);
+  const supported = pushSupported();
+  const permission = typeof Notification === 'undefined' ? 'denied' : Notification.permission;
+
+  const run = async () => {
+    setBusy(true);
+    setResult(await sendTestPush());
+    setBusy(false);
+  };
+
+  let message: string | null = null;
+  if (!supported) message = 'This browser or build has no push support. Make sure VITE_VAPID_PUBLIC_KEY is set on Vercel, then redeploy. On iPhone, add the app to the Home Screen first.';
+  else if (permission !== 'granted') message = 'Notifications are blocked or not allowed yet. Allow them for this app in your phone / browser settings.';
+  else if (result) {
+    if (result.server && (!result.server.vapid || !result.server.serviceAccount)) message = 'The server is missing push keys (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY or FIREBASE_SERVICE_ACCOUNT). See PUSH_SETUP.md.';
+    else if (result.error) message = `Could not send: ${result.error}`;
+    else if (result.devices === 0) message = 'No device is registered yet. Open the app once with notifications allowed and alerts switched on, then try again.';
+    else if (result.sent === 0) message = 'The device is registered but the push was rejected. Open the app once to refresh it, then try again.';
+    else message = `Sent to ${result.sent} device${result.sent === 1 ? '' : 's'}. Close the app now: the notification should appear.`;
+  }
+
+  return (
+    <Card>
+      <div className="flex items-center gap-2 mb-1">
+        <h2 className="text-sm font-semibold text-ink">Alerts when the app is closed</h2>
+      </div>
+      <p className="text-xs text-muted mb-4">
+        Market and holding alerts are sent from the server, so they arrive with the app closed. If your phone is offline,
+        they wait and show up as soon as it reconnects.
+      </p>
+      <button
+        type="button"
+        onClick={run}
+        disabled={busy || !supported}
+        className="btn-press inline-flex items-center gap-2 rounded-xl border border-line px-4 h-10 text-sm font-medium text-ink disabled:opacity-60"
+      >
+        <Bell size={14} />
+        {busy ? 'Sending…' : 'Send a test notification'}
+      </button>
+      {message && <p className="text-xs text-muted mt-3">{message}</p>}
+    </Card>
+  );
+}
+
 function NotificationsCard() {
   const prefs = useNotificationPreferencesStore((s) => s.prefs);
   const toggle = useNotificationPreferencesStore((s) => s.toggle);
@@ -1205,6 +1253,7 @@ function PreferencesTab() {
       <div className="md:hidden">
         <FloatingEyeCard />
       </div>
+      <ClosedAppAlertsCard />
       <NotificationsCard />
     </>
   );

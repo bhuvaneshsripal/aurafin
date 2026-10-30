@@ -8290,13 +8290,19 @@ function AllocationChart({
   currency: string;
 }) {
   const sorted = [...categories].sort((a, b) => b.value - a.value);
+  // Donut: Equity is split into its own slices (Direct Stock, SIP, ETF…), each with its own colour.
+  const slices = sorted.flatMap((c) =>
+    c.key === 'equity' && c.children.length > 1
+      ? c.children.map((s) => ({ key: `equity:${s.assetClass}`, label: `Equity · ${s.label}`, color: s.color, value: s.value }))
+      : [{ key: c.key, label: c.label, color: c.color, value: c.value }]
+  );
   return (
     <Card padding="lg" className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
       <div className="relative">
         <ResponsiveContainer width="100%" height={260}>
           <PieChart>
             <Pie
-              data={sorted}
+              data={slices}
               dataKey="value"
               nameKey="label"
               innerRadius={68}
@@ -8305,7 +8311,7 @@ function AllocationChart({
               stroke="none"
               isAnimationActive={false}
             >
-              {sorted.map((entry) => (
+              {slices.map((entry) => (
                 <Cell key={entry.key} fill={entry.color} />
               ))}
             </Pie>
@@ -8323,7 +8329,7 @@ function AllocationChart({
         </div>
       </div>
       <div className="min-w-0">
-        <CategoryBreakdownList categories={sorted} currency={currency} />
+        <CategoryBreakdownList categories={sorted} currency={currency} defaultOpen={['equity']} />
       </div>
     </Card>
   );
