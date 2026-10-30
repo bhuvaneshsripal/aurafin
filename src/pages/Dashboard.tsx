@@ -517,40 +517,56 @@ function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
     pin.setPinned((prev) => (prev?.label === pt.label ? null : pt));
   };
 
-  // Touch / pen: press to pick a point, then slide the finger along the chart
-  // and the selected point (and its values) follows. Lifting leaves it pinned;
-  // tapping the same point again clears it. Vertical swipes still scroll the
-  // page (touch-action: pan-y) and simply cancel the gesture.
+  // Touch / pen: the values show only while the finger is on the chart. Press
+  // (or start sliding sideways) to see a point's values, slide to move along the
+  // line, and lift the finger to hide them again. A quick tap flashes the value
+  // for a moment. Vertical swipes scroll the page (touch-action: pan-y); the
+  // browser then cancels the gesture and nothing is shown, so scrolling stays smooth.
   const dragRef = useRef<{
     startX: number;
     startY: number;
     pointerId: number;
-    startLabel: string | null;
     scrubbing: boolean;
+    shown: boolean;
   } | null>(null);
   const rafRef = useRef(0);
+  const holdRef = useRef(0);
+  const hideRef = useRef(0);
   const latestXRef = useRef(0);
-  useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
+  const clearTimers = () => {
+    cancelAnimationFrame(rafRef.current);
+    window.clearTimeout(holdRef.current);
+    rafRef.current = 0;
+    holdRef.current = 0;
+  };
+  useEffect(() => () => { clearTimers(); window.clearTimeout(hideRef.current); }, []);
 
-  // Nothing is pinned on touch-down: if the finger starts a vertical swipe the
-  // browser takes over (pointercancel) and the page scrolls with zero chart work
-  // or re-rendering. A pin happens only on a tap (pointer up without moving) or
-  // once the finger clearly moves sideways along the chart.
+  const showAt = (clientX: number, el: HTMLElement) => {
+    const pt = pointAt(clientX, el.getBoundingClientRect());
+    if (pt) pin.setPinned((prev) => (prev?.label === pt.label && prev.x === pt.x ? prev : pt));
+    return pt;
+  };
+
   const handlePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.pointerType === 'mouse') return;
     if ((e.target as HTMLElement).closest('[data-pinned-tip]')) return;
     justTouchedRef.current = true;
-    dragRef.current = {
-      startX: e.clientX,
-      startY: e.clientY,
-      pointerId: e.pointerId,
-      startLabel: pin.pinned?.label ?? null,
-      scrubbing: false,
-    };
+    window.clearTimeout(hideRef.current);
+    const drag = { startX: e.clientX, startY: e.clientY, pointerId: e.pointerId, scrubbing: false, shown: false };
+    dragRef.current = drag;
+    latestXRef.current = e.clientX;
+    const el = e.currentTarget;
+    // Show after a short press so a swipe that is really a scroll never flashes it.
+    holdRef.current = window.setTimeout(() => {
+      holdRef.current = 0;
+      if (dragRef.current !== drag) return;
+      drag.shown = !!showAt(latestXRef.current, el);
+    }, 120);
   };
   const handlePointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
     if (!drag || e.pointerType === 'mouse') return;
+    latestXRef.current = e.clientX;
     if (!drag.scrubbing) {
       const dx = Math.abs(e.clientX - drag.startX);
       const dy = Math.abs(e.clientY - drag.startY);
@@ -559,26 +575,25 @@ function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
       try { e.currentTarget.setPointerCapture(drag.pointerId); } catch { /* ignore */ }
     }
     // At most one state update per frame, however fast the finger moves.
-    latestXRef.current = e.clientX;
     if (rafRef.current) return;
     const el = e.currentTarget;
     rafRef.current = requestAnimationFrame(() => {
       rafRef.current = 0;
-      const pt = pointAt(latestXRef.current, el.getBoundingClientRect());
-      if (pt) pin.setPinned((prev) => (prev?.label === pt.label && prev.x === pt.x ? prev : pt));
+      if (dragRef.current === drag) drag.shown = !!showAt(latestXRef.current, el) || drag.shown;
     });
   };
   const handlePointerEnd = (e: ReactPointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
     dragRef.current = null;
     if (!drag || e.pointerType === 'mouse') return;
-    cancelAnimationFrame(rafRef.current);
-    rafRef.current = 0;
-    if (e.type === 'pointerup' && !drag.scrubbing) {
-      // Plain tap: pin that point, or clear it when tapping the pinned one again.
-      const pt = pointAt(e.clientX, e.currentTarget.getBoundingClientRect());
-      if (!pt || pt.label === drag.startLabel) pin.hidePinned();
-      else pin.setPinned(pt);
+    const wasPending = holdRef.current !== 0;
+    clearTimers();
+    window.clearTimeout(hideRef.current);
+    if (e.type === 'pointerup' && wasPending && !drag.scrubbing) {
+      // Quick tap: flash the value briefly, then hide it.
+      if (showAt(e.clientX, e.currentTarget)) hideRef.current = window.setTimeout(pin.hidePinned, 1200);
+    } else {
+      pin.hidePinned(); // finger lifted (or the browser took over to scroll)
     }
     window.setTimeout(() => { justTouchedRef.current = false; }, 400);
   };

@@ -1,5 +1,5 @@
-import { forwardRef, useImperativeHandle, useRef } from 'react';
-import type { KeyboardEvent, ClipboardEvent } from 'react';
+import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
+import type { ChangeEvent } from 'react';
 
 interface PinBoxInputProps {
   value: string;
@@ -18,93 +18,84 @@ export interface PinBoxInputHandle {
   focus: () => void;
 }
 
-/** Four (or `length`) individual round digit boxes for entering a PIN,
- *  instead of one long rectangular text field. Handles auto-advance on
- *  type, backspace-to-previous, arrow-key navigation, and paste. */
+/** Four (or `length`) round digit boxes for entering a PIN.
+ *
+ *  Underneath there is ONE real <input> that stays focused for the whole
+ *  entry; the round boxes are only a display of its value. Earlier each box
+ *  was its own input and focus hopped to the next one after every digit —
+ *  on phones that made the on-screen keyboard (and the page) flicker on each
+ *  keystroke. With a single input the focus never moves, so typing, backspace
+ *  and paste are smooth, and the browser's own handling covers them all.
+ *  Masking uses CSS (not type="password") so password managers / the
+ *  keyboard's autofill bar don't pop up over the PIN. */
 function PinBoxInput(
-  {
-    value,
-    onChange,
-    length = 4,
-    autoFocus = false,
-    mask = true,
-    onComplete,
-  }: PinBoxInputProps,
+  { value, onChange, length = 4, autoFocus = false, mask = true, onComplete }: PinBoxInputProps,
   ref: React.Ref<PinBoxInputHandle>
 ) {
-  const refs = useRef<(HTMLInputElement | null)[]>([]);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [focused, setFocused] = useState(false);
 
   useImperativeHandle(ref, () => ({
-    focus: () => refs.current[0]?.focus(),
+    focus: () => inputRef.current?.focus({ preventScroll: true }),
   }));
 
-  const setDigit = (index: number, digit: string) => {
-    const chars = value.split('');
-    chars[index] = digit;
-    const next = chars.join('').slice(0, length);
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const next = e.target.value.replace(/\D/g, '').slice(0, length);
+    if (next === value) return;
     onChange(next);
-    return next;
+    if (next.length === length && value.length < length) onComplete?.(next);
   };
 
-  const handleChange = (index: number, raw: string) => {
-    const digit = raw.replace(/\D/g, '').slice(-1);
-    if (!digit) return;
-    const next = setDigit(index, digit);
-    if (index < length - 1) {
-      refs.current[index + 1]?.focus();
-    } else if (next.length === length && !next.includes('')) {
-      // Last box just got filled — hand off to whatever comes next (e.g. the confirm-PIN boxes).
-      onComplete?.(next);
-    }
-  };
-
-  const handleKeyDown = (index: number, e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace') {
-      e.preventDefault();
-      if (value[index]) {
-        setDigit(index, '');
-      } else if (index > 0) {
-        setDigit(index - 1, '');
-        refs.current[index - 1]?.focus();
-      }
-    } else if (e.key === 'ArrowLeft' && index > 0) {
-      refs.current[index - 1]?.focus();
-    } else if (e.key === 'ArrowRight' && index < length - 1) {
-      refs.current[index + 1]?.focus();
-    }
-  };
-
-  const handlePaste = (e: ClipboardEvent<HTMLInputElement>) => {
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, length);
-    if (!pasted) return;
-    e.preventDefault();
-    onChange(pasted);
-    if (pasted.length === length) {
-      onComplete?.(pasted);
-    } else {
-      refs.current[Math.min(pasted.length, length - 1)]?.focus();
-    }
-  };
+  const active = Math.min(value.length, length - 1);
 
   return (
-    <div className="flex items-center justify-center gap-3">
-      {Array.from({ length }).map((_, i) => (
-        <input
-          key={i}
-          ref={(el) => {
-            refs.current[i] = el;
-          }}
-          type={mask ? 'password' : 'text'}
-          inputMode="numeric"
-          maxLength={1}
-          autoFocus={autoFocus && i === 0}
-          value={value[i] ?? ''}
-          onChange={(e) => handleChange(i, e.target.value)}
-          onKeyDown={(e) => handleKeyDown(i, e)}
-          onPaste={i === 0 ? handlePaste : undefined}
-          className="keep-round h-12 w-12 border border-line bg-white dark:bg-slate-800 text-center text-lg font-bold text-ink focus:outline-none focus:ring-2 focus:ring-brand-500"
-        />
-      ))}
+    <div className="relative flex items-center justify-center gap-3">
+      {Array.from({ length }).map((_, i) => {
+        const digit = value[i];
+        const isActive = focused && i === active;
+        return (
+          <div
+            key={i}
+            aria-hidden="true"
+            className={`keep-round flex h-12 w-12 items-center justify-center border bg-white dark:bg-slate-800 text-lg font-bold text-ink transition-shadow ${
+              isActive ? 'border-brand-500 ring-2 ring-brand-500' : 'border-line'
+            }`}
+          >
+            {digit ? (mask ? <span className="h-2 w-2 rounded-full bg-current" /> : digit) : null}
+          </div>
+        );
+      })}
+      <input
+        ref={inputRef}
+        value={value}
+        onChange={handleChange}
+        onFocus={(e) => {
+          setFocused(true);
+          // Keep the cursor at the end so new digits always append.
+          const n = e.target.value.length;
+          e.target.setSelectionRange(n, n);
+        }}
+        onBlur={() => setFocused(false)}
+        onClick={(e) => {
+          const n = e.currentTarget.value.length;
+          e.currentTarget.setSelectionRange(n, n);
+        }}
+        autoFocus={autoFocus}
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        maxLength={length}
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="off"
+        spellCheck={false}
+        enterKeyHint="done"
+        aria-label={`${length}-digit PIN`}
+        data-lpignore="true"
+        data-1p-ignore="true"
+        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+        style={{ fontSize: 16, caretColor: 'transparent' }}
+      />
     </div>
   );
 }
