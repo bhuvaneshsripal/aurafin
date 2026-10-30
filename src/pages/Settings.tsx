@@ -610,15 +610,27 @@ function SetPasswordCard() {
 }
 
 function AppLockCard() {
-  const { enabled, setPin, disable, lockNow } = useAppLockStore();
+  const { enabled, setPin, disable, lockNow, verifyPin } = useAppLockStore();
   const [open, setOpen] = useState(false);
   const [confirmDisable, setConfirmDisable] = useState(false);
+  const [oldPin, setOldPin] = useState('');
   const [pin, setPinInput] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [pinError, setPinError] = useState('');
   const confirmPinRef = useRef<PinBoxInputHandle>(null);
+  const newPinRef = useRef<PinBoxInputHandle>(null);
+  // Changing an existing PIN must prove the current one first.
+  const needsOldPin = enabled;
 
-  // Jump to the Confirm PIN boxes once the 4-digit PIN is complete — done
+  const openModal = () => {
+    setOldPin('');
+    setPinInput('');
+    setConfirmPin('');
+    setPinError('');
+    setOpen(true);
+  };
+
+  // Jump to the next set of boxes once a 4-digit PIN is complete — done
   // as an effect so it fires after the digit has committed to the DOM,
   // rather than mid-keystroke where the focus call was getting lost.
   useEffect(() => {
@@ -626,8 +638,25 @@ function AppLockCard() {
       confirmPinRef.current?.focus();
     }
   }, [pin]);
+  useEffect(() => {
+    if (needsOldPin && oldPin.length === 4) {
+      newPinRef.current?.focus();
+    }
+  }, [oldPin, needsOldPin]);
 
   const savePin = () => {
+    if (needsOldPin) {
+      if (!/^\d{4}$/.test(oldPin)) {
+        setPinError('Enter your current 4-digit PIN.');
+        return;
+      }
+      const res = verifyPin(oldPin);
+      if (!res.ok) {
+        setPinError(res.error ?? 'Incorrect current PIN.');
+        setOldPin('');
+        return;
+      }
+    }
     if (!/^\d{4}$/.test(pin)) {
       setPinError('PIN must be exactly 4 digits.');
       return;
@@ -638,6 +667,7 @@ function AppLockCard() {
     }
     setPin(pin);
     setOpen(false);
+    setOldPin('');
     setPinInput('');
     setConfirmPin('');
     setPinError('');
@@ -672,7 +702,7 @@ function AppLockCard() {
                 Disable Lock
               </button>
               <button
-                onClick={() => setOpen(true)}
+                onClick={openModal}
                 className="bg-cream-100 dark:bg-slate-800 border border-cream-300 dark:border-slate-700 text-ink-2 px-4 py-2 rounded-full text-sm font-medium hover:bg-cream-200 dark:hover:bg-slate-700"
               >
                 Change PIN
@@ -680,7 +710,7 @@ function AppLockCard() {
             </>
           ) : (
             <button
-              onClick={() => setOpen(true)}
+              onClick={openModal}
               className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors bg-brand-600 hover:bg-brand-700 text-white"
             >
               <Lock size={16} />
@@ -697,14 +727,20 @@ function AppLockCard() {
         </div>
       )}
 
-      <Modal open={open} onClose={() => setOpen(false)} title="Set Up App Lock">
+      <Modal open={open} onClose={() => setOpen(false)} title={needsOldPin ? 'Change PIN' : 'Set Up App Lock'}>
         <div className="space-y-4">
+          {needsOldPin && (
+            <div>
+              <label className="block text-xs text-muted mb-2 text-center">Current PIN</label>
+              <PinBoxInput value={oldPin} onChange={setOldPin} autoFocus />
+            </div>
+          )}
           <div>
-            <label className="block text-xs text-muted mb-2 text-center">4-digit PIN</label>
-            <PinBoxInput value={pin} onChange={setPinInput} autoFocus />
+            <label className="block text-xs text-muted mb-2 text-center">{needsOldPin ? 'New 4-digit PIN' : '4-digit PIN'}</label>
+            <PinBoxInput ref={newPinRef} value={pin} onChange={setPinInput} autoFocus={!needsOldPin} />
           </div>
           <div>
-            <label className="block text-xs text-muted mb-2 text-center">Confirm PIN</label>
+            <label className="block text-xs text-muted mb-2 text-center">{needsOldPin ? 'Confirm new PIN' : 'Confirm PIN'}</label>
             <PinBoxInput ref={confirmPinRef} value={confirmPin} onChange={setConfirmPin} />
           </div>
           {pinError && <p className="text-xs text-red-500">{pinError}</p>}

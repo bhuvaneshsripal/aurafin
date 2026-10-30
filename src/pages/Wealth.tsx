@@ -1005,8 +1005,12 @@ function AssetsTab({
   // When Edit was opened from a holding's detail page, closing it (phone Back, the arrow, or
   // after saving) returns to that detail page instead of dropping to the assets list.
   const editReturnRef = useRef<Asset | null>(null);
+  // True when the edit page was opened by "Buy" on Holding details, so the form
+  // starts with a new purchase row added.
+  const [editAddPurchase, setEditAddPurchase] = useState(false);
   const closeEdit = () => {
     setModalOpen(false);
+    setEditAddPurchase(false);
     const back = editReturnRef.current;
     editReturnRef.current = null;
     if (back) {
@@ -1731,8 +1735,9 @@ function AssetsTab({
         .filter((r): r is (typeof sortedRows)[number] => !!r))
     : sortedRows;
 
-  const openEdit = (a: Asset, fromDetail = false) => {
+  const openEdit = (a: Asset, fromDetail = false, addPurchase = false) => {
     editReturnRef.current = fromDetail ? a : null;
+    setEditAddPurchase(addPurchase);
     // Remember the list's scroll spot (unless we came from a detail page,
     // which already saved it) so Back returns to the same place.
     if (!viewingAsset) listScrollPosRef.current = window.scrollY;
@@ -1750,6 +1755,7 @@ function AssetsTab({
           initial={editing}
           onSave={handleSave}
           onClose={closeEdit}
+          addPurchaseOnOpen={editAddPurchase}
         />
       </div>
     );
@@ -1772,6 +1778,11 @@ function AssetsTab({
       onEdit: (a: Asset) => {
         setViewingAsset(null);
         openEdit(a, true);
+      },
+      // Holding details "Buy": open the same edit form with a new purchase row ready.
+      onBuy: (a: Asset) => {
+        setViewingAsset(null);
+        openEdit(a, true, true);
       },
       onDelete: async (id: string) => {
         await handleDelete(id);
@@ -3351,6 +3362,7 @@ function HoldingDetailView({
   asset,
   onBack,
   onEdit,
+  onBuy,
   onDelete,
   onQuickUpdate,
   accounts,
@@ -3360,6 +3372,8 @@ function HoldingDetailView({
   asset: Asset;
   onBack: () => void;
   onEdit: (a: Asset) => void;
+  /** Opens the edit form with a new purchase row added (the "Buy" action). */
+  onBuy?: (a: Asset) => void;
   onDelete: (id: string) => void;
   onQuickUpdate: (a: Asset) => void | Promise<void>;
   /** Bank/cash/wallet accounts (assetClass 'cash') a Sell or Dividend can be credited into. */
@@ -3463,7 +3477,8 @@ function HoldingDetailView({
               <button
                 onClick={() => {
                   setTxMenuOpen(false);
-                  setTxMode('buy');
+                  if (onBuy) onBuy(asset);
+                  else setTxMode('buy');
                 }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-2 hover:bg-slate-50 dark:hover:bg-slate-700"
               >
@@ -5147,10 +5162,14 @@ function AssetDetailsForm({
   onBack,
   onClose,
   onSave,
+  addPurchaseOnOpen = false,
 }: {
   category?: CategoryDef<AssetClass>;
   initial: Asset | null;
   initialType?: AssetClass;
+  /** Opened from a holding's "Buy" action: append one blank, dated-today
+   *  purchase row and scroll to it so the person can just type qty + price. */
+  addPurchaseOnOpen?: boolean;
   onBack?: () => void;
   /** Present only when this form is rendered inside the Edit Asset panel
    *  (see Wealth.tsx) — renders a page-style header ("Edit Asset" + type
@@ -5363,6 +5382,45 @@ function AssetDetailsForm({
 
   const addShareLot = () =>
     setShareLots((rows) => [...rows, { id: newId(), quantity: '', price: '' }]);
+  // "Buy" from Holding details: add a fresh purchase row (or reuse a blank
+  // one left over from an unsaved draft) and scroll it into view, once.
+  const autoAddPurchaseRef = useRef(false);
+  useEffect(() => {
+    if (!addPurchaseOnOpen || autoAddPurchaseRef.current) return;
+    autoAddPurchaseRef.current = true;
+    const today = toIsoDate();
+    let targetId: string | null = null;
+    if (isUnitTracked) {
+      const last = shareLots[shareLots.length - 1];
+      if (last && !last.quantity && !last.price) {
+        targetId = last.id;
+      } else {
+        targetId = newId();
+        const id = targetId;
+        setShareLots((rows) => [...rows, { id, date: today, quantity: '', price: '' }]);
+      }
+    } else if (isWeightTracked) {
+      const last = purchaseLots[purchaseLots.length - 1];
+      if (last && !last.grams && !last.amount) {
+        targetId = last.id;
+      } else {
+        targetId = newId();
+        const id = targetId;
+        setPurchaseLots((rows) => [...rows, { id, date: today, grams: '', amount: '' }]);
+      }
+    }
+    if (!targetId) return;
+    const id = targetId;
+    // Wait a couple of frames so the new row has been rendered.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        document
+          .querySelector(`[data-lot-id="${id}"]`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      })
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const removeShareLot = (id: string) =>
     setShareLots((rows) => (rows.length > 1 ? rows.filter((r) => r.id !== id) : rows));
   const updateShareLot = (id: string, patch: Partial<{ date: string; quantity: string; price: string }>) =>
@@ -6340,6 +6398,7 @@ function AssetDetailsForm({
               return (
                 <div
                   key={lot.id}
+                  data-lot-id={lot.id}
                   className="rounded-lg border border-slate-200 bg-white dark:bg-slate-800/60 dark:border-slate-700 p-3 space-y-2"
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -6627,6 +6686,7 @@ function AssetDetailsForm({
                 return (
                   <div
                     key={lot.id}
+                    data-lot-id={lot.id}
                     className="rounded-lg border border-slate-200 bg-white dark:bg-slate-800/60 dark:border-slate-700 p-3 space-y-2"
                   >
                     <div className="flex items-center justify-between gap-2">

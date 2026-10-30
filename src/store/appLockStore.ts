@@ -138,6 +138,10 @@ interface AppLockState {
   setPin: (pin: string) => Promise<void>;
   disable: () => Promise<void>;
   unlock: (pin: string) => boolean;
+  /** Checks the current PIN without unlocking anything (used before changing
+   *  the PIN). Wrong entries share the same 3-attempt limit as the lock
+   *  screen: the 3rd one signs the person out. */
+  verifyPin: (pin: string) => { ok: boolean; error?: string };
   lockNow: () => void;
 }
 
@@ -292,6 +296,30 @@ export const useAppLockStore = create<AppLockState & { _storedPin: string | null
       failedAttempts: attempts,
     });
     return false;
+  },
+
+  verifyPin: (pin: string) => {
+    const { _storedPin, failedAttempts } = get();
+    if (!_storedPin) return { ok: false, error: LOW_NETWORK_MESSAGE };
+    if (pin === _storedPin) {
+      writeAttempts(0);
+      set({ failedAttempts: 0 });
+      return { ok: true };
+    }
+    const attempts = failedAttempts + 1;
+    if (attempts >= MAX_PIN_ATTEMPTS) {
+      writeAttempts(0);
+      set({ failedAttempts: 0 });
+      ssSet(LOCKOUT_BYPASS_KEY, 'true');
+      window.setTimeout(() => {
+        void useAuthStore.getState().logout();
+      }, 900);
+      return { ok: false, error: 'Too many incorrect attempts. Signing you out…' };
+    }
+    writeAttempts(attempts);
+    set({ failedAttempts: attempts });
+    const left = MAX_PIN_ATTEMPTS - attempts;
+    return { ok: false, error: `Incorrect current PIN. ${left} ${left === 1 ? 'attempt' : 'attempts'} left.` };
   },
 
   lockNow: () => {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { usePinnedTooltip, isTouchDevice, type ChartClickState } from '../hooks/usePinnedTooltip';
 import PinnedChartTooltip from '../components/PinnedChartTooltip';
-import { isFullySold, computeHoldingPnl, isInvestmentHolding, computePortfolioPnl } from '../utils/investmentPnl';
+import { isFullySold, computePortfolioPnl } from '../utils/investmentPnl';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, Wallet, Receipt, Target, TrendingUp } from 'lucide-react';
 import {
@@ -137,20 +137,10 @@ export default function Dashboard() {
   // already taken out by selling — fully or partly — and the entire amount
   // ever invested, i.e. what's still invested plus the cost of what was sold.
   const profileAssets = activeProfileId ? allAssets.filter((a) => a.profileId === activeProfileId) : allAssets;
-  let soldAmount = 0;
-  for (const a of profileAssets) {
-    // Same scoping as the Investments → Profit & Loss page: one currency
-    // at a time (this card is shown in ₹, so a $ sale must not be added in
-    // as if it were rupees) and only holdings with a recorded buy history.
-    if (!isInvestmentHolding(a) || a.currency !== 'INR') continue;
-    const r = resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram);
-    const h = computeHoldingPnl(a, r.currentPrice, r.isLive);
-    if (h.totalBoughtQty <= 0) continue;
-    soldAmount += h.totalSaleProceeds;
-  }
-  // Arrow on the Net worth card flips the strip to a lifetime view in place:
-  // Total invested becomes the entire amount ever invested (incl. sold), and
-  // Profit / loss becomes total return (unrealised + realised) on that.
+  // Arrow on the Net worth card flips the strip in place:
+  //  - Net worth      = current value + total realized profit/loss
+  //  - Total invested = currently invested + cost of what was sold
+  //  - Profit / loss  = realized profit/loss only (no current/unrealized)
   const [includeSold, setIncludeSold] = useState(false);
   // Profit / loss and return come from the same engine as the Performance
   // page so both screens always show identical numbers.
@@ -165,18 +155,16 @@ export default function Dashboard() {
         : s,
     0
   );
-  const investedShown =
-    (includeSold ? portfolioPnl.lifetimeCapitalDeployed : portfolioPnl.totalInvested) + cashBasis;
-  // Lifetime net worth = what you hold now plus the proceeds already taken out
-  // by selling, so Net worth − Total invested always equals Profit / loss.
-  const netWorthShown = includeSold ? netWorth + soldAmount : netWorth;
-  const netWorthPnl = includeSold ? portfolioPnl.totalPnl : portfolioPnl.unrealizedPnl;
+  const realizedPnl = portfolioPnl.realizedPnl;
+  // Cost basis of everything already sold (the "realised investment").
+  const realizedCost = portfolioPnl.holdings.reduce((s, h) => s + h.totalCostOfSold, 0);
+  const investedShown = portfolioPnl.totalInvested + cashBasis + (includeSold ? realizedCost : 0);
+  const netWorthShown = includeSold ? netWorth + realizedPnl : netWorth;
+  const netWorthPnl = includeSold ? realizedPnl : portfolioPnl.unrealizedPnl;
   // Percent comes straight from the Performance page's engine so both screens
-  // show the same figure. (Total invested above includes Cash & Savings at face
-  // value so it reconciles with Net worth, but cash earns no P&L — dividing by
-  // it diluted the return, e.g. 3.56% here vs 4.89% on Performance.)
-  const netWorthPnlPercent =
-    (includeSold ? portfolioPnl.totalReturnPercent : portfolioPnl.unrealizedPnlPercent) ?? 0;
+  // show the same figure. It's only shown for the normal (current) view; the
+  // realized-only view shows just the amount.
+  const netWorthPnlPercent = portfolioPnl.unrealizedPnlPercent ?? 0;
 
   const thisMonth = toIsoMonth();
   const monthIncome = transactions
@@ -205,7 +193,6 @@ export default function Dashboard() {
   // ---- Derived for the new visual sections (all read-only views of the
   // ---- same numbers computed above; nothing here changes a calculation).
   const money = (v: number) => maskAmount(v, 'INR', privacyMode, { fractionDigits: 0 });
-  const preciseMoney = (v: number) => maskAmount(v, 'INR', privacyMode, { fractionDigits: 0 });
   const signedMoney = (v: number) => (privacyMode ? '••••••' : formatSignedCurrency(v, 'INR', 0));
   const ready = wealthDataKnown && (!hasWealth || netWorthReady);
 
@@ -277,7 +264,7 @@ export default function Dashboard() {
             value={money(hasWealth ? netWorthShown : 0)}
             onToggle={hasWealth ? () => setIncludeSold((v) => !v) : undefined}
             toggled={includeSold}
-            sublabel={hasWealth ? (includeSold ? `Incl. ${preciseMoney(soldAmount)} sold so far` : 'Assets minus liabilities') : <Link to="/wealth" className="text-primary-ink font-medium hover:underline">Add your first asset</Link>}
+            sublabel={hasWealth ? (includeSold ? `Incl. ${signedMoney(realizedPnl)} realized P&L` : 'Assets minus liabilities') : <Link to="/wealth" className="text-primary-ink font-medium hover:underline">Add your first asset</Link>}
           />
         </div>
         <StatCard
@@ -285,20 +272,20 @@ export default function Dashboard() {
           label="Total invested"
           loading={!wealthDataKnown}
           value={money(hasWealth ? investedShown : 0)}
-          sublabel={includeSold ? 'Incl. sold investments' : 'Cost basis'}
+          sublabel={includeSold ? `Incl. ${money(realizedCost)} realized investment` : 'Cost basis'}
         />
         <StatCard
           dense
           label="Profit / loss"
           loading={!ready}
-          tone={!hasWealth || investedShown <= 0 ? 'default' : netWorthPnl >= 0 ? 'positive' : 'negative'}
+          tone={!hasWealth || (!includeSold && investedShown <= 0) ? 'default' : netWorthPnl >= 0 ? 'positive' : 'negative'}
           value={hasWealth ? signedMoney(netWorthPnl) : money(0)}
           delta={
-            hasWealth && investedShown > 0 && !privacyMode
+            hasWealth && !includeSold && investedShown > 0 && !privacyMode
               ? { value: formatPercentMagnitude(netWorthPnlPercent), positive: netWorthPnl >= 0 }
               : undefined
           }
-          sublabel={includeSold ? 'total return incl. sold' : 'vs. invested'}
+          sublabel={includeSold ? 'realized only' : 'vs. invested'}
         />
       </div>
 
