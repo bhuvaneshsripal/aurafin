@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { usePinnedTooltip, isTouchDevice, type ChartClickState } from '../hooks/usePinnedTooltip';
 import PinnedChartTooltip from '../components/PinnedChartTooltip';
 import { isFullySold, computeHoldingPnl, isInvestmentHolding, computePortfolioPnl } from '../utils/investmentPnl';
@@ -14,6 +14,8 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  ReferenceLine,
+  ReferenceDot,
   PieChart,
   Pie,
   Cell,
@@ -519,35 +521,64 @@ function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
   // and the selected point (and its values) follows. Lifting leaves it pinned;
   // tapping the same point again clears it. Vertical swipes still scroll the
   // page (touch-action: pan-y) and simply cancel the gesture.
-  const dragRef = useRef<{ startX: number; startLabel: string | null; moved: boolean } | null>(null);
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    pointerId: number;
+    startLabel: string | null;
+    scrubbing: boolean;
+  } | null>(null);
+  const rafRef = useRef(0);
+  const latestXRef = useRef(0);
+  useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
+
+  // Nothing is pinned on touch-down: if the finger starts a vertical swipe the
+  // browser takes over (pointercancel) and the page scrolls with zero chart work
+  // or re-rendering. A pin happens only on a tap (pointer up without moving) or
+  // once the finger clearly moves sideways along the chart.
   const handlePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.pointerType === 'mouse') return;
     if ((e.target as HTMLElement).closest('[data-pinned-tip]')) return;
-    const pt = pointAt(e.clientX, e.currentTarget.getBoundingClientRect());
     justTouchedRef.current = true;
-    if (!pt) {
-      dragRef.current = null;
-      pin.hidePinned();
-      return;
-    }
-    dragRef.current = { startX: e.clientX, startLabel: pin.pinned?.label ?? null, moved: false };
-    pin.setPinned(pt);
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      pointerId: e.pointerId,
+      startLabel: pin.pinned?.label ?? null,
+      scrubbing: false,
+    };
   };
   const handlePointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
     if (!drag || e.pointerType === 'mouse') return;
-    if (Math.abs(e.clientX - drag.startX) > 6) drag.moved = true;
-    if (!drag.moved) return;
-    const pt = pointAt(e.clientX, e.currentTarget.getBoundingClientRect());
-    if (pt) pin.setPinned((prev) => (prev?.label === pt.label && prev.x === pt.x ? prev : pt));
+    if (!drag.scrubbing) {
+      const dx = Math.abs(e.clientX - drag.startX);
+      const dy = Math.abs(e.clientY - drag.startY);
+      if (dx < 6 || dx < dy) return; // not (yet) a sideways drag
+      drag.scrubbing = true;
+      try { e.currentTarget.setPointerCapture(drag.pointerId); } catch { /* ignore */ }
+    }
+    // At most one state update per frame, however fast the finger moves.
+    latestXRef.current = e.clientX;
+    if (rafRef.current) return;
+    const el = e.currentTarget;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = 0;
+      const pt = pointAt(latestXRef.current, el.getBoundingClientRect());
+      if (pt) pin.setPinned((prev) => (prev?.label === pt.label && prev.x === pt.x ? prev : pt));
+    });
   };
   const handlePointerEnd = (e: ReactPointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
     dragRef.current = null;
     if (!drag || e.pointerType === 'mouse') return;
-    // A plain tap on the point that was already pinned closes it.
-    if (e.type === 'pointerup' && !drag.moved && drag.startLabel !== null && drag.startLabel === pin.pinned?.label) {
-      pin.hidePinned();
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = 0;
+    if (e.type === 'pointerup' && !drag.scrubbing) {
+      // Plain tap: pin that point, or clear it when tapping the pinned one again.
+      const pt = pointAt(e.clientX, e.currentTarget.getBoundingClientRect());
+      if (!pt || pt.label === drag.startLabel) pin.hidePinned();
+      else pin.setPinned(pt);
     }
     window.setTimeout(() => { justTouchedRef.current = false; }, 400);
   };
@@ -653,8 +684,13 @@ function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
                 domain={yDomain ?? ['auto', 'auto']}
                 allowDecimals={false}
               />
+              {/* Recharts' own cursor/active dot follow its hover state, which a
+                  finger doesn't drive reliably. So they're off whenever a point is
+                  pinned or on touch devices, and the pinned point gets its own
+                  line + dot below, so what's highlighted always matches the value
+                  shown above the chart. */}
               <Tooltip
-                cursor={chart.tooltip.cursor}
+                cursor={pin.pinned || isTouchDevice() ? false : chart.tooltip.cursor}
                 content={(p) =>
                   pin.pinned || isTouchDevice() ? null : (
                     <NetWorthTooltip
@@ -674,9 +710,32 @@ function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
                 strokeWidth={2}
                 fill={fillColor}
                 dot={data.length <= 6 ? { r: 4, strokeWidth: 2, stroke: 'var(--color-surface)', fill: lineColor } : false}
-                activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-surface)', fill: lineColor }}
+                activeDot={
+                  pin.pinned || isTouchDevice()
+                    ? false
+                    : { r: 5, strokeWidth: 2, stroke: 'var(--color-surface)', fill: lineColor }
+                }
                 isAnimationActive={data.length > 1}
               />
+              {selected && (
+                <ReferenceLine
+                  x={selected.date}
+                  stroke={chart.tooltip.cursor.stroke}
+                  strokeWidth={1}
+                  ifOverflow="visible"
+                />
+              )}
+              {selected && (
+                <ReferenceDot
+                  x={selected.date}
+                  y={selected.netWorth}
+                  r={5}
+                  fill={lineColor}
+                  stroke="var(--color-surface)"
+                  strokeWidth={2}
+                  ifOverflow="visible"
+                />
+              )}
             </AreaChart>
           </ResponsiveContainer>
           {pin.pinned && (
