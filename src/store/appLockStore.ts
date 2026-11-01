@@ -114,6 +114,59 @@ function writeGuestAppLock(uid: string, data: { pin: string; enabled: boolean } 
   }
 }
 
+// Offline unlock: the real PIN lives in Firestore, which can't be reached on a
+// bad connection. So each device also keeps a *salted hash* of the PIN (never
+// the PIN itself) once it has been loaded, purely so a correct PIN can still
+// open the app with no/low network. A 4-digit PIN is inherently guessable
+// from any hash, so this is a convenience check, not strong protection.
+const VERIFIER_KEY_PREFIX = 'aurafin-pin-verifier-';
+const verifierKey = (uid: string) => `${VERIFIER_KEY_PREFIX}${uid}`;
+
+function toHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function hashPin(pin: string, salt: string): Promise<string> {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: enc.encode(salt), iterations: 100_000, hash: 'SHA-256' },
+    key,
+    256
+  );
+  return toHex(new Uint8Array(bits));
+}
+
+async function cacheVerifier(uid: string, pin: string): Promise<void> {
+  try {
+    const salt = toHex(crypto.getRandomValues(new Uint8Array(16)));
+    const hash = await hashPin(pin, salt);
+    localStorage.setItem(verifierKey(uid), JSON.stringify({ salt, hash }));
+  } catch {
+    // best-effort only — without it, offline unlock just isn't available
+  }
+}
+
+function clearVerifier(uid: string) {
+  try {
+    localStorage.removeItem(verifierKey(uid));
+  } catch {
+    /* best-effort only */
+  }
+}
+
+/** true/false = match result; null = no cached copy to check against. */
+async function checkVerifier(uid: string, pin: string): Promise<boolean | null> {
+  try {
+    const raw = localStorage.getItem(verifierKey(uid));
+    if (!raw) return null;
+    const { salt, hash } = JSON.parse(raw) as { salt: string; hash: string };
+    return (await hashPin(pin, salt)) === hash;
+  } catch {
+    return null;
+  }
+}
+
 // In-memory only (NOT localStorage). A real page refresh/close always gets a
 // brand new JS module instance, so this always starts at `null`.
 let hiddenAt: number | null = null;
@@ -138,6 +191,10 @@ interface AppLockState {
   setPin: (pin: string) => Promise<void>;
   disable: () => Promise<void>;
   unlock: (pin: string) => boolean;
+  /** Fallback for when the PIN hasn't loaded from Firestore (no/low network):
+   *  checks against the hashed copy cached on this device. 'unavailable' means
+   *  there is no cached copy to check against. */
+  unlockWithCache: (pin: string) => Promise<'ok' | 'wrong' | 'unavailable'>;
   /** Checks the current PIN without unlocking anything (used before changing
    *  the PIN). Wrong entries share the same 3-attempt limit as the lock
    *  screen: the 3rd one signs the person out. */
@@ -145,7 +202,34 @@ interface AppLockState {
   lockNow: () => void;
 }
 
-export const useAppLockStore = create<AppLockState & { _storedPin: string | null }>((set, get) => ({
+export const useAppLockStore = create<AppLockState & { _storedPin: string | null }>((set, get) => {
+  /** Counts a wrong lock-screen PIN; the 3rd one signs the person out. */
+  const registerWrongPin = () => {
+    const attempts = get().failedAttempts + 1;
+    if (attempts >= MAX_PIN_ATTEMPTS) {
+      // Too many wrong guesses: sign out and send them to Login rather than
+      // letting them keep guessing. Flag this session so that once they
+      // prove who they are again (Google/email), the PIN screen is skipped
+      // instead of immediately re-locking them out.
+      writeAttempts(0);
+      set({ pinAttemptError: 'Too many incorrect attempts. Signing you out…', failedAttempts: 0 });
+      ssSet(LOCKOUT_BYPASS_KEY, 'true');
+      // Small delay so the message above is actually readable before the
+      // screen switches to Login.
+      window.setTimeout(() => {
+        void useAuthStore.getState().logout();
+      }, 900);
+      return;
+    }
+    writeAttempts(attempts);
+    const left = MAX_PIN_ATTEMPTS - attempts;
+    set({
+      pinAttemptError: `Incorrect PIN. ${left} ${left === 1 ? 'attempt' : 'attempts'} left.`,
+      failedAttempts: attempts,
+    });
+  };
+
+  return {
   // Optimistic guess from the non-sensitive cache flag, just so the lock
   // screen can show immediately instead of flashing the dashboard while the
   // real PIN loads from Firestore.
@@ -191,6 +275,8 @@ export const useAppLockStore = create<AppLockState & { _storedPin: string | null
       ssRemove(LOCKOUT_BYPASS_KEY);
       ssSet(SESSION_UNLOCKED_KEY, 'true');
     }
+    const syncUser = useAuthStore.getState().user;
+    if (pin && enabled && syncUser) void cacheVerifier(syncUser.uid, pin);
     set((state) => ({
       _storedPin: pin,
       enabled,
@@ -216,6 +302,7 @@ export const useAppLockStore = create<AppLockState & { _storedPin: string | null
     } catch {
       // best-effort only
     }
+    void cacheVerifier(user.uid, pin);
     if (isAnonymous(user)) {
       writeGuestAppLock(user.uid, { pin, enabled: true });
       set({ _storedPin: pin, enabled: true, pinLoaded: true, pinAttemptError: null, failedAttempts: 0 });
@@ -243,6 +330,7 @@ export const useAppLockStore = create<AppLockState & { _storedPin: string | null
       set({ enabled: false, locked: false, pinAttemptError: null, _storedPin: null, failedAttempts: 0 });
       return;
     }
+    clearVerifier(user.uid);
     if (isAnonymous(user)) {
       writeGuestAppLock(user.uid, null);
       set({ enabled: false, locked: false, pinAttemptError: null, _storedPin: null, failedAttempts: 0 });
@@ -254,7 +342,7 @@ export const useAppLockStore = create<AppLockState & { _storedPin: string | null
   },
 
   unlock: (pin: string) => {
-    const { _storedPin, failedAttempts } = get();
+    const { _storedPin } = get();
 
     // The real PIN lives in Firestore. If it hasn't loaded yet (slow/no
     // network), we can't tell whether the entry is right or wrong — so say
@@ -272,30 +360,25 @@ export const useAppLockStore = create<AppLockState & { _storedPin: string | null
       return true;
     }
 
-    const attempts = failedAttempts + 1;
-    if (attempts >= MAX_PIN_ATTEMPTS) {
-      // Too many wrong guesses: sign out and send them to Login rather than
-      // letting them keep guessing. Flag this session so that once they
-      // prove who they are again (Google/email), the PIN screen is skipped
-      // instead of immediately re-locking them out.
-      writeAttempts(0);
-      set({ pinAttemptError: 'Too many incorrect attempts. Signing you out…', failedAttempts: 0 });
-      ssSet(LOCKOUT_BYPASS_KEY, 'true');
-      // Small delay so the message above is actually readable before the
-      // screen switches to Login.
-      window.setTimeout(() => {
-        void useAuthStore.getState().logout();
-      }, 900);
-      return false;
-    }
-
-    writeAttempts(attempts);
-    const left = MAX_PIN_ATTEMPTS - attempts;
-    set({
-      pinAttemptError: `Incorrect PIN. ${left} ${left === 1 ? 'attempt' : 'attempts'} left.`,
-      failedAttempts: attempts,
-    });
+    registerWrongPin();
     return false;
+  },
+
+  unlockWithCache: async (pin: string) => {
+    const user = useAuthStore.getState().user;
+    const match = user ? await checkVerifier(user.uid, pin) : null;
+    if (match === null) {
+      set({ pinAttemptError: LOW_NETWORK_MESSAGE });
+      return 'unavailable';
+    }
+    if (match) {
+      ssSet(SESSION_UNLOCKED_KEY, 'true');
+      writeAttempts(0);
+      set({ locked: false, pinAttemptError: null, failedAttempts: 0 });
+      return 'ok';
+    }
+    registerWrongPin();
+    return 'wrong';
   },
 
   verifyPin: (pin: string) => {
@@ -328,4 +411,5 @@ export const useAppLockStore = create<AppLockState & { _storedPin: string | null
       set({ locked: true, failedAttempts: 0, pinAttemptError: null });
     }
   },
-}));
+};
+});

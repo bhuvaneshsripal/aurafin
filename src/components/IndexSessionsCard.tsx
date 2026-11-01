@@ -61,7 +61,7 @@ export default function IndexSessionsCard() {
   if (visible.length === 0 && pastDays.length === 0) return null;
 
   return (
-    <section className="px-4 pt-4 pb-1">
+    <section className="@container px-4 pt-4 pb-1">
       {visible.length > 0 && (
         <>
           <div className="flex items-center justify-between mb-2.5">
@@ -90,7 +90,7 @@ export default function IndexSessionsCard() {
                 <div
                   key={key}
                   style={{ animationDelay: `${idx * 50}ms` }}
-                  className="animate-notif-row snap-start shrink-0 w-[78%] sm:w-[250px] md:flex-1 md:w-auto md:min-w-[200px] rounded-2xl border border-line bg-surface p-3.5 relative group"
+                  className="animate-notif-row snap-start shrink-0 w-[78%] @lg:w-auto @lg:flex-1 @lg:min-w-0 rounded-2xl border border-line bg-surface p-3.5 relative group"
                 >
                   <button
                     type="button"

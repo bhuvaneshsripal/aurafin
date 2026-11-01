@@ -664,7 +664,7 @@ function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
           onPointerCancel={handlePointerEnd}
         >
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            <AreaChart data={data} margin={{ top: 12, right: 8, left: 0, bottom: 0 }}>
               <PlotAreaProbe areaRef={plotAreaRef} />
               <CartesianGrid stroke={chart.grid} strokeDasharray="3 3" vertical={false} />
               <XAxis

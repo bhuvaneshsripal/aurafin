@@ -1,8 +1,14 @@
 import type { ReactNode, RefObject } from 'react';
 
+/** Gap kept between the pinned point's x and the tooltip's nearest edge. */
+const GAP = 14;
+
 /**
- * Shows a pinned chart tooltip along the top of its chart, centred on the
- * tapped point and kept inside the chart's edges. Tapping it closes it.
+ * Shows a pinned chart tooltip along the top of its chart, *beside* the tapped
+ * point (never over it) so the highlighted dot/line stays visible — important
+ * for peaks, which sit right at the top of the plot where a centred tooltip
+ * (or a finger) would hide them. The tooltip opens toward whichever side of
+ * the chart has more room. Tapping it closes it.
  * Used with `usePinnedTooltip`, which owns the pinned state.
  */
 export default function PinnedChartTooltip({
@@ -17,16 +23,34 @@ export default function PinnedChartTooltip({
   children: ReactNode;
 }) {
   const width = containerRef.current?.clientWidth ?? 0;
-  const half = 96; // roughly half the tooltip's width, so it doesn't spill past the chart edge
-  const left =
-    x !== undefined && width > 0 ? Math.min(Math.max(x, half + 4), width - half - 4) : width / 2;
+
+  // No known x: fall back to centred.
+  if (x === undefined || width <= 0) {
+    return (
+      <div
+        data-pinned-tip
+        onClick={onHide}
+        className="absolute top-0 z-10 cursor-pointer"
+        style={{ left: width / 2, transform: 'translateX(-50%)' }}
+      >
+        {children}
+      </div>
+    );
+  }
+
+  // Open to the left when the point is in the right half, otherwise to the right.
+  const openLeft = x > width / 2;
 
   return (
     <div
       data-pinned-tip
       onClick={onHide}
       className="absolute top-0 z-10 cursor-pointer"
-      style={{ left, transform: 'translateX(-50%)' }}
+      style={
+        openLeft
+          ? { left: x - GAP, transform: 'translateX(-100%)' }
+          : { left: x + GAP }
+      }
     >
       {children}
     </div>

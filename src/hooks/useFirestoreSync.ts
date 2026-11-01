@@ -660,7 +660,10 @@ export function useAppLockSync() {
         const data = snap.data();
         syncFromRemote((data?.pin as string | undefined) ?? null, !!data?.enabled);
       },
-      () => syncFromRemote(null, false)
+      // Network/permission error: keep the current lock state (and the cached
+      // offline PIN check) instead of treating it as "no lock configured",
+      // which would drop the lock screen on a bad connection.
+      () => {}
     );
     return () => unsub();
   }, [user, syncFromRemote]);

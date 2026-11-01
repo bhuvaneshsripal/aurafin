@@ -6,6 +6,7 @@ export default function LockScreen() {
   const { locked, pinAttemptError, unlock } = useAppLockStore();
   const [pin, setPinInput] = useState('');
   const [shake, setShake] = useState(false);
+  const [checking, setChecking] = useState(false);
 
   // Keeps the lock screen mounted for one more animation frame after a
   // correct PIN unlocks it, so it fades/scales smoothly away instead of
@@ -29,38 +30,54 @@ export default function LockScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locked]);
 
+  const rejectPin = useCallback(() => {
+    // Wrong PIN: shake with the 4 dots still filled (so the person can see
+    // *what* they typed was rejected), then clear once the shake finishes.
+    if ('vibrate' in navigator) {
+      try {
+        navigator.vibrate(200);
+      } catch {
+        // best-effort haptic only — never block on it
+      }
+    }
+    setShake(true);
+    window.setTimeout(() => {
+      setShake(false);
+      setPinInput('');
+    }, 420);
+  }, []);
+
   const submitPin = useCallback(
     (value?: string) => {
-      if (shake) return;
+      if (shake || checking) return;
       const candidate = value ?? pin;
       if (candidate.length !== 4) return;
+      const { _storedPin, unlockWithCache } = useAppLockStore.getState();
+      if (!_storedPin) {
+        // The PIN hasn't loaded from Firestore (no/low network). Check against
+        // the hashed copy cached on this device so a correct PIN still opens.
+        setChecking(true);
+        void unlockWithCache(candidate).then((result) => {
+          setChecking(false);
+          if (result === 'ok') {
+            setPinInput('');
+          } else if (result === 'wrong') {
+            rejectPin();
+          } else {
+            // Nothing cached yet (first sign-in on this device): can't verify.
+            window.setTimeout(() => setPinInput(''), 300);
+          }
+        });
+        return;
+      }
       const ok = unlock(candidate);
       if (ok) {
         setPinInput('');
         return;
       }
-      // PIN couldn't be verified (network) — the store set a message; just
-      // clear the dots without the red "wrong" shake.
-      if (!useAppLockStore.getState()._storedPin) {
-        window.setTimeout(() => setPinInput(''), 300);
-        return;
-      }
-      // Wrong PIN: shake with the 4 dots still filled (so the person can see
-      // *what* they typed was rejected), then clear once the shake finishes.
-      if ('vibrate' in navigator) {
-        try {
-          navigator.vibrate(200);
-        } catch {
-          // best-effort haptic only — never block on it
-        }
-      }
-      setShake(true);
-      window.setTimeout(() => {
-        setShake(false);
-        setPinInput('');
-      }, 420);
+      rejectPin();
     },
-    [pin, shake, unlock]
+    [pin, shake, checking, unlock, rejectPin]
   );
 
   const pressDigit = useCallback(
