@@ -1,31 +1,23 @@
 {
   "version": "1.0",
   "date": "2 Nov 2026",
-  "title": "What's new in Aurafin",
+  "title": "What's new in Aurafin v1.0",
   "items": [
     {
       "title": "Smoother notification swipe",
-      "description": "Swipe a notification left or right and it now follows your finger, fades slowly and slides away, just like Android notifications."
+      "description": "Swipe a notification left or right and it follows your finger, fades slowly and slides away, like Android notifications. A small swipe just springs back."
     },
     {
       "title": "Fewer stock alerts",
       "description": "Your holdings now alert only when they move 4% or 5% up or down in a day, instead of at 2%."
     },
     {
-      "title": "Unlock with your PIN even on weak network",
-      "description": "A correct PIN now opens the app with low or no internet. Open the app online once after updating so your device can remember it."
+      "title": "Correct prices without refreshing",
+      "description": "A wrong live price no longer sticks until you refresh. Total returns now fix themselves on their own."
     },
     {
-      "title": "Chart point no longer hidden",
-      "description": "On the Net worth chart, the highlighted point stays visible while you press or slide along the line — the value box now sits beside it instead of on top."
-    },
-    {
-      "title": "Fresh index strip every trading morning",
-      "description": "NIFTY, SENSEX and BANKNIFTY reset to 0 at 4:30 AM on market days and go live again when the market opens at 9:15 AM. Weekends and holidays keep the last close."
-    },
-    {
-      "title": "Tidier Today's market cards",
-      "description": "The three index cards in Notifications now line up evenly across the panel instead of spilling off the edge."
+      "title": "Net worth chart waits for live prices",
+      "description": "The chart's latest value no longer shows a wrong number while prices are still loading."
     }
   ]
 }

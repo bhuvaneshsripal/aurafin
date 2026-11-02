@@ -50,14 +50,14 @@ export default function WhatsNewModal({
   return (
     <Modal open={open} onClose={onClose} title={notes?.title ?? "What's new"}>
       {(notes?.version || notes?.date) && (
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          {notes.version && (
-            <span className="inline-flex items-center rounded-full bg-[#0a9a4b] px-2.5 py-0.5 text-xs font-bold text-white">
+        <div className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl bg-[#e7f4ec] dark:bg-[#0a9a4b]/15 px-3.5 py-2.5">
+          {notes.version && !(notes.title ?? '').includes(notes.version) && (
+            <span className="rounded-full bg-[#0a9a4b] px-2.5 py-0.5 text-xs font-bold text-white">
               Version {notes.version}
             </span>
           )}
           {notes.date && (
-            <span className="text-sm font-semibold text-ink">{notes.date}</span>
+            <span className="text-sm font-semibold text-ink">Released {notes.date}</span>
           )}
         </div>
       )}
