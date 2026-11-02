@@ -20,7 +20,8 @@ import { resolveQuote } from '../_lib/quote.js';
 
 export const config = { maxDuration: 60 };
 
-const MOVE_LEVELS = [2, 5];
+const MOVE_LEVELS = [2, 5]; // index moves
+const HOLDING_LEVELS = [4, 5]; // a holding must move 4% or 5% before it alerts
 const INDEX_KEYS = ['nifty', 'sensex', 'banknifty'];
 
 // Same session windows as the in-app alerts (minutes since midnight, IST).
@@ -202,7 +203,7 @@ export default async function handler(req, res) {
         }
       }
 
-      // --- Each person's own holdings (2% / 5% vs yesterday's close). ---
+      // --- Each person's own holdings (4% / 5% vs yesterday's close). ---
       const quotes = new Map();
       const quoteFor = (symbol, market) => {
         const k = `${market}:${symbol}`;
@@ -219,7 +220,7 @@ export default async function handler(req, res) {
           if (!q?.price || !q.previousClose) continue;
           const pct = ((q.price - q.previousClose) / q.previousClose) * 100;
           const dir = pct >= 0 ? 'up' : 'down';
-          const crossed = MOVE_LEVELS.filter((l) => Math.abs(pct) >= l);
+          const crossed = HOLDING_LEVELS.filter((l) => Math.abs(pct) >= l);
           if (!crossed.length) continue;
           const top = crossed[crossed.length - 1];
           const sym = String(a.symbol).toUpperCase();

@@ -3,8 +3,9 @@ import { persist } from 'zustand/middleware';
 
 export type AlertKind = 'pre-open' | 'open' | 'close' | 'market' | 'up' | 'down';
 
-/** Kinds shown in the bell list. Holding moves (up/down) are pop-up only. */
-export const LIST_KINDS: AlertKind[] = ['pre-open', 'open', 'close', 'market'];
+/** Kinds shown in the bell list: every alert that also reaches the phone's
+ *  notification bar, including each holding's up/down move. */
+export const LIST_KINDS: AlertKind[] = ['pre-open', 'open', 'close', 'market', 'up', 'down'];
 
 export interface AlertItem {
   id: string;
@@ -36,7 +37,7 @@ interface AlertsState {
   /** Removes an earlier day's saved levels. */
   removeSession: (dayKey: string) => void;
   setSession: (dayKey: string, which: SessionName, snap: SessionSnapshot) => void;
-  add: (item: Omit<AlertItem, 'id' | 'at' | 'read'>) => void;
+  add: (item: Omit<AlertItem, 'id' | 'at' | 'read'> & { at?: number }) => void;
   markAllRead: () => void;
   /** Clears every alert and the past days' history (today's snapshots are kept). */
   clear: (todayKey?: string) => void;
@@ -68,7 +69,7 @@ export const useAlertsStore = create<AlertsState>()(
         }),
       add: (item) =>
         set((s) => ({
-          items: [{ ...item, id: crypto.randomUUID(), at: Date.now(), read: false }, ...s.items].slice(0, MAX_ITEMS),
+          items: [{ ...item, id: crypto.randomUUID(), at: item.at ?? Date.now(), read: false }, ...s.items].slice(0, MAX_ITEMS),
         })),
       markAllRead: () => set((s) => ({ items: s.items.map((i) => ({ ...i, read: true })) })),
       clear: (todayKey) =>

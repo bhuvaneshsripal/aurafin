@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { isIndexPollingWindow, isIndexResetWindow } from './marketHours';
+import { getIstTimeOfDay, isIndexPollingWindow, isIndexResetWindow } from './marketHours';
 
 /**
  * One shared source of truth for the Nifty / Sensex / Bank Nifty levels.
@@ -168,18 +168,21 @@ export function getRecentIndexQuotes(maxAgeMs: number): IndexQuote[] | null {
   return lastGood && Date.now() - lastGoodAt <= maxAgeMs ? lastGood : null;
 }
 
-/** During the pre-open reset window: is this quote still the previous
- *  session's close (so the strip should keep showing 0)? Once the feed gives a
- *  level different from that close, today's data has arrived and the real
- *  numbers show immediately, without waiting for 9:15. With no saved close to
- *  compare against (fresh install), it stays "stale" until the window ends. */
+/** During the pre-open reset window: should the strip still show 0 for this
+ *  quote? Before 9:00 AM the exchange hasn't published anything new, so always.
+ *  From 9:00 AM the real numbers show as soon as the feed has today's data: if
+ *  the quote still equals the previous session's close (saved on this device)
+ *  it keeps showing 0, otherwise — including when there is no saved close to
+ *  compare against — the live level is shown, so it never waits for 9:15. */
 export function isStaleIndexQuote(q: IndexQuote): boolean {
+  const { hour } = getIstTimeOfDay();
+  if (hour < 9) return true;
   try {
     const raw = localStorage.getItem(BASELINE_KEY);
     const base = raw ? (JSON.parse(raw) as Record<string, number>)[q.key] : undefined;
-    if (typeof base !== 'number') return true;
+    if (typeof base !== 'number') return false;
     return Math.abs(q.price - base) < 0.005;
   } catch {
-    return true;
+    return false;
   }
 }

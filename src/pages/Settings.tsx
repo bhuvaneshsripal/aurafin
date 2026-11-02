@@ -681,7 +681,7 @@ function AppLockCard() {
           <h2 className="text-sm font-semibold text-ink flex items-center gap-1.5">
             App Lock
             <InfoTip>
-              Protect Aurafin with a 4-digit PIN. The app locks itself after a minute in the background, and signs you out after 3 wrong PIN attempts, so your net worth stays private if someone else picks up your device.
+              Protect Aurafin with a 4-digit PIN. The PIN is asked again only after you close the tab or clear the app from recent apps (or tap Lock now), and you are signed out after 3 wrong PIN attempts, so your net worth stays private if someone else picks up your device.
             </InfoTip>
           </h2>
         </div>

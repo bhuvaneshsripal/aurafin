@@ -6,9 +6,10 @@ import { resolveLivePrice, resolvePreviousClose, useLivePricesStore } from '../s
 import { getIstDateInfo, getIstTimeOfDay, isMarketOpen } from '../utils/marketHours';
 import { formatCurrency } from '../utils/currency';
 import { fetchIndexQuotes, getRecentIndexQuotes, type IndexQuote } from '../utils/indexQuotes';
+import { drainPushInbox } from '../utils/pushInbox';
 
 /** Price-move levels (%) that trigger a holding alert, in either direction. */
-const LEVELS = [2, 5];
+const LEVELS = [4, 5]; // a holding must move 4% or 5% before it alerts
 const INDEX_LEVELS = [2, 5];
 const CHECK_MS = 5_000;
 
@@ -98,7 +99,7 @@ function movePair(name: string, arrow: string, pct: number, now: string, _prev?:
  * as an installed app):
  *  - pre-open (9:00 IST), market open (9:15) and market close (3:30 PM) with
  *    Nifty / Sensex / Bank Nifty levels and the portfolio's day move
- *  - any direct holding up or down 2%, 3% or 5% vs yesterday's close
+ *  - any direct holding up or down 4% or 5% vs yesterday's close
  * Each alert fires once per trading day.
  */
 export function useMarketAlerts() {
@@ -163,7 +164,7 @@ export function useMarketAlerts() {
           dir,
           `${a.name} ${dir === 'up' ? '▲' : '▼'} ${Math.abs(pct).toFixed(2)}%`,
           `${dir === 'up' ? 'Up' : 'Down'} ${top}%+ today · now ${formatCurrency(price, a.currency)} (prev close ${formatCurrency(prev, a.currency)})`,
-          false, // pop-up only — not listed in the bell
+          true, // listed in the bell as well as popping up
           movePair(
             a.name,
             dir === 'up' ? '▲' : '▼',
@@ -281,13 +282,25 @@ export function useMarketAlerts() {
       }
     };
 
+    // Alerts the server pushed while the app was closed / in the background
+    // only ever reached the notification bar; file them in the list too.
+    void drainPushInbox();
     void check();
     const id = window.setInterval(check, CHECK_MS);
-    const onVisible = () => document.visibilityState === 'visible' && void check();
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      void drainPushInbox();
+      void check();
+    };
     document.addEventListener('visibilitychange', onVisible);
+    const onSwMessage = (e: MessageEvent) => {
+      if (e.data?.type === 'aurafin-push-stored') void drainPushInbox();
+    };
+    navigator.serviceWorker?.addEventListener('message', onSwMessage);
     return () => {
       window.clearInterval(id);
       document.removeEventListener('visibilitychange', onVisible);
+      navigator.serviceWorker?.removeEventListener('message', onSwMessage);
     };
   }, [user, enabled]);
 }

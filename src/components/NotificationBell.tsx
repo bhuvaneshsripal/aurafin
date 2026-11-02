@@ -4,7 +4,6 @@ import { useLocation } from 'react-router-dom';
 import { Activity, ArrowLeft, Bell, BellOff, BellRing, MoreHorizontal, Moon, Sunrise, Trash2, TrendingUp, type LucideIcon } from 'lucide-react';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { IconButton } from './ui';
-import IndexSessionsCard from './IndexSessionsCard';
 import { getIstDateInfo } from '../utils/marketHours';
 import { useUiStore } from '../store/uiStore';
 import { useAlertsStore, LIST_KINDS, type AlertKind } from '../store/alertsStore';
@@ -61,16 +60,39 @@ function AlertBody({ body }: { body: string }) {
   return <p className="mt-1 text-sm text-slate-600 whitespace-pre-line">{body}</p>;
 }
 
-/** Touch: swipe a row left to delete it (like Instagram). Mouse: hover shows a delete button instead. */
+/** Swipe timing (ms). Slow and soft on purpose, like Android notifications. */
+const SWIPE_FLY_MS = 480; // slide off + fade out after release
+const SWIPE_COLLAPSE_MS = 320; // gap closes after the row has faded
+const SWIPE_RETURN_MS = 320; // spring back when the swipe was too short
+
+/** Touch: swipe a row left or right to delete it, like Google notifications.
+ *  The row follows the finger and fades gradually with distance. Let go far
+ *  enough (or flick) and it keeps sliding off while fading out slowly, then
+ *  the gap closes smoothly. Let go early and it eases back. Mouse: hover shows
+ *  a delete button instead. */
 function SwipeRow({ onDelete, children }: { onDelete: () => void; children: ReactNode }) {
   const [dx, setDx] = useState(0);
-  const [gone, setGone] = useState(false);
-  const [dragging, setDragging] = useState(false);
-  const start = useRef<{ x: number; y: number; active: boolean } | null>(null);
+  const [phase, setPhase] = useState<'idle' | 'drag' | 'fly' | 'collapse'>('idle');
+  const [height, setHeight] = useState<number | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const dxRef = useRef(0);
+  const start = useRef<{ x: number; y: number; t: number; active: boolean } | null>(null);
+  const timers = useRef<number[]>([]);
+
+  useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
+
+  const reduce = typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const flyMs = reduce ? 0 : SWIPE_FLY_MS;
+  const collapseMs = reduce ? 0 : SWIPE_COLLAPSE_MS;
+
+  const move = (v: number) => {
+    dxRef.current = v;
+    setDx(v);
+  };
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (e.pointerType === 'mouse') return;
-    start.current = { x: e.clientX, y: e.clientY, active: false };
+    if (e.pointerType === 'mouse' || phase === 'fly' || phase === 'collapse') return;
+    start.current = { x: e.clientX, y: e.clientY, t: Date.now(), active: false };
   };
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const s = start.current;
@@ -79,46 +101,73 @@ function SwipeRow({ onDelete, children }: { onDelete: () => void; children: Reac
     const my = e.clientY - s.y;
     if (!s.active) {
       if (Math.abs(my) > 10 && Math.abs(my) > Math.abs(mx)) {
-        start.current = null;
+        start.current = null; // it's a vertical scroll
         return;
       }
       if (Math.abs(mx) < 10) return;
       s.active = true;
-      setDragging(true);
-      e.currentTarget.setPointerCapture(e.pointerId);
+      setPhase('drag');
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     }
-    setDx(Math.min(0, mx));
+    move(mx);
   };
-  const end = () => {
+  const end = (cancelled = false) => {
     const s = start.current;
     start.current = null;
-    setDragging(false);
     if (!s?.active) return;
-    if (dx < -96) {
-      setGone(true);
-      window.setTimeout(onDelete, 200);
-    } else {
-      setDx(0);
+    const el = wrapRef.current;
+    const width = el?.offsetWidth || window.innerWidth;
+    const d = dxRef.current;
+    const speed = Math.abs(d) / Math.max(1, Date.now() - s.t); // px per ms
+    const dismiss = !cancelled && (Math.abs(d) > width * 0.35 || (speed > 0.6 && Math.abs(d) > 40));
+    if (!dismiss) {
+      setPhase('idle');
+      move(0);
+      return;
     }
+    // Keep sliding the way it was going, fading out as it goes.
+    setHeight(el?.offsetHeight ?? null);
+    setPhase('fly');
+    move((d < 0 ? -1 : 1) * width);
+    // Once it has faded, close the gap, then remove it.
+    timers.current.push(
+      window.setTimeout(() => {
+        setPhase('collapse');
+        setHeight(0);
+        timers.current.push(window.setTimeout(onDelete, collapseMs));
+      }, flyMs),
+    );
   };
 
+  const width = wrapRef.current?.offsetWidth || 360;
+  const gone = phase === 'fly' || phase === 'collapse';
+  // Fades a little at a time as it moves; fully clear before it reaches the edge.
+  const fade = Math.max(0, 1 - Math.abs(dx) / (width * 0.8));
+
   return (
-    <div className={`relative overflow-hidden transition-[opacity,max-height] duration-200 ${gone ? 'opacity-0 max-h-0' : 'max-h-96'}`}>
-      <div
-        aria-hidden
-        className="absolute inset-0 flex items-center justify-end pr-6 bg-red-500 text-white"
-        style={{ opacity: Math.min(1, Math.abs(dx) / 60) }}
-      >
-        <Trash2 size={20} />
-      </div>
+    <div
+      ref={wrapRef}
+      className="relative overflow-hidden"
+      style={{
+        height: height === null ? undefined : height,
+        transition: phase === 'collapse' ? `height ${collapseMs}ms cubic-bezier(0.4, 0, 0.2, 1)` : undefined,
+      }}
+    >
       <div
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
-        onPointerUp={end}
-        onPointerCancel={end}
+        onPointerUp={() => end()}
+        onPointerCancel={() => end(true)}
         style={{
-          transform: `translate3d(${gone ? -480 : dx}px,0,0)`,
-          transition: dragging ? 'none' : 'transform 200ms cubic-bezier(0.2,0.7,0.2,1)',
+          transform: `translate3d(${dx}px,0,0)`,
+          opacity: gone ? 0 : fade,
+          transition:
+            phase === 'drag'
+              ? 'none'
+              : gone
+                ? `transform ${flyMs}ms cubic-bezier(0.25, 0.1, 0.25, 1), opacity ${flyMs}ms ease-in-out`
+                : `transform ${SWIPE_RETURN_MS}ms cubic-bezier(0.22, 1, 0.36, 1), opacity ${SWIPE_RETURN_MS}ms ease-out`,
+          willChange: phase === 'drag' ? 'transform, opacity' : undefined,
           touchAction: 'pan-y',
         }}
         className="relative"
@@ -363,8 +412,6 @@ export default function NotificationBell(_props: { align?: 'right' | 'left' } = 
                 </span>
               </button>
             )}
-
-            <IndexSessionsCard />
 
             {items.length === 0 ? (
               <div className="px-6 py-14 flex flex-col items-center text-center animate-notif-row">

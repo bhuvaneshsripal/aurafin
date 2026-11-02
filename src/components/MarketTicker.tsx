@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { cn } from './ui/cn';
 import { useIndexQuotes, isStaleIndexQuote, type IndexQuote } from '../utils/indexQuotes';
 import { useIndexResetWindow } from '../utils/marketHours';
@@ -22,21 +22,27 @@ const fmt = (n: number) => levelFormatter.format(n);
 // they used to run two separate pollers.)
 
 /** Price that briefly flashes green/red whenever the number changes, so a
- *  live update is visible without watching the digits. */
+ *  live update is visible without watching the digits. The flash runs as a Web
+ *  Animation on the same element: re-keying/remounting it every tick (as this
+ *  used to) rebuilt part of the strip once a second, which could interrupt a
+ *  swipe along the mobile bar. */
 function LivePrice({ value }: { value: number }) {
   const prev = useRef(value);
-  const [flash, setFlash] = useState<{ dir: 'up' | 'down'; n: number } | null>(null);
+  const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
-    if (value !== prev.current) {
-      setFlash((f) => ({ dir: value > prev.current ? 'up' : 'down', n: (f?.n ?? 0) + 1 }));
-      prev.current = value;
-    }
+    if (value === prev.current) return;
+    const up = value > prev.current;
+    prev.current = value;
+    const el = ref.current;
+    if (!el || typeof el.animate !== 'function') return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    el.animate(
+      [{ backgroundColor: up ? 'rgb(34 197 94 / 0.35)' : 'rgb(239 68 68 / 0.35)' }, { backgroundColor: 'transparent' }],
+      { duration: 900, easing: 'ease-out' }
+    );
   }, [value]);
   return (
-    <span
-      key={flash?.n ?? 0}
-      className={cn('text-ink-2 tabular-nums rounded px-0.5', flash && (flash.dir === 'up' ? 'ticker-flash-up' : 'ticker-flash-down'))}
-    >
+    <span ref={ref} className="text-ink-2 tabular-nums rounded px-0.5">
       {fmt(value)}
     </span>
   );
@@ -85,7 +91,7 @@ export default function MarketTicker() {
   // On narrower headers the text and gaps step down so all three still fit.
   return (
     <div className="@container flex-1 min-w-0 h-5" aria-label="Market indices">
-      <div className="h-5 overflow-hidden flex items-center justify-between gap-x-4 whitespace-nowrap text-[13px] @max-[900px]:text-xs @max-[780px]:text-[11px] leading-5">
+      <div className="h-5 overflow-hidden flex items-center justify-between gap-x-4 whitespace-nowrap text-sm @max-[900px]:text-[13px] @max-[780px]:text-xs leading-5">
         {items}
       </div>
     </div>
@@ -102,10 +108,10 @@ export function MarketTickerMarquee({ className, id }: { className?: string; id?
     <div
       id={id}
       className={cn(
-        'no-scrollbar overflow-x-auto overflow-y-hidden overscroll-x-contain h-9 flex items-center text-[12.5px] bg-surface border-b border-line',
+        'no-scrollbar overflow-x-auto overflow-y-hidden overscroll-x-contain h-9 flex items-center text-sm bg-surface border-b border-line',
         className
       )}
-      style={{ touchAction: 'pan-x', scrollbarWidth: 'none' }}
+      style={{ touchAction: 'pan-x pan-y', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}
       aria-label="Market indices"
     >
       <div className="flex shrink-0 items-center gap-x-8 px-4 whitespace-nowrap">{renderItems(quotes, reset)}</div>

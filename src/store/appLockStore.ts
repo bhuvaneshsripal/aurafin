@@ -25,8 +25,10 @@ const SESSION_UNLOCKED_KEY = 'aurafin-unlocked-session';
 // the same trust level the email-OTP reset flow already grants.
 const LOCKOUT_BYPASS_KEY = 'aurafin-lock-bypass-next-login';
 
-// Auto-lock after this long in the background.
-const AUTO_LOCK_MS = 60_000;
+// There is deliberately NO time-based auto-lock: switching tabs or apps and
+// coming back keeps the app unlocked. The PIN is asked again only after the tab
+// / window is closed or the app is cleared from recents (sessionStorage is wiped
+// then — see SESSION_UNLOCKED_KEY), or when "Lock now" is used.
 // Wrong PIN entries allowed before we sign the person out and send them
 // back to Login (from which they can prove who they are with Google/email
 // instead of guessing the PIN forever).
@@ -167,10 +169,6 @@ async function checkVerifier(uid: string, pin: string): Promise<boolean | null> 
   }
 }
 
-// In-memory only (NOT localStorage). A real page refresh/close always gets a
-// brand new JS module instance, so this always starts at `null`.
-let hiddenAt: number | null = null;
-let listenerAttached = false;
 
 interface AppLockState {
   enabled: boolean;
@@ -241,23 +239,7 @@ export const useAppLockStore = create<AppLockState & { _storedPin: string | null
   _storedPin: null,
 
   init: () => {
-    hiddenAt = null;
-    if (listenerAttached) return;
-    listenerAttached = true;
-
-    document.addEventListener('visibilitychange', () => {
-      const { enabled } = get();
-      if (!enabled) return;
-      if (document.visibilityState === 'hidden') {
-        hiddenAt = Date.now();
-      } else {
-        if (hiddenAt && Date.now() - hiddenAt > AUTO_LOCK_MS) {
-          ssRemove(SESSION_UNLOCKED_KEY);
-          set({ locked: true, failedAttempts: 0, pinAttemptError: null });
-        }
-        hiddenAt = null;
-      }
-    });
+    // Nothing to watch: see the note above about not auto-locking.
   },
 
   syncFromRemote: (pin, enabled) => {
@@ -320,7 +302,6 @@ export const useAppLockStore = create<AppLockState & { _storedPin: string | null
   disable: async () => {
     const user = useAuthStore.getState().user;
     ssRemove(SESSION_UNLOCKED_KEY);
-    hiddenAt = null;
     try {
       localStorage.setItem(ENABLED_CACHE_KEY, 'false');
     } catch {

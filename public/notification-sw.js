@@ -13,6 +13,29 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
+// Every push the worker shows is also saved to a small IndexedDB inbox, so the
+// app can add it to its Notifications list the next time it opens (a closed app
+// can't be written to directly). utils/pushInbox.ts reads and clears this.
+const INBOX_DB = 'aurafin-inbox';
+const INBOX_STORE = 'pushes';
+function saveToInbox(item) {
+  return new Promise((resolve) => {
+    try {
+      const open = indexedDB.open(INBOX_DB, 1);
+      open.onupgradeneeded = () => open.result.createObjectStore(INBOX_STORE, { autoIncrement: true });
+      open.onerror = () => resolve();
+      open.onsuccess = () => {
+        const tx = open.result.transaction(INBOX_STORE, 'readwrite');
+        tx.objectStore(INBOX_STORE).add(item);
+        tx.oncomplete = () => { open.result.close(); resolve(); };
+        tx.onerror = () => resolve();
+      };
+    } catch (e) {
+      resolve();
+    }
+  });
+}
+
 // Web Push from the server (api/push/send): arrives even when the app is closed.
 self.addEventListener('push', (event) => {
   let data = {};
@@ -31,6 +54,11 @@ self.addEventListener('push', (event) => {
       if (data.tag) {
         const shown = await self.registration.getNotifications({ tag: data.tag });
         if (shown.length) return;
+      }
+      if (data.tag !== 'aurafin-test') {
+        await saveToInbox({ title: data.title || 'Aurafin', body: data.body || '', tag: data.tag || '', at: Date.now() });
+        // A hidden-but-open page can pick it up straight away.
+        wins.forEach((c) => c.postMessage({ type: 'aurafin-push-stored' }));
       }
       await self.registration.showNotification(data.title || 'Aurafin', {
         body: data.body || '',

@@ -230,9 +230,6 @@ export function useFirestoreCollectionSync<T extends { id: string }>(
   }, [uid, anonymous, collectionName, setLocal, onSyncChange, markCollectionLoaded, markCollectionServerConfirmed]);
 }
 
-/** Shown when a save is kept on the device because the connection is weak. */
-const QUEUED_MSG = 'Low network — saved on this device. It will sync when your connection is back.';
-const OFFLINE_MSG = 'No network — saved on this device. It will sync when you are back online.';
 const FAILED_MSG = "Couldn't save to the server right now. Your change is kept and will retry.";
 
 /** True when a save should be queued instead of awaited. Firestore's write
@@ -242,8 +239,12 @@ function shouldQueue(): boolean {
   return getNetworkQuality() !== 'good';
 }
 
+/** A save kept on the device because the connection is weak. Deliberately
+ *  silent: the bottom "Low network connection" banner (NetworkBanner) already
+ *  tells the person, and a second "saved on this device" toast on top of it was
+ *  just noise. The change is journaled and syncs when the connection returns. */
 function announceQueued() {
-  toast.bottom.info(getNetworkQuality() === 'offline' ? OFFLINE_MSG : QUEUED_MSG, 5000);
+  /* no toast */
 }
 
 /** Sends a write without blocking the caller. The journal entry (see
