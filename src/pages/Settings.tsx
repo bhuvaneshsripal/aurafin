@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, Suspense, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
+import type { LucideIcon } from 'lucide-react';
 import {
   updatePassword,
   linkWithCredential,
@@ -7,7 +8,7 @@ import {
   sendPasswordResetEmail,
   EmailAuthProvider,
 } from 'firebase/auth';
-import { ArrowLeft, ChevronRight, RefreshCw, Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, Download, Upload, Mail, Bell } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Database, FileText, KeyRound, LockKeyhole, RefreshCw, Share2, SlidersHorizontal, Sparkles, UserRound, Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, Download, Upload, Mail, Bell } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
 import { useAvatarUrl } from '../hooks/useAvatarUrl';
@@ -48,6 +49,7 @@ import type { HouseholdProfile } from '../types';
 import Modal from '../components/Modal';
 import { hardRefresh } from '../utils/hardRefresh';
 import UpdateDot from '../components/UpdateDot';
+import WhatsNewModal, { useWhatsNew } from '../components/WhatsNewModal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useUrlTab } from '../hooks/useUrlTab';
 import CustomSelect from '../components/CustomSelect';
@@ -71,6 +73,17 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'data', label: 'Data' },
 ];
 
+const NAV_ICONS: Record<string, LucideIcon> = {
+  basic: UserRound,
+  report: FileText,
+  password: KeyRound,
+  pin: LockKeyhole,
+  preferences: SlidersHorizontal,
+  profiles: Users,
+  shared: Share2,
+  data: Database,
+};
+
 // Menu order: Report is an action (opens the report window) rather than a tab.
 const NAV_ITEMS: { key: Tab | 'report'; label: string }[] = [
   TABS[0],
@@ -92,6 +105,14 @@ function ProfileHeader() {
   const setCustomUrl = useAvatarStore((s) => s.setDataUrl);
   const displayUrl = useAvatarUrl();
   const name = useDisplayName('Your Account');
+  const created = user ? ('metadata' in user ? user.metadata?.creationTime : user.createdAt) : undefined;
+  const since = (() => {
+    const d = created ? new Date(created) : null;
+    if (!d || Number.isNaN(d.getTime())) return '';
+    const mon = d.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+    return ` SINCE ${mon}'${String(d.getFullYear()).slice(-2)}`;
+  })();
+  const ringUnit = `AURAFIN${since} • `;
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -125,28 +146,40 @@ function ProfileHeader() {
   };
 
   return (
-    <div className="flex flex-col items-center px-5 pt-6 pb-4">
-      <label className={`relative block rounded-full ${saving ? 'opacity-60' : 'cursor-pointer'}`} aria-label="Change profile photo">
-        {displayUrl ? (
-          <img src={displayUrl} alt="" className="keep-round h-24 w-24 rounded-full object-cover" referrerPolicy="no-referrer" />
-        ) : (
-          <div className="keep-round h-24 w-24 rounded-full bg-primary-soft text-primary-ink flex items-center justify-center text-3xl font-semibold">
-            {name.charAt(0).toUpperCase()}
-          </div>
-        )}
-        <input
-          type="file"
-          accept="image/*"
-          className="hidden"
-          disabled={saving}
-          onChange={(e) => {
-            const file = e.target.files?.[0] ?? null;
-            void handleFile(file);
-            e.target.value = '';
-          }}
-        />
-      </label>
-      <p className="mt-3 text-[15px] font-semibold text-ink text-center break-words max-w-full">{name}</p>
+    <div className="flex flex-col items-center px-5 pt-4 pb-4">
+      <div className="relative h-40 w-40 flex items-center justify-center">
+        <svg viewBox="0 0 160 160" className="pointer-events-none absolute inset-0 h-full w-full text-ink-2" aria-hidden>
+          <defs>
+            <path id="profile-ring" d="M 80,80 m -66,0 a 66,66 0 1,1 132,0 a 66,66 0 1,1 -132,0" />
+          </defs>
+          <text fill="currentColor" fontSize="10.5" fontWeight="500" letterSpacing="1.5">
+            <textPath href="#profile-ring" textLength={2 * Math.PI * 66 - 2} lengthAdjust="spacing">
+              {ringUnit.repeat(2)}
+            </textPath>
+          </text>
+        </svg>
+        <label className={`relative block rounded-full ${saving ? 'opacity-60' : 'cursor-pointer'}`} aria-label="Change profile photo">
+          {displayUrl ? (
+            <img src={displayUrl} alt="" className="keep-round h-24 w-24 rounded-full object-cover" referrerPolicy="no-referrer" />
+          ) : (
+            <div className="keep-round h-24 w-24 rounded-full bg-primary-soft text-primary-ink flex items-center justify-center text-3xl font-semibold">
+              {name.charAt(0).toUpperCase()}
+            </div>
+          )}
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            disabled={saving}
+            onChange={(e) => {
+              const file = e.target.files?.[0] ?? null;
+              void handleFile(file);
+              e.target.value = '';
+            }}
+          />
+        </label>
+      </div>
+      <p className="mt-1 text-[15px] font-semibold text-ink text-center break-words max-w-full">{name}</p>
       {error && <p className="text-xs text-red-500 mt-1 text-center">{error}</p>}
       <AvatarCropModal open={!!cropImage} image={cropImage} onCancel={() => setCropImage(null)} onConfirm={handleCropConfirm} />
     </div>
@@ -1734,7 +1767,9 @@ export default function Settings() {
     initialTab && TABS.some((t) => t.key === initialTab) ? initialTab : 'basic'
   );
 
-  const [refreshing, setRefreshing] = useState(false);
+  const [whatsNewOpen, setWhatsNewOpen] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const whatsNew = useWhatsNew(whatsNewOpen);
   const [reportOpen, setReportOpen] = useState(false);
 
   // Phones show the menu first and one section at a time; desktop shows both side by side.
@@ -1762,54 +1797,58 @@ export default function Settings() {
     <div className="space-y-5">
       <div className={mobileOpen ? 'hidden md:block' : ''}>
       <PageHeader
-        title={
-          <span className="inline-flex items-center gap-3 flex-wrap">
-            Settings
-            <button
-              type="button"
-              disabled={refreshing}
-              onClick={() => {
-                setRefreshing(true);
-                void hardRefresh();
-              }}
-              className="relative inline-flex items-center gap-1.5 rounded-lg border border-line bg-white hover:bg-surface-hover disabled:opacity-60 px-2.5 py-1 text-[13px] font-medium tracking-normal text-ink-2 transition-colors"
-            >
-              <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-              {refreshing ? 'Updating…' : 'Update app'}
-              <UpdateDot className="-top-1 -right-1" />
-            </button>
-          </span>
-        }
+        title="Settings"
       />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-6 items-start">
-        <div className={`min-w-0 max-w-full ${mobileOpen ? 'hidden md:block' : ''}`}>
+      <div className="grid grid-cols-1 md:grid-cols-[340px_1fr] gap-6 items-start">
+        <div className={`min-w-0 max-w-full ${mobileOpen ? 'hidden md:block' : 'menu-slide-in'}`}>
           <nav className="bg-white rounded-2xl border border-line overflow-hidden flex flex-col w-full">
             <ProfileHeader />
             {NAV_ITEMS.map((t) => {
               const isReport = t.key === 'report';
               const active = !isReport && tab === t.key;
+              const Icon = NAV_ICONS[t.key];
               return (
                 <button
                   key={t.key}
                   type="button"
                   onClick={() => openItem(t.key)}
-                  className={`w-full text-left px-5 h-14 border-t border-line text-[15px] flex items-center justify-between gap-2 transition-colors ${
+                  className={`press-row w-full text-left px-5 h-14 border-t border-line text-[15px] flex items-center justify-between gap-2 transition-colors ${
                     active
                       ? 'font-medium md:bg-surface-muted md:text-ink md:font-semibold text-ink'
                       : 'font-normal text-slate-600 hover:bg-surface-hover hover:text-ink'
                   }`}
                 >
-                  {t.label}
-                  <ChevronRight size={16} className="text-ink-2 shrink-0" />
+                  <span className="flex items-center gap-3 min-w-0">
+                    <Icon size={20} strokeWidth={1.75} className="shrink-0 text-ink-2" />
+                    {t.label}
+                    {t.key === 'shared' && (
+                      <span className="text-xs font-medium text-brand-600 bg-brand-50 dark:bg-brand-500/10 dark:text-brand-400 px-2 py-0.5 rounded-full shrink-0">
+                        Coming Soon
+                      </span>
+                    )}
+                  </span>
+                  <ChevronRight size={16} className="press-chevron text-ink-2 shrink-0" />
                 </button>
               );
             })}
+            <button
+              type="button"
+              onClick={() => setWhatsNewOpen(true)}
+              className="press-row w-full text-left px-5 h-14 border-t border-line text-[15px] font-normal text-slate-600 hover:bg-surface-hover hover:text-ink flex items-center justify-between gap-2 transition-colors"
+            >
+              <span className="relative flex items-center gap-3 min-w-0">
+                <Sparkles size={20} strokeWidth={1.75} className="shrink-0 text-ink-2" />
+                New version
+                <UpdateDot className="-top-1 -right-3" />
+              </span>
+              <ChevronRight size={16} className="press-chevron text-ink-2 shrink-0" />
+            </button>
           </nav>
         </div>
 
-        <div className={`space-y-6 min-w-0 ${mobileOpen ? '' : 'hidden md:block'}`}>
+        <div className={`space-y-6 min-w-0 ${mobileOpen ? 'section-slide-in' : 'hidden md:block'}`}>
           <button
             type="button"
             onClick={() => setMobileOpen(false)}
@@ -1827,6 +1866,18 @@ export default function Settings() {
           {tab === 'data' && <DataTab />}
         </div>
       </div>
+      <WhatsNewModal
+        open={whatsNewOpen}
+        onClose={() => setWhatsNewOpen(false)}
+        notes={whatsNew}
+        updating={updating}
+        onUpdate={() => {
+          setUpdating(true);
+          void hardRefresh().then((ok) => {
+            if (!ok) setUpdating(false);
+          });
+        }}
+      />
       {reportOpen && (
         <Suspense fallback={null}>
           <PortfolioExportModal open={reportOpen} onClose={() => setReportOpen(false)} />

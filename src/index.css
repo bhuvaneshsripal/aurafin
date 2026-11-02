@@ -1496,3 +1496,37 @@ input.global-search-input:focus,
     animation: none;
   }
 }
+
+/* ── Settings menu: tap feedback + mobile slide transitions ───────────── */
+.press-row {
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.15s ease, transform 0.12s ease;
+}
+.press-row:active {
+  background-color: color-mix(in srgb, currentColor 9%, transparent);
+  transform: scale(0.98);
+}
+.press-row .press-chevron {
+  transition: transform 0.15s ease;
+}
+.press-row:active .press-chevron {
+  transform: translateX(4px);
+}
+
+@keyframes section-slide-in {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes menu-slide-in {
+  from { opacity: 0; transform: translateX(-24px); }
+  to { opacity: 1; transform: none; }
+}
+@media (max-width: 767px) {
+  .section-slide-in { animation: section-slide-in 0.26s ease-out; }
+  .menu-slide-in { animation: menu-slide-in 0.26s ease-out; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .press-row, .press-row .press-chevron { transition: none; }
+  .press-row:active { transform: none; }
+  .section-slide-in, .menu-slide-in { animation: none; }
+}

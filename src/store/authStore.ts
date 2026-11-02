@@ -38,7 +38,7 @@ function onboardingKey(uid: string) {
 // session) must already know which kind of account this is. Without it, a guest
 // was briefly treated as a normal user on every reload — their saved data was
 // looked up in Firestore, found nothing, and showed an empty account for a moment.
-type CachedUser = Pick<User, 'uid' | 'email' | 'displayName' | 'photoURL'> & { isAnonymous?: boolean };
+type CachedUser = Pick<User, 'uid' | 'email' | 'displayName' | 'photoURL'> & { isAnonymous?: boolean; createdAt?: string };
 
 const CACHED_USER_KEY = 'aurafin-cached-user';
 
@@ -91,6 +91,7 @@ function writeCachedUser(user: User | null) {
       displayName: user.displayName,
       photoURL: user.photoURL,
       isAnonymous: user.isAnonymous,
+      createdAt: user.metadata?.creationTime,
     };
     localStorage.setItem(CACHED_USER_KEY, JSON.stringify(cached));
   } catch {

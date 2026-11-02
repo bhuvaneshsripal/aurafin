@@ -260,7 +260,6 @@ export default function BasicDetailsCard() {
 
   if (!user) return null;
 
-  const isDemo = (user as { isAnonymous?: boolean }).isAnonymous === true;
   const accountEmail = user.email ?? '';
 
   const fields: FieldConfig[] = [
@@ -276,7 +275,6 @@ export default function BasicDetailsCard() {
       label: 'Gender',
       input: 'select',
       options: GENDER_OPTIONS,
-      hint: isDemo ? 'Your demo profile picture follows this.' : undefined,
     },
     { key: 'incomeRange', label: 'Income Range', input: 'select', options: INCOME_OPTIONS },
     { key: 'occupation', label: 'Occupation', input: 'select', options: OCCUPATION_OPTIONS },
@@ -286,10 +284,7 @@ export default function BasicDetailsCard() {
 
   return (
     <div className="bg-surface rounded-2xl border border-line p-6 shadow-sm">
-      <h2 className="text-sm font-semibold text-ink">Personal Details</h2>
-      <p className="text-xs text-muted mt-1 mb-5">
-        {isDemo ? 'Saved on this device only.' : 'Saved to your account.'}
-      </p>
+      <h2 className="text-sm font-semibold text-ink mb-5">Personal Details</h2>
       <div className="divide-y divide-line-soft">
         {fields.map((f) => (
           <Row

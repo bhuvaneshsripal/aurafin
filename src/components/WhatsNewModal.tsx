@@ -6,7 +6,7 @@ export interface WhatsNew {
   version?: string;
   date?: string;
   title?: string;
-  items: { title: string; description?: string }[];
+  items: { emoji?: string; title: string; description?: string }[];
 }
 
 /** Fetches the release notes published with the newest deploy (/whats-new.json).
@@ -64,10 +64,16 @@ export default function WhatsNewModal({
       {notes ? (
         <ul className="space-y-3.5">
           {notes.items.map((item) => (
-            <li key={item.title} className="flex items-start gap-3">
-              <span className="mt-0.5 shrink-0 h-5 w-5 rounded-full bg-[#e7f4ec] dark:bg-[#0a9a4b]/15 text-[#0a9a4b] inline-flex items-center justify-center">
-                <Check size={13} strokeWidth={3} />
-              </span>
+            <li key={item.title} className="flex items-center gap-3">
+              {item.emoji ? (
+                <span className="shrink-0 h-9 w-9 rounded-xl bg-[#e7f4ec] dark:bg-[#0a9a4b]/15 inline-flex items-center justify-center text-xl leading-none" aria-hidden>
+                  {item.emoji}
+                </span>
+              ) : (
+                <span className="mt-0.5 shrink-0 h-5 w-5 rounded-full bg-[#e7f4ec] dark:bg-[#0a9a4b]/15 text-[#0a9a4b] inline-flex items-center justify-center">
+                  <Check size={13} strokeWidth={3} />
+                </span>
+              )}
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-ink leading-snug">{item.title}</p>
                 {item.description && <p className="text-[13px] text-muted leading-snug mt-0.5">{item.description}</p>}

@@ -1,6 +1,6 @@
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Moon, Sun, Globe, Eye, EyeOff, ChevronDown, MoreVertical, Settings as SettingsIcon, Lock, LogOut, FileText } from 'lucide-react';
+import { Moon, Sun, Globe, Eye, EyeOff, ChevronDown, MoreVertical, Settings as SettingsIcon, Lock, LogOut } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarUrl } from '../hooks/useAvatarUrl';
 import { useDisplayName } from '../hooks/useDisplayName';
@@ -16,15 +16,6 @@ import NotificationBell from './NotificationBell';
 import MarketTicker, { MarketTickerMarquee } from './MarketTicker';
 import { Button, IconButton } from './ui';
 import UpdateDot from './UpdateDot';
-import { lazyWithRetry } from '../utils/lazyWithRetry';
-
-// The PDF report drags in the whole charts library (~400 KB). It is only
-// needed when someone actually taps "Export report", so it is loaded on demand
-// instead of being part of the always-on header bundle that every page (and
-// the login screen) has to download first.
-const PortfolioExportModal = lazyWithRetry(() =>
-  import('./PortfolioExportModal').then((m) => ({ default: m.PortfolioExportModal }))
-);
 
 const menuPanel =
   'animate-menu-in absolute right-0 mt-2 bg-surface border border-line rounded-xl shadow-lg overflow-hidden z-30';
@@ -45,7 +36,6 @@ export default function TopHeader() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [reportOpen, setReportOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const isGuest = (user as { isAnonymous?: boolean } | null)?.isAnonymous === true;
 
@@ -241,17 +231,6 @@ export default function TopHeader() {
                   </span>
                 </button>
 
-                <button
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    setReportOpen(true);
-                  }}
-                  className={menuItem}
-                >
-                  <FileText size={17} className="text-muted" />
-                  Export report
-                </button>
-
                 <button onClick={toggleTheme} className={menuItem}>
                   {theme === 'dark' ? <Sun size={17} className="text-muted" /> : <Moon size={17} className="text-muted" />}
                   {theme === 'dark' ? 'Light mode' : 'Dark mode'}
@@ -277,12 +256,6 @@ export default function TopHeader() {
 
       {/* Mobile only: scrolling index strip pinned just under the top bar. */}
       <MarketTickerMarquee id="app-marquee" className="md:hidden sticky top-14 z-20" />
-
-      {reportOpen && (
-        <Suspense fallback={null}>
-          <PortfolioExportModal open={reportOpen} onClose={() => setReportOpen(false)} />
-        </Suspense>
-      )}
 
       <Modal open={confirmOpen} onClose={() => setConfirmOpen(false)} title="Log out of Aurafin?">
         <p className="text-sm text-muted mb-6">
