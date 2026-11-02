@@ -7,7 +7,7 @@ import {
   sendPasswordResetEmail,
   EmailAuthProvider,
 } from 'firebase/auth';
-import { ChevronRight, RefreshCw, Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, X, Download, Upload, Mail, Bell } from 'lucide-react';
+import { ArrowLeft, ChevronRight, RefreshCw, Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, Download, Upload, Mail, Bell } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
 import { useAvatarUrl } from '../hooks/useAvatarUrl';
@@ -33,7 +33,7 @@ import {
   getSecurityQuestion,
   verifySecurityAnswer,
 } from '../utils/securityQuestion';
-import { deleteAllUserData, upsertDoc, removeDoc, saveAvatar, removeAvatar, assignOrphanDataToProfile, reassignProfileData, setDefaultProfile, bulkUpsertDocs } from '../hooks/useFirestoreSync';
+import { deleteAllUserData, upsertDoc, removeDoc, saveAvatar, assignOrphanDataToProfile, reassignProfileData, setDefaultProfile, bulkUpsertDocs } from '../hooks/useFirestoreSync';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useGoalsStore } from '../store/goalsStore';
@@ -86,141 +86,69 @@ function Card({ children }: { children: ReactNode }) {
   );
 }
 
-function AvatarEditor() {
+/** Profile picture + name at the top of the settings menu. Clicking the picture changes it. */
+function ProfileHeader() {
   const user = useAuthStore((s) => s.user);
-  const customUrl = useAvatarStore((s) => s.dataUrl);
   const setCustomUrl = useAvatarStore((s) => s.setDataUrl);
+  const displayUrl = useAvatarUrl();
+  const name = useDisplayName('Your Account');
 
-  const [status, setStatus] = useState<'idle' | 'saving' | 'error'>('idle');
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [cropImage, setCropImage] = useState<HTMLImageElement | null>(null);
-
-  // customUrl is only a photo the user uploaded (it drives the Remove button);
-  // displayUrl also includes their Google photo or the demo avatar.
-  const displayUrl = useAvatarUrl();
-  const initial = (user?.displayName ?? user?.email ?? 'A').charAt(0).toUpperCase();
 
   const handleFile = async (file: File | null) => {
     if (!file) return;
     setError('');
     try {
-      const img = await loadImageFromFile(file);
-      // Opens the crop/zoom editor instead of saving immediately — the
-      // person positions and zooms the photo, then confirms.
-      setCropImage(img);
+      // Opens the crop/zoom editor; the photo is saved once the person confirms.
+      setCropImage(await loadImageFromFile(file));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not read that image.');
-      setStatus('error');
     }
   };
 
   const handleCropConfirm = async (dataUrl: string) => {
     setCropImage(null);
     if (!user) return;
-    setStatus('saving');
+    setSaving(true);
     setError('');
     try {
-      // Reflect it immediately rather than waiting on the round-trip to
-      // Firestore and back through the live listener.
+      // Show it straight away rather than waiting on the Firestore round-trip.
       setCustomUrl(dataUrl);
       await saveAvatar(user.uid, dataUrl);
-      setStatus('idle');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update your photo.');
-      setStatus('error');
-    }
-  };
-
-  const handleRemove = async () => {
-    if (!user) return;
-    setStatus('saving');
-    setError('');
-    try {
-      setCustomUrl(null);
-      await removeAvatar(user.uid);
-      setStatus('idle');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not remove your photo.');
-      setStatus('error');
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
-    <div className="flex items-center gap-4 mb-5">
-      <div className="relative shrink-0">
+    <div className="flex flex-col items-center px-5 pt-6 pb-4">
+      <label className={`relative block rounded-full ${saving ? 'opacity-60' : 'cursor-pointer'}`} aria-label="Change profile photo">
         {displayUrl ? (
-          <img
-            src={displayUrl}
-            alt=""
-            referrerPolicy="no-referrer"
-            className="h-16 w-16 rounded-full object-cover border border-line"
-          />
+          <img src={displayUrl} alt="" className="keep-round h-24 w-24 rounded-full object-cover" referrerPolicy="no-referrer" />
         ) : (
-          <div className="h-16 w-16 rounded-full bg-brand-600 text-white flex items-center justify-center text-xl font-semibold">
-            {initial}
+          <div className="keep-round h-24 w-24 rounded-full bg-primary-soft text-primary-ink flex items-center justify-center text-3xl font-semibold">
+            {name.charAt(0).toUpperCase()}
           </div>
         )}
-
-        <label
-          title="Edit photo"
-          className="icon-outline-green tap-scale absolute -bottom-1 -right-1 h-8 w-8 shadow-sm flex items-center justify-center cursor-pointer"
-        >
-          <Pencil size={14} />
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            disabled={status === 'saving'}
-            onChange={(e) => {
-              const file = e.target.files?.[0] ?? null;
-              handleFile(file);
-              e.target.value = '';
-            }}
-          />
-        </label>
-      </div>
-
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-ink-2">Profile photo</p>
-        <p className="text-xs text-muted mt-0.5">
-          {status === 'saving' ? 'Saving...' : 'JPG or PNG — drag and zoom to crop after choosing one.'}
-        </p>
-        <div className="flex items-center gap-3 mt-1.5">
-          <label className="text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline cursor-pointer">
-            Change
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              disabled={status === 'saving'}
-              onChange={(e) => {
-                const file = e.target.files?.[0] ?? null;
-                handleFile(file);
-                e.target.value = '';
-              }}
-            />
-          </label>
-          {customUrl && (
-            <button
-              type="button"
-              onClick={handleRemove}
-              disabled={status === 'saving'}
-              className="flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-emerald-600 dark:hover:text-emerald-400 disabled:opacity-50"
-            >
-              <X size={12} />
-              Remove
-            </button>
-          )}
-        </div>
-        {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-      </div>
-
-      <AvatarCropModal
-        open={!!cropImage}
-        image={cropImage}
-        onCancel={() => setCropImage(null)}
-        onConfirm={handleCropConfirm}
-      />
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          disabled={saving}
+          onChange={(e) => {
+            const file = e.target.files?.[0] ?? null;
+            void handleFile(file);
+            e.target.value = '';
+          }}
+        />
+      </label>
+      <p className="mt-3 text-[15px] font-semibold text-ink text-center break-words max-w-full">{name}</p>
+      {error && <p className="text-xs text-red-500 mt-1 text-center">{error}</p>}
+      <AvatarCropModal open={!!cropImage} image={cropImage} onCancel={() => setCropImage(null)} onConfirm={handleCropConfirm} />
     </div>
   );
 }
@@ -1808,11 +1736,31 @@ export default function Settings() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
-  const avatarUrl = useAvatarUrl();
-  const accountName = useDisplayName('Your Account');
+
+  // Phones show the menu first and one section at a time; desktop shows both side by side.
+  const [mobileOpen, setMobileOpen] = useState(
+    () => !!initialTab || new URLSearchParams(location.search).has('tab')
+  );
+  useEffect(() => {
+    // Landing on plain /settings (e.g. tapping Settings again) goes back to the menu.
+    if (!new URLSearchParams(location.search).has('tab') && !initialTab) setMobileOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
+  const openItem = (key: Tab | 'report') => {
+    if (key === 'report') {
+      setReportOpen(true);
+      return;
+    }
+    setTab(key);
+    setMobileOpen(true);
+    window.scrollTo({ top: 0 });
+  };
+  const currentLabel = TABS.find((t) => t.key === tab)?.label ?? '';
 
   return (
     <div className="space-y-5">
+      <div className={mobileOpen ? 'hidden md:block' : ''}>
       <PageHeader
         title={
           <span className="inline-flex items-center gap-3 flex-wrap">
@@ -1833,20 +1781,12 @@ export default function Settings() {
           </span>
         }
       />
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-6 items-start">
-        <div className="min-w-0 max-w-full">
-          <nav className="bg-white rounded-2xl border border-line p-1 md:p-0 inline-flex md:flex md:flex-col gap-0 overflow-x-auto no-scrollbar md:overflow-hidden w-fit min-w-0 max-w-full md:w-full">
-            <div className="hidden md:flex flex-col items-center px-5 pt-7 pb-5">
-              {avatarUrl ? (
-                <img src={avatarUrl} alt="" className="keep-round h-28 w-28 rounded-full object-cover" referrerPolicy="no-referrer" />
-              ) : (
-                <div className="keep-round h-28 w-28 rounded-full bg-primary-soft text-primary-ink flex items-center justify-center text-3xl font-semibold">
-                  {accountName.charAt(0).toUpperCase()}
-                </div>
-              )}
-              <p className="mt-4 text-base font-semibold text-ink text-center break-words max-w-full">{accountName}</p>
-            </div>
+        <div className={`min-w-0 max-w-full ${mobileOpen ? 'hidden md:block' : ''}`}>
+          <nav className="bg-white rounded-2xl border border-line overflow-hidden flex flex-col w-full">
+            <ProfileHeader />
             {NAV_ITEMS.map((t) => {
               const isReport = t.key === 'report';
               const active = !isReport && tab === t.key;
@@ -1854,31 +1794,31 @@ export default function Settings() {
                 <button
                   key={t.key}
                   type="button"
-                  onClick={() => (isReport ? setReportOpen(true) : setTab(t.key as Tab))}
-                  className={`shrink-0 md:w-full text-left px-2 md:px-5 h-9 md:h-16 rounded-lg md:rounded-none md:border-t md:border-line text-[13px] md:text-base flex items-center justify-between gap-2 transition-colors ${
+                  onClick={() => openItem(t.key)}
+                  className={`w-full text-left px-5 h-14 border-t border-line text-[15px] flex items-center justify-between gap-2 transition-colors ${
                     active
-                      ? 'font-medium bg-primary-soft text-primary-ink md:bg-surface-muted md:text-ink md:font-semibold'
-                      : 'font-medium md:font-normal text-slate-600 hover:bg-surface-hover hover:text-ink'
+                      ? 'font-medium md:bg-surface-muted md:text-ink md:font-semibold text-ink'
+                      : 'font-normal text-slate-600 hover:bg-surface-hover hover:text-ink'
                   }`}
                 >
                   {t.label}
-                  <ChevronRight size={16} className="hidden md:block text-ink-2 shrink-0" />
+                  <ChevronRight size={16} className="text-ink-2 shrink-0" />
                 </button>
               );
             })}
           </nav>
         </div>
 
-        <div className="space-y-6 min-w-0">
-          {tab === 'basic' && (
-            <>
-              <Card>
-                <h2 className="text-sm font-semibold text-ink mb-4">Profile photo</h2>
-                <AvatarEditor />
-              </Card>
-              <BasicDetailsCard />
-            </>
-          )}
+        <div className={`space-y-6 min-w-0 ${mobileOpen ? '' : 'hidden md:block'}`}>
+          <button
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            className="md:hidden inline-flex items-center gap-2 text-[15px] font-semibold text-ink -mb-2"
+          >
+            <ArrowLeft size={18} />
+            {currentLabel}
+          </button>
+          {tab === 'basic' && <BasicDetailsCard />}
           {tab === 'password' && <SetPasswordCard />}
           {tab === 'pin' && <AppLockCard />}
           {tab === 'shared' && <SharedAccessCard />}
