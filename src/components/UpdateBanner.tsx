@@ -6,6 +6,7 @@ import { hardRefresh } from '../utils/hardRefresh';
 import { useUpdateStore } from '../store/updateStore';
 import { useSwipeDismiss } from '../hooks/useSwipeDismiss';
 import { startUpdateChecks } from '../utils/updateChecks';
+import WhatsNewModal, { useWhatsNew } from './WhatsNewModal';
 
 /** Four-point sparkle used in the notice's icon badge. */
 function SparkleIcon({ size = 26 }: { size?: number }) {
@@ -31,6 +32,7 @@ export default function UpdateBanner() {
   const [updating, setUpdating] = useState(false);
   // True as soon as the version ping sees a newer deploy, before the new service worker has finished installing.
   const [stale, setStale] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
   const stopChecksRef = useRef<(() => void) | null>(null);
   const {
     needRefresh: [needRefresh, setNeedRefresh],
@@ -55,6 +57,7 @@ export default function UpdateBanner() {
   // Dismissing the banner doesn't clear the red dots: the update is still pending.
   const setUpdateAvailable = useUpdateStore((s) => s.setUpdateAvailable);
   const show = needRefresh || stale;
+  const notes = useWhatsNew(show);
   useEffect(() => {
     if (show) setUpdateAvailable(true);
   }, [show, setUpdateAvailable]);
@@ -105,6 +108,7 @@ export default function UpdateBanner() {
   };
 
   return (
+    <>
     <div
       ref={wrapRef}
       id="app-update-banner"
@@ -125,12 +129,18 @@ export default function UpdateBanner() {
         >
           <SparkleIcon size={26} />
         </span>
-        <div className="min-w-0 flex-1">
+        {/* Tapping the message (not just "Update now") shows what's new. */}
+        <button
+          type="button"
+          onClick={() => setShowNotes(true)}
+          aria-label="See what's new in this update"
+          className="min-w-0 flex-1 text-left"
+        >
           <p className="text-[15px] font-bold leading-tight text-[#0b2420] dark:text-white">New AuraFin update</p>
           <p className="text-[12.5px] leading-snug text-[#5b6a80] dark:text-slate-400 mt-1">
-            A faster, smoother experience of AURAFIN. is available
+            Tap to see what&apos;s new
           </p>
-        </div>
+        </button>
         <button
           type="button"
           disabled={updating}
@@ -150,5 +160,13 @@ export default function UpdateBanner() {
         </button>
       </div>
     </div>
+    <WhatsNewModal
+      open={showNotes}
+      onClose={() => setShowNotes(false)}
+      notes={notes}
+      updating={updating}
+      onUpdate={onUpdate}
+    />
+    </>
   );
 }

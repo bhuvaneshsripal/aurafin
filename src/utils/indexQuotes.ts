@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { isMarketOpen } from './marketHours';
+import { isIndexPollingWindow, isIndexResetWindow } from './marketHours';
 
 /**
  * One shared source of truth for the Nifty / Sensex / Bank Nifty levels.
@@ -25,9 +25,13 @@ export interface IndexQuote {
 /** Latest quotes: undefined = still loading, null = unavailable, array = data. */
 export type IndexQuotesState = IndexQuote[] | null | undefined;
 
-const LIVE_MS = 1_000; // market open: refresh every second
-const IDLE_MS = 30_000; // market closed: nothing moves, so poll lazily
+const LIVE_MS = 1_000; // from just before the pre-open until just after the close: refresh every second
+const IDLE_MS = 30_000; // otherwise nothing moves, so poll lazily
 const CACHE_KEY = 'aurafin.tickerQuotes';
+/** The last levels seen *outside* the 4:30–9:15 AM reset window, i.e. the
+ *  previous session's close. While the strip shows 0 for the new day, a quote
+ *  still equal to this is the old close; the first different one is today's. */
+const BASELINE_KEY = 'aurafin.indexBaseline';
 /** Hidden tab / app in the background: still refresh the saved copy once a minute. */
 const BACKGROUND_MS = 60_000;
 let lastFetchAt = 0;
@@ -86,6 +90,9 @@ function persist(q: IndexQuote[], force = false) {
   lastCacheWrite = now;
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify(q));
+    if (!isIndexResetWindow()) {
+      localStorage.setItem(BASELINE_KEY, JSON.stringify(Object.fromEntries(q.map((x) => [x.key, x.price]))));
+    }
   } catch {
     /* storage unavailable — fine, just no instant paint next time */
   }
@@ -117,7 +124,7 @@ function startPolling(): () => void {
     }
     // Count the interval from when the request started (not finished), so
     // a 400ms response still gives a true one-second cadence.
-    const interval = isMarketOpen() ? LIVE_MS : IDLE_MS;
+    const interval = isIndexPollingWindow() ? LIVE_MS : IDLE_MS;
     if (!cancelled && myGeneration === generation) {
       timer = window.setTimeout(tick, Math.max(0, interval - (Date.now() - startedAt)));
     }
@@ -159,4 +166,20 @@ export function useIndexQuotes(): IndexQuotesState {
 /** The newest successfully fetched quotes if they are younger than `maxAgeMs`, else null. */
 export function getRecentIndexQuotes(maxAgeMs: number): IndexQuote[] | null {
   return lastGood && Date.now() - lastGoodAt <= maxAgeMs ? lastGood : null;
+}
+
+/** During the pre-open reset window: is this quote still the previous
+ *  session's close (so the strip should keep showing 0)? Once the feed gives a
+ *  level different from that close, today's data has arrived and the real
+ *  numbers show immediately, without waiting for 9:15. With no saved close to
+ *  compare against (fresh install), it stays "stale" until the window ends. */
+export function isStaleIndexQuote(q: IndexQuote): boolean {
+  try {
+    const raw = localStorage.getItem(BASELINE_KEY);
+    const base = raw ? (JSON.parse(raw) as Record<string, number>)[q.key] : undefined;
+    if (typeof base !== 'number') return true;
+    return Math.abs(q.price - base) < 0.005;
+  } catch {
+    return true;
+  }
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { cn } from './ui/cn';
-import { useIndexQuotes, type IndexQuote } from '../utils/indexQuotes';
+import { useIndexQuotes, isStaleIndexQuote, type IndexQuote } from '../utils/indexQuotes';
+import { useIndexResetWindow } from '../utils/marketHours';
 
 const ORDER = [
   { key: 'nifty', name: 'NIFTY' },
@@ -41,19 +42,22 @@ function LivePrice({ value }: { value: number }) {
   );
 }
 
-function renderItems(quotes: IndexQuote[] | null | undefined) {
+/** `resetWindow`: new trading day, before the open — show 0 rather than
+ *  yesterday's close, until the feed delivers a level that is actually today's. */
+function renderItems(quotes: IndexQuote[] | null | undefined, resetWindow = false) {
   return ORDER.map(({ key, name }) => {
     const q = Array.isArray(quotes) ? quotes.find((x) => x.key === key) : undefined;
     if (Array.isArray(quotes) && !q) return null; // index unavailable — skip rather than show a dash
-    const change = q?.previousClose !== undefined ? q.price - q.previousClose : undefined;
-    const pct = change !== undefined && q?.previousClose ? (change / q.previousClose) * 100 : undefined;
+    const reset = resetWindow && !!q && isStaleIndexQuote(q);
+    const change = reset ? 0 : q?.previousClose !== undefined ? q.price - q.previousClose : undefined;
+    const pct = reset ? 0 : change !== undefined && q?.previousClose ? (change / q.previousClose) * 100 : undefined;
     const up = (change ?? 0) >= 0;
     return (
       <div key={key} className="flex items-baseline gap-1.5 @min-[900px]:gap-2 h-5 shrink-0">
         <span className="font-semibold text-ink-2">{name}</span>
         {q ? (
           <>
-            <LivePrice value={q.price} />
+            <LivePrice value={reset ? 0 : q.price} />
             {change !== undefined && pct !== undefined && (
               <span className={cn('font-medium tabular-nums', up ? 'text-positive' : 'text-negative')}>
                 {up ? '+' : '-'}
@@ -74,7 +78,8 @@ function renderItems(quotes: IndexQuote[] | null | undefined) {
 /** Desktop: static strip in the top bar. */
 export default function MarketTicker() {
   const quotes = useIndexQuotes();
-  const items = renderItems(quotes);
+  const reset = useIndexResetWindow();
+  const items = renderItems(quotes, reset);
 
   // Static strip, always the full "NAME  level  ±points (±pct%)", spread evenly.
   // On narrower headers the text and gaps step down so all three still fit.
@@ -92,6 +97,7 @@ export default function MarketTicker() {
  *  bar sideways to see all three (NIFTY, SENSEX, BANKNIFTY). */
 export function MarketTickerMarquee({ className, id }: { className?: string; id?: string }) {
   const quotes = useIndexQuotes();
+  const reset = useIndexResetWindow();
   return (
     <div
       id={id}
@@ -102,7 +108,7 @@ export function MarketTickerMarquee({ className, id }: { className?: string; id?
       style={{ touchAction: 'pan-x', scrollbarWidth: 'none' }}
       aria-label="Market indices"
     >
-      <div className="flex shrink-0 items-center gap-x-8 px-4 whitespace-nowrap">{renderItems(quotes)}</div>
+      <div className="flex shrink-0 items-center gap-x-8 px-4 whitespace-nowrap">{renderItems(quotes, reset)}</div>
     </div>
   );
 }

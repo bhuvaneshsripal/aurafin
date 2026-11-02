@@ -113,6 +113,46 @@ export function useDayChangeResetWindow(): boolean {
   return active;
 }
 
+/** The top-bar index strip (NIFTY / SENSEX / BANKNIFTY) starts the new day
+ *  earlier than the holdings' "1D returns" reset: from 4:30 AM IST. */
+const INDEX_RESET_HOUR = 4;
+const INDEX_RESET_MINUTE = 30;
+
+/** True on a trading day (Mon–Fri, not a listed exchange holiday) from
+ *  4:30 AM IST up to the 9:15 AM IST open — the window where the index strip
+ *  shows 0 instead of yesterday's closing levels. Weekends and holidays are
+ *  not reset: nothing new is about to trade, so the last close stays. */
+export function isIndexResetWindow(now: Date = new Date()): boolean {
+  const { hour, minute } = getIstTimeOfDay(now);
+  const { dateKey, isoWeekday } = getIstDateInfo(now);
+  if (isoWeekday > 5 || MARKET_HOLIDAYS.has(dateKey)) return false;
+  const mins = hour * 60 + minute;
+  return mins >= INDEX_RESET_HOUR * 60 + INDEX_RESET_MINUTE && mins < MARKET_OPEN_HOUR * 60 + MARKET_OPEN_MINUTE;
+}
+
+/** Index levels start moving in the NSE pre-open session (9:00–9:15) and the
+ *  closing prints land a little after 3:30 PM, so the top-bar strip polls every
+ *  second from 8:55 AM to 3:45 PM IST on trading days — not only 9:15–3:30,
+ *  which left the first (and last) quotes up to 30 seconds late. */
+export function isIndexPollingWindow(now: Date = new Date()): boolean {
+  const { hour, minute } = getIstTimeOfDay(now);
+  const { dateKey, isoWeekday } = getIstDateInfo(now);
+  if (isoWeekday > 5 || MARKET_HOLIDAYS.has(dateKey)) return false;
+  const mins = hour * 60 + minute;
+  return mins >= 8 * 60 + 55 && mins < 15 * 60 + 45;
+}
+
+/** Reactive version of isIndexResetWindow — re-checks every 30s so the strip
+ *  flips to 0 at 4:30 AM and back to live values at the open without a reload. */
+export function useIndexResetWindow(): boolean {
+  const [active, setActive] = useState(() => isIndexResetWindow());
+  useEffect(() => {
+    const id = setInterval(() => setActive(isIndexResetWindow()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  return active;
+}
+
 /** True during NSE's live trading window — Mon–Fri, 9:15 AM–3:30 PM IST.
  *  Unlike getMarketSessionProgress (which only looks at time-of-day and is
  *  meant for drawing how far a chart should trail across), this also knows

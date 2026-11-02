@@ -2408,7 +2408,7 @@ function AssetsTab({
                     <SortHeader label="Name" sortKeyName="name" className="sticky left-0 z-[1] bg-surface-muted" />
                     <SortHeader label="Qty" sortKeyName="qty" align="right" />
                     <SortHeader label="Avg. cost" sortKeyName="avgCost" align="right" />
-                    <SortHeader label="Per unit" sortKeyName="perUnit" align="right" />
+                    <SortHeader label="Current/1D" sortKeyName="perUnit" align="right" />
                     <SortHeader label="Invested" sortKeyName="invested" align="right" />
                     <SortHeader label="Current value" sortKeyName="value" align="right" />
                     <SortHeader label="P&L" sortKeyName="pnl" align="right" />

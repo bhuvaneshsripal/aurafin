@@ -1,0 +1,23 @@
+{
+  "version": "2026.11.02",
+  "date": "2 Nov 2026",
+  "title": "What's new in Aurafin",
+  "items": [
+    {
+      "title": "Unlock with your PIN even on weak network",
+      "description": "A correct PIN now opens the app with low or no internet. Open the app online once after updating so your device can remember it."
+    },
+    {
+      "title": "Chart point no longer hidden",
+      "description": "On the Net worth chart, the highlighted point stays visible while you press or slide along the line — the value box now sits beside it instead of on top."
+    },
+    {
+      "title": "Fresh index strip every trading morning",
+      "description": "NIFTY, SENSEX and BANKNIFTY reset to 0 at 4:30 AM on market days and go live again when the market opens at 9:15 AM. Weekends and holidays keep the last close."
+    },
+    {
+      "title": "Tidier Today's market cards",
+      "description": "The three index cards in Notifications now line up evenly across the panel instead of spilling off the edge."
+    }
+  ]
+}
