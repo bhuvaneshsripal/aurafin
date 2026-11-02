@@ -2,8 +2,7 @@ import { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, ChevronDown, ChevronsUpDown, Layers, Settings } from 'lucide-react';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
-import { useAuthStore } from '../store/authStore';
-import { useAvatarStore } from '../store/avatarStore';
+import { useAvatarUrl } from '../hooks/useAvatarUrl';
 
 /**
  * Household profile selector. `compact` is the small mobile-header trigger;
@@ -15,8 +14,7 @@ export default function ProfileSwitcher({ compact = false }: { compact?: boolean
   const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
   const setActiveProfileId = useHouseholdProfilesStore((s) => s.setActiveProfileId);
   const navigate = useNavigate();
-  const user = useAuthStore((s) => s.user);
-  const avatarUrl = useAvatarStore((s) => s.dataUrl) ?? user?.photoURL ?? null;
+  const avatarUrl = useAvatarUrl();
 
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);

@@ -13,16 +13,25 @@ const MAX_SYMBOLS = 25;
 
 async function profileFor(yahooSymbol, retry = true) {
   const s = await getSession();
-  const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(yahooSymbol)}?modules=assetProfile&crumb=${encodeURIComponent(s.crumb)}`;
+  const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(yahooSymbol)}?modules=assetProfile,price&crumb=${encodeURIComponent(s.crumb)}`;
   const res = await fetch(url, { headers: { 'User-Agent': UA, Cookie: s.cookie } });
   if ((res.status === 401 || res.status === 403) && retry) {
     await getSession(true);
     return profileFor(yahooSymbol, false);
   }
   if (!res.ok) return null;
-  const p = (await res.json())?.quoteSummary?.result?.[0]?.assetProfile;
-  if (!p || (!p.sector && !p.industry)) return null;
-  return { sector: p.sector ?? null, industry: p.industry ?? null };
+  const result = (await res.json())?.quoteSummary?.result?.[0];
+  const p = result?.assetProfile;
+  // Market value of the whole company (Yahoo gives it in the share's own currency).
+  const cap = result?.price?.marketCap?.raw;
+  const marketCap = typeof cap === 'number' && Number.isFinite(cap) && cap > 0 ? cap : null;
+  if ((!p || (!p.sector && !p.industry)) && marketCap === null) return null;
+  return {
+    sector: p?.sector ?? null,
+    industry: p?.industry ?? null,
+    marketCap,
+    capCurrency: result?.price?.currency ?? null,
+  };
 }
 
 async function lookup(raw, market) {

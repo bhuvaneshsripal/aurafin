@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, deleteField, writeBatch, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuthStore } from '../store/authStore';
@@ -6,6 +6,7 @@ import { useAvatarStore } from '../store/avatarStore';
 import { useAppLockStore, readGuestAppLock } from '../store/appLockStore';
 import { useDisplaySettingsStore, type EyePos } from '../store/displaySettingsStore';
 import { useWealthFilterStore, type WealthFilterSelection } from '../store/wealthFilterStore';
+import { useBasicDetailsStore, cleanBasicDetails, type BasicDetails } from '../store/basicDetailsStore';
 import { useSyncStatusStore } from '../store/syncStatusStore';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
@@ -767,6 +768,122 @@ export async function saveWealthFilters(
 
   const ref = doc(db, 'users', uid, 'meta', 'wealthFilters');
   await setDoc(ref, value, { merge: true });
+}
+
+function guestBasicDetailsKey(uid: string): string {
+  return `aurafin-guest-${uid}-basicDetails`;
+}
+
+function readGuestBasicDetails(uid: string): BasicDetails {
+  try {
+    const raw = localStorage.getItem(guestBasicDetailsKey(uid));
+    return raw ? cleanBasicDetails(JSON.parse(raw)) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeGuestBasicDetails(uid: string, value: BasicDetails) {
+  try {
+    localStorage.setItem(guestBasicDetailsKey(uid), JSON.stringify(value));
+  } catch {
+    // localStorage unavailable — the details just won't survive a refresh.
+  }
+}
+
+/**
+ * Keeps the Settings > Basic details info (basicDetailsStore) in sync with
+ * users/{uid}/meta/basicDetails — the same singleton-doc pattern as the avatar
+ * and Wealth filters above. A demo (guest) account keeps its details in this
+ * browser's localStorage only, like the rest of its data.
+ */
+export function useBasicDetailsSync() {
+  // Depend on the uid (not the user object) so the cached → real Firebase user
+  // swap on startup doesn't tear the listener down and back up.
+  const uid = useAuthStore((s) => s.user?.uid ?? null);
+  const guest = useAuthStore((s) => isAnonymousUser(s.user));
+  const setDetails = useBasicDetailsStore((s) => s.setDetails);
+
+  // A layout effect so a demo account's saved details (its gender picks the
+  // avatar) are in place before the first paint, instead of flashing the
+  // default avatar for a frame on every reload.
+  useLayoutEffect(() => {
+    if (!uid) {
+      setDetails({}, false);
+      return;
+    }
+    if (guest) {
+      setDetails(readGuestBasicDetails(uid));
+      return;
+    }
+
+    setDetails({}, false);
+    const ref = doc(db, 'users', uid, 'meta', 'basicDetails');
+    // If the server doesn't answer (offline, slow network), don't leave the
+    // screen stuck loading with editing disabled: show what we have after a moment.
+    const fallback = setTimeout(() => {
+      const s = useBasicDetailsStore.getState();
+      if (!s.loaded) s.setDetails(s.details);
+    }, 4000);
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        // A cache-only "doesn't exist" answer isn't trustworthy: wait for the server.
+        if (!snap.exists() && snap.metadata.fromCache) return;
+        clearTimeout(fallback);
+        setDetails(cleanBasicDetails(snap.data()));
+      },
+      (err) => {
+        console.error('Basic details sync error', err);
+        // Stop showing the loading state; keep whatever we already have.
+        setDetails(useBasicDetailsStore.getState().details);
+      }
+    );
+    return () => {
+      clearTimeout(fallback);
+      unsub();
+    };
+  }, [uid, guest, setDetails]);
+}
+
+/** A change to the details: `null` (or an empty string) clears that field. */
+export type BasicDetailsPatch = { [K in keyof BasicDetails]?: BasicDetails[K] | null };
+
+/**
+ * Saves a change to the person's basic details. The screen updates straight
+ * away; if the save fails the previous values are put back and the error is
+ * rethrown so the caller can show it.
+ */
+export async function saveBasicDetails(user: { uid: string; isAnonymous?: boolean }, patch: BasicDetailsPatch) {
+  const store = useBasicDetailsStore.getState();
+  const previous = store.details;
+  const next: Record<string, string> = { ...previous };
+  const remote: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (value == null || value === '') {
+      delete next[key];
+      remote[key] = deleteField();
+    } else {
+      next[key] = value;
+      remote[key] = value;
+    }
+  }
+  const nextDetails = next as BasicDetails;
+  store.setDetails(nextDetails);
+
+  if (isAnonymousUser(user)) {
+    writeGuestBasicDetails(user.uid, nextDetails);
+    return;
+  }
+  // Don't wait for the server's confirmation: offline, that never arrives until
+  // the connection is back, which left "Saving..." stuck. The change is already
+  // on screen and Firestore queues the write and sends it when online. If the
+  // server rejects it, put the old values back and say so.
+  setDoc(doc(db, 'users', user.uid, 'meta', 'basicDetails'), remote, { merge: true }).catch((err) => {
+    console.error('Basic details save failed', err);
+    useBasicDetailsStore.getState().setDetails(previous);
+    toast.bottom.error('Could not sync your details. Please try again.', 5000);
+  });
 }
 
 /**

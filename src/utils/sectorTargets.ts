@@ -13,14 +13,19 @@ export interface TargetCheck {
   amount: number;
 }
 
+/** A sector only counts as Low once it falls below this fraction of its minimum
+ *  target. Between that and the minimum it is Medium ("close to target"), so a
+ *  sector at 6.4% against a 7% minimum is no longer shown as Low. */
+export const LOW_FRACTION = 0.5;
+
 /** Where `pct` sits against `range`, and about how much money moves it back inside. */
 export function checkRange(key: string, label: string, value: number, total: number, range: TargetRange): TargetCheck {
   const pct = total > 0 ? (value / total) * 100 : 0;
   let status: TargetStatus = 'ok';
   let amount = 0;
-  if (total > 0 && pct < range.min - 0.05) {
+  if (total > 0 && pct < range.min * LOW_FRACTION) {
     status = 'low';
-    // Money added to this sector also grows the total: (v + x) / (T + x) = min
+    // Money added to this sector also grows the total: (v + x) / (T + x) = min (the amount needed to reach the full minimum)
     const m = range.min / 100;
     amount = Math.max(0, (m * total - value) / (1 - m));
   } else if (total > 0 && pct > range.max + 0.05) {

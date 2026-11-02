@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Moon, Sun, Eye, EyeOff, Bell, ChevronDown, MoreVertical, Settings as SettingsIcon, Lock } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import { useAvatarStore } from '../store/avatarStore';
+import { useAvatarUrl } from '../hooks/useAvatarUrl';
 import { useUiStore } from '../store/uiStore';
 import { useAppLockStore } from '../store/appLockStore';
 import Modal from './Modal';
@@ -51,7 +51,7 @@ export default function Topbar() {
   }, []);
 
   const initial = (user?.displayName ?? user?.email ?? 'A').charAt(0).toUpperCase();
-  const avatarUrl = useAvatarStore((s) => s.dataUrl) ?? user?.photoURL ?? null;
+  const avatarUrl = useAvatarUrl();
 
   return (
     <>

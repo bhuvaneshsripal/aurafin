@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Asset } from '../types';
 import { useSectorProfilesStore } from '../store/sectorProfilesStore';
-import { needsProfileLookup, normaliseSymbol, profileKey, type SectorProfile } from '../utils/sectors';
+import { needsCapLookup, needsProfileLookup, normaliseSymbol, profileKey, type SectorProfile } from '../utils/sectors';
 
 const MISS_RETRY_MS = 3 * 24 * 60 * 60 * 1000; // retry "nothing found" after 3 days
 const BATCH = 25;
@@ -22,11 +22,13 @@ export function useSectorProfiles(assets: Asset[]) {
     const out = new Map<string, { market: 'IN' | 'US'; symbol: string }>();
     const now = Date.now();
     for (const a of assets) {
-      if (!needsProfileLookup(a)) continue;
+      if (!needsProfileLookup(a) && !needsCapLookup(a)) continue;
       const key = profileKey(a);
       const known = profiles[key];
       const at = fetchedAt[key];
-      if (known) continue;
+      // Profiles saved before market cap existed are looked up once more to add it.
+      if (known && known.marketCap !== undefined) continue;
+      if (known && !needsCapLookup(a)) continue;
       if (known === null && at !== undefined && now - at < MISS_RETRY_MS) continue;
       out.set(key, { market: key.startsWith('US:') ? 'US' : 'IN', symbol: normaliseSymbol(a.symbol) });
     }
@@ -53,7 +55,12 @@ export function useSectorProfiles(assets: Asset[]) {
             const data = (await res.json()) as Record<string, SectorProfile | null>;
             if (cancelled) return;
             const batch: Record<string, SectorProfile | null> = {};
-            for (const [key, v] of chunk) batch[key] = data[v.symbol] ?? null;
+            for (const [key, v] of chunk) {
+              const got = data[v.symbol] ?? null;
+              // A failed refresh must never wipe a profile we already had.
+              if (got === null && profiles[key]) continue;
+              batch[key] = got;
+            }
             setProfiles(batch);
           } catch {
             /* offline / upstream down: stays "Unclassified" until a later visit */

@@ -134,7 +134,9 @@ export default function Login() {
     try {
       await loginAsGuest();
     } catch (e) {
-      setDemoError(friendlyAuthError(e, 'The demo could not start. Please try again.'));
+      const code = (e as { code?: string })?.code;
+      // Unrecognised failures show their code so the real cause can be found.
+      setDemoError(friendlyAuthError(e, `The demo could not start. Please try again.${code ? ` (${code})` : ''}`));
     } finally {
       setDemoLoading(false);
     }

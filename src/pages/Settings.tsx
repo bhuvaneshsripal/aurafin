@@ -1,16 +1,17 @@
 import { useState, useEffect, useRef, Suspense, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
-  updateProfile,
   updatePassword,
   linkWithCredential,
   reauthenticateWithCredential,
   sendPasswordResetEmail,
   EmailAuthProvider,
 } from 'firebase/auth';
-import { RefreshCw, Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, X, Download, Upload, Mail, Bell, FileText } from 'lucide-react';
+import { ChevronRight, RefreshCw, Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, X, Download, Upload, Mail, Bell } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
+import { useAvatarUrl } from '../hooks/useAvatarUrl';
+import { useDisplayName } from '../hooks/useDisplayName';
 import { useAppLockStore } from '../store/appLockStore';
 import { useDisplaySettingsStore, FONT_MIN_SCALE, FONT_MAX_SCALE, SCREEN_MIN_SCALE, SCREEN_MAX_SCALE } from '../store/displaySettingsStore';
 import { useGoldSettingsStore } from '../store/goldSettingsStore';
@@ -25,6 +26,7 @@ import { CURRENCY_SYMBOLS } from '../utils/currency';
 import { loadImageFromFile } from '../utils/imageResize';
 import { formatDateTime } from '../utils/date';
 import AvatarCropModal from '../components/AvatarCropModal';
+import BasicDetailsCard from '../components/BasicDetailsCard';
 import {
   SECURITY_QUESTIONS,
   saveSecurityAnswer,
@@ -57,13 +59,23 @@ const PortfolioExportModal = lazyWithRetry(() =>
   import('../components/PortfolioExportModal').then((m) => ({ default: m.PortfolioExportModal }))
 );
 
-type Tab = 'account' | 'preferences' | 'profiles' | 'data';
+type Tab = 'basic' | 'password' | 'pin' | 'shared' | 'preferences' | 'profiles' | 'data';
 
 const TABS: { key: Tab; label: string }[] = [
-  { key: 'account', label: 'Account' },
+  { key: 'basic', label: 'Basic details' },
+  { key: 'password', label: 'Change password' },
+  { key: 'pin', label: 'Change Aurafin pincode' },
   { key: 'preferences', label: 'Preferences' },
   { key: 'profiles', label: 'Profiles' },
+  { key: 'shared', label: 'Shared access' },
   { key: 'data', label: 'Data' },
+];
+
+// Menu order: Report is an action (opens the report window) rather than a tab.
+const NAV_ITEMS: { key: Tab | 'report'; label: string }[] = [
+  TABS[0],
+  { key: 'report', label: 'Reports' },
+  ...TABS.slice(1),
 ];
 
 function Card({ children }: { children: ReactNode }) {
@@ -83,7 +95,9 @@ function AvatarEditor() {
   const [error, setError] = useState('');
   const [cropImage, setCropImage] = useState<HTMLImageElement | null>(null);
 
-  const displayUrl = customUrl ?? user?.photoURL ?? null;
+  // customUrl is only a photo the user uploaded (it drives the Remove button);
+  // displayUrl also includes their Google photo or the demo avatar.
+  const displayUrl = useAvatarUrl();
   const initial = (user?.displayName ?? user?.email ?? 'A').charAt(0).toUpperCase();
 
   const handleFile = async (file: File | null) => {
@@ -208,103 +222,6 @@ function AvatarEditor() {
         onConfirm={handleCropConfirm}
       />
     </div>
-  );
-}
-
-function PersonalInfoCard() {
-  const user = useAuthStore((s) => s.user);
-  const [editingName, setEditingName] = useState(false);
-  const [displayName, setDisplayName] = useState(user?.displayName ?? '');
-  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-
-  const startEdit = () => {
-    setDisplayName(user?.displayName ?? '');
-    setStatus('idle');
-    setEditingName(true);
-  };
-
-  const cancelEdit = () => {
-    setDisplayName(user?.displayName ?? '');
-    setStatus('idle');
-    setEditingName(false);
-  };
-
-  const save = async () => {
-    if (!auth.currentUser) return;
-    setStatus('saving');
-    try {
-      await updateProfile(auth.currentUser, { displayName });
-      setStatus('idle');
-      setEditingName(false);
-    } catch {
-      setStatus('error');
-    }
-  };
-
-  return (
-    <Card>
-      <h2 className="text-sm font-semibold text-ink mb-4">Personal info</h2>
-      <AvatarEditor />
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs text-muted mb-1.5">Display Name</label>
-          {editingName ? (
-            <>
-              <input
-                autoFocus
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') save();
-                  if (e.key === 'Escape') cancelEdit();
-                }}
-                className="w-full border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-              />
-              <div className="flex items-center gap-3 mt-1.5">
-                <button
-                  onClick={save}
-                  disabled={status === 'saving'}
-                  className="text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline disabled:opacity-50"
-                >
-                  {status === 'saving' ? 'Saving...' : 'Save'}
-                </button>
-                <button
-                  onClick={cancelEdit}
-                  disabled={status === 'saving'}
-                  className="text-xs font-medium text-slate-600 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-              </div>
-              {status === 'error' && <p className="text-xs text-red-500 mt-1.5">Something went wrong. Please try again.</p>}
-            </>
-          ) : (
-            <div className="flex items-center gap-2 h-[38px]">
-              <span className="text-sm text-ink truncate">
-                {user?.displayName || <span className="text-muted">Not set</span>}
-              </span>
-              <button
-                onClick={startEdit}
-                title="Edit name"
-                aria-label="Edit name"
-                className="text-slate-300 dark:text-slate-600 hover:text-brand-600 dark:hover:text-brand-400 shrink-0"
-              >
-                <Pencil size={14} />
-              </button>
-            </div>
-          )}
-        </div>
-        <div>
-          <label className="block text-xs text-muted mb-1.5">Email</label>
-          <input
-            value={user?.email ?? ''}
-            disabled
-            className="w-full border border-line bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-500 rounded-lg px-3 py-2 text-sm cursor-not-allowed"
-          />
-          <p className="text-xs text-muted mt-1.5">Email cannot be changed</p>
-        </div>
-      </div>
-    </Card>
   );
 }
 
@@ -1291,6 +1208,7 @@ function PreferencesTab() {
       </div>
       <ClosedAppAlertsCard />
       <NotificationsCard />
+      <InstallAppCard />
     </>
   );
 }
@@ -1885,11 +1803,13 @@ export default function Settings() {
   const initialTab = (location.state as { tab?: Tab } | null)?.tab;
   const [tab, setTab] = useUrlTab<Tab>(
     TABS.map((t) => t.key),
-    initialTab && TABS.some((t) => t.key === initialTab) ? initialTab : 'account'
+    initialTab && TABS.some((t) => t.key === initialTab) ? initialTab : 'basic'
   );
 
   const [refreshing, setRefreshing] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const avatarUrl = useAvatarUrl();
+  const accountName = useDisplayName('Your Account');
 
   return (
     <div className="space-y-5">
@@ -1914,43 +1834,54 @@ export default function Settings() {
         }
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-6 items-start">
-        <div className="flex items-center gap-1.5 md:gap-2 md:flex-col md:items-stretch min-w-0">
-          <nav className="bg-white rounded-2xl p-1 md:p-1.5 inline-flex md:flex md:flex-col gap-0 md:gap-0.5 overflow-x-auto no-scrollbar md:overflow-visible w-fit min-w-0 max-w-full md:w-full">
-            {TABS.map((t) => (
-              <button
-                key={t.key}
-                onClick={() => setTab(t.key)}
-                className={`shrink-0 md:w-full text-left px-2 md:px-3 h-9 rounded-lg text-[13px] md:text-sm font-medium transition-colors ${
-                  tab === t.key
-                    ? 'bg-primary-soft text-primary-ink'
-                    : 'text-slate-600 hover:bg-surface-hover hover:text-ink'
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
+      <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-6 items-start">
+        <div className="min-w-0 max-w-full">
+          <nav className="bg-white rounded-2xl border border-line p-1 md:p-0 inline-flex md:flex md:flex-col gap-0 overflow-x-auto no-scrollbar md:overflow-hidden w-fit min-w-0 max-w-full md:w-full">
+            <div className="hidden md:flex flex-col items-center px-5 pt-7 pb-5">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" className="keep-round h-28 w-28 rounded-full object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                <div className="keep-round h-28 w-28 rounded-full bg-primary-soft text-primary-ink flex items-center justify-center text-3xl font-semibold">
+                  {accountName.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <p className="mt-4 text-base font-semibold text-ink text-center break-words max-w-full">{accountName}</p>
+            </div>
+            {NAV_ITEMS.map((t) => {
+              const isReport = t.key === 'report';
+              const active = !isReport && tab === t.key;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => (isReport ? setReportOpen(true) : setTab(t.key as Tab))}
+                  className={`shrink-0 md:w-full text-left px-2 md:px-5 h-9 md:h-16 rounded-lg md:rounded-none md:border-t md:border-line text-[13px] md:text-base flex items-center justify-between gap-2 transition-colors ${
+                    active
+                      ? 'font-medium bg-primary-soft text-primary-ink md:bg-surface-muted md:text-ink md:font-semibold'
+                      : 'font-medium md:font-normal text-slate-600 hover:bg-surface-hover hover:text-ink'
+                  }`}
+                >
+                  {t.label}
+                  <ChevronRight size={16} className="hidden md:block text-ink-2 shrink-0" />
+                </button>
+              );
+            })}
           </nav>
-          <button
-            type="button"
-            onClick={() => setReportOpen(true)}
-            className="shrink-0 inline-flex items-center justify-center gap-1 md:gap-1.5 h-9 px-2.5 md:px-3 rounded-xl border border-line bg-white hover:bg-surface-hover text-[13px] md:text-sm font-medium text-ink-2 transition-colors md:w-full"
-          >
-            <FileText size={15} className="text-muted" />
-            Report
-          </button>
         </div>
 
         <div className="space-y-6 min-w-0">
-          {tab === 'account' && (
+          {tab === 'basic' && (
             <>
-              <PersonalInfoCard />
-              <SetPasswordCard />
-              <AppLockCard />
-              <InstallAppCard />
-              <SharedAccessCard />
+              <Card>
+                <h2 className="text-sm font-semibold text-ink mb-4">Profile photo</h2>
+                <AvatarEditor />
+              </Card>
+              <BasicDetailsCard />
             </>
           )}
+          {tab === 'password' && <SetPasswordCard />}
+          {tab === 'pin' && <AppLockCard />}
+          {tab === 'shared' && <SharedAccessCard />}
           {tab === 'preferences' && <PreferencesTab />}
           {tab === 'profiles' && <ProfilesTab />}
           {tab === 'data' && <DataTab />}

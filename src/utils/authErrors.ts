@@ -18,6 +18,10 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
   'auth/operation-not-allowed': 'This sign-in method isn\u2019t enabled right now. Please try another option.',
   'auth/popup-blocked': 'Your browser blocked the sign-in popup. Please allow popups for this site and try again.',
   'auth/unauthorized-domain': 'Sign-in isn\u2019t available from this domain yet. Please try again later.',
+  'auth/admin-restricted-operation': 'Guest sign-in is switched off for this app. The owner needs to enable Anonymous sign-in in Firebase.',
+  'auth/invalid-api-key': 'This app isn\u2019t connected to its sign-in service yet (missing Firebase settings). Please try again later.',
+  'auth/api-key-not-valid.-please-pass-a-valid-api-key.': 'This app isn\u2019t connected to its sign-in service yet (missing Firebase settings). Please try again later.',
+  'auth/configuration-not-found': 'Sign-in isn\u2019t set up for this app yet. The owner needs to finish the Firebase Authentication setup.',
   'auth/internal-error': 'Something went wrong on our end. Please try again.',
 };
 

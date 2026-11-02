@@ -65,6 +65,7 @@ import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useAuthStore } from '../store/authStore';
 import { useUiStore } from '../store/uiStore';
 import SectorAllocationCard from '../components/SectorAllocationCard';
+import MarketCapCard from '../components/MarketCapCard';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import { upsertDoc, removeDoc, saveWealthFilters } from '../hooks/useFirestoreSync';
 import { useWealthFilterStore } from '../store/wealthFilterStore';
@@ -8328,6 +8329,7 @@ function AllocationTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) 
         <>
           <AllocationChart categories={categories} total={total} currency={currency} />
           <SectorAllocationCard items={allocItems} currency={currency} />
+          <MarketCapCard items={allocItems} currency={currency} />
           {currencies.length > 1 && (
             <p className="mt-3 text-xs text-muted flex items-center gap-1.5">
               Showing {currency} only

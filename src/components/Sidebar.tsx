@@ -16,8 +16,8 @@ import {
   PanelLeftOpen,
 } from 'lucide-react';
 import { useAppLockStore } from '../store/appLockStore';
-import { useAuthStore } from '../store/authStore';
-import { useAvatarStore } from '../store/avatarStore';
+import { useAvatarUrl } from '../hooks/useAvatarUrl';
+import { useDisplayName } from '../hooks/useDisplayName';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import { useUiStore } from '../store/uiStore';
 import ProfileSwitcher from './ProfileSwitcher';
@@ -90,10 +90,9 @@ function NavItem({ to, label, icon: Icon, end }: NavLinkDef) {
 
 /** Shown under the logo when the account has no household profiles yet. */
 function AccountChip() {
-  const user = useAuthStore((s) => s.user);
-  const avatarUrl = useAvatarStore((s) => s.dataUrl) ?? user?.photoURL ?? null;
+  const avatarUrl = useAvatarUrl();
   const navigate = useNavigate();
-  const name = user?.displayName ?? user?.email ?? 'Your account';
+  const name = useDisplayName('Your account');
   const initial = name.charAt(0).toUpperCase();
   return (
     <button

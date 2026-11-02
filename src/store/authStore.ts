@@ -211,7 +211,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const currentUser = get().user;
     // Clear all guest localStorage data when logging out
     if (currentUser && (currentUser as any).isAnonymous === true) {
-      const guestCollections = ['assets', 'liabilities', 'goals', 'transactions', 'snapshots', 'budgets', 'financialProfile', 'profiles'];
+      const guestCollections = ['assets', 'liabilities', 'goals', 'transactions', 'snapshots', 'budgets', 'financialProfile', 'profiles', 'basicDetails'];
       guestCollections.forEach((collection) => {
         safeRemove(`aurafin-guest-${currentUser.uid}-${collection}`);
       });

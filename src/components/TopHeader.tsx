@@ -2,7 +2,8 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Moon, Sun, Globe, Eye, EyeOff, ChevronDown, MoreVertical, Settings as SettingsIcon, Lock, LogOut, FileText } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import { useAvatarStore } from '../store/avatarStore';
+import { useAvatarUrl } from '../hooks/useAvatarUrl';
+import { useDisplayName } from '../hooks/useDisplayName';
 import { useUiStore } from '../store/uiStore';
 import { useAppLockStore } from '../store/appLockStore';
 import { toast } from '../store/toastStore';
@@ -93,8 +94,9 @@ export default function TopHeader() {
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, []);
 
-  const initial = (user?.displayName ?? user?.email ?? 'A').charAt(0).toUpperCase();
-  const avatarUrl = useAvatarStore((s) => s.dataUrl) ?? user?.photoURL ?? null;
+  const displayName = useDisplayName();
+  const initial = (displayName || 'A').charAt(0).toUpperCase();
+  const avatarUrl = useAvatarUrl();
 
   const avatar = (size: string) =>
     avatarUrl ? (
@@ -170,7 +172,7 @@ export default function TopHeader() {
             >
               {avatar('h-7 w-7')}
               <span className="text-sm font-medium text-ink-2 hidden lg:inline max-w-[9rem] truncate">
-                {user?.displayName ?? user?.email}
+                {displayName}
               </span>
               <ChevronDown size={15} className="text-muted" />
             </button>
@@ -178,7 +180,7 @@ export default function TopHeader() {
             {profileOpen && (
               <div className={`${menuPanel} w-60`}>
                 <div className="px-4 py-3 border-b border-line-soft">
-                  <p className="text-sm font-semibold text-ink truncate">{user?.displayName ?? 'Your account'}</p>
+                  <p className="text-sm font-semibold text-ink truncate">{displayName || 'Your account'}</p>
                   <p className="text-xs text-muted truncate">{user?.email}</p>
                 </div>
                 <Link to="/settings" onClick={() => setProfileOpen(false)} className={menuItem}>
@@ -230,7 +232,7 @@ export default function TopHeader() {
                 >
                   {avatar('h-9 w-9')}
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-ink truncate">{user?.displayName ?? 'Your account'}</p>
+                    <p className="text-sm font-semibold text-ink truncate">{displayName || 'Your account'}</p>
                     <p className="text-xs text-muted truncate">{user?.email ?? 'View profile & settings'}</p>
                   </div>
                   <span className="relative shrink-0 inline-flex">

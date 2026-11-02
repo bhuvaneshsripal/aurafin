@@ -259,6 +259,75 @@ export function profileKey(asset: Asset): string {
 export interface SectorProfile {
   sector: string | null;
   industry: string | null;
+  /** Company market value in its own currency (older cached profiles don't have it yet). */
+  marketCap?: number | null;
+  capCurrency?: string | null;
+}
+
+/** Single-stock holding whose company size (market cap) we need to look up. */
+export function needsCapLookup(asset: Asset): boolean {
+  return SINGLE_STOCK_CLASSES.has(asset.assetClass) && !!asset.symbol;
+}
+
+// ------------------------------------------------------------- company size
+export type CapKey = 'large' | 'mid' | 'small' | 'fund' | 'unknown';
+
+/** Approximate SEBI/AMFI size bands: top 100 companies = large, next 150 = mid,
+ *  the rest = small. AMFI re-ranks twice a year; these cut-offs track it closely.
+ *  India in rupees; other markets in dollars. */
+export const CAP_BANDS = {
+  IN: { large: 1_00_000 * 1e7, mid: 30_000 * 1e7 }, // ₹1,00,000 cr / ₹30,000 cr
+  US: { large: 10e9, mid: 2e9 },
+} as const;
+
+export const CAP_META: Record<CapKey, { label: string; hint: string; color: string }> = {
+  large: { label: 'Large cap', hint: 'Biggest ~100 companies', color: '#0a9a4b' },
+  mid: { label: 'Mid cap', hint: 'Next ~150 companies', color: '#2563eb' },
+  small: { label: 'Small cap', hint: 'Smaller companies', color: '#f59e0b' },
+  fund: { label: 'ETFs & others', hint: 'Spread across many companies', color: '#94a3b8' },
+  unknown: { label: 'Size unavailable', hint: 'Market value not found yet', color: '#cbd5e1' },
+};
+
+export function capBucket(asset: Asset, profile: SectorProfile | null | undefined): CapKey {
+  if (!SINGLE_STOCK_CLASSES.has(asset.assetClass)) return 'fund';
+  const cap = profile?.marketCap;
+  if (!cap || cap <= 0) return 'unknown';
+  const bands = profile?.capCurrency === 'INR' || (!profile?.capCurrency && asset.market !== 'US') ? CAP_BANDS.IN : CAP_BANDS.US;
+  return cap >= bands.large ? 'large' : cap >= bands.mid ? 'mid' : 'small';
+}
+
+export interface CapRow {
+  key: CapKey;
+  label: string;
+  hint: string;
+  color: string;
+  value: number;
+  pct: number;
+  holdings: SectorHolding[];
+}
+
+/** How much of your stocks and ETFs sits in large, mid and small companies. */
+export function buildCapAllocation(
+  items: { asset: Asset; value: number }[],
+  profiles: Record<string, SectorProfile | null | undefined>
+): { total: number; rows: CapRow[] } {
+  const eligible = items.filter((i) => isSectorAsset(i.asset) && i.value > 0);
+  const total = eligible.reduce((s, i) => s + i.value, 0);
+  const order: CapKey[] = ['large', 'mid', 'small', 'fund', 'unknown'];
+  const rows = new Map<CapKey, CapRow>(
+    order.map((k) => [k, { key: k, ...CAP_META[k], value: 0, pct: 0, holdings: [] }])
+  );
+  for (const { asset, value } of eligible) {
+    const key = capBucket(asset, asset.symbol ? profiles[profileKey(asset)] : undefined);
+    const r = rows.get(key)!;
+    r.value += value;
+    r.holdings.push({ id: asset.id, name: asset.name, value, pct: total > 0 ? (value / total) * 100 : 0 });
+  }
+  for (const r of rows.values()) {
+    r.pct = total > 0 ? (r.value / total) * 100 : 0;
+    r.holdings.sort((a, b) => b.value - a.value);
+  }
+  return { total, rows: order.map((k) => rows.get(k)!).filter((r) => ['large', 'mid', 'small'].includes(r.key) || r.value > 0) };
 }
 
 /** Final sector key for one holding. `profiles` = cached Yahoo lookups by profileKey(). */

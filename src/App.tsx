@@ -21,6 +21,7 @@ import {
   useAppLockSync,
   useFloatingEyeSync,
   useWealthFilterSync,
+  useBasicDetailsSync,
   useAutoNetWorthHistory,
   usePendingFlush,
   assignOrphanDataToProfile,
@@ -251,6 +252,7 @@ function DataSync() {
   useAvatarSync();
   useAppLockSync();
   useWealthFilterSync();
+  useBasicDetailsSync();
   useFloatingEyeSync();
   // Pushes saves made while the network was weak/offline once it returns.
   usePendingFlush();
