@@ -10,7 +10,7 @@ import { useSyncStatusStore } from '../store/syncStatusStore';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useSnapshotsStore } from '../store/snapshotsStore';
-import { useLivePricesStore } from '../store/livePricesStore';
+import { useLivePricesStore, isPriceCacheFresh } from '../store/livePricesStore';
 import { resolveAssetValues } from '../utils/assetValues';
 import { isFullySold } from '../utils/investmentPnl';
 import { toIsoDate } from '../utils/date';
@@ -564,6 +564,7 @@ export function useAutoNetWorthHistory() {
   const sipValues = useLivePricesStore((s) => s.sipValues);
   const goldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
   const pricesAttempted = useLivePricesStore((s) => s.pricesAttempted);
+  const pricesUpdatedAt = useLivePricesStore((s) => s.pricesUpdatedAt);
   const lastWriteRef = useRef(0);
 
   useEffect(() => {
@@ -575,6 +576,10 @@ export function useAutoNetWorthHistory() {
     // finished — it would be corrected seconds later and leave a blip.
     const hasLivePriced = assets.some((a) => a.symbol && a.quantity && a.quantity > 0);
     if (hasLivePriced && !pricesAttempted) return;
+    // On a weak or missing connection the first fetch "finishes" without any
+    // price. Recording a number built from old saved values would put a wrong
+    // point on the chart, so wait until a real, recent price has arrived.
+    if (hasLivePriced && !isPriceCacheFresh(pricesUpdatedAt)) return;
 
     const totalAssets = assets
       .filter((a) => !isFullySold(a))
@@ -626,6 +631,7 @@ export function useAutoNetWorthHistory() {
     sipValues,
     goldPricePerGram,
     pricesAttempted,
+    pricesUpdatedAt,
   ]);
 }
 

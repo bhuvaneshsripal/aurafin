@@ -1,28 +1,46 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 
-/** Swipe-to-dismiss for a floating notice. It follows the finger left, right
- *  or toward `edge` (a notice that lives at the top flies off `'up'`, one at
- *  the bottom flies off `'down'`), fades as it goes, springs back if the swipe
- *  was too short, and flies off-screen smoothly when it was far or fast
- *  enough, then calls `onDismiss`. A plain tap never counts as a swipe, so
- *  the notice's own buttons keep working. */
-/** How long the fly-off takes (ms). Slow and gentle on purpose. */
-const FLY_MS = 600;
-/** How long the spring-back takes (ms). */
-const RETURN_MS = 420;
+/** Swipe-to-dismiss for a floating notice, behaving like a phone notification.
+ *  - It follows the finger left, right or toward `edge` (a notice at the top
+ *    flies off `'up'`, one at the bottom flies off `'down'`) and fades a
+ *    little at a time as it goes.
+ *  - Let go after only a small move and it eases back and fades back in.
+ *  - Let go after a long drag (or a real flick) and it keeps sliding away
+ *    while fading out slowly, then calls `onDismiss`.
+ *  A plain tap never counts as a swipe, so the notice's own buttons keep working. */
+/** How long the slide-away + fade-out takes (ms). Slow and gentle on purpose. */
+const FLY_MS = 550;
+/** How long the ease-back takes (ms). */
+const RETURN_MS = 350;
+/** Must be dragged this far (fraction of the notice's width) to be dismissed. */
+const DISMISS_FRACTION = 0.4;
+/** Down/up swipes: dragged at least this many px (or the notice's own height). */
+const MIN_VERTICAL_PX = 70;
+/** A quick flick counts too, but only a real one (px per ms) over a real distance. */
+const FLICK_SPEED = 0.9;
+const FLICK_MIN_PX = 60;
+
+type Sample = { x: number; y: number; t: number };
 
 export function useSwipeDismiss(onDismiss: () => void, edge: 'up' | 'down') {
   const [drag, setDrag] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
   const [flung, setFlung] = useState(false);
-  const start = useRef<{ x: number; y: number; t: number; id: number } | null>(null);
+  const start = useRef<{ x: number; y: number; id: number; w: number; h: number } | null>(null);
+  const samples = useRef<Sample[]>([]);
+  const last = useRef({ x: 0, y: 0 });
   const moved = useRef(false);
+  const timer = useRef(0);
   const sign = edge === 'up' ? -1 : 1;
+
+  useEffect(() => () => window.clearTimeout(timer.current), []);
 
   const onPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
     if (flung) return;
-    start.current = { x: e.clientX, y: e.clientY, t: Date.now(), id: e.pointerId };
+    const r = e.currentTarget.getBoundingClientRect();
+    start.current = { x: e.clientX, y: e.clientY, id: e.pointerId, w: r.width || 300, h: r.height || 60 };
+    samples.current = [{ x: e.clientX, y: e.clientY, t: performance.now() }];
     moved.current = false;
   };
 
@@ -37,7 +55,11 @@ export function useSwipeDismiss(onDismiss: () => void, edge: 'up' | 'down') {
       setDragging(true);
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     }
-    setDrag({ x: dx, y: dy * sign });
+    const now = performance.now();
+    samples.current.push({ x: e.clientX, y: e.clientY, t: now });
+    samples.current = samples.current.filter((p) => now - p.t < 150);
+    last.current = { x: dx, y: dy * sign };
+    setDrag(last.current);
   };
 
   const end = (e: ReactPointerEvent<HTMLElement>, cancelled = false) => {
@@ -45,38 +67,61 @@ export function useSwipeDismiss(onDismiss: () => void, edge: 'up' | 'down') {
     start.current = null;
     if (!s0 || !moved.current) return;
     setDragging(false);
-    const dx = e.clientX - s0.x;
-    const dy = Math.max(0, (e.clientY - s0.y) * sign);
-    const dt = Math.max(1, Date.now() - s0.t);
-    const dist = Math.max(Math.abs(dx), dy);
+
+    const dx = last.current.x;
+    const dy = Math.abs(last.current.y);
     const horizontal = Math.abs(dx) >= dy;
-    const far = horizontal ? Math.abs(dx) > 90 : dy > 50;
-    const fast = dist / dt > 0.5; // px per ms
-    if (!cancelled && (far || (fast && dist > 30))) {
-      setFlung(true);
-      setDrag(horizontal ? { x: dx < 0 ? -window.innerWidth : window.innerWidth, y: 0 } : { x: dx, y: sign * 160 });
-      window.setTimeout(onDismiss, FLY_MS);
-    } else {
-      setDrag({ x: 0, y: 0 }); // spring back
+    const dist = horizontal ? Math.abs(dx) : dy;
+
+    // Speed over the last ~150ms only, so a slow drag that ends with a tiny
+    // twitch never counts as a flick.
+    const now = performance.now();
+    const recent = samples.current.filter((p) => now - p.t < 150);
+    let speed = 0;
+    if (recent.length >= 2) {
+      const a = recent[0];
+      const b = recent[recent.length - 1];
+      const d = horizontal ? Math.abs(b.x - a.x) : Math.max(0, (b.y - a.y) * sign);
+      speed = d / Math.max(1, b.t - a.t);
     }
+
+    const far = horizontal ? dist > s0.w * DISMISS_FRACTION : dist > Math.max(MIN_VERTICAL_PX, s0.h);
+    const flick = speed > FLICK_SPEED && dist > FLICK_MIN_PX;
+
+    if (!cancelled && (far || flick)) {
+      setFlung(true);
+      setDrag(
+        horizontal
+          ? { x: dx < 0 ? -window.innerWidth : window.innerWidth, y: 0 }
+          : { x: dx, y: sign * (s0.h + 120) }
+      );
+      timer.current = window.setTimeout(onDismiss, FLY_MS);
+    } else {
+      setDrag({ x: 0, y: 0 }); // small move: ease back, like a phone notification
+    }
+    void e;
   };
 
   const reset = useCallback(() => {
+    window.clearTimeout(timer.current);
+    last.current = { x: 0, y: 0 };
     setDrag({ x: 0, y: 0 });
     setFlung(false);
     setDragging(false);
   }, []);
 
-  const offset = Math.max(Math.abs(drag.x) / 300, Math.abs(drag.y) / 160);
+  // Fades gradually with distance (never fully gone until it is dismissed).
+  const w = start.current?.w ?? 320;
+  const fade = Math.max(0.1, 1 - Math.max(Math.abs(drag.x) / (w * 0.9), Math.abs(drag.y) / 140));
   const style: CSSProperties = {
     touchAction: 'none',
     transform: drag.x || drag.y ? `translate3d(${drag.x}px, ${drag.y}px, 0)` : undefined,
-    opacity: flung ? 0 : drag.x || drag.y ? Math.max(0.35, 1 - offset) : undefined,
+    opacity: flung ? 0 : drag.x || drag.y ? fade : undefined,
     transition: dragging
       ? 'none'
       : flung
-        ? `transform ${FLY_MS}ms cubic-bezier(0.33, 0, 0.2, 1), opacity ${FLY_MS}ms ease-in-out`
-        : `transform ${RETURN_MS}ms cubic-bezier(0.22, 1, 0.36, 1), opacity ${RETURN_MS}ms ease-out`,
+        ? `transform ${FLY_MS}ms cubic-bezier(0.3, 0, 0.5, 1), opacity ${FLY_MS}ms ease-in-out`
+        : `transform ${RETURN_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity ${RETURN_MS}ms ease-out`,
     willChange: dragging ? 'transform, opacity' : undefined,
   };
 

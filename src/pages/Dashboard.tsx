@@ -25,6 +25,7 @@ import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useTransactionsStore } from '../store/transactionsStore';
 import { useGoalsStore } from '../store/goalsStore';
+import LoadingDots from '../components/LoadingDots';
 import { useSnapshotsStore } from '../store/snapshotsStore';
 import { useLivePricesStore } from '../store/livePricesStore';
 import { useUiStore } from '../store/uiStore';
@@ -292,7 +293,7 @@ export default function Dashboard() {
       {/* Performance + allocation */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2">
-          <NetWorthOverTimeCard privacyMode={privacyMode} />
+          <NetWorthOverTimeCard privacyMode={privacyMode} ready={netWorthReady} liveNetWorth={activeProfileId ? Number.NaN : netWorth} />
         </div>
         <AllocationCard
           data={allocation}
@@ -442,7 +443,17 @@ function PlotAreaProbe({ areaRef }: { areaRef: { current: { x: number; width: nu
   return null;
 }
 
-function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
+function NetWorthOverTimeCard({
+  privacyMode,
+  ready,
+  liveNetWorth,
+}: {
+  privacyMode: boolean;
+  /** True once live prices are in. Until then today's point is hidden: the saved one can be stale or wrong. */
+  ready: boolean;
+  /** Net worth computed from live prices right now — used for today's point so the chart matches the cards. */
+  liveNetWorth: number;
+}) {
   // Real, stored history only — the same `snapshots` collection the manual
   // "Take Snapshot" action writes to, plus (via useAutoNetWorthHistory,
   // mounted in DataSync) an automatic entry for today whenever assets or
@@ -460,8 +471,15 @@ function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
     // jump or repeats an x-axis label.
     const byDate = new Map<string, Snapshot>();
     for (const s of sorted) byDate.set(s.date, s);
+    // Today's saved point can be stale (or was saved from a bad price), so it
+    // never shows while live prices are still loading, and once they are in,
+    // it is the live net worth — the same number the cards show.
+    const today = toIsoDate();
+    const todaySaved = byDate.get(today);
+    if (!ready) byDate.delete(today);
+    else if (todaySaved && Number.isFinite(liveNetWorth)) byDate.set(today, { ...todaySaved, netWorth: liveNetWorth });
     return [...byDate.values()];
-  }, [snapshots]);
+  }, [snapshots, ready, liveNetWorth]);
 
   const data = useMemo(() => {
     if (range === 'ALL') return allHistory;
@@ -640,7 +658,7 @@ function NetWorthOverTimeCard({ privacyMode }: { privacyMode: boolean }) {
             {selected ? 'Selected' : data.length === 1 ? 'Only data point' : 'Latest'} · {formatDate(shown.date)}
           </span>
           <span className="font-numeric text-lg font-semibold text-ink">
-            {privacyMode ? '••••••' : formatPreciseCurrency(shown.netWorth)}
+            {!ready && !selected ? <LoadingDots /> : privacyMode ? '••••••' : formatPreciseCurrency(shown.netWorth)}
           </span>
         </div>
       )}

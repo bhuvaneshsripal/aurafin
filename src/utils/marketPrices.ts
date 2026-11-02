@@ -98,24 +98,59 @@ export async function searchStockSymbols(
   }
 }
 
-// In-memory cache from ISIN/name -> resolved Yahoo symbol, so we only hit
-// the search endpoint once per session instead of on every 60s poll.
-const resolvedSymbolCache = new Map<string, string | null>();
+// In-memory cache from ISIN/name -> resolved Yahoo symbol, so we don't hit the
+// search endpoint on every 5s poll. A found symbol is kept for a while; a
+// miss (search failed or found nothing) is only remembered briefly so one bad
+// moment never leaves a holding without a price (or with the wrong one) for
+// the rest of the session — that used to need a page refresh to clear.
+const SYMBOL_HIT_TTL_MS = 30 * 60 * 1000;
+const SYMBOL_MISS_TTL_MS = 20 * 1000;
+const resolvedSymbolCache = new Map<string, { symbol: string | null; at: number }>();
 
-/** Resolve a real Yahoo/NSE ticker from an ISIN or company name via symbol search. */
-async function searchYahooSymbol(query: string): Promise<string | null> {
+/** Drop a remembered ISIN/name -> symbol match so the next poll searches again. */
+export function forgetResolvedSymbol(query: string | undefined): void {
+  if (query) resolvedSymbolCache.delete(query.trim().toUpperCase());
+}
+
+const NAME_FILLER = new Set(['LIMITED', 'LTD', 'INDIA', 'THE', 'AND', 'CO', 'COMPANY', 'CORP', 'CORPORATION', 'PVT', 'PRIVATE', 'INC', 'OF']);
+const nameTokens = (name: string) =>
+  name
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .split(/\s+/)
+    .filter((t) => t && !NAME_FILLER.has(t));
+
+/** True when a search hit really is the company we asked for (by name), so
+ *  "JIO PLATFORMS" can't be priced as some other "JIO…" share. */
+function nameMatches(wanted: string, symbol: string, name?: string): boolean {
+  const tokens = nameTokens(wanted);
+  if (tokens.length === 0) return true;
+  const hay = `${name ?? ''} ${symbol.replace(/\.(NS|BO)$/i, '')}`.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const hits = tokens.filter((t) => hay.includes(t)).length;
+  return hits >= Math.max(1, Math.ceil(tokens.length * 0.75));
+}
+
+/** Resolve a real Yahoo/NSE ticker from an ISIN or company name via symbol search.
+ *  `byName` makes it insist the result's name actually matches. */
+async function searchYahooSymbol(query: string, byName = false): Promise<string | null> {
   const cacheKey = query.trim().toUpperCase();
-  if (resolvedSymbolCache.has(cacheKey)) return resolvedSymbolCache.get(cacheKey) ?? null;
+  const cached = resolvedSymbolCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < (cached.symbol ? SYMBOL_HIT_TTL_MS : SYMBOL_MISS_TTL_MS)) {
+    return cached.symbol;
+  }
 
   let resolved: string | null = null;
   try {
     const res = await fetchWithTimeout(`${SEARCH_BASE}?q=${encodeURIComponent(query)}`);
     if (res.ok) {
       const json = await res.json();
-      const quotes: { symbol?: string; quoteType?: string; exchDisp?: string }[] =
+      const quotes: { symbol?: string; name?: string; quoteType?: string; exchDisp?: string }[] =
         json?.quotes ?? [];
       const equities = quotes.filter(
-        (q) => q.symbol && (q.quoteType === 'EQUITY' || q.quoteType === undefined)
+        (q) =>
+          q.symbol &&
+          (q.quoteType === 'EQUITY' || q.quoteType === undefined) &&
+          (!byName || nameMatches(query, q.symbol, q.name))
       );
       // Prefer NSE (.NS) over BSE (.BO) over anything else.
       const nse = equities.find((q) => q.symbol?.endsWith('.NS'));
@@ -126,7 +161,7 @@ async function searchYahooSymbol(query: string): Promise<string | null> {
     resolved = null;
   }
 
-  resolvedSymbolCache.set(cacheKey, resolved);
+  resolvedSymbolCache.set(cacheKey, { symbol: resolved, at: Date.now() });
   return resolved;
 }
 
@@ -185,9 +220,9 @@ export async function fetchLiveQuotes(lookups: PriceLookup[]): Promise<Map<strin
           yahooSymbol = toYahooSymbol(lookup.key);
         } else if (lookup.isin) {
           yahooSymbol = await searchYahooSymbol(lookup.isin);
-          if (!yahooSymbol && lookup.name) yahooSymbol = await searchYahooSymbol(lookup.name);
+          if (!yahooSymbol && lookup.name) yahooSymbol = await searchYahooSymbol(lookup.name, true);
         } else if (lookup.name) {
-          yahooSymbol = await searchYahooSymbol(lookup.name);
+          yahooSymbol = await searchYahooSymbol(lookup.name, true);
         }
 
         if (!yahooSymbol) return;

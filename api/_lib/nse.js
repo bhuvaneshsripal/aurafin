@@ -67,6 +67,11 @@ async function fetchNseQuote(symbol) {
   }
 
   const data = await res.json();
+  // Never accept another company's quote for this symbol.
+  const answered = data?.info?.symbol;
+  if (typeof answered === 'string' && answered.toUpperCase() !== String(symbol).toUpperCase()) {
+    throw new Error('NSE quote response was for a different symbol');
+  }
   const price = data?.priceInfo?.lastPrice;
   if (typeof price !== 'number' || !Number.isFinite(price)) {
     throw new Error('NSE quote response missing lastPrice');

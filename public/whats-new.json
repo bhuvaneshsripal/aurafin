@@ -1,8 +1,16 @@
 {
-  "version": "2026.11.02",
+  "version": "1.0",
   "date": "2 Nov 2026",
   "title": "What's new in Aurafin",
   "items": [
+    {
+      "title": "Smoother notification swipe",
+      "description": "Swipe a notification left or right and it now follows your finger, fades slowly and slides away, just like Android notifications."
+    },
+    {
+      "title": "Fewer stock alerts",
+      "description": "Your holdings now alert only when they move 4% or 5% up or down in a day, instead of at 2%."
+    },
     {
       "title": "Unlock with your PIN even on weak network",
       "description": "A correct PIN now opens the app with low or no internet. Open the app online once after updating so your device can remember it."

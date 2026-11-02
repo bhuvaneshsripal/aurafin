@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLivePricesStore } from '../store/livePricesStore';
-import { fetchLiveQuotes, type PriceLookup } from '../utils/marketPrices';
+import { fetchLiveQuotes, forgetResolvedSymbol, looksLikeTicker, type PriceLookup } from '../utils/marketPrices';
 import { isMarketOpen } from '../utils/marketHours';
 
 /** Poll every 5s while the market is open (and the tab is visible);
@@ -10,6 +10,12 @@ const LIVE_REFRESH_MS = 5_000;
 const IDLE_REFRESH_MS = 60_000;
 /** Hidden tab / app in the background: refresh the saved prices once a minute. */
 const BACKGROUND_REFRESH_MS = 60_000;
+/** A price this far (as a fraction) from the last one we showed is treated as
+ *  suspect: Indian stocks are capped at about ±20% a day, so more than that
+ *  within minutes means a bad quote or a wrong symbol match. */
+const MAX_JUMP = 0.35;
+/** Only compare to the last price if it is this fresh (older ones can be a real overnight gap). */
+const BASELINE_MAX_AGE_MS = 30 * 60 * 1000;
 
 /**
  * Polls Yahoo Finance for equity holdings with a symbol + quantity.
@@ -38,6 +44,8 @@ export function useLivePrices() {
     // an in-flight response from the old symbol set must not be applied.
     let stopped = false;
     let generation = 0;
+    // A suspect price must come back the same on the next poll before we show it.
+    const suspect = new Map<string, number>();
 
     const refresh = async () => {
       // Watchdog: even if something ever stalls, never stay "busy" past 30s.
@@ -55,7 +63,37 @@ export function useLivePrices() {
         if (stopped) return;
         const prices: Record<string, number> = {};
         const previousCloses: Record<string, number> = {};
+        const store = useLivePricesStore.getState();
+        const baselineFresh =
+          store.pricesUpdatedAt !== null && Date.now() - store.pricesUpdatedAt <= BASELINE_MAX_AGE_MS;
         quoteMap.forEach((quote, symbol) => {
+          // --- Sanity check: never show an absurd price, even for a moment. ---
+          const asset = equityAssets.find((a) => a.symbol!.trim().toUpperCase() === symbol);
+          const last = baselineFresh ? store.prices[symbol] : undefined;
+          const cost =
+            asset?.avgCost && asset.avgCost > 0
+              ? asset.avgCost
+              : asset?.investedValue && asset.quantity
+                ? asset.investedValue / asset.quantity
+                : undefined;
+          const byName = !looksLikeTicker(symbol);
+          const farFromLast = last !== undefined && Math.abs(quote.price / last - 1) > MAX_JUMP;
+          const farFromPrevClose =
+            quote.previousClose !== undefined && Math.abs(quote.price / quote.previousClose - 1) > 0.5;
+          // A share found by name with no recent price to compare to: check it against what was paid.
+          const farFromCost = byName && last === undefined && cost !== undefined && (quote.price / cost > 4 || quote.price / cost < 0.25);
+          if (farFromLast || farFromPrevClose || farFromCost) {
+            const seen = suspect.get(symbol);
+            if (seen === undefined || Math.abs(quote.price / seen - 1) > 0.01) {
+              suspect.set(symbol, quote.price); // wait for a second matching reading
+              if (byName) {
+                forgetResolvedSymbol(asset?.isin);
+                forgetResolvedSymbol(asset?.name);
+              }
+              return;
+            }
+          }
+          suspect.delete(symbol);
           prices[symbol] = quote.price;
           if (quote.previousClose !== undefined) previousCloses[symbol] = quote.previousClose;
         });

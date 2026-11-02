@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { WifiLow, X } from 'lucide-react';
 import { useNetworkQuality, type NetworkQuality } from '../hooks/useNetworkQuality';
 import { useExitPresence } from '../hooks/useExitPresence';
+import { useSwipeDismiss } from '../hooks/useSwipeDismiss';
 
 const COPY: Record<Exclude<NetworkQuality, 'good'>, { title: string; body: string }> = {
   low: { title: 'Low network connection', body: 'Some features may work slowly or not at all.' },
@@ -13,8 +14,7 @@ const COPY: Record<Exclude<NetworkQuality, 'good'>, { title: string; body: strin
  *  Dismissing hides it until the connection state changes again (e.g. it
  *  drops from low to offline, or recovers and later degrades). */
 // Slow, gentle motion for dismissing / snapping back.
-const SLOW_MS = 450;
-const SLOW_EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
+const SLOW_MS = 450; // fade-out when the banner hides by itself
 
 export default function NetworkBanner() {
   const quality = useNetworkQuality();
@@ -33,62 +33,18 @@ export default function NetworkBanner() {
   }, [quality]);
   const { mounted, closing } = useExitPresence(show, SLOW_MS);
 
-  // --- Swipe to dismiss (left, right or down) ---------------------------
-  const [drag, setDrag] = useState({ x: 0, y: 0 });
-  const [dragging, setDragging] = useState(false);
-  const [flung, setFlung] = useState(false);
-  const start = useRef<{ x: number; y: number; t: number; id: number } | null>(null);
-  const moved = useRef(false);
+  // Swipe left, right or down like a phone notification: it follows the finger,
+  // eases back if the move was small, and fades slowly away if it was far.
+  const swipe = useSwipeDismiss(() => setDismissedFor(quality), 'down');
+  const { reset: resetSwipe } = swipe;
 
   // Re-arm the gesture state whenever the banner shows again.
   useEffect(() => {
-    if (show) {
-      setDrag({ x: 0, y: 0 });
-      setFlung(false);
-      setDragging(false);
-    }
-  }, [show]);
+    if (show) resetSwipe();
+  }, [show, resetSwipe]);
 
   if (!mounted) return null;
-
-  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (flung) return;
-    start.current = { x: e.clientX, y: e.clientY, t: Date.now(), id: e.pointerId };
-    moved.current = false;
-  };
-  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const s0 = start.current;
-    if (!s0 || s0.id !== e.pointerId) return;
-    const dx = e.clientX - s0.x;
-    const dy = Math.max(0, e.clientY - s0.y); // never drag upward
-    if (!moved.current) {
-      if (Math.abs(dx) < 6 && dy < 6) return;
-      moved.current = true;
-      setDragging(true);
-      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
-    }
-    setDrag({ x: dx, y: dy });
-  };
-  const endDrag = (e: React.PointerEvent<HTMLDivElement>, cancelled = false) => {
-    const s0 = start.current;
-    start.current = null;
-    if (!s0 || !moved.current) return;
-    setDragging(false);
-    const dx = e.clientX - s0.x;
-    const dy = Math.max(0, e.clientY - s0.y);
-    const dt = Math.max(1, Date.now() - s0.t);
-    const fast = Math.max(Math.abs(dx), dy) / dt > 0.5; // px per ms
-    const horizontal = Math.abs(dx) >= dy;
-    const far = horizontal ? Math.abs(dx) > 90 : dy > 50;
-    if (!cancelled && (far || (fast && Math.max(Math.abs(dx), dy) > 30))) {
-      const W = window.innerWidth;
-      setFlung(true);
-      setDrag(horizontal ? { x: dx < 0 ? -W : W, y: 0 } : { x: dx, y: 240 });
-      window.setTimeout(() => setDismissedFor(quality), SLOW_MS);
-    } else {
-      setDrag({ x: 0, y: 0 });
-    }
-  };
+  const { flung } = swipe;
 
   const kind = quality !== 'good' ? quality : last;
   const { title, body } = COPY[kind];
@@ -100,15 +56,9 @@ export default function NetworkBanner() {
       <div
         role="status"
         aria-live="polite"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={(e) => endDrag(e)}
-        onPointerCancel={(e) => endDrag(e, true)}
+        {...swipe.bind}
         style={{
-          touchAction: 'none',
-          transform: drag.x || drag.y ? `translate(${drag.x}px, ${drag.y}px)` : undefined,
-          opacity: flung ? 0 : drag.x || drag.y ? Math.max(0.35, 1 - Math.max(Math.abs(drag.x) / 300, drag.y / 160)) : undefined,
-          transition: dragging ? 'none' : `transform ${SLOW_MS}ms ${SLOW_EASE}, opacity ${SLOW_MS}ms ease`,
+          ...swipe.style,
           animationDuration: closing && !flung ? `${SLOW_MS}ms` : undefined,
           animationTimingFunction: closing && !flung ? 'ease-in-out' : undefined,
         }}
