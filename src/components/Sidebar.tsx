@@ -7,7 +7,6 @@ import {
   FileUp,
   Calculator,
   MessageSquare,
-  Lock,
   LineChart,
   Gem,
   Wallet,
@@ -15,7 +14,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react';
-import { useAppLockStore } from '../store/appLockStore';
 import { useAvatarUrl } from '../hooks/useAvatarUrl';
 import { useDisplayName } from '../hooks/useDisplayName';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
@@ -114,8 +112,6 @@ function AccountChip() {
 }
 
 export default function Sidebar() {
-  const lockEnabled = useAppLockStore((s) => s.enabled);
-  const lockNow = useAppLockStore((s) => s.lockNow);
   const hasProfiles = useHouseholdProfilesStore((s) => s.profiles.length > 0);
   const collapsed = useUiStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
@@ -134,17 +130,6 @@ export default function Sidebar() {
             Aurafin<span className="text-brand-600">.</span>
           </span>
         </span>
-        {lockEnabled && (
-          <button
-            type="button"
-            onClick={lockNow}
-            title="Lock Aurafin now"
-            aria-label="Lock Aurafin now"
-            className="sb-label tap-scale h-8 w-8 flex items-center justify-center rounded-lg text-muted hover:bg-surface-hover hover:text-ink shrink-0"
-          >
-            <Lock size={16} />
-          </button>
-        )}
       </div>
 
       {/* Profile / account selector */}

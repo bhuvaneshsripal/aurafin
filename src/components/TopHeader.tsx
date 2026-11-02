@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Moon, Sun, Globe, Eye, EyeOff, ChevronDown, MoreVertical, Lock, LogOut } from 'lucide-react';
+import { Moon, Sun, Globe, Eye, EyeOff, ChevronDown, MoreVertical, LogOut } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarUrl } from '../hooks/useAvatarUrl';
 import { useDisplayName } from '../hooks/useDisplayName';
 import { useUiStore } from '../store/uiStore';
-import { useAppLockStore } from '../store/appLockStore';
 import { toast } from '../store/toastStore';
 import QuickAddMenu from './QuickAddMenu';
 import ProfileSwitcher from './ProfileSwitcher';
@@ -26,8 +25,6 @@ const menuItem =
 export default function TopHeader() {
   const logout = useAuthStore((s) => s.logout);
   const { theme, toggleTheme, privacyMode, togglePrivacy } = useUiStore();
-  const lockEnabled = useAppLockStore((s) => s.enabled);
-  const lockNow = useAppLockStore((s) => s.lockNow);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -128,11 +125,6 @@ export default function TopHeader() {
             Aurafin<span className="text-brand-600">.</span>
           </span>
           <ProfileSwitcher compact />
-          {lockEnabled && (
-            <IconButton label="Lock Aurafin now" size="sm" onClick={lockNow} className="tap-scale shrink-0">
-              <Lock size={15} />
-            </IconButton>
-          )}
         </span>
 
         {/* Desktop */}

@@ -1015,7 +1015,6 @@ function ClosedAppAlertsCard() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<PushTestResult | null>(null);
   const supported = pushSupported();
-  const permission = typeof Notification === 'undefined' ? 'denied' : Notification.permission;
 
   const run = async () => {
     setBusy(true);
@@ -1381,6 +1380,7 @@ function PreferencesTab() {
         </div>
         <FxVsDollar base={baseCurrency} compare={compareCurrency} />
       </Card>
+      <AppLockCard />
       <GoldRateCard />
       <DisplaySizeCard />
       {/* Laptop: the eye is pinned bottom-right, so there's nothing to configure. */}
@@ -1980,7 +1980,7 @@ function DataTab() {
 export default function Settings() {
   const location = useLocation();
   const initialTab = (location.state as { tab?: Tab } | null)?.tab;
-  const [tab, setTab] = useUrlTab<Tab>(
+  const [tab] = useUrlTab<Tab>(
     TABS.map((t) => t.key),
     initialTab && TABS.some((t) => t.key === initialTab) ? initialTab : 'basic'
   );

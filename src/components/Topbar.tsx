@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Moon, Sun, Eye, EyeOff, Bell, ChevronDown, MoreVertical, Settings as SettingsIcon, Lock } from 'lucide-react';
+import { Moon, Sun, Eye, EyeOff, Bell, ChevronDown, MoreVertical, Settings as SettingsIcon } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarUrl } from '../hooks/useAvatarUrl';
 import { useUiStore } from '../store/uiStore';
-import { useAppLockStore } from '../store/appLockStore';
 import Modal from './Modal';
 import QuickAddMenu from './QuickAddMenu';
 import ProfileSwitcher from './ProfileSwitcher';
@@ -15,8 +14,6 @@ export default function Topbar() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { theme, toggleTheme, privacyMode, togglePrivacy } = useUiStore();
-  const lockEnabled = useAppLockStore((s) => s.enabled);
-  const lockNow = useAppLockStore((s) => s.lockNow);
   const navigate = useNavigate();
 
   const [profileOpen, setProfileOpen] = useState(false);
@@ -66,17 +63,6 @@ export default function Topbar() {
             Aurafin<span className="text-brand-500">.</span>
           </span>
           <ProfileSwitcher compact />
-          {lockEnabled && (
-            <button
-              type="button"
-              onClick={lockNow}
-              title="Lock Aurafin now"
-              aria-label="Lock Aurafin now"
-              className="tap-scale h-8 w-8 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 shrink-0 ml-1"
-            >
-              <Lock size={16} />
-            </button>
-          )}
         </span>
 
         {/* Desktop toolbar — unchanged */}
