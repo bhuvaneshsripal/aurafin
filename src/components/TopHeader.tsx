@@ -1,20 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Moon, Sun, Globe, Eye, EyeOff, ChevronDown, MoreVertical, Settings as SettingsIcon, Lock, LogOut } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Moon, Sun, Globe, Eye, EyeOff, ChevronDown, MoreVertical, Lock, LogOut } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarUrl } from '../hooks/useAvatarUrl';
 import { useDisplayName } from '../hooks/useDisplayName';
 import { useUiStore } from '../store/uiStore';
 import { useAppLockStore } from '../store/appLockStore';
 import { toast } from '../store/toastStore';
-import Modal from './Modal';
 import QuickAddMenu from './QuickAddMenu';
 import ProfileSwitcher from './ProfileSwitcher';
 import AppLogo from './AppLogo';
 import GlobalSearch from './GlobalSearch';
 import NotificationBell from './NotificationBell';
 import MarketTicker, { MarketTickerMarquee } from './MarketTicker';
-import { Button, IconButton } from './ui';
+import { IconButton } from './ui';
 import UpdateDot from './UpdateDot';
 
 const menuPanel =
@@ -25,7 +24,6 @@ const menuItem =
 /** The sticky 56px top bar. Desktop: search icon · add · privacy/theme/notifications · account.
  *  Mobile: brand + profile on the left, search / privacy / overflow menu on the right. */
 export default function TopHeader() {
-  const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { theme, toggleTheme, privacyMode, togglePrivacy } = useUiStore();
   const lockEnabled = useAppLockStore((s) => s.enabled);
@@ -35,15 +33,15 @@ export default function TopHeader() {
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
-  const isGuest = (user as { isAnonymous?: boolean } | null)?.isAnonymous === true;
 
-  // Fades a full-screen overlay in first, then flips the real auth state —
-  // so leaving the app reads as a smooth log out instead of an abrupt cut
-  // to the Login screen.
+  // Logs out immediately (no confirmation). Fades a full-screen overlay in
+  // first, then flips the real auth state — so leaving the app reads as a
+  // smooth log out instead of an abrupt cut to the Login screen.
   const handleLogout = () => {
-    setConfirmOpen(false);
+    if (signingOut) return;
+    setProfileOpen(false);
+    setMobileMenuOpen(false);
     setSigningOut(true);
     window.setTimeout(async () => {
       try {
@@ -83,6 +81,26 @@ export default function TopHeader() {
     document.addEventListener('mousedown', onClickOutside);
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, []);
+
+  // Close whichever dropdown is open as soon as the page is scrolled. Scroll
+  // events don't bubble, so listen in the capture phase to also catch nested
+  // scroll containers; `wheel` covers a mouse wheel on a page too short to
+  // actually scroll. (touchmove is deliberately not used: finger jitter during
+  // a tap on "Log out" could close the menu before the tap registers.)
+  const anyMenuOpen = profileOpen || mobileMenuOpen;
+  useEffect(() => {
+    if (!anyMenuOpen) return;
+    const close = () => {
+      setProfileOpen(false);
+      setMobileMenuOpen(false);
+    };
+    window.addEventListener('scroll', close, { capture: true, passive: true });
+    window.addEventListener('wheel', close, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', close, { capture: true });
+      window.removeEventListener('wheel', close);
+    };
+  }, [anyMenuOpen]);
 
   const displayName = useDisplayName();
   const initial = (displayName || 'A').charAt(0).toUpperCase();
@@ -145,10 +163,6 @@ export default function TopHeader() {
             {privacyMode ? <EyeOff size={18} /> : <Eye size={18} />}
           </IconButton>
 
-          <IconButton label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} onClick={toggleTheme}>
-            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-          </IconButton>
-
           <NotificationBell />
 
           <div className="w-px h-6 bg-line mx-1.5 shrink-0" />
@@ -171,17 +185,14 @@ export default function TopHeader() {
               <div className={`${menuPanel} w-60`}>
                 <div className="px-4 py-3 border-b border-line-soft">
                   <p className="text-sm font-semibold text-ink truncate">{displayName || 'Your account'}</p>
-                  <p className="text-xs text-muted truncate">{user?.email}</p>
                 </div>
-                <Link to="/settings" onClick={() => setProfileOpen(false)} className={menuItem}>
-                  <SettingsIcon size={16} className="text-muted" />
-                  Settings
-                </Link>
+                <button onClick={toggleTheme} className={menuItem}>
+                  {theme === 'dark' ? <Sun size={16} className="text-muted" /> : <Moon size={16} className="text-muted" />}
+                  {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+                </button>
+                <div className="border-t border-line-soft" />
                 <button
-                  onClick={() => {
-                    setProfileOpen(false);
-                    setConfirmOpen(true);
-                  }}
+                  onClick={handleLogout}
                   className={`${menuItem} text-red-600 dark:text-red-400`}
                 >
                   <LogOut size={16} />
@@ -212,24 +223,12 @@ export default function TopHeader() {
 
             {mobileMenuOpen && (
               <div className={`${menuPanel} w-64`}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    navigate('/settings');
-                  }}
-                  className="w-full px-4 py-3 border-b border-line-soft flex items-center gap-3 hover:bg-surface-hover text-left"
-                >
+                <div className="w-full px-4 py-3 border-b border-line-soft flex items-center gap-3 text-left">
                   {avatar('h-9 w-9')}
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-ink truncate">{displayName || 'Your account'}</p>
-                    <p className="text-xs text-muted truncate">{user?.email ?? 'View profile & settings'}</p>
                   </div>
-                  <span className="relative shrink-0 inline-flex">
-                    <SettingsIcon size={16} className="text-muted" />
-                    <UpdateDot />
-                  </span>
-                </button>
+                </div>
 
                 <button onClick={toggleTheme} className={menuItem}>
                   {theme === 'dark' ? <Sun size={17} className="text-muted" /> : <Moon size={17} className="text-muted" />}
@@ -239,10 +238,7 @@ export default function TopHeader() {
                 <div className="border-t border-line-soft" />
 
                 <button
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    setConfirmOpen(true);
-                  }}
+                  onClick={handleLogout}
                   className={`${menuItem} text-red-600 dark:text-red-400`}
                 >
                   <LogOut size={17} />
@@ -256,22 +252,6 @@ export default function TopHeader() {
 
       {/* Mobile only: scrolling index strip pinned just under the top bar. */}
       <MarketTickerMarquee id="app-marquee" className="md:hidden sticky top-14 z-20" />
-
-      <Modal open={confirmOpen} onClose={() => setConfirmOpen(false)} title="Log out of Aurafin?">
-        <p className="text-sm text-muted mb-6">
-          {isGuest
-            ? "You're using the demo. Logging out permanently deletes everything you've added here, and it can't be recovered. Create an account first if you want to keep it."
-            : "You'll need to sign in again to see your dashboard."}
-        </p>
-        <div className="flex gap-2.5">
-          <Button variant="secondary" fullWidth onClick={() => setConfirmOpen(false)}>
-            Cancel
-          </Button>
-          <Button fullWidth onClick={handleLogout}>
-            Log out
-          </Button>
-        </div>
-      </Modal>
 
       {signingOut && (
         <div className="animate-backdrop-in fixed inset-0 z-[200] flex flex-col items-center justify-center gap-3 bg-page"></div>

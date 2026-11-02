@@ -1,3 +1,4 @@
+import { LOGO_SRC } from '../config/logo';
 /**
  * Shown whenever the app is waiting on something before it can render real
  * content — resolving the signed-in session on first load, or a lazy-loaded
@@ -13,7 +14,7 @@ export default function LoadingScreen({ fullScreen = true }: { fullScreen?: bool
       }`}
     >
       <span className="h-12 w-12 rounded-full overflow-hidden inline-block">
-        <img src="/logo-icon.png" alt="Aurafin" className="logo-loading-spin block h-full w-full object-cover" />
+        <img src={LOGO_SRC} alt="Aurafin" className="logo-loading-spin block h-full w-full object-cover" />
       </span>
       <p className="text-sm text-slate-400 dark:text-slate-500">Loading…</p>
     </div>

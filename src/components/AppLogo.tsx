@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { hardRefresh } from '../utils/hardRefresh';
+import { LOGO_SRC } from '../config/logo';
 
 /**
  * The Aurafin coin logo. Flips like a coin every 4s as a subtle brand
@@ -46,7 +47,7 @@ export default function AppLogo({ className }: { className?: string }) {
     >
       <img
         key={spinKey}
-        src="/logo-icon.png"
+        src={LOGO_SRC}
         alt="Aurafin"
         className="block h-full w-full object-cover animate-logo-spin"
         draggable={false}

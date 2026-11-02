@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Delete } from 'lucide-react';
 import { useAppLockStore } from '../store/appLockStore';
+import { LOGO_SRC } from '../config/logo';
 
 export default function LockScreen() {
   const { locked, pinAttemptError, unlock } = useAppLockStore();
@@ -135,7 +136,7 @@ export default function LockScreen() {
     >
       <div className="w-full max-w-[300px] mx-auto text-center flex flex-col items-center">
         <img
-          src="/logo-icon.png"
+          src={LOGO_SRC}
           alt="Aurafin"
           className="h-14 w-14 rounded-full object-cover mb-4"
         />

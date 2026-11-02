@@ -48,7 +48,29 @@ export default function WhatsNewModal({
   onUpdate: () => void;
 }) {
   return (
-    <Modal open={open} onClose={onClose} title={notes?.title ?? "What's new"}>
+    <Modal open={open} onClose={onClose} title={notes?.title ?? "What's new"}
+      fullScreenOnMobile
+      footer={
+        <div className="flex items-center justify-between gap-2 md:justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="tap-scale px-4 py-2.5 text-sm font-medium text-muted hover:text-ink transition-colors"
+          >
+            Do it later
+          </button>
+          <button
+            type="button"
+            disabled={updating}
+            onClick={onUpdate}
+            className="tap-scale inline-flex items-center gap-1.5 rounded-xl bg-brand-600 hover:bg-brand-700 px-5 py-2.5 text-sm font-semibold text-white transition-colors disabled:opacity-60"
+          >
+            {updating ? 'Updating…' : 'Update now'}
+            {updating ? <RefreshCw size={15} className="animate-spin" /> : <ArrowRight size={16} strokeWidth={2.25} />}
+          </button>
+        </div>
+      }
+    >
       {(notes?.version || notes?.date) && (
         <div className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl bg-[#e7f4ec] dark:bg-[#0a9a4b]/15 px-3.5 py-2.5">
           {notes.version && !(notes.title ?? '').includes(notes.version) && (
@@ -86,24 +108,6 @@ export default function WhatsNewModal({
           A new version of Aurafin is ready, with improvements and fixes. Update to get it.
         </p>
       )}
-      <div className="mt-6 flex items-center justify-end gap-2">
-        <button
-          type="button"
-          onClick={onClose}
-          className="tap-scale px-4 py-2 text-sm font-medium text-muted hover:text-ink transition-colors"
-        >
-          Later
-        </button>
-        <button
-          type="button"
-          disabled={updating}
-          onClick={onUpdate}
-          className="tap-scale inline-flex items-center gap-1.5 rounded-xl bg-[#0a9a4b] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-        >
-          {updating ? 'Updating…' : 'Update now'}
-          {updating ? <RefreshCw size={15} className="animate-spin" /> : <ArrowRight size={16} strokeWidth={2.25} />}
-        </button>
-      </div>
     </Modal>
   );
 }

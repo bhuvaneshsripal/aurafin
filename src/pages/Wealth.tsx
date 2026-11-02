@@ -6257,7 +6257,7 @@ function AssetDetailsForm({
                   onOpenChange={(open) => {
                     if (!open) setAssetTypeEditing(false);
                   }}
-                  className={`${inputClass} bg-white text-ink-2`}
+                  className={`${inputClass} bg-surface text-ink-2`}
                   options={ASSET_TAXONOMY.flatMap((cat) =>
                     cat.types.map((t) => ({ value: t.value, label: t.label, group: cat.label }))
                   )}
@@ -6297,7 +6297,7 @@ function AssetDetailsForm({
             <CustomSelect
               value={assetClass}
               onChange={(v) => setAssetClass(v as AssetClass)}
-              className={`${inputClass} bg-white text-ink-2`}
+              className={`${inputClass} bg-surface text-ink-2`}
               options={[
                 ...(!effectiveCategory.types.some((t) => t.value === assetClass)
                   ? [{ value: assetClass, label: ASSET_CLASS_LABELS[assetClass] ?? assetClass }]
@@ -6318,7 +6318,7 @@ function AssetDetailsForm({
             <CustomSelect
               value={market}
               onChange={(v) => setMarket(v as 'IN' | 'US')}
-              className={`${inputClass} bg-white text-ink-2`}
+              className={`${inputClass} bg-surface text-ink-2`}
               options={[
                 { value: 'IN', label: 'IND · NSE / BSE' },
                 { value: 'US', label: 'US · NASDAQ / NYSE' },
@@ -6992,7 +6992,7 @@ function AssetDetailsForm({
           <CustomSelect
             value={institution}
             onChange={setInstitution}
-            className={`${inputClass} bg-white text-ink-2`}
+            className={`${inputClass} bg-surface text-ink-2`}
             placeholder="None"
             options={[
               { value: '', label: 'None' },
@@ -7425,7 +7425,7 @@ function AssetDetailsForm({
               <CustomSelect
                 value={geography}
                 onChange={setGeography}
-                className={`${inputClass} bg-white text-ink-2`}
+                className={`${inputClass} bg-surface text-ink-2`}
                 placeholder="—"
                 options={GEOGRAPHY_OPTIONS.map((g) => ({ value: g.value as string, label: g.label }))}
               />

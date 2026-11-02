@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -15,6 +15,7 @@ import {
   Scale,
 } from 'lucide-react';
 import { hardRefresh } from '../utils/hardRefresh';
+import { APP_VERSION } from '../config/version';
 import UpdateDot from './UpdateDot';
 import QuickAddMenu from './QuickAddMenu';
 import { useUiStore } from '../store/uiStore';
@@ -71,6 +72,70 @@ export default function BottomNav() {
   const { mounted: moreMounted, closing: moreClosing } = useExitPresence(moreOpen, 180);
   useBodyScrollLock(moreOpen);
   useModalBackClose(moreOpen, () => setMoreOpen(false));
+
+  // Swipe the More sheet down to close it. Works from anywhere on the sheet
+  // as long as its content is scrolled to the top.
+  const sheetRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = sheetRef.current;
+    if (!moreMounted || !el) return;
+    let startY = 0;
+    let lastY = 0;
+    let lastT = 0;
+    let velocity = 0;
+    let tracking = false;
+    let dragging = false;
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      tracking = el.scrollTop <= 0;
+      dragging = false;
+      startY = lastY = e.touches[0].clientY;
+      lastT = e.timeStamp;
+      velocity = 0;
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!tracking) return;
+      const y = e.touches[0].clientY;
+      const dy = y - startY;
+      if (!dragging) {
+        if (dy <= 4 || el.scrollTop > 0) return;
+        dragging = true;
+        el.style.animation = 'none';
+        el.style.transition = 'none';
+      }
+      if (e.cancelable) e.preventDefault();
+      const dt = e.timeStamp - lastT;
+      if (dt > 0) velocity = (y - lastY) / dt;
+      lastY = y;
+      lastT = e.timeStamp;
+      el.style.transform = `translate3d(0, ${Math.max(0, dy)}px, 0)`;
+    };
+    const onEnd = () => {
+      if (!dragging) return;
+      dragging = false;
+      tracking = false;
+      const dy = lastY - startY;
+      if (dy > 90 || velocity > 0.6) {
+        el.style.transition = 'transform 180ms ease-in';
+        el.style.transform = 'translate3d(0, 100%, 0)';
+        tapFeedback();
+        setMoreOpen(false);
+      } else {
+        el.style.transition = 'transform 200ms ease-out';
+        el.style.transform = 'translate3d(0, 0, 0)';
+      }
+    };
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    el.addEventListener('touchend', onEnd);
+    el.addEventListener('touchcancel', onEnd);
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+    };
+  }, [moreMounted]);
 
   // Hide the bar only while a text field is focused (keyboard up).
   useEffect(() => {
@@ -190,13 +255,15 @@ export default function BottomNav() {
           onClick={() => setMoreOpen(false)}
         >
           <div
+            ref={sheetRef}
             role="dialog"
             aria-modal="true"
             aria-label="More"
             onClick={(e) => e.stopPropagation()}
             className={`${moreClosing ? 'animate-sheet-out' : 'animate-sheet-in'} w-full bg-surface rounded-t-2xl border-t border-line pb-[env(safe-area-inset-bottom)] max-h-[75vh] overflow-y-auto overscroll-contain`}
           >
-            <div className="flex items-center justify-between px-5 pt-4 pb-2">
+            <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-slate-300 dark:bg-slate-600" aria-hidden />
+            <div className="flex items-center justify-between px-5 pt-3 pb-2">
               <h3 className="text-base font-semibold text-ink">More</h3>
               <button
                 type="button"
@@ -240,6 +307,7 @@ export default function BottomNav() {
               </div>
             </div>
             <div className="px-5 pb-6 pt-2 text-center text-xs text-muted">
+              <p className="mb-1 font-medium">Aurafin v{APP_VERSION}</p>
               Developed by Bhuvanesh S ·{' '}
               <a
                 href="https://www.linkedin.com/in/bhuvaneshs07"

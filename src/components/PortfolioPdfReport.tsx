@@ -11,7 +11,20 @@ import { formatCurrency, ASSET_CLASS_LABELS, maskPreciseAmount } from '../utils/
 import { computePortfolioPnl } from '../utils/investmentPnl';
 import { Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
+export type ReportSectionKey = 'summary' | 'cashflow' | 'breakdown' | 'liabilities' | 'holdings' | 'sold';
+
+export const REPORT_SECTIONS: { key: ReportSectionKey; label: string }[] = [
+  { key: 'summary', label: 'Portfolio summary' },
+  { key: 'cashflow', label: 'Monthly cashflow' },
+  { key: 'breakdown', label: 'Asset breakdown' },
+  { key: 'liabilities', label: 'Liabilities' },
+  { key: 'holdings', label: 'Current holdings' },
+  { key: 'sold', label: 'Sold investments' },
+];
+
 interface PortfolioPdfReportProps {
+  /** Which sections to include. Defaults to all of them. */
+  sections?: ReportSectionKey[];
   hideInPrint?: boolean;
   /** DOM id applied to the report's root element, so a caller (e.g. the
    *  export preview modal) can point html2canvas at exactly this node.
@@ -45,9 +58,11 @@ const ASSET_COLORS: Record<string, string> = {
 };
 
 export const PortfolioPdfReport = ({
+  sections,
   hideInPrint = false,
   reportElementId = 'portfolio-pdf-report',
 }: PortfolioPdfReportProps) => {
+  const has = (k: ReportSectionKey) => !sections || sections.includes(k);
   const allAssets = useAssetsStore((s) => s.assets);
   const allLiabilities = useLiabilitiesStore((s) => s.liabilities);
   const allTransactions = useTransactionsStore((s) => s.transactions);
@@ -206,16 +221,17 @@ export const PortfolioPdfReport = ({
       <div className="mb-8 bg-slate-50 border border-slate-200 rounded-lg p-5">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">In this report</p>
         <ol className="grid grid-cols-2 gap-y-1.5 text-sm text-slate-700 list-decimal list-inside">
-          <li>Portfolio summary</li>
-          <li>Monthly cashflow</li>
-          {assetsByClass.length > 0 && <li>Asset breakdown</li>}
-          {liabilitiesByType.length > 0 && <li>Liabilities</li>}
-          {assets.length > 0 && <li>Current holdings (detailed)</li>}
-          <li>Sold investments &amp; realized gains</li>
+          {has('summary') && <li>Portfolio summary</li>}
+          {has('cashflow') && <li>Monthly cashflow</li>}
+          {has('breakdown') && assetsByClass.length > 0 && <li>Asset breakdown</li>}
+          {has('liabilities') && liabilitiesByType.length > 0 && <li>Liabilities</li>}
+          {has('holdings') && assets.length > 0 && <li>Current holdings (detailed)</li>}
+          {has('sold') && <li>Sold investments &amp; realized gains</li>}
         </ol>
       </div>
 
       {/* Summary Section */}
+      {has('summary') && (
       <div className="mb-8">
         <h2 className="text-2xl font-bold mb-6">Portfolio Summary</h2>
         <div className="grid grid-cols-2 gap-6">
@@ -271,7 +287,10 @@ export const PortfolioPdfReport = ({
         </div>
       </div>
 
+      )}
+
       {/* Cashflow Section */}
+      {has('cashflow') && (
       <div className="mb-8 page-break-before">
         <h2 className="text-2xl font-bold mb-6">Monthly Cashflow ({toIsoMonth()})</h2>
         <div className="grid grid-cols-2 gap-6">
@@ -298,8 +317,10 @@ export const PortfolioPdfReport = ({
         </div>
       </div>
 
+      )}
+
       {/* Asset Breakdown Charts */}
-      {assetsByClass.length > 0 && (
+      {has('breakdown') && assetsByClass.length > 0 && (
         <div className="mb-8 page-break-before">
           <h2 className="text-2xl font-bold mb-6">Asset Breakdown</h2>
 
@@ -353,7 +374,7 @@ export const PortfolioPdfReport = ({
       )}
 
       {/* Liabilities Section */}
-      {liabilitiesByType.length > 0 && (
+      {has('liabilities') && liabilitiesByType.length > 0 && (
         <div className="mb-8 page-break-before">
           <h2 className="text-2xl font-bold mb-6">Liabilities</h2>
 
@@ -383,7 +404,7 @@ export const PortfolioPdfReport = ({
       )}
 
       {/* Detailed Assets List */}
-      {assets.length > 0 && (
+      {has('holdings') && assets.length > 0 && (
         <div className="mb-8 page-break-before">
           <h2 className="text-2xl font-bold mb-1">Current Holdings</h2>
           <p className="text-sm text-slate-500 mb-6">Everything you currently hold, with live value and gain/loss against what you invested.</p>
@@ -444,6 +465,7 @@ export const PortfolioPdfReport = ({
       )}
 
       {/* Sold Investments (realized gains/losses) */}
+      {has('sold') && (
       <div className="mb-8 page-break-before">
         <h2 className="text-2xl font-bold mb-1">Sold Investments</h2>
         <p className="text-sm text-slate-500 mb-6">
@@ -513,6 +535,8 @@ export const PortfolioPdfReport = ({
           </div>
         )}
       </div>
+
+      )}
 
       {/* Footer */}
       <div className="mt-12 pt-6 border-t border-slate-200 text-xs text-slate-500">

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, Suspense, type ReactNode } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
   updatePassword,
@@ -15,9 +15,10 @@ import { useAvatarUrl } from '../hooks/useAvatarUrl';
 import { useDisplayName } from '../hooks/useDisplayName';
 import { useAppLockStore } from '../store/appLockStore';
 import { useDisplaySettingsStore, FONT_MIN_SCALE, FONT_MAX_SCALE, SCREEN_MIN_SCALE, SCREEN_MAX_SCALE } from '../store/displaySettingsStore';
+import { useAlertsStore } from '../store/alertsStore';
 import { useGoldSettingsStore } from '../store/goldSettingsStore';
 import { pushSupported, sendTestPush, type PushTestResult } from '../hooks/usePushSubscription';
-import { useNotificationPreferencesStore, type NotificationChannelKey } from '../store/notificationPreferencesStore';
+import { useNotificationPreferencesStore, HOLDING_MOVE_OPTIONS, type NotificationChannelKey } from '../store/notificationPreferencesStore';
 import InfoTip from '../components/ui/InfoTip';
 import PinBoxInput, { type PinBoxInputHandle } from '../components/PinBoxInput';
 import { auth } from '../firebase/config';
@@ -54,20 +55,34 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useUrlTab } from '../hooks/useUrlTab';
 import CustomSelect from '../components/CustomSelect';
 import { PageHeader } from '../components/ui';
+import type { ReportSectionKey } from '../components/PortfolioPdfReport';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 
-// Loaded only when "Report" is tapped: the PDF report pulls in the charts library.
+// Loaded only when the Reports tab is opened: the PDF report pulls in the charts library.
 const PortfolioExportModal = lazyWithRetry(() =>
   import('../components/PortfolioExportModal').then((m) => ({ default: m.PortfolioExportModal }))
 );
+const PortfolioPdfReport = lazyWithRetry(() =>
+  import('../components/PortfolioPdfReport').then((m) => ({ default: m.PortfolioPdfReport }))
+);
+const REPORT_SECTIONS: { key: ReportSectionKey; label: string }[] = [
+  { key: 'summary', label: 'Portfolio summary' },
+  { key: 'cashflow', label: 'Monthly cashflow' },
+  { key: 'breakdown', label: 'Asset breakdown' },
+  { key: 'liabilities', label: 'Liabilities' },
+  { key: 'holdings', label: 'Current holdings' },
+  { key: 'sold', label: 'Sold investments' },
+];
 
-type Tab = 'basic' | 'password' | 'pin' | 'shared' | 'preferences' | 'profiles' | 'data';
+type Tab = 'basic' | 'reports' | 'password' | 'pin' | 'shared' | 'preferences' | 'notifications' | 'profiles' | 'data';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'basic', label: 'Basic details' },
+  { key: 'reports', label: 'Reports' },
   { key: 'password', label: 'Change password' },
   { key: 'pin', label: 'Change Aurafin pincode' },
   { key: 'preferences', label: 'Preferences' },
+  { key: 'notifications', label: 'Notifications' },
   { key: 'profiles', label: 'Profiles' },
   { key: 'shared', label: 'Shared access' },
   { key: 'data', label: 'Data' },
@@ -75,21 +90,17 @@ const TABS: { key: Tab; label: string }[] = [
 
 const NAV_ICONS: Record<string, LucideIcon> = {
   basic: UserRound,
-  report: FileText,
+  reports: FileText,
   password: KeyRound,
   pin: LockKeyhole,
   preferences: SlidersHorizontal,
+  notifications: Bell,
   profiles: Users,
   shared: Share2,
   data: Database,
 };
 
-// Menu order: Report is an action (opens the report window) rather than a tab.
-const NAV_ITEMS: { key: Tab | 'report'; label: string }[] = [
-  TABS[0],
-  { key: 'report', label: 'Reports' },
-  ...TABS.slice(1),
-];
+const NAV_ITEMS = TABS;
 
 function Card({ children }: { children: ReactNode }) {
   return (
@@ -146,7 +157,7 @@ function ProfileHeader() {
   };
 
   return (
-    <div className="flex flex-col items-center px-5 pt-4 pb-4">
+    <div className="flex flex-col items-center px-5 pt-4 pb-7">
       <div className="relative h-40 w-40 flex items-center justify-center">
         <svg viewBox="0 0 160 160" className="pointer-events-none absolute inset-0 h-full w-full text-ink-2" aria-hidden>
           <defs>
@@ -179,7 +190,7 @@ function ProfileHeader() {
           />
         </label>
       </div>
-      <p className="mt-1 text-[15px] font-semibold text-ink text-center break-words max-w-full">{name}</p>
+      <p className="mt-4 text-[16px] font-semibold text-ink text-center break-words max-w-full">{name}</p>
       {error && <p className="text-xs text-red-500 mt-1 text-center">{error}</p>}
       <AvatarCropModal open={!!cropImage} image={cropImage} onCancel={() => setCropImage(null)} onConfirm={handleCropConfirm} />
     </div>
@@ -1013,30 +1024,22 @@ function ClosedAppAlertsCard() {
   };
 
   let message: string | null = null;
-  if (!supported) message = 'This browser or build has no push support. Make sure VITE_VAPID_PUBLIC_KEY is set on Vercel, then redeploy. On iPhone, add the app to the Home Screen first.';
-  else if (permission !== 'granted') message = 'Notifications are blocked or not allowed yet. Allow them for this app in your phone / browser settings.';
-  else if (result) {
-    if (result.server && (!result.server.vapid || !result.server.serviceAccount)) message = 'The server is missing push keys (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY or FIREBASE_SERVICE_ACCOUNT). See PUSH_SETUP.md.';
+  if (result) {
+    if (result.server && (!result.server.vapid || !result.server.serviceAccount)) message = 'Server push keys missing.';
     else if (result.error) message = `Could not send: ${result.error}`;
-    else if (result.devices === 0) message = 'No device is registered yet. Open the app once with notifications allowed and alerts switched on, then try again.';
-    else if (result.sent === 0) message = 'The device is registered but the push was rejected. Open the app once to refresh it, then try again.';
-    else message = `Sent to ${result.sent} device${result.sent === 1 ? '' : 's'}. Close the app now: the notification should appear.`;
+    else if (result.devices === 0) message = 'No device registered.';
+    else if (result.sent === 0) message = 'Push was rejected.';
+    else message = `Sent to ${result.sent} device${result.sent === 1 ? '' : 's'}.`;
   }
 
   return (
     <Card>
-      <div className="flex items-center gap-2 mb-1">
-        <h2 className="text-sm font-semibold text-ink">Alerts when the app is closed</h2>
-      </div>
-      <p className="text-xs text-muted mb-4">
-        Market and holding alerts are sent from the server, so they arrive with the app closed. If your phone is offline,
-        they wait and show up as soon as it reconnects.
-      </p>
+      <h2 className="text-sm font-semibold text-ink mb-4">Alerts when the app is closed</h2>
       <button
         type="button"
         onClick={run}
         disabled={busy || !supported}
-        className="btn-press inline-flex items-center gap-2 rounded-xl border border-line px-4 h-10 text-sm font-medium text-ink disabled:opacity-60"
+        className="btn-press inline-flex items-center justify-center gap-2 rounded-xl border border-line px-4 h-10 text-sm font-medium text-ink disabled:opacity-60"
       >
         <Bell size={14} />
         {busy ? 'Sending…' : 'Send a test notification'}
@@ -1052,15 +1055,12 @@ function NotificationsCard() {
 
   return (
     <Card>
-      <div className="flex items-center gap-2 mb-1">
+      <div className="flex items-center gap-2 mb-4">
         <h2 className="text-sm font-semibold text-ink">Notifications</h2>
         <span className="text-xs font-medium text-brand-600 bg-brand-50 dark:bg-brand-500/10 dark:text-brand-400 px-2 py-0.5 rounded-full">
           Coming Soon
         </span>
       </div>
-      <p className="text-xs text-muted mb-4">
-        Choose how you'd like to be reached. Changes take effect immediately.
-      </p>
       <div className="space-y-2">
         {NOTIFICATION_ROWS.map((row) => (
           <div
@@ -1087,6 +1087,226 @@ function NotificationsCard() {
       </div>
 
     </Card>
+  );
+}
+
+/** One labelled row with a toggle, used by the Advanced card. */
+function AdvancedRow({ title, hint, checked, onChange }: { title: string; hint?: string; checked: boolean; onChange: () => void }) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-xl border border-line bg-slate-50 dark:bg-slate-800/40 px-4 py-3">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-ink">{title}</p>
+        {hint && <p className="text-xs text-muted mt-0.5">{hint}</p>}
+      </div>
+      <Toggle checked={checked} onChange={onChange} label={title} />
+    </div>
+  );
+}
+
+/** Advanced notification controls: what is sent, how sensitive it is, and when it stays quiet. */
+function AdvancedNotificationsCard() {
+  const adv = useNotificationPreferencesStore((s) => s.advanced);
+  const setAdvanced = useNotificationPreferencesStore((s) => s.setAdvanced);
+  const marketAlerts = useAlertsStore((s) => s.enabled);
+  const setMarketAlerts = useAlertsStore((s) => s.setEnabled);
+  const timeCls = 'border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-50';
+
+  return (
+    <Card>
+      <div className="flex items-center gap-2 mb-4">
+        <Sparkles size={15} className="text-brand-600" />
+        <h2 className="text-sm font-semibold text-ink">Advanced notifications</h2>
+      </div>
+
+      <div className="space-y-2">
+        <AdvancedRow
+          title="Market & price alerts"
+          checked={marketAlerts}
+          onChange={() => setMarketAlerts(!marketAlerts)}
+        />
+      </div>
+
+      <fieldset disabled={!marketAlerts} className={`mt-5 space-y-5 ${marketAlerts ? '' : 'opacity-50'}`}>
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Daily market summaries</h3>
+          <div className="space-y-2">
+            <AdvancedRow title="Pre-market (9:00 AM)" checked={adv.sessionPreOpen} onChange={() => setAdvanced({ sessionPreOpen: !adv.sessionPreOpen })} />
+            <AdvancedRow title="Market open (9:15 AM)" checked={adv.sessionOpen} onChange={() => setAdvanced({ sessionOpen: !adv.sessionOpen })} />
+            <AdvancedRow title="Market close (3:30 PM)" checked={adv.sessionClose} onChange={() => setAdvanced({ sessionClose: !adv.sessionClose })} />
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Price-move alerts</h3>
+          <div className="space-y-2">
+            <AdvancedRow title="Index moves" checked={adv.indexMoves} onChange={() => setAdvanced({ indexMoves: !adv.indexMoves })} />
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-slate-50 dark:bg-slate-800/40 px-4 py-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-ink">Holding move threshold</p>
+              </div>
+              <div className="flex gap-1" role="group" aria-label="Holding move thresholds">
+                {HOLDING_MOVE_OPTIONS.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    aria-pressed={adv.holdingMoveLevels.includes(n)}
+                    onClick={() => {
+                      const has = adv.holdingMoveLevels.includes(n);
+                      // Keep at least one level selected.
+                      if (has && adv.holdingMoveLevels.length === 1) return;
+                      const next = has ? adv.holdingMoveLevels.filter((l) => l !== n) : [...adv.holdingMoveLevels, n].sort((a, b) => a - b);
+                      setAdvanced({ holdingMoveLevels: next });
+                    }}
+                    className={`h-9 min-w-[3rem] rounded-lg px-3 text-sm font-medium border transition-colors ${
+                      adv.holdingMoveLevels.includes(n) ? 'bg-brand-600 border-brand-600 text-white' : 'border-line text-ink hover:bg-surface-hover'
+                    }`}
+                  >
+                    {n}%
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Quiet hours (IST)</h3>
+          <AdvancedRow
+            title="Silence phone pop-ups"
+            checked={adv.quietHoursEnabled}
+            onChange={() => setAdvanced({ quietHoursEnabled: !adv.quietHoursEnabled })}
+          />
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-xs text-muted">
+              From
+              <input type="time" value={adv.quietStart} disabled={!adv.quietHoursEnabled} onChange={(e) => e.target.value && setAdvanced({ quietStart: e.target.value })} className={timeCls} />
+            </label>
+            <label className="flex items-center gap-2 text-xs text-muted">
+              To
+              <input type="time" value={adv.quietEnd} disabled={!adv.quietHoursEnabled} onChange={(e) => e.target.value && setAdvanced({ quietEnd: e.target.value })} className={timeCls} />
+            </label>
+          </div>
+        </div>
+      </fieldset>
+    </Card>
+  );
+}
+
+function NotificationsTab() {
+  return (
+    <>
+      <NotificationsCard />
+      <ClosedAppAlertsCard />
+      <AdvancedNotificationsCard />
+    </>
+  );
+}
+
+/** Reports: pick what goes in the PDF, preview it, then download. */
+function ReportsTab() {
+  const [sections, setSections] = useState<ReportSectionKey[]>(REPORT_SECTIONS.map((x) => x.key));
+  const [preview, setPreview] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0.4);
+  const [innerH, setInnerH] = useState(0);
+  const PAGE = 900;
+
+  useEffect(() => {
+    if (!preview || !wrapRef.current) return;
+    const el = wrapRef.current;
+    const update = () => {
+      setScale(Math.min(1, el.clientWidth / PAGE));
+      setInnerH(innerRef.current?.offsetHeight ?? 0);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    if (innerRef.current) ro.observe(innerRef.current);
+    return () => ro.disconnect();
+  }, [preview]);
+
+  const toggleSection = (k: ReportSectionKey) =>
+    setSections((cur) => {
+      if (cur.includes(k)) return cur.length === 1 ? cur : cur.filter((x) => x !== k);
+      return REPORT_SECTIONS.map((x) => x.key).filter((x) => x === k || cur.includes(x));
+    });
+  const allSelected = sections.length === REPORT_SECTIONS.length;
+
+  return (
+    <>
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <h2 className="text-sm font-semibold text-ink">Portfolio report</h2>
+          <button
+            type="button"
+            onClick={() => setSections(allSelected ? [sections[0]] : REPORT_SECTIONS.map((x) => x.key))}
+            className="text-xs font-medium text-brand-600 hover:underline"
+          >
+            {allSelected ? 'Clear' : 'Select all'}
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+          {REPORT_SECTIONS.map(({ key, label }) => {
+            const on = sections.includes(key);
+            return (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={on}
+                onClick={() => toggleSection(key)}
+                className={`inline-flex items-center justify-center sm:justify-start gap-1.5 h-10 sm:h-9 rounded-lg px-3 text-sm font-medium border transition-all duration-200 ${
+                  on
+                    ? 'border-brand-500 text-brand-700 bg-transparent shadow-[0_0_0_1px_rgba(47,133,88,0.35),0_0_12px_2px_rgba(47,133,88,0.35)]'
+                    : 'border-line text-ink hover:bg-surface-hover'
+                }`}
+              >
+                {on && <Check size={14} />}
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
+          <button
+            type="button"
+            onClick={() => setPreview((v) => !v)}
+            className="btn-press inline-flex items-center gap-2 rounded-xl border border-line px-4 h-10 text-sm font-medium text-ink"
+          >
+            {preview ? <EyeOff size={14} /> : <Eye size={14} />}
+            {preview ? 'Hide preview' : 'Preview'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setDownloading(true)}
+            disabled={downloading}
+            className="btn-press inline-flex items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 h-10 text-sm font-medium text-white disabled:opacity-60"
+          >
+            <Download size={14} />
+            {downloading ? 'Preparing…' : 'Download PDF'}
+          </button>
+        </div>
+      </Card>
+
+      {preview && (
+        <Card>
+          <div ref={wrapRef} className="w-full overflow-hidden rounded-lg border border-line bg-white" style={{ height: innerH ? innerH * scale : undefined }}>
+            <Suspense fallback={<p className="p-6 text-sm text-muted">Loading preview…</p>}>
+              <div ref={innerRef} style={{ width: PAGE, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
+                <PortfolioPdfReport reportElementId="portfolio-pdf-report-preview" sections={sections} />
+              </div>
+            </Suspense>
+          </div>
+        </Card>
+      )}
+
+      {downloading && (
+        <Suspense fallback={null}>
+          <PortfolioExportModal open={downloading} sections={sections} onClose={() => setDownloading(false)} />
+        </Suspense>
+      )}
+    </>
   );
 }
 
@@ -1167,8 +1387,6 @@ function PreferencesTab() {
       <div className="md:hidden">
         <FloatingEyeCard />
       </div>
-      <ClosedAppAlertsCard />
-      <NotificationsCard />
       <InstallAppCard />
     </>
   );
@@ -1770,26 +1988,75 @@ export default function Settings() {
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
   const [updating, setUpdating] = useState(false);
   const whatsNew = useWhatsNew(whatsNewOpen);
-  const [reportOpen, setReportOpen] = useState(false);
 
   // Phones show the menu first and one section at a time; desktop shows both side by side.
-  const [mobileOpen, setMobileOpen] = useState(
-    () => !!initialTab || new URLSearchParams(location.search).has('tab')
+  // Desktop: the menu (left) and the section (right) are two separate scroll
+  // areas that together fill exactly the space under the heading, so the page
+  // itself never scrolls here. Wheeling over the left moves only the menu;
+  // over the right, only the section. The height is measured (not assumed) so
+  // it stays exact under the Screen size zoom and when the window resizes.
+  const gridRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const apply = () => {
+      if (!window.matchMedia('(min-width: 768px)').matches) {
+        el.style.height = '';
+        return;
+      }
+      const z = el.offsetWidth ? el.getBoundingClientRect().width / el.offsetWidth || 1 : 1;
+      const top = el.getBoundingClientRect().top + window.scrollY; // as if scrolled to the very top
+      const main = document.getElementById('main-content');
+      const padBottom = main ? parseFloat(getComputedStyle(main).paddingBottom) || 0 : 0;
+      const h = (window.innerHeight - top) / z - padBottom - 4;
+      el.style.height = `${Math.max(320, Math.floor(h))}px`;
+    };
+    apply();
+    const raf = requestAnimationFrame(apply);
+    const t = window.setTimeout(apply, 400); // after the page-in animation / fonts settle
+    window.addEventListener('resize', apply);
+    const mo = new MutationObserver(apply); // Screen size / Font size changes
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class'] });
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(t);
+      window.removeEventListener('resize', apply);
+      mo.disconnect();
+    };
+  }, []);
+
+  // Phones: the menu and an open section are two separate history entries,
+  // told apart by `open=1` in the URL. Opening a row pushes a new entry, so the
+  // phone's Back button (or the arrow at the top) returns to the menu instead of
+  // landing on some other section. Desktop ignores `open`.
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Arriving straight at a section (a link, a refresh, or "go to Profiles")
+  // shows that section; the entry is then tagged open=1 so Back leaves it normally.
+  const [deepLinked, setDeepLinked] = useState(
+    () => !!initialTab || (searchParams.has('tab') && searchParams.get('open') !== '1')
   );
   useEffect(() => {
-    // Landing on plain /settings (e.g. tapping Settings again) goes back to the menu.
-    if (!new URLSearchParams(location.search).has('tab') && !initialTab) setMobileOpen(false);
+    if (!deepLinked) return;
+    setSearchParams({ tab, open: '1' }, { replace: true });
+    setDeepLinked(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.search]);
+  }, []);
+  const mobileOpen = searchParams.get('open') === '1' || deepLinked;
+  const openedFromMenu = useRef(false);
 
-  const openItem = (key: Tab | 'report') => {
-    if (key === 'report') {
-      setReportOpen(true);
-      return;
-    }
-    setTab(key);
-    setMobileOpen(true);
+  const openItem = (key: Tab) => {
+    openedFromMenu.current = true;
+    setSearchParams({ tab: key, open: '1' });
     window.scrollTo({ top: 0 });
+  };
+  const backToMenu = () => {
+    if (openedFromMenu.current) {
+      openedFromMenu.current = false;
+      navigate(-1);
+    } else {
+      setSearchParams({ tab }, { replace: true });
+    }
   };
   const currentLabel = TABS.find((t) => t.key === tab)?.label ?? '';
 
@@ -1801,13 +2068,15 @@ export default function Settings() {
       />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-[340px_1fr] gap-6 items-start">
-        <div className={`min-w-0 max-w-full ${mobileOpen ? 'hidden md:block' : 'menu-slide-in'}`}>
-          <nav className="bg-white rounded-2xl border border-line overflow-hidden flex flex-col w-full">
+      <div ref={gridRef} className="grid grid-cols-1 md:grid-cols-[340px_1fr] md:grid-rows-[minmax(0,1fr)] gap-6 items-start md:items-stretch">
+        <div
+          className={`min-w-0 max-w-full md:min-h-0 md:h-full md:overflow-y-auto md:overscroll-contain ${mobileOpen ? 'hidden md:block' : 'menu-slide-in'}`}
+          style={{ scrollbarWidth: 'thin' }}
+        >
+          <nav className="bg-surface rounded-2xl border border-line overflow-hidden flex flex-col w-full">
             <ProfileHeader />
             {NAV_ITEMS.map((t) => {
-              const isReport = t.key === 'report';
-              const active = !isReport && tab === t.key;
+              const active = tab === t.key;
               const Icon = NAV_ICONS[t.key];
               return (
                 <button
@@ -1816,7 +2085,7 @@ export default function Settings() {
                   onClick={() => openItem(t.key)}
                   className={`press-row w-full text-left px-5 h-14 border-t border-line text-[15px] flex items-center justify-between gap-2 transition-colors ${
                     active
-                      ? 'font-medium md:bg-surface-muted md:text-ink md:font-semibold text-ink'
+                      ? 'font-normal text-slate-600 hover:bg-surface-hover hover:text-ink md:bg-surface-muted md:text-ink md:font-semibold'
                       : 'font-normal text-slate-600 hover:bg-surface-hover hover:text-ink'
                   }`}
                 >
@@ -1848,20 +2117,25 @@ export default function Settings() {
           </nav>
         </div>
 
-        <div className={`space-y-6 min-w-0 ${mobileOpen ? 'section-slide-in' : 'hidden md:block'}`}>
+        <div
+          className={`space-y-6 min-w-0 md:min-h-0 md:h-full md:overflow-y-auto md:overscroll-contain ${mobileOpen ? 'section-slide-in' : 'hidden md:block'}`}
+          style={{ scrollbarWidth: 'thin' }}
+        >
           <button
             type="button"
-            onClick={() => setMobileOpen(false)}
-            className="md:hidden inline-flex items-center gap-2 text-[15px] font-semibold text-ink -mb-2"
+            onClick={backToMenu}
+            className="md:hidden inline-flex items-center gap-2 text-[15px] font-semibold text-ink py-1 mb-3"
           >
             <ArrowLeft size={18} />
             {currentLabel}
           </button>
           {tab === 'basic' && <BasicDetailsCard />}
+          {tab === 'reports' && <ReportsTab />}
           {tab === 'password' && <SetPasswordCard />}
           {tab === 'pin' && <AppLockCard />}
           {tab === 'shared' && <SharedAccessCard />}
           {tab === 'preferences' && <PreferencesTab />}
+          {tab === 'notifications' && <NotificationsTab />}
           {tab === 'profiles' && <ProfilesTab />}
           {tab === 'data' && <DataTab />}
         </div>
@@ -1878,11 +2152,6 @@ export default function Settings() {
           });
         }}
       />
-      {reportOpen && (
-        <Suspense fallback={null}>
-          <PortfolioExportModal open={reportOpen} onClose={() => setReportOpen(false)} />
-        </Suspense>
-      )}
     </div>
   );
 }

@@ -7,9 +7,11 @@ import { getIstDateInfo, getIstTimeOfDay, isMarketOpen } from '../utils/marketHo
 import { formatCurrency } from '../utils/currency';
 import { fetchIndexQuotes, getRecentIndexQuotes, type IndexQuote } from '../utils/indexQuotes';
 import { drainPushInbox } from '../utils/pushInbox';
+import { useNotificationPreferencesStore, isInQuietHours } from '../store/notificationPreferencesStore';
 
 /** Price-move levels (%) that trigger a holding alert, in either direction. */
-const LEVELS = [4, 5]; // a holding must move 4% or 5% before it alerts
+// Holding alert levels come from Settings ▸ Notifications ▸ Advanced (default 4% and 5%).
+const holdingLevels = (levels: number[]) => [...levels].sort((a, b) => a - b);
 const INDEX_LEVELS = [2, 5];
 const CHECK_MS = 5_000;
 
@@ -82,6 +84,9 @@ interface Part {
 let pushChain: Promise<unknown> = Promise.resolve();
 /** Sends each part as a separate notification, in order, ~0.25s apart. */
 function queuePush(parts: Part[], baseTag: string) {
+  // Quiet hours: skip the phone pop-up (the alert is still listed in the bell).
+  const { hour, minute } = getIstTimeOfDay();
+  if (isInQuietHours(useNotificationPreferencesStore.getState().advanced, hour * 60 + minute)) return;
   parts.forEach((p, n) => {
     pushChain = pushChain
       .then(() => showSystemNotification(p.title, p.body, `${baseTag}:${n}`))
@@ -149,7 +154,7 @@ export function useMarketAlerts() {
         if (price === undefined || !prev) continue;
         const pct = ((price - prev) / prev) * 100;
         const dir = pct >= 0 ? 'up' : 'down';
-        const crossed = LEVELS.filter((l) => Math.abs(pct) >= l);
+        const crossed = holdingLevels(useNotificationPreferencesStore.getState().advanced.holdingMoveLevels).filter((l) => Math.abs(pct) >= l);
         if (crossed.length === 0) continue;
         const top = crossed[crossed.length - 1];
         const sym = a.symbol.toUpperCase();
@@ -178,6 +183,7 @@ export function useMarketAlerts() {
 
     // Big index moves (Nifty / Sensex / Bank Nifty) of 2% and 5% vs the previous close.
     const checkMarketMoves = async (dayKey: string, indices: IndexQuote[]) => {
+      if (!useNotificationPreferencesStore.getState().advanced.indexMoves) return;
       for (const i of indices) {
         if (!['nifty', 'sensex', 'banknifty'].includes(i.key) || !i.previousClose) continue;
         const pct = ((i.price - i.previousClose) / i.previousClose) * 100;
@@ -215,11 +221,13 @@ export function useMarketAlerts() {
         // so move alerts naturally stay quiet).
         if (isoWeekday > 5) return;
         const inWin = (w: number[]) => mins >= w[0] && mins < w[1];
+        const adv = useNotificationPreferencesStore.getState().advanced;
+        const sessionOn = { pre: adv.sessionPreOpen, open: adv.sessionOpen, close: adv.sessionClose };
 
         if (inWin(PRE_OPEN) || inWin(OPEN) || inWin(CLOSE)) {
           const fired = useAlertsStore.getState().fired;
           const which = inWin(PRE_OPEN) ? 'pre' : inWin(OPEN) ? 'open' : 'close';
-          if (!fired[`${dateKey}:${which}`]) {
+          if (!fired[`${dateKey}:${which}`] && sessionOn[which]) {
             const indices = await getIndices();
             if (indices.length) {
               const idx = indices.filter((i) => ['nifty', 'sensex', 'banknifty'].includes(i.key));
@@ -247,7 +255,7 @@ export function useMarketAlerts() {
         // Opened the app after the 9:15 window? Send today's index levels once
         // as a catch-up update, one notification per index (+ prev close).
         const missedOpen = mins >= OPEN[1] && mins < CLOSE[1];
-        if (missedOpen && !useAlertsStore.getState().fired[`${dateKey}:catchup`] && !useAlertsStore.getState().fired[`${dateKey}:open`]) {
+        if (missedOpen && adv.sessionOpen && !useAlertsStore.getState().fired[`${dateKey}:catchup`] && !useAlertsStore.getState().fired[`${dateKey}:open`]) {
           const indices = (await getIndices()).filter((i) => ['nifty', 'sensex', 'banknifty'].includes(i.key));
           if (indices.length) {
             const parts: Part[] = indices.map((i) => {

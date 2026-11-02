@@ -2,11 +2,12 @@ import { useEffect, useRef } from 'react';
 import { exportDomToPdf } from '../utils/exportPdf';
 import { toIsoDate } from '../utils/date';
 import { toast } from '../store/toastStore';
-import { PortfolioPdfReport } from './PortfolioPdfReport';
+import { PortfolioPdfReport, type ReportSectionKey } from './PortfolioPdfReport';
 
 interface PortfolioExportModalProps {
   open: boolean;
   onClose: () => void;
+  sections?: ReportSectionKey[];
 }
 
 const REPORT_ELEMENT_ID = 'portfolio-pdf-report-export';
@@ -19,7 +20,7 @@ const PAGE_WIDTH = 900;
  * is generated and downloaded straight away, then `onClose` is called.
  * (Name kept so existing callers don't change.)
  */
-export const PortfolioExportModal = ({ open, onClose }: PortfolioExportModalProps) => {
+export const PortfolioExportModal = ({ open, onClose, sections }: PortfolioExportModalProps) => {
   const running = useRef(false);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -70,7 +71,7 @@ export const PortfolioExportModal = ({ open, onClose }: PortfolioExportModalProp
         zIndex: -1,
       }}
     >
-      <PortfolioPdfReport reportElementId={REPORT_ELEMENT_ID} />
+      <PortfolioPdfReport reportElementId={REPORT_ELEMENT_ID} sections={sections} />
     </div>
   );
 };

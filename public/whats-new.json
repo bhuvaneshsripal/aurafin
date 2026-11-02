@@ -1,57 +1,17 @@
 {
-  "version": "1.1",
+  "version": "1.0",
   "date": "2 Nov 2026",
-  "title": "What's new in Aurafin v1.1 🎉",
+  "title": "What's new in Aurafin v1.0 🎉",
   "items": [
     {
-      "emoji": "📱",
-      "title": "Brand-new Settings menu",
-      "description": "Your photo and name on top, with every setting in one tidy list. On phones, tap a row to open it and use the arrow to come back."
-    },
-    {
-      "emoji": "🖼️",
-      "title": "Tap your photo to change it",
-      "description": "No more extra card. Just tap your profile picture to pick and crop a new one."
-    },
-    {
-      "emoji": "💾",
-      "title": "Auto-save in Basic details",
-      "description": "Start editing one field and open another, and the first one saves itself. In Address, press Enter to save and Shift + Enter for a new line."
-    },
-    {
-      "emoji": "🔐",
-      "title": "Separate password and PIN pages",
-      "description": "Change password and Change Aurafin pincode now have their own pages, easy to find."
-    },
-    {
       "emoji": "✨",
-      "title": "Your name, everywhere",
-      "description": "The name you save in Basic details now shows at the top right and in the sidebar."
+      "title": "New version moved into Settings",
+      "description": "The New version button now sits at the end of the Settings menu, right below Data, so the Settings heading stays clean."
     },
     {
-      "emoji": "👆",
-      "title": "Smoother taps",
-      "description": "Menu rows now react when you press them and slide in as you move between pages."
-    },
-    {
-      "title": "Smoother notification swipe",
-      "description": "Swipe a notification left or right and it follows your finger, fades slowly and slides away, like Android notifications. A small swipe just springs back.",
-      "emoji": "🔔"
-    },
-    {
-      "title": "Fewer stock alerts",
-      "description": "Your holdings now alert only when they move 4% or 5% up or down in a day, instead of at 2%.",
-      "emoji": "📉"
-    },
-    {
-      "title": "Correct prices without refreshing",
-      "description": "A wrong live price no longer sticks until you refresh. Total returns now fix themselves on their own.",
-      "emoji": "💹"
-    },
-    {
-      "title": "Net worth chart waits for live prices",
-      "description": "The chart's latest value no longer shows a wrong number while prices are still loading.",
-      "emoji": "📊"
+      "emoji": "↔️",
+      "title": "Roomier Settings menu",
+      "description": "The menu on the left of Settings is a little wider, so your photo, name and every row have more space to breathe."
     }
   ]
 }

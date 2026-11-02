@@ -1530,3 +1530,19 @@ input.global-search-input:focus,
   .press-row:active { transform: none; }
   .section-slide-in, .menu-slide-in { animation: none; }
 }
+
+/* ==========================================================================
+   DARK-MODE SAFETY NET
+   `slate-50/100/200` stay light in dark mode (they double as light *text*
+   colours there), so any panel/field that uses them as a background without
+   its own `dark:` variant would glow white. Re-point just the backgrounds.
+   Elements that already carry a `dark:bg-*` class are left alone.
+   ========================================================================== */
+.dark .bg-slate-50:not([class*="dark:bg-"]),
+.dark .bg-slate-50\/60:not([class*="dark:bg-"]),
+.dark .bg-slate-100:not([class*="dark:bg-"]) {
+  background-color: var(--color-surface-muted);
+}
+.dark .disabled\:bg-slate-200:disabled:not([class*="dark:disabled:bg-"]) {
+  background-color: var(--color-slate-700);
+}

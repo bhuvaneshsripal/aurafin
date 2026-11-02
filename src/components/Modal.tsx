@@ -30,6 +30,46 @@ interface ModalProps {
    *  instead, so the panel isn't left with two headers stacked. Only
    *  meaningful together with `fullScreen` or `contentPanel`. */
   hideHeader?: boolean;
+  /** Buttons pinned at the bottom of the dialog. Only the content above
+   *  scrolls; the footer never moves. */
+  footer?: ReactNode;
+  /** On phones (<768px) cover the whole screen, bottom nav included, with
+   *  the header and `footer` pinned and only the body scrolling. Desktop
+   *  keeps the normal centered dialog. */
+  fullScreenOnMobile?: boolean;
+}
+
+/** True on phone-width screens; follows rotation/resize. */
+function useIsMobile() {
+  const q = '(max-width: 767px)';
+  const [m, setM] = useState(() => typeof window !== 'undefined' && window.matchMedia(q).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(q);
+    const on = () => setM(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return m;
+}
+
+/** Where the top bar (and the market index strip under it) end on screen, so
+ *  a phone panel can start right below them and leave them visible. */
+function useBarsBottom(active: boolean) {
+  const [top, setTop] = useState(0);
+  useLayoutEffect(() => {
+    if (!active) return;
+    const measure = () => {
+      const bottoms = ['app-update-banner', 'app-topbar', 'app-marquee'].map(
+        (id) => document.getElementById(id)?.getBoundingClientRect().bottom ?? 0
+      );
+      setTop(Math.max(0, Math.round(Math.max(...bottoms))));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [active]);
+  return top;
 }
 
 /** Shared by the fullScreen and contentPanel variants: header + scrollable
@@ -38,14 +78,17 @@ function PanelBody({
   title,
   onClose,
   children,
+  belowBars = false,
 }: {
   title: ReactNode;
   onClose: () => void;
   children: ReactNode;
+  /** The panel starts under the top bar, so it needs no safe-area padding. */
+  belowBars?: boolean;
 }) {
   return (
     <>
-      <div className="flex items-center justify-between px-4 sm:px-6 pt-[calc(env(safe-area-inset-top)+16px)] pb-4 shrink-0 border-b border-line-soft">
+      <div className={`flex items-center justify-between px-4 sm:px-6 ${belowBars ? 'pt-4' : 'pt-[calc(env(safe-area-inset-top)+16px)]'} pb-4 shrink-0 border-b border-line-soft`}>
         <h3 className="text-[18px] font-semibold text-ink tracking-tight">{title}</h3>
         <button
           type="button"
@@ -212,7 +255,11 @@ export default function Modal({
   fullScreen = false,
   contentPanel = false,
   hideHeader = false,
+  footer,
+  fullScreenOnMobile = false,
 }: ModalProps) {
+  const isMobile = useIsMobile();
+  const barsBottom = useBarsBottom(open && fullScreenOnMobile && isMobile);
   // Escape closes whichever variant is open, same as the phone/PWA back
   // button already does via useModalBackClose at the call site.
   useEffect(() => {
@@ -238,6 +285,22 @@ export default function Modal({
   const { mounted, closing } = useExitPresence(open, 180);
   const visible = useVisibleBox(open);
   if (!mounted) return null;
+
+  if (fullScreenOnMobile && isMobile) {
+    return createPortal(
+      <div role="dialog" aria-modal="true" className={`${closing ? 'animate-detail-out' : 'animate-detail-in'} fixed inset-x-0 bottom-0 z-[80] bg-surface flex flex-col`} style={{ top: barsBottom }}>
+        <PanelBody title={title} onClose={onClose} belowBars>
+          {children}
+        </PanelBody>
+        {footer && (
+          <div className="shrink-0 border-t border-line-soft bg-surface px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)]">
+            {footer}
+          </div>
+        )}
+      </div>,
+      document.body
+    );
+  }
 
   if (fullScreen) {
     // Portaled straight to <body>, escaping the `.app-scale` zoomed content
@@ -309,6 +372,7 @@ export default function Modal({
         <div className="px-6 pb-6 overflow-y-auto overflow-x-hidden overscroll-contain min-w-0" style={{ scrollbarGutter: 'stable' }}>
           {children}
         </div>
+        {footer && <div className="shrink-0 px-6 pb-6 pt-2">{footer}</div>}
       </div>
     </div>,
     document.body
