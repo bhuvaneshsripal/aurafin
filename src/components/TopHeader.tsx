@@ -52,6 +52,17 @@ export default function TopHeader() {
     }, 320);
   };
 
+  // Safety net: if logging out never finishes, take the blank cover away
+  // instead of leaving the app stuck on an empty screen.
+  useEffect(() => {
+    if (!signingOut) return;
+    const t = window.setTimeout(() => {
+      setSigningOut(false);
+      toast.error('Logging out is taking too long. Please try again.');
+    }, 8000);
+    return () => window.clearTimeout(t);
+  }, [signingOut]);
+
   const profileRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 

@@ -294,7 +294,7 @@ export default function Modal({
 
   if (fullScreenOnMobile && isMobile) {
     return createPortal(
-      <div role="dialog" aria-modal="true" className={`${closing ? 'animate-detail-out' : 'animate-detail-in'} fixed inset-x-0 ${flush ? 'bottom-[calc(56px_+_env(safe-area-inset-bottom))] z-40' : 'bottom-0 z-[80]'} bg-surface flex flex-col`} style={{ top: barsBottom }}>
+      <div role="dialog" aria-modal="true" className={`${closing ? 'animate-detail-out' : 'animate-detail-in'} fixed inset-x-0 ${flush ? 'bottom-[calc(56px_+_env(safe-area-inset-bottom))] z-40' : 'bottom-0 z-[80]'} bg-surface flex flex-col`} style={{ top: flush ? Math.max(0, barsBottom - 2) : barsBottom }}>
         <PanelBody title={title} onClose={onClose} belowBars>
           {children}
         </PanelBody>

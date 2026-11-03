@@ -227,7 +227,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
     }
     // Stop server alerts for this account on this device (needs the session, so before signOut).
-    if (currentUser && (currentUser as any).isAnonymous !== true) await removePushSubscription(currentUser.uid);
+    // Best effort only: the delete can wait forever on a weak/offline connection
+    // (Firestore queues writes), which used to leave the blank "logging out"
+    // screen up for good. Give it a moment, then sign out regardless.
+    if (currentUser && (currentUser as any).isAnonymous !== true) {
+      await Promise.race([
+        removePushSubscription(currentUser.uid),
+        new Promise<void>((resolve) => setTimeout(resolve, 1500)),
+      ]);
+    }
     await signOut(auth);
     writeCachedUser(null);
     clearDataBackups(); // don't leave this account's last-known data on the device
