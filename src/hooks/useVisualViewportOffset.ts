@@ -9,6 +9,8 @@ export function useVisualViewportOffset() {
     const root = document.documentElement;
     const update = () => {
       root.style.setProperty('--vv-top', `${vv.offsetTop}px`);
+      // Only the vertical pan is followed: the bar spans the page's full width and
+      // starts after the sidebar, so shifting it sideways leaves a gap beside it.
       if (vv.offsetTop > 0) root.setAttribute('data-vv-pan', '');
       else root.removeAttribute('data-vv-pan');
     };

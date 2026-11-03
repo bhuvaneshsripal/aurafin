@@ -279,6 +279,8 @@ export default function Wealth() {
     const navState = location.state as { startAddAsset?: string; startStep?: 'type' | 'details' } | null;
     const startAddAsset = navState?.startAddAsset;
     if (startAddAsset) {
+      // Arrived from the onboarding wizard: it is finished now.
+      useAuthStore.getState().completeOnboarding();
       setStartCategoryKey(startAddAsset);
       const next = new URLSearchParams(searchParams);
       next.set('add', '1');

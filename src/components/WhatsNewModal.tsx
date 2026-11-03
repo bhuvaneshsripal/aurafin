@@ -40,26 +40,32 @@ export default function WhatsNewModal({
   notes,
   updating,
   onUpdate,
+  status = 'available',
 }: {
   open: boolean;
   onClose: () => void;
   notes: WhatsNew | null;
   updating: boolean;
   onUpdate: () => void;
+  /** 'checking': looking for an update (spinner). 'uptodate': nothing new, so
+   *  the list is empty. 'available': show the release notes + Update button. */
+  status?: 'checking' | 'available' | 'uptodate';
 }) {
+  const available = status === 'available';
   return (
-    <Modal open={open} onClose={onClose} title={notes?.title ?? "What's new"}
+    <Modal open={open} onClose={onClose} widthClassName={status === 'uptodate' ? 'max-w-2xl' : undefined}
+      title={available ? notes?.title ?? "What's new" : "What's new"}
       fullScreenOnMobile
-      footer={
+      footer={status === 'uptodate' ? undefined :
         <div className="flex items-center justify-between gap-2 md:justify-end">
           <button
             type="button"
             onClick={onClose}
             className="tap-scale px-4 py-2.5 text-sm font-medium text-muted hover:text-ink transition-colors"
           >
-            Do it later
+            {available ? 'Do it later' : 'Close'}
           </button>
-          <button
+          {available && <button
             type="button"
             disabled={updating}
             onClick={onUpdate}
@@ -67,11 +73,40 @@ export default function WhatsNewModal({
           >
             {updating ? 'Updating…' : 'Update now'}
             {updating ? <RefreshCw size={15} className="animate-spin" /> : <ArrowRight size={16} strokeWidth={2.25} />}
-          </button>
+          </button>}
         </div>
       }
     >
-      {(notes?.version || notes?.date) && (
+      {status === 'checking' && (
+        <div className="flex flex-col items-center justify-center gap-3 py-10 text-muted" role="status" aria-live="polite">
+          <RefreshCw size={28} className="animate-spin text-brand-600" />
+          <p className="text-sm">Checking for updates…</p>
+        </div>
+      )}
+      {status === 'uptodate' && (
+        // Split panel: the message sits in the left half; the right half is the
+        // site's own page colour (light sand) running out to the dialog's edge.
+        <div className="md:grid md:grid-cols-2 md:-mx-6 md:-mb-6 md:min-h-[230px]">
+          <div className="flex flex-col items-start justify-between gap-6 md:px-6 md:pb-6 py-2">
+            <div className="flex flex-col items-start gap-2">
+              <span className="h-11 w-11 rounded-full bg-[#e7f4ec] dark:bg-[#0a9a4b]/15 text-[#0a9a4b] inline-flex items-center justify-center">
+                <Check size={22} strokeWidth={2.5} />
+              </span>
+              <p className="text-sm font-semibold text-ink mt-1">You're up to date</p>
+              <p className="text-[13px] text-muted">There's nothing new to show right now.</p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="tap-scale -ml-4 px-4 py-2.5 text-sm font-medium text-muted hover:text-ink transition-colors"
+            >
+              Close
+            </button>
+          </div>
+          <div className="hidden md:block bg-page rounded-br-2xl" aria-hidden />
+        </div>
+      )}
+      {available && (notes?.version || notes?.date) && (
         <div className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl bg-[#e7f4ec] dark:bg-[#0a9a4b]/15 px-3.5 py-2.5">
           {notes.version && !(notes.title ?? '').includes(notes.version) && (
             <span className="rounded-full bg-[#0a9a4b] px-2.5 py-0.5 text-xs font-bold text-white">
@@ -83,7 +118,7 @@ export default function WhatsNewModal({
           )}
         </div>
       )}
-      {notes ? (
+      {available && (notes ? (
         <ul className="space-y-3.5">
           {notes.items.map((item) => (
             <li key={item.title} className="flex items-center gap-3">
@@ -107,7 +142,7 @@ export default function WhatsNewModal({
         <p className="text-sm text-muted">
           A new version of Aurafin is ready, with improvements and fixes. Update to get it.
         </p>
-      )}
+      ))}
     </Modal>
   );
 }

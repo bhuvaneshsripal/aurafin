@@ -1,13 +1,25 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Delete } from 'lucide-react';
 import { useAppLockStore } from '../store/appLockStore';
 import { LOGO_SRC } from '../config/logo';
+
+const KEY_CLASS =
+  'aspect-square w-full rounded-2xl border border-line bg-surface shadow-xs select-none hover:bg-surface-hover transition-colors duration-100 focus-visible:outline-2 focus-visible:outline-brand-600';
 
 export default function LockScreen() {
   const { locked, pinAttemptError, unlock } = useAppLockStore();
   const [pin, setPinInput] = useState('');
   const [shake, setShake] = useState(false);
-  const [checking, setChecking] = useState(false);
+  const [, setChecking] = useState(false);
+  // Refs mirror the state so very fast typing never reads a stale value
+  // (two quick taps used to land in the same render and drop a digit).
+  const pinRef = useRef('');
+  const busyRef = useRef(false); // wrong-PIN shake or cache check running
+  const keyEls = useRef<Record<string, HTMLButtonElement | null>>({});
+  const setPin = useCallback((v: string) => {
+    pinRef.current = v;
+    setPinInput(v);
+  }, []);
 
   // Keeps the lock screen mounted for one more animation frame after a
   // correct PIN unlocks it, so it fades/scales smoothly away instead of
@@ -42,81 +54,114 @@ export default function LockScreen() {
       }
     }
     setShake(true);
+    busyRef.current = true;
     window.setTimeout(() => {
       setShake(false);
-      setPinInput('');
+      busyRef.current = false;
+      setPin('');
     }, 420);
-  }, []);
+  }, [setPin]);
 
   const submitPin = useCallback(
     (value?: string) => {
-      if (shake || checking) return;
-      const candidate = value ?? pin;
+      if (busyRef.current) return;
+      const candidate = value ?? pinRef.current;
       if (candidate.length !== 4) return;
       const { _storedPin, unlockWithCache } = useAppLockStore.getState();
       if (!_storedPin) {
         // The PIN hasn't loaded from Firestore (no/low network). Check against
         // the hashed copy cached on this device so a correct PIN still opens.
+        busyRef.current = true;
         setChecking(true);
         void unlockWithCache(candidate).then((result) => {
+          busyRef.current = false;
           setChecking(false);
           if (result === 'ok') {
-            setPinInput('');
+            setPin('');
           } else if (result === 'wrong') {
             rejectPin();
           } else {
             // Nothing cached yet (first sign-in on this device): can't verify.
-            window.setTimeout(() => setPinInput(''), 300);
+            window.setTimeout(() => setPin(''), 300);
           }
         });
         return;
       }
       const ok = unlock(candidate);
       if (ok) {
-        setPinInput('');
+        setPin('');
         return;
       }
       rejectPin();
     },
-    [pin, shake, checking, unlock, rejectPin]
+    [unlock, rejectPin, setPin]
   );
+
+  /** Quick squish + green flash on the pressed key (touch, mouse or keyboard). */
+  const animateKey = useCallback((id: string) => {
+    const el = keyEls.current[id];
+    if (!el || typeof el.animate !== 'function') return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    el.animate(
+      [
+        { transform: 'scale(1)', backgroundColor: 'var(--color-brand-100, #d1fae5)', offset: 0 },
+        { transform: 'scale(0.88)', backgroundColor: 'var(--color-brand-100, #d1fae5)', offset: 0.35 },
+        { transform: 'scale(1)', backgroundColor: 'transparent', offset: 1 },
+      ],
+      { duration: 220, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' }
+    );
+  }, []);
+
+  const buzz = () => {
+    if ('vibrate' in navigator) {
+      try {
+        navigator.vibrate(8);
+      } catch {
+        /* best-effort haptic */
+      }
+    }
+  };
 
   const pressDigit = useCallback(
     (digit: string) => {
-      if (shake) return;
-      // Compute from current state and submit outside any state updater:
-      // updaters must stay pure (React may run them twice), otherwise one
-      // entry could be validated twice and count as two wrong attempts.
-      if (pin.length >= 4) return;
-      const next = pin + digit;
-      setPinInput(next);
+      if (busyRef.current) return;
+      const cur = pinRef.current;
+      if (cur.length >= 4) return;
+      const next = cur + digit;
+      setPin(next);
       if (next.length === 4) submitPin(next);
     },
-    [shake, pin, submitPin]
+    [submitPin, setPin]
   );
 
   const pressBackspace = useCallback(() => {
-    if (shake) return;
-    setPinInput((p) => p.slice(0, -1));
-  }, [shake]);
+    if (busyRef.current) return;
+    setPin(pinRef.current.slice(0, -1));
+  }, [setPin]);
 
   // Whenever the screen (re)locks — including auto-lock after returning from
   // the background, not just the initial mount — make sure the box starts
   // empty rather than showing whatever was last typed.
   useEffect(() => {
     if (locked) {
-      setPinInput('');
+      setPin('');
       setShake(false);
+      busyRef.current = false;
     }
-  }, [locked]);
+  }, [locked, setPin]);
 
   // Physical keyboard support (desktop/laptop)
   useEffect(() => {
     if (!locked) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key >= '0' && e.key <= '9') {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key.length === 1 && e.key >= '0' && e.key <= '9') {
+        // Held-down key repeat must not type extra digits; fast separate presses all count.
+        if (e.repeat) return;
+        animateKey(e.key);
         pressDigit(e.key);
       } else if (e.key === 'Backspace') {
+        animateKey('back');
         pressBackspace();
       } else if (e.key === 'Enter') {
         submitPin();
@@ -124,7 +169,7 @@ export default function LockScreen() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [locked, pressDigit, pressBackspace, submitPin]);
+  }, [locked, pressDigit, pressBackspace, submitPin, animateKey]);
 
   if (!shouldRender) return null;
 
@@ -176,32 +221,57 @@ export default function LockScreen() {
       <div className="flex-1 min-h-6" />
 
       <div className="w-full max-w-[300px] mx-auto flex flex-col items-center">
-        {/* Keypad */}
-        <div className="grid grid-cols-3 gap-3 w-full max-w-[260px]">
+        {/* Keypad: square keys. They react on press-down (not release) so typing
+            feels instant, and each one squishes + flashes when hit. */}
+        <div className="grid grid-cols-3 gap-3 w-full max-w-[264px]" style={{ touchAction: 'manipulation' }}>
           {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => (
             <button
               key={d}
+              ref={(el) => { keyEls.current[d] = el; }}
               type="button"
-              onClick={() => pressDigit(d)}
-              className="h-14 rounded-xl border border-line bg-surface shadow-xs text-xl font-semibold text-ink hover:bg-surface-hover active:scale-95 transition-all duration-100"
+              aria-label={d}
+              onPointerDown={(e) => {
+                e.preventDefault(); // no focus ring / text selection while tapping fast
+                buzz();
+                animateKey(d);
+                pressDigit(d);
+              }}
+              onClick={(e) => { if (e.detail === 0) pressDigit(d); }} // keyboard activation (Enter/Space)
+              className={KEY_CLASS + ' text-2xl font-semibold text-ink'}
             >
               {d}
             </button>
           ))}
           <div />
           <button
+            ref={(el) => { keyEls.current['0'] = el; }}
             type="button"
-            onClick={() => pressDigit('0')}
-            className="h-14 rounded-xl border border-line bg-surface shadow-xs text-xl font-semibold text-ink hover:bg-surface-hover active:scale-95 transition-all duration-100"
+            aria-label="0"
+            onPointerDown={(e) => {
+              e.preventDefault();
+              buzz();
+              animateKey('0');
+              pressDigit('0');
+            }}
+            onClick={(e) => { if (e.detail === 0) pressDigit('0'); }}
+            className={KEY_CLASS + ' text-2xl font-semibold text-ink'}
           >
             0
           </button>
           <button
+            ref={(el) => { keyEls.current['back'] = el; }}
             type="button"
-            onClick={pressBackspace}
-            className="h-14 rounded-xl border border-line bg-surface shadow-xs flex items-center justify-center text-ink-2 hover:bg-surface-hover active:scale-95 transition-all duration-100"
+            aria-label="Delete"
+            onPointerDown={(e) => {
+              e.preventDefault();
+              buzz();
+              animateKey('back');
+              pressBackspace();
+            }}
+            onClick={(e) => { if (e.detail === 0) pressBackspace(); }}
+            className={KEY_CLASS + ' flex items-center justify-center text-ink-2'}
           >
-            <Delete size={20} />
+            <Delete size={22} />
           </button>
         </div>
       </div>

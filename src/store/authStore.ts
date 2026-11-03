@@ -11,7 +11,7 @@ import {
   sendPasswordResetEmail,
   type User,
 } from 'firebase/auth';
-import { auth, googleProvider } from '../firebase/config';
+import { auth, googleProvider, appleProvider, microsoftProvider, yahooProvider } from '../firebase/config';
 import { useSyncStatusStore } from './syncStatusStore';
 import { clearDataBackups } from '../utils/dataBackup';
 
@@ -111,6 +111,7 @@ interface AuthState {
   needsOnboarding: boolean;
   init: () => void;
   loginWithGoogle: () => Promise<void>;
+  loginWithProvider: (provider: 'apple' | 'microsoft' | 'yahoo') => Promise<void>;
   loginWithEmail: (email: string, password: string) => Promise<void>;
   registerWithEmail: (email: string, password: string) => Promise<void>;
   loginAsGuest: () => Promise<void>;
@@ -179,6 +180,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
   loginWithGoogle: async () => {
     const result = await signInWithPopup(auth, googleProvider);
+    if (getAdditionalUserInfo(result)?.isNewUser) {
+      safeSet(onboardingKey(result.user.uid), 'true');
+      set({ needsOnboarding: true });
+    }
+  },
+  loginWithProvider: async (provider) => {
+    const p = provider === 'apple' ? appleProvider : provider === 'microsoft' ? microsoftProvider : yahooProvider;
+    const result = await signInWithPopup(auth, p);
     if (getAdditionalUserInfo(result)?.isNewUser) {
       safeSet(onboardingKey(result.user.uid), 'true');
       set({ needsOnboarding: true });

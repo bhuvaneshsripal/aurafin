@@ -51,6 +51,8 @@ import Modal from '../components/Modal';
 import { hardRefresh } from '../utils/hardRefresh';
 import UpdateDot from '../components/UpdateDot';
 import WhatsNewModal, { useWhatsNew } from '../components/WhatsNewModal';
+import { isNewVersionDeployed } from '../utils/updateChecks';
+import { useUpdateStore } from '../store/updateStore';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useUrlTab } from '../hooks/useUrlTab';
 import CustomSelect from '../components/CustomSelect';
@@ -1380,7 +1382,6 @@ function PreferencesTab() {
         </div>
         <FxVsDollar base={baseCurrency} compare={compareCurrency} />
       </Card>
-      <AppLockCard />
       <GoldRateCard />
       <DisplaySizeCard />
       {/* Laptop: the eye is pinned bottom-right, so there's nothing to configure. */}
@@ -1987,7 +1988,25 @@ export default function Settings() {
 
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
   const [updating, setUpdating] = useState(false);
-  const whatsNew = useWhatsNew(whatsNewOpen);
+  // Opening "New version" first checks for a deployed update (spinner), then
+  // shows the release list only if one is waiting; otherwise the list is empty.
+  const pendingUpdate = useUpdateStore((s) => s.updateAvailable);
+  const [updateStatus, setUpdateStatus] = useState<'checking' | 'available' | 'uptodate'>('checking');
+  const whatsNew = useWhatsNew(whatsNewOpen && updateStatus === 'available');
+  useEffect(() => {
+    if (!whatsNewOpen) return;
+    let cancelled = false;
+    setUpdateStatus('checking');
+    const minSpinner = new Promise((r) => window.setTimeout(r, 700));
+    void Promise.all([isNewVersionDeployed(), minSpinner]).then(([deployed]) => {
+      if (cancelled) return;
+      setUpdateStatus(pendingUpdate || deployed === true ? 'available' : 'uptodate');
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [whatsNewOpen]);
 
   // Phones show the menu first and one section at a time; desktop shows both side by side.
   // Desktop: the menu (left) and the section (right) are two separate scroll
@@ -2144,6 +2163,7 @@ export default function Settings() {
         open={whatsNewOpen}
         onClose={() => setWhatsNewOpen(false)}
         notes={whatsNew}
+        status={updateStatus}
         updating={updating}
         onUpdate={() => {
           setUpdating(true);

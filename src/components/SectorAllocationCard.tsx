@@ -168,15 +168,22 @@ export default function SectorAllocationCard({ items, currency }: { items: Value
               >
                 <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: r.color, opacity: held ? 1 : 0.35 }} />
                 <span className={`flex-1 min-w-0 text-sm truncate ${held ? 'text-ink font-medium' : 'text-muted'}`}>{r.label}</span>
-                <span className="hidden sm:block w-40 h-1.5 rounded-full bg-surface-hover overflow-hidden">
+                <span className="hidden sm:block w-40 shrink-0 h-1.5 rounded-full bg-surface-hover overflow-hidden">
                   <span
                     className="block h-full rounded-full"
                     style={{ width: `${(r.pct / maxPct) * 100}%`, background: r.color }}
                   />
                 </span>
-                {c && (
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${PILL[c.status]}`}>{PILL_TEXT[c.status]}</span>
+                {/* Fixed-width slot (even when empty) so every bar starts and ends at the same x,
+                    whether the pill says Low, Medium or High, or is missing. */}
+                {targetsOn && total > 0 && (
+                  <span className="hidden sm:flex w-[4.5rem] shrink-0 justify-center">
+                    {c && (
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${PILL[c.status]}`}>{PILL_TEXT[c.status]}</span>
+                    )}
+                  </span>
                 )}
+                {c && <span className={`sm:hidden rounded-full px-2 py-0.5 text-[11px] font-semibold ${PILL[c.status]}`}>{PILL_TEXT[c.status]}</span>}
                 <span className={`font-numeric text-sm w-14 text-right ${held ? 'text-ink font-semibold' : 'text-muted'}`}>
                   {pctLabel(r.pct)}
                 </span>

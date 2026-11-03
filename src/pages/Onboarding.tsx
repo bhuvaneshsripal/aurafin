@@ -18,7 +18,7 @@ import { setPendingImportFile } from '../utils/pendingImportFile';
 import Modal from '../components/Modal';
 import PinBoxInput, { type PinBoxInputHandle } from '../components/PinBoxInput';
 
-const STEPS = ['welcome', 'profile', 'assets', 'secure'] as const;
+const STEPS = ['welcome', 'profile', 'secure', 'assets'] as const;
 type StepKey = (typeof STEPS)[number];
 
 /**
@@ -139,14 +139,17 @@ export default function Onboarding() {
 
           {step === 'assets' && (
             <AssetsStep
-              onBack={() => goTo(1)}
-              onSkip={() => goTo(3)}
+              onBack={() => goTo(2)}
+              onSkip={finish}
               onSkipAll={skipAll}
-              onSave={() => goTo(3)}
+              onSave={finish}
               onImportBroker={goImport}
               onPickCategory={(cat) => {
                 // Hand straight over to the real Add Asset flow (type tiles, then the details form).
-                completeOnboarding();
+                // Onboarding is marked complete by Wealth once it has taken over (see
+                // its startAddAsset effect). Completing it here raced the router: the
+                // "pending onboarding -> /onboarding" guard bounced the person straight
+                // back, so tapping a type seemed to do nothing.
                 navigate('/wealth', {
                   state: { startAddAsset: cat.key, startStep: cat.types.length <= 1 ? 'details' : 'type' },
                 });
@@ -154,7 +157,7 @@ export default function Onboarding() {
             />
           )}
 
-          {step === 'secure' && <SecureStep onBack={() => goTo(2)} onSkip={finish} onSkipAll={skipAll} onDone={finish} />}
+          {step === 'secure' && <SecureStep onBack={() => goTo(1)} onSkip={() => goTo(3)} onSkipAll={skipAll} onDone={() => goTo(3)} />}
         </div>
       </div>
     </div>
@@ -308,7 +311,15 @@ function ProfileStep({
         />
       </div>
 
-      <StepNav onBack={onBack} onSkip={onSkip} onSkipAll={onSkipAll} onNext={onContinue} nextLabel="Continue" />
+      {/* Continue only works once something is filled in; with nothing typed, Skip is the way through. */}
+      <StepNav
+        onBack={onBack}
+        onSkip={onSkip}
+        onSkipAll={onSkipAll}
+        onNext={onContinue}
+        nextLabel="Continue"
+        nextDisabled={![age, income, expense, savings].some((v) => String(v ?? '').trim() !== '')}
+      />
     </div>
   );
 }

@@ -284,14 +284,32 @@ export const CAP_META: Record<CapKey, { label: string; hint: string; color: stri
   large: { label: 'Large cap', hint: 'Biggest ~100 companies', color: '#0a9a4b' },
   mid: { label: 'Mid cap', hint: 'Next ~150 companies', color: '#2563eb' },
   small: { label: 'Small cap', hint: 'Smaller companies', color: '#f59e0b' },
-  fund: { label: 'ETFs & others', hint: 'Spread across many companies', color: '#94a3b8' },
+  fund: { label: 'ETFs & funds', hint: 'Spread across many companies', color: '#94a3b8' },
   unknown: { label: 'Size unavailable', hint: 'Market value not found yet', color: '#cbd5e1' },
 };
 
+/** Used only when the live lookup returns no market value: sizes for stocks the
+ *  feed often misses (AMFI list, Jun 2026 for Vodafone Idea; others approximate). */
+const CAP_FALLBACK: [RegExp, CapKey][] = [
+  [/vodafone\s*idea|\bIDEA\b/i, 'large'],
+  [/suzlon/i, 'mid'],
+  [/adani\s*total\s*gas|\bATGL\b/i, 'mid'],
+  [/cupid/i, 'small'],
+];
+
+/** ETFs / index funds / gold & silver BEES held as a "stock": they have no single company size. */
+const FUND_NAME = /\bETF\b|BEES\b|\bBEES|index\s*fund|\bNIFTYBEES|LIQUID/i;
+
 export function capBucket(asset: Asset, profile: SectorProfile | null | undefined): CapKey {
   if (!SINGLE_STOCK_CLASSES.has(asset.assetClass)) return 'fund';
+  if (FUND_NAME.test(`${asset.name ?? ''} ${asset.symbol ?? ''}`)) return 'fund';
   const cap = profile?.marketCap;
-  if (!cap || cap <= 0) return 'unknown';
+  if (!cap || cap <= 0) {
+    const hay = `${asset.name ?? ''} ${asset.symbol ?? ''}`;
+    const hit = CAP_FALLBACK.find(([re]) => re.test(hay));
+    // Never "unknown": anything outside the top 250 is a small cap, so that is the safe default.
+    return hit ? hit[1] : 'small';
+  }
   const bands = profile?.capCurrency === 'INR' || (!profile?.capCurrency && asset.market !== 'US') ? CAP_BANDS.IN : CAP_BANDS.US;
   return cap >= bands.large ? 'large' : cap >= bands.mid ? 'mid' : 'small';
 }

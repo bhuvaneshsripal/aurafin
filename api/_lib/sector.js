@@ -13,7 +13,7 @@ const MAX_SYMBOLS = 25;
 
 async function profileFor(yahooSymbol, retry = true) {
   const s = await getSession();
-  const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(yahooSymbol)}?modules=assetProfile,price&crumb=${encodeURIComponent(s.crumb)}`;
+  const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(yahooSymbol)}?modules=assetProfile,price,summaryDetail,defaultKeyStatistics&crumb=${encodeURIComponent(s.crumb)}`;
   const res = await fetch(url, { headers: { 'User-Agent': UA, Cookie: s.cookie } });
   if ((res.status === 401 || res.status === 403) && retry) {
     await getSession(true);
@@ -23,8 +23,13 @@ async function profileFor(yahooSymbol, retry = true) {
   const result = (await res.json())?.quoteSummary?.result?.[0];
   const p = result?.assetProfile;
   // Market value of the whole company (Yahoo gives it in the share's own currency).
-  const cap = result?.price?.marketCap?.raw;
-  const marketCap = typeof cap === 'number' && Number.isFinite(cap) && cap > 0 ? cap : null;
+  // Yahoo leaves price.marketCap empty for some listings: fall back to the
+  // summary figure, then to shares outstanding x last price.
+  const ok = (n) => typeof n === 'number' && Number.isFinite(n) && n > 0;
+  const shares = result?.defaultKeyStatistics?.sharesOutstanding?.raw ?? result?.defaultKeyStatistics?.impliedSharesOutstanding?.raw;
+  const last = result?.price?.regularMarketPrice?.raw;
+  const cap = [result?.price?.marketCap?.raw, result?.summaryDetail?.marketCap?.raw, ok(shares) && ok(last) ? shares * last : null].find(ok);
+  const marketCap = ok(cap) ? cap : null;
   if ((!p || (!p.sector && !p.industry)) && marketCap === null) return null;
   return {
     sector: p?.sector ?? null,

@@ -1,4 +1,4 @@
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useRef, useState, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 import { useAssetsStore } from './store/assetsStore';
@@ -120,7 +120,9 @@ function AppShell() {
   // means /import renders immediately and reliably even if the onboarding
   // flag hasn't finished propagating yet, instead of racing back to
   // /onboarding and bouncing on to the Dashboard.
-  if (needsOnboarding && location.pathname !== '/import') {
+  const handingOffToAddAsset =
+    location.pathname === '/wealth' && !!(location.state as { startAddAsset?: string } | null)?.startAddAsset;
+  if (needsOnboarding && location.pathname !== '/import' && !handingOffToAddAsset) {
     return (
       <ErrorBoundary key="onboarding">
         <Suspense fallback={<RouteFallback />}>
@@ -365,6 +367,19 @@ function AppReady({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/** True when the page was reloaded (F5 / pull-to-refresh) rather than opened. */
+function isPageReload(): boolean {
+  try {
+    const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+    return nav?.type === 'reload';
+  } catch {
+    return false;
+  }
+}
+// Set when the sign-in screen has been shown, so a login always lands on the
+// Dashboard even if the tab was left on another URL (e.g. /settings).
+let loginScreenShown = false;
+
 export default function App() {
   // Public policy pages: reachable signed-out (and by Google's verification bot).
   const legalPath = window.location.pathname.replace(/\/+$/, '');
@@ -376,6 +391,7 @@ export default function App() {
   const initLock = useAppLockStore((s) => s.init);
   const initDisplaySettings = useDisplaySettingsStore((s) => s.init);
   const initNotificationPrefs = useNotificationPreferencesStore((s) => s.init);
+  const startRouteChecked = useRef(false);
 
   useEffect(() => {
     init();
@@ -394,7 +410,21 @@ export default function App() {
   }
 
   if (!user) {
+    loginScreenShown = true;
+    // Signed out (logout, expired session, fresh visit): the address goes back
+    // to the start page too, instead of keeping the old /essentials?tab=... URL.
+    if (window.location.pathname !== '/') window.history.replaceState(null, '', '/');
     return <Suspense fallback={null}><Login /></Suspense>;
+  }
+
+  // Opening the app or logging in starts on the Dashboard. Only a plain
+  // reload keeps whatever page you were on. Done before <BrowserRouter>
+  // mounts so it reads the corrected URL (no flash of the old page).
+  if (!startRouteChecked.current) {
+    startRouteChecked.current = true;
+    if ((loginScreenShown || !isPageReload()) && window.location.pathname !== '/') {
+      window.history.replaceState(null, '', '/');
+    }
   }
 
   return (

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import SocialLoginButtons from './SocialLoginButtons';
 import { friendlyAuthError } from '../utils/authErrors';
 
 interface SignUpScreenProps {
@@ -88,6 +89,8 @@ export default function SignUpScreen({ onBack, onLogin }: SignUpScreenProps) {
           </svg>
           {googleLoading ? 'Connecting…' : 'Continue with Google'}
         </button>
+
+          <SocialLoginButtons onError={setError} disabled={googleLoading} />
 
         <div className="su-divider">
           <span>or use email</span>

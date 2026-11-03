@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, OAuthProvider, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { isSupported, getAnalytics, type Analytics } from 'firebase/analytics';
 
@@ -62,6 +62,16 @@ function createFirestore() {
 
 export const db = createFirestore();
 export const googleProvider = new GoogleAuthProvider();
+
+// More ways in than Gmail: Apple (iPhone/iCloud), Microsoft (Outlook/Hotmail/Live/work) and Yahoo.
+// Each must be switched on in Firebase Console -> Authentication -> Sign-in method.
+export const appleProvider = new OAuthProvider('apple.com');
+appleProvider.addScope('email');
+appleProvider.addScope('name');
+export const microsoftProvider = new OAuthProvider('microsoft.com');
+microsoftProvider.setCustomParameters({ prompt: 'select_account' });
+export const yahooProvider = new OAuthProvider('yahoo.com');
+yahooProvider.addScope('email');
 
 // Analytics only works in a browser that supports it (and is a no-op
 // during SSR or in unsupported environments), so it's initialized

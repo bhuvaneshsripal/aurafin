@@ -24,7 +24,7 @@ const SW_POLL_MS = 20_000;
 const MIN_GAP_MS = 2_000;
 
 /** The id of the deployed build, or null when it can't be read (offline, dev, odd response). */
-async function fetchDeployedBuildId(): Promise<string | null> {
+export async function fetchDeployedBuildId(): Promise<string | null> {
   try {
     const res = await fetch(`/version.json?t=${Date.now()}`, { cache: 'no-store' });
     if (!res.ok) return null;
@@ -89,4 +89,14 @@ export function startUpdateChecks(reg: ServiceWorkerRegistration | undefined, on
     window.removeEventListener('pageshow', checkAll);
     window.removeEventListener('online', checkAll);
   };
+}
+
+/** One-off check used by Settings → New version: is a newer build deployed
+ *  than the one running right now? `true`/`false`, or `null` if it couldn't be
+ *  determined (offline, dev server). */
+export async function isNewVersionDeployed(): Promise<boolean | null> {
+  if (import.meta.env.DEV || typeof __BUILD_ID__ === 'undefined') return null;
+  const id = await fetchDeployedBuildId();
+  if (!id) return null;
+  return id !== __BUILD_ID__;
 }

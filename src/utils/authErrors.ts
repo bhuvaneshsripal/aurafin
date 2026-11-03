@@ -22,6 +22,7 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
   'auth/invalid-api-key': 'This app isn\u2019t connected to its sign-in service yet (missing Firebase settings). Please try again later.',
   'auth/api-key-not-valid.-please-pass-a-valid-api-key.': 'This app isn\u2019t connected to its sign-in service yet (missing Firebase settings). Please try again later.',
   'auth/configuration-not-found': 'Sign-in isn\u2019t set up for this app yet. The owner needs to finish the Firebase Authentication setup.',
+  'auth/account-exists-with-different-credential': 'An account with this email already exists with a different sign-in method. Please use the method you signed up with (Google, Apple, Microsoft, Yahoo or email).',
   'auth/internal-error': 'Something went wrong on our end. Please try again.',
 };
 

@@ -2,6 +2,7 @@ import { lazy, Suspense, useState } from 'react';
 import { Eye, EyeOff, Moon, Sun } from 'lucide-react';
 import { useUiStore } from '../store/uiStore';
 import { useAuthStore } from '../store/authStore';
+import SocialLoginButtons from '../components/SocialLoginButtons';
 import { friendlyAuthError } from '../utils/authErrors';
 import LoginShowcase from '../components/LoginShowcase';
 import StockAnalysisArticle from '../components/StockAnalysisArticle';
@@ -249,6 +250,8 @@ export default function Login() {
             </svg>
             {googleLoading ? 'Connecting…' : 'Continue with Google'}
           </button>
+
+          <SocialLoginButtons onError={setError} disabled={googleLoading} />
 
           {error && (
             <p role="alert" className="text-[0.875em] text-red-500 mb-[0.75em]">
