@@ -190,7 +190,7 @@ export default function BottomNav() {
     // Tapping the tab you're already on refreshes the page (falls back to
     // scrolling to the top if the app can't reach the network).
     if (location.pathname === to) {
-      void hardRefresh().then((ok) => {
+      void hardRefresh({ showBar: true, keepPage: true }).then((ok) => {
         if (!ok) window.scrollTo({ top: 0, behavior: 'smooth' });
       });
     }

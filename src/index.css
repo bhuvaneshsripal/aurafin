@@ -1547,3 +1547,15 @@ input.global-search-input:focus,
 .dark .disabled\:bg-slate-200:disabled:not([class*="dark:disabled:bg-"]) {
   background-color: var(--color-slate-700);
 }
+
+/* Green refresh line under the index bar (RefreshBar). */
+@keyframes refresh-bar-run {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+.refresh-bar-run {
+  animation: refresh-bar-run 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .refresh-bar-run { animation-duration: 2s; }
+}

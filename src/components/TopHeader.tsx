@@ -1,3 +1,4 @@
+import RefreshBar from './RefreshBar';
 import { SHORTCUT_HINT } from '../config/shortcuts';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -256,6 +257,7 @@ export default function TopHeader() {
 
       {/* Mobile only: scrolling index strip pinned just under the top bar. */}
       <MarketTickerMarquee id="app-marquee" className="md:hidden sticky top-14 z-20" />
+      <RefreshBar />
 
       {signingOut && (
         <div className="animate-backdrop-in fixed inset-0 z-[200] flex flex-col items-center justify-center gap-3 bg-page"></div>

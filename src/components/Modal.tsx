@@ -63,14 +63,31 @@ function useBarsBottom(active: boolean) {
   useLayoutEffect(() => {
     if (!active) return;
     const measure = () => {
-      const bottoms = ['app-update-banner', 'app-topbar', 'app-marquee'].map(
-        (id) => document.getElementById(id)?.getBoundingClientRect().bottom ?? 0
-      );
-      setTop(Math.max(0, Math.round(Math.max(...bottoms))));
+      // Only bars that are actually on screen count (a dismissed update banner
+      // keeps its element but has no height).
+      const bottoms = ['app-update-banner', 'app-topbar', 'app-marquee'].map((id) => {
+        const r = document.getElementById(id)?.getBoundingClientRect();
+        return r && r.height > 0 && r.width > 0 ? r.bottom : 0;
+      });
+      const next = Math.max(0, Math.round(Math.max(...bottoms)));
+      setTop((prev) => (prev === next ? prev : next));
     };
     measure();
+    // The bars slide (the update notice pushes them down, then they glide back
+    // up when it goes), so one measurement can be stale a moment later. Follow
+    // them for as long as the sheet is open so it always sits flush under the
+    // market strip, with no page showing through above it.
+    let raf = 0;
+    const tick = () => {
+      measure();
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
     window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', measure);
+    };
   }, [active]);
   return top;
 }

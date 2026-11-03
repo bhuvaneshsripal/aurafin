@@ -166,7 +166,7 @@ import PropertySection from '../components/assetForm/PropertySection';
 import { propertyCost, rateBasedValue, summarizeProperty } from '../utils/property';
 import { computePpfNow, migrateLegacyPpf, ppfMaturityDate, ppfRate, ppfStatus, yearAdvice } from '../utils/ppf';
 
-type Tab = 'assets' | 'liabilities' | 'networth' | 'allocation' | 'analytics';
+type Tab = 'assets' | 'liabilities' | 'performs' | 'networth' | 'allocation' | 'analytics';
 type SortKey = 'manual' | 'name' | 'qty' | 'avgCost' | 'perUnit' | 'invested' | 'value' | 'pnl' | 'alloc' | 'dayChange';
 type EntryType = 'asset' | 'liability';
 type NetWorthRange = '3M' | '6M' | '1Y' | 'ALL';
@@ -262,7 +262,7 @@ export default function Wealth() {
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [tab, setTab] = useUrlTab<Tab>(['assets', 'liabilities', 'networth', 'allocation', 'analytics'], 'assets');
+  const [tab, setTab] = useUrlTab<Tab>(['assets', 'liabilities', 'performs', 'networth', 'allocation', 'analytics'], 'assets');
   const [startCategoryKey, setStartCategoryKey] = useState<string | undefined>();
 
   const addFlow: EntryType | null =
@@ -338,6 +338,7 @@ export default function Wealth() {
       {tab === 'liabilities' && (
         <LiabilitiesTab tab={tab} setTab={setTab} onAdd={() => openAdd('liability')} />
       )}
+      {tab === 'performs' && <PerformsTab tab={tab} setTab={setTab} />}
       {tab === 'networth' && <NetWorthTab tab={tab} setTab={setTab} />}
       {tab === 'allocation' && <AllocationTab tab={tab} setTab={setTab} />}
       {tab === 'analytics' && <AnalyticsTab tab={tab} setTab={setTab} />}
@@ -803,6 +804,7 @@ function TabNav({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
       items={[
         { key: 'assets', label: 'Assets' },
         { key: 'liabilities', label: 'Liabilities' },
+        { key: 'performs', label: 'Performs' },
         { key: 'networth', label: 'Net worth' },
         { key: 'allocation', label: 'Allocation' },
         { key: 'analytics', label: 'Analytics' },
@@ -8287,6 +8289,133 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
           </>
         }
       />
+    </div>
+  );
+}
+
+/** How many holdings each side of the Performs tab lists. */
+const PERFORMS_COUNT = 6;
+
+type PerformRow = {
+  asset: Asset;
+  percent: number;
+  /** Total rupee change today = per-unit change × quantity. */
+  total: number | undefined;
+  price: number | undefined;
+};
+
+function PerformsList({ title, tone, rows }: { title: string; tone: 'up' | 'down'; rows: PerformRow[] }) {
+  const Icon = tone === 'up' ? TrendingUp : TrendingDown;
+  return (
+    <Card padding="none">
+      <div className="flex items-center gap-2 px-5 py-4 border-b border-line-soft">
+        <span
+          className={`h-7 w-7 rounded-lg inline-flex items-center justify-center ${
+            tone === 'up' ? 'bg-positive-soft text-positive' : 'bg-negative-soft text-negative'
+          }`}
+        >
+          <Icon size={15} />
+        </span>
+        <h3 className="text-[15px] font-semibold text-ink">{title}</h3>
+      </div>
+      {rows.length === 0 ? (
+        <p className="px-5 py-8 text-sm text-muted text-center">Nothing to show yet.</p>
+      ) : (
+        <ul className="divide-y divide-line-soft">
+          {rows.map((r, i) => {
+            const a = r.asset;
+            const up = r.percent >= 0;
+            return (
+              <li key={a.id} className="flex items-center gap-3 px-5 py-3">
+                <span className="w-4 text-xs text-muted font-numeric">{i + 1}</span>
+                <CompanyLogo symbol={a.symbol} name={a.name} market={a.market ?? 'IN'} isin={a.isin} size={32} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-ink truncate">{a.name}</p>
+                  <p className="text-xs text-muted truncate">
+                    {r.price !== undefined ? formatPreciseCurrency(r.price, a.currency) : a.symbol ?? ''}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className={`text-sm font-semibold font-numeric ${up ? 'text-positive' : 'text-negative'}`}>
+                    {up ? '+' : '−'}
+                    {formatPercentMagnitude(r.percent)}
+                  </p>
+                  {r.total !== undefined && (
+                    <p className={`text-xs font-numeric ${up ? 'text-positive' : 'text-negative'}`}>
+                      {formatSignedCurrency(r.total, a.currency)}
+                    </p>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+/** Performs: today's six best and six worst holdings by 1D % change (same
+ *  numbers as the Assets table's 1D column). */
+function PerformsTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
+  const allAssets = useAssetsStore((s) => s.assets);
+  const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
+  const livePrices = useLivePricesStore((s) => s.prices);
+  const previousCloses = useLivePricesStore((s) => s.previousCloses);
+  const sipValues = useLivePricesStore((s) => s.sipValues);
+  const liveGoldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
+  const dayChangeResetActive = useDayChangeResetWindow();
+
+  const { best, worst, count } = useMemo(() => {
+    const assets = (activeProfileId ? allAssets.filter((a) => a.profileId === activeProfileId) : allAssets).filter(
+      (a) => !isFullySold(a)
+    );
+    const rows: PerformRow[] = [];
+    for (const a of assets) {
+      const computed = resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram);
+      const previousClose = resolvePreviousClose(a.symbol, previousCloses);
+      if (previousClose === undefined || !previousClose || computed.currentPrice === undefined) continue;
+      const perUnit = computed.currentPrice - previousClose;
+      rows.push({
+        asset: a,
+        percent: (perUnit / previousClose) * 100,
+        total: a.quantity ? perUnit * a.quantity : undefined,
+        price: computed.currentPrice,
+      });
+    }
+    rows.sort((x, y) => y.percent - x.percent);
+    // Split so the two lists never share a holding when there are few of them.
+    const n = Math.min(PERFORMS_COUNT, Math.ceil(rows.length / 2));
+    const m = Math.min(PERFORMS_COUNT, Math.floor(rows.length / 2));
+    return {
+      best: rows.slice(0, n),
+      worst: rows.slice(rows.length - m).reverse(),
+      count: rows.length,
+    };
+  }, [allAssets, activeProfileId, livePrices, previousCloses, sipValues, liveGoldPricePerGram]);
+
+  return (
+    <div className="space-y-4">
+      <PageHeader title="Performs" description="Your best and worst performing holdings today." />
+      <TabNav tab={tab} setTab={setTab} />
+      {count === 0 || dayChangeResetActive ? (
+        <Card padding="none">
+          <EmptyState
+            icon={<TrendingUp size={18} />}
+            title={dayChangeResetActive ? "Waiting for today's market" : 'No day changes yet'}
+            description={
+              dayChangeResetActive
+                ? "Today's moves show up once the market opens."
+                : "Today's moves appear for stocks and funds with a live price once prices have loaded."
+            }
+          />
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <PerformsList title={`Best performing today`} tone="up" rows={best} />
+          <PerformsList title={`Worst performing today`} tone="down" rows={worst} />
+        </div>
+      )}
     </div>
   );
 }

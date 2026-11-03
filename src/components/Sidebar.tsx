@@ -66,7 +66,7 @@ function NavItem({ to, label, icon: Icon, end }: NavLinkDef) {
       to={to}
       onClick={() => {
         // Clicking the page you're already on refreshes it.
-        if (location.pathname === to) void hardRefresh();
+        if (location.pathname === to) void hardRefresh({ showBar: true, keepPage: true });
       }}
       end={end ?? to === '/'}
       title={PAGE_SHORTCUT_BY_PATH[to] ? `${label} (${PAGE_SHORTCUT_BY_PATH[to]})` : label}

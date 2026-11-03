@@ -1,3 +1,4 @@
+import { KEEP_PAGE_FLAG } from './utils/hardRefresh';
 import { useEffect, useRef, useState, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
@@ -455,9 +456,24 @@ export default function App() {
   // mounts so it reads the corrected URL (no flash of the old page).
   if (!startRouteChecked.current) {
     startRouteChecked.current = true;
-    if ((loginScreenShown || !isPageReload()) && window.location.pathname !== '/') {
+    // A refresh the person asked for on a page (tapping the tab they're on)
+    // reloads onto that same page.
+    let keepPage = false;
+    try {
+      keepPage = sessionStorage.getItem(KEEP_PAGE_FLAG) === '1';
+      sessionStorage.removeItem(KEEP_PAGE_FLAG);
+    } catch { /* ignore */ }
+    if (!keepPage && (loginScreenShown || !isPageReload()) && window.location.pathname !== '/') {
       window.history.replaceState(null, '', '/');
     }
+    // Drop the cache-busting "_r" the refresh added, leaving the rest of the address as it was.
+    try {
+      const u = new URL(window.location.href);
+      if (u.searchParams.has('_r')) {
+        u.searchParams.delete('_r');
+        window.history.replaceState(null, '', u.pathname + u.search + u.hash);
+      }
+    } catch { /* ignore */ }
   }
 
   return (

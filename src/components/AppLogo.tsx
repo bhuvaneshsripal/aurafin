@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { hardRefresh } from '../utils/hardRefresh';
+import { useRefreshBarStore } from '../store/refreshBarStore';
 import { LOGO_SRC } from '../config/logo';
 
 /**
@@ -34,8 +35,11 @@ export default function AppLogo({ className }: { className?: string }) {
         // pause lets the flip be seen before the page reloads.
         if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
         setSpinKey((k) => k + 1);
+        // Green line under the index bar right away, while the coin flips.
+        useRefreshBarStore.getState().setActive(true);
         window.setTimeout(() => {
-          void hardRefresh().then((ok) => {
+          // From any page the logo goes to Overview, then refreshes.
+          void hardRefresh({ showBar: true, to: '/' }).then((ok) => {
             // Offline / server unreachable: stay on the page and re-arm.
             if (!ok) refreshing.current = false;
           });

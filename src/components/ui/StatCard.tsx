@@ -49,7 +49,7 @@ function DeltaChip({ delta }: { delta: { value: string; positive: boolean } }) {
 
 export default function StatCard({ label, value, tone = 'default', delta, deltaInCorner, cornerLabel, sublabel, icon, loading, dense, hero, onToggle, toggled, className }: StatCardProps) {
   return (
-    <Card padding="md" className={cn(dense && '!p-3 sm:!p-5', className)}>
+    <Card padding="md" className={cn(dense && (hero ? '!p-5 sm:!p-5' : '!p-3 sm:!p-5'), className)}>
       <div className="flex items-center justify-between gap-2 min-h-6">
         <span className="text-[13px] font-medium text-muted">{label}</span>
         {onToggle && (
@@ -75,7 +75,7 @@ export default function StatCard({ label, value, tone = 'default', delta, deltaI
           </span>
         )}
       </div>
-      <div className={cn('mt-2 flex items-baseline gap-2', hero ? 'min-h-9 sm:min-h-[28px]' : 'min-h-[28px]')}>
+      <div className={cn('flex items-baseline gap-2', hero ? 'mt-4 sm:mt-2 mb-1 sm:mb-0 min-h-10 sm:min-h-[28px]' : 'mt-2 min-h-[28px]')}>
         {loading ? (
           <span className="h-7 flex items-center">
             <LoadingDots />
