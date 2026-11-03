@@ -51,7 +51,7 @@ export default function NetworkBanner() {
 
   return (
     <div
-      className="fixed left-0 right-0 z-[70] flex justify-center px-4 pointer-events-none bottom-[calc(56px_+_env(safe-area-inset-bottom)_+_12px)] md:bottom-4"
+      className="fixed left-0 right-0 z-[70] flex justify-center px-4 pointer-events-none bottom-[calc(80px_+_env(safe-area-inset-bottom)_+_12px)] md:bottom-4"
     >
       <div
         role="status"

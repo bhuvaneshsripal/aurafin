@@ -2024,7 +2024,7 @@ function AssetsTab({
               Performance page (chart icon, right). Hidden while a search
               query is active, same as the tabs and filter row above. */}
           {!isSearching && (
-          <Card padding="none" className="rounded-[26px] p-5 sm:p-6 border-line/70">
+          <Card padding="none" className="rounded-[26px] p-5 sm:p-6 border-line/70 dark:!border-[#2f8f5b]/45 dark:!shadow-[0_0_30px_-2px_rgba(47,143,91,0.50),0_0_0_1px_rgba(47,143,91,0.18)]">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold tracking-wider text-muted uppercase">

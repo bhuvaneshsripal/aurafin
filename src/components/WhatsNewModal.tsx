@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, Check, RefreshCw, Sparkles, X } from 'lucide-react';
+import { ArrowRight, Check, RefreshCw, X } from 'lucide-react';
 import Modal from './Modal';
 import { APP_VERSION } from '../config/version';
 
@@ -162,20 +162,10 @@ export default function WhatsNewModal({
             <h3 className="text-[18px] font-semibold text-ink tracking-tight">{heading}</h3>
             <CloseIconButton onClose={onClose} className="flex" />
           </div>
-          <div className="md:flex-1 md:min-h-0 md:overflow-y-auto md:overscroll-contain md:px-6 md:py-6">
-            <div className="mx-auto w-full md:max-w-[640px]">
-              {/* Desktop hero, echoing the check badge on the up-to-date view. */}
-              <div className="hidden md:flex flex-col items-center text-center mb-7">
-                <div className="relative h-16 w-16 mb-5">
-                  <span
-                    aria-hidden
-                    className="absolute -inset-5 rounded-full"
-                    style={{ background: 'radial-gradient(circle, rgba(10,154,75,0.20), rgba(10,154,75,0) 70%)' }}
-                  />
-                  <span className="relative h-full w-full rounded-full bg-[#e7f4ec] dark:bg-[#0a9a4b]/15 text-[#0a9a4b] inline-flex items-center justify-center">
-                    <Sparkles size={28} strokeWidth={2} />
-                  </span>
-                </div>
+          <div className="md:flex-1 md:min-h-0 md:overflow-y-auto md:overscroll-contain md:pl-14 md:pr-6 md:py-6">
+            <div className="w-full md:max-w-[640px]">
+              {/* Desktop heading, left-aligned (no icon). */}
+              <div className="hidden md:block text-left mb-7">
                 <h3 className="text-[28px] font-semibold text-ink tracking-tight">A new version is ready</h3>
                 <p className="mt-2 text-base text-muted">Here's what you'll get when you update.</p>
               </div>
@@ -192,9 +182,15 @@ export default function WhatsNewModal({
                 </div>
               )}
               {notes ? (
+                <>
+                <style>{'@keyframes wn-in{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}.wn-item{opacity:0;animation:wn-in .45s ease-out forwards}@media (prefers-reduced-motion:reduce){.wn-item{opacity:1;animation:none}}'}</style>
                 <ul className="space-y-3.5 md:space-y-0 md:divide-y md:divide-line-soft md:rounded-2xl md:border md:border-line md:bg-surface md:px-5 md:shadow-sm">
-                  {notes.items.map((item) => (
-                    <li key={item.title} className="flex items-center gap-3 md:gap-4 md:py-4">
+                  {notes.items.map((item, i) => (
+                    <li
+                      key={item.title}
+                      className="wn-item flex items-center gap-3 md:gap-4 md:py-4"
+                      style={{ animationDelay: `${0.15 + i * 0.3}s` }}
+                    >
                       {item.emoji ? (
                         <span className="shrink-0 h-9 w-9 md:h-11 md:w-11 rounded-xl bg-[#e7f4ec] dark:bg-[#0a9a4b]/15 inline-flex items-center justify-center text-xl md:text-2xl leading-none" aria-hidden>
                           {item.emoji}
@@ -211,6 +207,7 @@ export default function WhatsNewModal({
                     </li>
                   ))}
                 </ul>
+                </>
               ) : (
                 <p className="text-sm md:text-base text-muted md:text-center">
                   A new version of Aurafin is ready, with improvements and fixes. Update to get it.

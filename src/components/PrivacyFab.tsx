@@ -161,7 +161,7 @@ export default function PrivacyFab() {
   const shown = pos && !isDesktop ? { x: clampX(pos.x), b: clampB(pos.b) } : null;
   const style = shown
     ? { left: shown.x, bottom: shown.b - kb, width: SIZE, height: SIZE }
-    : { left: 16, bottom: 'calc(80px + env(safe-area-inset-bottom))', width: SIZE, height: SIZE };
+    : { left: 16, bottom: 'calc(104px + env(safe-area-inset-bottom))', width: SIZE, height: SIZE };
 
   return (
     <button
@@ -174,8 +174,8 @@ export default function PrivacyFab() {
       onContextMenu={(e) => e.preventDefault()}
       aria-label={privacyMode ? 'Show amounts' : 'Hide amounts'}
       title={isDesktop ? (privacyMode ? 'Show amounts' : 'Hide amounts') : privacyMode ? 'Show amounts (hold and drag to move)' : 'Hide amounts (hold and drag to move)'}
-      style={{ ...style, border: '2px solid var(--color-brand-300)', color: 'var(--color-brand-600)', touchAction: 'none', WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
-      className={`icon-outline-green mini-fab fixed z-[45] flex items-center justify-center rounded-full shadow-md ${
+      style={{ ...style, color: 'var(--color-brand-600)', touchAction: 'none', WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
+      className={`icon-outline-green mini-fab !border-2 !border-brand-300 dark:!border-transparent fixed z-[45] flex items-center justify-center rounded-full shadow-md ${
         shown ? '' : 'md:!left-auto md:!right-4 md:!bottom-4'
       } ${
         dragging ? 'scale-110 shadow-xl opacity-90' : 'tap-scale'

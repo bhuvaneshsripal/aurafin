@@ -190,11 +190,11 @@ function ContentPanel({
          the panel below reveals a softened version of the page instead of
          sharp content (e.g. asset rows) peeking through. */}
       {!flush && <div
-        className={`fixed left-0 right-0 md:left-[var(--sb-w)] bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-40 bg-slate-900/30 backdrop-blur-[3px] pointer-events-none ${closing ? 'animate-backdrop-out' : 'animate-backdrop-in'}`}
+        className={`fixed left-0 right-0 md:left-[var(--sb-w)] bottom-[calc(80px_+_env(safe-area-inset-bottom))] md:bottom-0 z-40 bg-slate-900/30 backdrop-blur-[3px] pointer-events-none ${closing ? 'animate-backdrop-out' : 'animate-backdrop-in'}`}
         style={{ top }}
       />}
       <div
-        className={`${closing ? 'animate-menu-out' : 'animate-dialog-in'} fixed left-0 right-0 md:left-[var(--sb-w)] bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-50 bg-surface flex flex-col overflow-hidden ${flush ? '' : 'm-3 sm:m-4 rounded-2xl border border-line shadow-lg'}`}
+        className={`${closing ? 'animate-menu-out' : 'animate-dialog-in'} fixed left-0 right-0 md:left-[var(--sb-w)] bottom-[calc(80px_+_env(safe-area-inset-bottom))] md:bottom-0 z-50 bg-surface flex flex-col overflow-hidden ${flush ? '' : 'm-3 sm:m-4 rounded-2xl border border-line shadow-lg'}`}
         style={{ top }}
       >
         {hideHeader ? (
@@ -311,7 +311,7 @@ export default function Modal({
 
   if (fullScreenOnMobile && isMobile) {
     return createPortal(
-      <div role="dialog" aria-modal="true" className={`${closing ? 'animate-detail-out' : 'animate-detail-in'} fixed inset-x-0 ${flush ? 'bottom-[calc(56px_+_env(safe-area-inset-bottom))] z-40' : 'bottom-0 z-[80]'} bg-surface flex flex-col`} style={{ top: flush ? Math.max(0, barsBottom - 2) : barsBottom }}>
+      <div role="dialog" aria-modal="true" className={`${closing ? 'animate-detail-out' : 'animate-detail-in'} fixed inset-x-0 ${flush ? 'bottom-[calc(80px_+_env(safe-area-inset-bottom))] z-40' : 'bottom-0 z-[80]'} bg-surface flex flex-col`} style={{ top: flush ? Math.max(0, barsBottom - 2) : barsBottom }}>
         <PanelBody title={title} onClose={onClose} belowBars>
           {children}
         </PanelBody>
@@ -332,7 +332,7 @@ export default function Modal({
     // smaller than the true viewport — visibly not covering the bottom nav,
     // which itself renders outside `.app-scale` at full size.
     return createPortal(
-      <div role="dialog" aria-modal="true" className={`${closing ? 'animate-detail-out' : 'animate-detail-in'} fixed inset-x-0 top-0 bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-50 bg-surface flex flex-col`}>
+      <div role="dialog" aria-modal="true" className={`${closing ? 'animate-detail-out' : 'animate-detail-in'} fixed inset-x-0 top-0 bottom-[calc(80px_+_env(safe-area-inset-bottom))] md:bottom-0 z-50 bg-surface flex flex-col`}>
         {hideHeader ? (
           <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain">{children}</div>
         ) : (

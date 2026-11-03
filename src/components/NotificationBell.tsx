@@ -338,7 +338,7 @@ export default function NotificationBell(_props: { align?: 'right' | 'left' } = 
 
       {open && createPortal(
         <div
-          className="animate-backdrop-in fixed right-0 bottom-[calc(56px+env(safe-area-inset-bottom))] md:bottom-0 z-[25] bg-slate-900/40 flex justify-end"
+          className="animate-backdrop-in fixed right-0 bottom-[calc(80px+env(safe-area-inset-bottom))] md:bottom-0 z-[25] bg-slate-900/40 flex justify-end"
           style={{ top: box.top, left: box.left }}
           onClick={() => setOpen(false)}
         >

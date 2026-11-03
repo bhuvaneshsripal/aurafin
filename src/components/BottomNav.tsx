@@ -47,6 +47,15 @@ const moreLinks: MoreLink[] = [
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
+/** Round nav button: soft green disc when active, plain otherwise (app theme colors). */
+function navBtn(active: boolean) {
+  return `tap-scale relative h-14 w-14 shrink-0 rounded-full inline-flex items-center justify-center transition-all duration-200 ${
+    active
+      ? 'bg-primary-soft text-primary-ink shadow-[inset_0_0_0_1.5px_var(--color-primary)]'
+      : 'text-muted hover:bg-surface-hover'
+  }`;
+}
+
 function tapFeedback() {
   if ('vibrate' in navigator) {
     try {
@@ -202,28 +211,31 @@ export default function BottomNav() {
           Hidden when a page's own bottom toolbar (e.g. bulk-selection
           actions on Wealth) is occupying the same corner, and while typing. */}
       {!hideFab && (
-        <div className="md:hidden fixed right-4 z-40" style={{ bottom: 'calc(56px + env(safe-area-inset-bottom) + 12px)' }}>
+        <div className="md:hidden fixed right-4 z-40" style={{ bottom: 'calc(80px + env(safe-area-inset-bottom) + 12px)' }}>
           <QuickAddMenu variant="fab" />
         </div>
       )}
 
       {!searchOpen && !typing && (
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface border-t border-line pb-[env(safe-area-inset-bottom)]">
-          <div className="grid grid-cols-4 h-14">
+        // Floating glass pill with round icon buttons. The outer strip keeps the
+        // 80px footprint (other layers are positioned above it),
+        // is transparent and lets taps through everywhere except the pill.
+        <nav
+          aria-label="Primary"
+          className="md:hidden fixed bottom-0 left-0 right-0 z-40 h-[calc(80px+env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)] flex items-center justify-center pointer-events-none"
+        >
+          <div className="pointer-events-auto flex items-center gap-2 rounded-full p-1.5 border border-line bg-surface shadow-[0_8px_24px_-8px_rgba(23,23,23,0.28)]">
             {primaryLinks.map(({ to, label, icon: Icon }) => (
               <NavLink
                 key={to}
                 to={to}
                 end={to === '/' || to === '/wealth'}
                 onClick={() => onTabTap(to)}
-                className={({ isActive }) =>
-                  `tap-scale flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors ${
-                    isActive ? 'text-primary-ink' : 'text-muted'
-                  }`
-                }
+                aria-label={label}
+                title={label}
+                className={({ isActive }) => navBtn(isActive)}
               >
-                <Icon size={20} strokeWidth={1.75} />
-                {label}
+                <Icon size={26} strokeWidth={1.75} />
               </NavLink>
             ))}
 
@@ -233,17 +245,16 @@ export default function BottomNav() {
                 tapFeedback();
                 setMoreOpen(true);
               }}
+              aria-label="More"
+              title="More"
               aria-haspopup="dialog"
               aria-expanded={moreOpen}
-              className={`tap-scale flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors ${
-                isMoreActive ? 'text-primary-ink' : 'text-muted'
-              }`}
+              className={navBtn(isMoreActive)}
             >
               <span className="relative inline-flex">
-                <MoreHorizontal size={20} strokeWidth={1.75} />
+                <MoreHorizontal size={26} strokeWidth={1.75} />
                 <UpdateDot />
               </span>
-              More
             </button>
           </div>
         </nav>
