@@ -367,11 +367,41 @@ function AppReady({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-/** True when the page was reloaded (F5 / pull-to-refresh) rather than opened. */
+// Browsers report a tab restored from last session / "reopen closed tab" /
+// "continue where you left off" as type 'reload' too, which kept the old page
+// (e.g. /settings) instead of opening on the Dashboard. A genuine F5 /
+// pull-to-refresh comes back within a second or two of the page going away, so
+// the tab leaves a "last seen" stamp and a reload only counts if it's fresh.
+const LAST_SEEN_KEY = 'aurafin:lastSeen';
+const RELOAD_WINDOW_MS = 15_000;
+let previousSeen = 0;
+try {
+  previousSeen = parseInt(sessionStorage.getItem(LAST_SEEN_KEY) ?? '0', 10) || 0; // read before we write
+} catch {
+  /* storage blocked: treated as "not a reload" */
+}
+if (typeof window !== 'undefined') {
+  const stamp = () => {
+    try {
+      sessionStorage.setItem(LAST_SEEN_KEY, String(Date.now()));
+    } catch {
+      /* ignore */
+    }
+  };
+  window.addEventListener('pagehide', stamp);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') stamp();
+  });
+  window.setInterval(stamp, 5000);
+}
+
+/** True only for a real reload (F5 / pull-to-refresh) of a tab that was just
+ *  in use — not a restored or freshly opened tab. */
 function isPageReload(): boolean {
   try {
     const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
-    return nav?.type === 'reload';
+    if (nav?.type !== 'reload') return false;
+    return previousSeen > 0 && Date.now() - previousSeen < RELOAD_WINDOW_MS;
   } catch {
     return false;
   }

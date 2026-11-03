@@ -1499,6 +1499,7 @@ input.global-search-input:focus,
 
 /* ── Settings menu: tap feedback + mobile slide transitions ───────────── */
 .press-row {
+  border-radius: 0; /* full-width list rows: square, so stacked rows form one clean list */
   -webkit-tap-highlight-color: transparent;
   transition: background-color 0.15s ease, transform 0.12s ease;
 }

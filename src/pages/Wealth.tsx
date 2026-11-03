@@ -2045,21 +2045,21 @@ function AssetsTab({
                   type="button"
                   onClick={togglePrivacy}
                   aria-label={privacyMode ? 'Show amounts' : 'Hide amounts'}
-                  className="h-9 w-9 rounded-full border border-line flex items-center justify-center text-muted hover:text-ink hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+                  className="keep-round h-9 w-9 rounded-full border border-line flex items-center justify-center text-muted hover:text-ink hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
                 >
                   {privacyMode ? <EyeOff size={16} strokeWidth={1.75} /> : <Eye size={16} strokeWidth={1.75} />}
                 </button>
                 <Link
                   to="/wealth/performance"
                   aria-label="View performance"
-                  className="h-9 w-9 rounded-full border border-line flex items-center justify-center text-muted hover:text-ink hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+                  className="keep-round h-9 w-9 rounded-full border border-line flex items-center justify-center text-muted hover:text-ink hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
                 >
                   <BarChart2 size={16} strokeWidth={1.75} />
                 </Link>
                 <IconButton
                   label="Export CSV"
                   variant="ghost"
-                  className="h-9 w-9 rounded-full border border-line text-muted hover:text-ink hover:border-slate-300 dark:hover:border-slate-600"
+                  className="keep-round h-9 w-9 rounded-full border border-line text-muted hover:text-ink hover:border-slate-300 dark:hover:border-slate-600"
                   onClick={handleExport}
                   disabled={assets.length === 0}
                 >
@@ -2071,7 +2071,7 @@ function AssetsTab({
               <div className="hidden lg:flex items-center gap-2 shrink-0">
                 <Link
                   to="/wealth/performance"
-                  className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full border border-line text-sm font-medium text-ink hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+                  className="inline-flex items-center gap-1.5 keep-round h-9 px-3.5 rounded-full border border-line text-sm font-medium text-ink hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
                 >
                   <BarChart2 size={15} strokeWidth={1.75} />
                   Analyse
@@ -2080,14 +2080,14 @@ function AssetsTab({
                   type="button"
                   onClick={togglePrivacy}
                   aria-label={privacyMode ? 'Show amounts' : 'Hide amounts'}
-                  className="h-9 w-9 rounded-full border border-line flex items-center justify-center text-muted hover:text-ink hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+                  className="keep-round h-9 w-9 rounded-full border border-line flex items-center justify-center text-muted hover:text-ink hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
                 >
                   {privacyMode ? <EyeOff size={16} strokeWidth={1.75} /> : <Eye size={16} strokeWidth={1.75} />}
                 </button>
                 <IconButton
                   label="Export CSV"
                   variant="ghost"
-                  className="h-9 w-9 rounded-full border border-line text-muted hover:text-ink hover:border-slate-300 dark:hover:border-slate-600"
+                  className="keep-round h-9 w-9 rounded-full border border-line text-muted hover:text-ink hover:border-slate-300 dark:hover:border-slate-600"
                   onClick={handleExport}
                   disabled={assets.length === 0}
                 >
@@ -2352,15 +2352,11 @@ function AssetsTab({
                         </>
                       ) : (
                         <>
-                          <div
-                            className={`text-sm font-semibold animate-value-in ${
-                              (r.pnl ?? r.value - invested) >= 0 ? 'text-emerald-600' : 'text-red-500'
-                            }`}
-                          >
-                            {maskPreciseAmount(r.value, a.currency, privacyMode)}
+                          <div className="text-sm font-semibold text-ink animate-value-in">
+                            <SplitAmount text={maskPreciseAmount(r.value, a.currency, privacyMode)} decimalClassName="text-[0.78em] font-medium text-faint" />
                           </div>
                           <div className="text-[11px] mt-0.5 text-slate-600">
-                            ({maskPreciseAmount(invested, a.currency, privacyMode)})
+                            (<SplitAmount text={maskPreciseAmount(invested, a.currency, privacyMode)} decimalClassName="text-faint" />)
                           </div>
                         </>
                       )}

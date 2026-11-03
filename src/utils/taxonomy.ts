@@ -51,7 +51,7 @@ export const ASSET_TAXONOMY: CategoryDef<AssetClass>[] = [
     key: 'equity',
     label: 'Equity',
     icon: TrendingUp,
-    color: '#16a35d',
+    color: '#247a4d',
     types: [
       { value: 'stock', label: 'Direct Stock', keywords: ['stock', 'share', 'equity'] },
       { value: 'etf', label: 'ETF', keywords: ['stock', 'fund'] },
@@ -68,7 +68,7 @@ export const ASSET_TAXONOMY: CategoryDef<AssetClass>[] = [
     key: 'debt',
     label: 'Debt',
     icon: Landmark,
-    color: '#3b82f6',
+    color: '#4a78b5',
     types: [
       { value: 'fixed_deposit', label: 'Fixed Deposit' },
       { value: 'recurring_deposit', label: 'Recurring Deposit' },
@@ -119,14 +119,14 @@ export const ASSET_TAXONOMY: CategoryDef<AssetClass>[] = [
     key: 'cash',
     label: 'Cash & Savings',
     icon: Wallet,
-    color: '#94a3b8',
+    color: '#a3a39b',
     types: [{ value: 'cash', label: 'Cash & Savings', keywords: ['savings', 'bank', 'account', 'wallet'] }],
   },
   {
     key: 'crypto',
     label: 'Crypto',
     icon: Bitcoin,
-    color: '#f97316',
+    color: '#c9742e',
     types: [
       { value: 'crypto_coin', label: 'Crypto Coin / Token', keywords: ['bitcoin', 'coin', 'token'] },
       { value: 'nft', label: 'NFT' },

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { cn } from './cn';
 
 export interface TabItem<T extends string = string> {
@@ -19,8 +19,30 @@ export function Tabs<T extends string>({
   onChange: (key: T) => void;
   className?: string;
 }) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [moreRight, setMoreRight] = useState(false);
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const update = () => setMoreRight(el.scrollWidth - el.scrollLeft - el.clientWidth > 4);
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener('scroll', update);
+      ro.disconnect();
+    };
+  }, [items.length]);
   return (
-    <div className={cn('border-b border-line overflow-x-auto no-scrollbar', className)}>
+    <div
+      ref={scrollerRef}
+      className={cn(
+        'border-b border-line overflow-x-auto no-scrollbar',
+        moreRight && '[mask-image:linear-gradient(to_right,#000_calc(100%-44px),transparent)]',
+        className
+      )}
+    >
       <div role="tablist" className="flex gap-1 min-w-max">
         {items.map((t) => {
           const active = t.key === value;

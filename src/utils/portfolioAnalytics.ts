@@ -25,12 +25,12 @@ export type CategoryKey = (typeof CATEGORY_KEYS)[number];
 export type TargetAllocation = Partial<Record<CategoryKey, number>>;
 
 export const CATEGORY_META: Record<CategoryKey, { label: string; color: string }> = {
-  equity: { label: 'Equity', color: '#16a35d' },
-  debt: { label: 'Debt', color: '#3b82f6' },
+  equity: { label: 'Equity', color: '#247a4d' },
+  debt: { label: 'Debt', color: '#4a78b5' },
   real_estate: { label: 'Real Estate', color: '#4ade93' },
   commodities: { label: 'Commodities', color: '#f5b942' },
-  cash: { label: 'Cash & Savings', color: '#94a3b8' },
-  crypto: { label: 'Crypto', color: '#f97316' },
+  cash: { label: 'Cash & Savings', color: '#a3a39b' },
+  crypto: { label: 'Crypto', color: '#c9742e' },
   alternatives: { label: 'Alternatives', color: '#8b5cf6' },
   other: { label: 'Other', color: '#64748b' },
 };

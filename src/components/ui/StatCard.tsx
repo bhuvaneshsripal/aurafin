@@ -14,6 +14,8 @@ export interface StatCardProps {
   sublabel?: ReactNode;
   icon?: ReactNode;
   loading?: boolean;
+  /** Larger value for the one number the page is about (Net worth). */
+  hero?: boolean;
   /** Phones: smaller padding/value and no sublabel, so a strip of KPIs stays short. */
   dense?: boolean;
   /** When set, a small arrow next to the label calls this on click. The
@@ -27,10 +29,10 @@ export interface StatCardProps {
 const tones = { default: 'text-ink', positive: 'text-positive', negative: 'text-negative' };
 
 /** KPI tile. Values are never truncated — long ₹ figures wrap instead of being cut off. */
-export default function StatCard({ label, value, tone = 'default', delta, sublabel, icon, loading, dense, onToggle, toggled, className }: StatCardProps) {
+export default function StatCard({ label, value, tone = 'default', delta, sublabel, icon, loading, dense, hero, onToggle, toggled, className }: StatCardProps) {
   return (
     <Card padding="md" className={cn(dense && '!p-3 sm:!p-5', className)}>
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2 min-h-6">
         <span className="text-[13px] font-medium text-muted">{label}</span>
         {onToggle && (
           <button
@@ -45,7 +47,7 @@ export default function StatCard({ label, value, tone = 'default', delta, sublab
         )}
         {icon && <span className="text-faint shrink-0">{icon}</span>}
       </div>
-      <div className="mt-2 min-h-[28px] flex items-baseline gap-2">
+      <div className={cn('mt-2 flex items-baseline gap-2', hero ? 'min-h-9 sm:min-h-[28px]' : 'min-h-[28px]')}>
         {loading ? (
           <span className="h-7 flex items-center">
             <LoadingDots />
@@ -54,7 +56,7 @@ export default function StatCard({ label, value, tone = 'default', delta, sublab
           <span
             className={cn(
               'font-numeric leading-7 font-semibold tracking-tight break-words animate-value-in',
-              dense ? 'text-lg sm:text-[22px]' : 'text-xl sm:text-[22px]',
+              hero ? 'text-[32px] leading-9 sm:text-[22px] sm:leading-7' : dense ? 'text-lg sm:text-[22px]' : 'text-xl sm:text-[22px]',
               tones[tone]
             )}
           >
@@ -75,7 +77,7 @@ export default function StatCard({ label, value, tone = 'default', delta, sublab
               {delta.value}
             </span>
           )}
-          {sublabel && <span className={cn('min-w-0', dense && 'hidden sm:inline')}>{sublabel}</span>}
+          {sublabel && <span className="min-w-0">{sublabel}</span>}
         </div>
       )}
     </Card>

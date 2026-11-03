@@ -2126,10 +2126,12 @@ export default function Settings() {
               onClick={() => setWhatsNewOpen(true)}
               className="press-row w-full text-left px-5 h-14 border-t border-line text-[15px] font-normal text-slate-600 hover:bg-surface-hover hover:text-ink flex items-center justify-between gap-2 transition-colors"
             >
-              <span className="relative flex items-center gap-3 min-w-0">
-                <Sparkles size={20} strokeWidth={1.75} className="shrink-0 text-ink-2" />
+              <span className="flex items-center gap-3 min-w-0">
+                <span className="relative shrink-0">
+                  <RefreshCw size={20} strokeWidth={1.75} className="text-ink-2" />
+                  <UpdateDot className="-top-0.5 -right-0.5" />
+                </span>
                 New version
-                <UpdateDot className="-top-1 -right-3" />
               </span>
               <ChevronRight size={16} className="press-chevron text-ink-2 shrink-0" />
             </button>

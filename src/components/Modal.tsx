@@ -310,9 +310,13 @@ export default function Modal({
     // which itself renders outside `.app-scale` at full size.
     return createPortal(
       <div role="dialog" aria-modal="true" className={`${closing ? 'animate-detail-out' : 'animate-detail-in'} fixed inset-x-0 top-0 bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-50 bg-surface flex flex-col`}>
-        <PanelBody title={title} onClose={onClose}>
-          {children}
-        </PanelBody>
+        {hideHeader ? (
+          <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain">{children}</div>
+        ) : (
+          <PanelBody title={title} onClose={onClose}>
+            {children}
+          </PanelBody>
+        )}
       </div>,
       document.body
     );

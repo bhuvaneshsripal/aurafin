@@ -260,6 +260,7 @@ export default function Dashboard() {
         <div className="col-span-2 lg:col-span-1">
           <StatCard
             dense
+            hero
             label="Net worth"
             loading={!ready}
             value={money(hasWealth ? netWorthShown : 0)}

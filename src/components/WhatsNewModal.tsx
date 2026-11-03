@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, Check, RefreshCw } from 'lucide-react';
+import { ArrowRight, Check, RefreshCw, X } from 'lucide-react';
 import Modal from './Modal';
 
 export interface WhatsNew {
@@ -53,15 +53,17 @@ export default function WhatsNewModal({
 }) {
   const available = status === 'available';
   return (
-    <Modal open={open} onClose={onClose} widthClassName={status === 'uptodate' ? 'max-w-2xl' : undefined}
+    <Modal open={open} onClose={onClose}
       title={available ? notes?.title ?? "What's new" : "What's new"}
+      contentPanel={status === 'uptodate'}
+      hideHeader={status === 'uptodate'}
       fullScreenOnMobile
-      footer={status === 'uptodate' ? undefined :
-        <div className="flex items-center justify-between gap-2 md:justify-end">
+      footer={
+        <div className="flex items-center justify-between gap-2">
           <button
             type="button"
             onClick={onClose}
-            className="tap-scale px-4 py-2.5 text-sm font-medium text-muted hover:text-ink transition-colors"
+            className="tap-scale -ml-4 px-4 py-2.5 text-sm font-medium text-muted hover:text-ink transition-colors"
           >
             {available ? 'Do it later' : 'Close'}
           </button>
@@ -84,26 +86,38 @@ export default function WhatsNewModal({
         </div>
       )}
       {status === 'uptodate' && (
-        // Split panel: the message sits in the left half; the right half is the
-        // site's own page colour (light sand) running out to the dialog's edge.
-        <div className="md:grid md:grid-cols-2 md:-mx-6 md:-mb-6 md:min-h-[230px]">
-          <div className="flex flex-col items-start justify-between gap-6 md:px-6 md:pb-6 py-2">
-            <div className="flex flex-col items-start gap-2">
-              <span className="h-11 w-11 rounded-full bg-[#e7f4ec] dark:bg-[#0a9a4b]/15 text-[#0a9a4b] inline-flex items-center justify-center">
+        // Desktop: the working area (sidebar, top bar and index strip stay visible) split in two. The message fills the left
+        // half; the right half is the sandal page colour, edge to edge inside the panel.
+        // Phones keep the simple stacked message inside the full-screen sheet.
+        <div className="relative md:absolute md:inset-0 md:grid md:grid-cols-2">
+          <div className="relative flex flex-col items-start justify-center gap-6 py-2 md:px-16 md:py-10">
+            <h3 className="hidden md:block absolute top-8 left-16 text-[18px] font-semibold text-ink tracking-tight">What's new</h3>
+            <div className="flex flex-col items-start gap-2 md:gap-3">
+              <span className="h-11 w-11 md:h-14 md:w-14 rounded-full bg-[#e7f4ec] dark:bg-[#0a9a4b]/15 text-[#0a9a4b] inline-flex items-center justify-center">
                 <Check size={22} strokeWidth={2.5} />
               </span>
-              <p className="text-sm font-semibold text-ink mt-1">You're up to date</p>
-              <p className="text-[13px] text-muted">There's nothing new to show right now.</p>
+              <p className="text-sm md:text-2xl font-semibold text-ink mt-1">You're up to date</p>
+              <p className="text-[13px] md:text-base text-muted">There's nothing new to show right now.</p>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="tap-scale -ml-4 px-4 py-2.5 text-sm font-medium text-muted hover:text-ink transition-colors"
-            >
-              Close
-            </button>
           </div>
-          <div className="hidden md:block bg-page rounded-br-2xl" aria-hidden />
+          <div className="hidden md:block bg-sandal" aria-hidden />
+          {/* Desktop's full-screen view has no footer slot, so pin Close to the
+              bottom-left here. On phones the pinned footer carries it. */}
+          <button
+            type="button"
+            onClick={onClose}
+            className="tap-scale hidden md:block absolute bottom-8 left-12 px-4 py-2.5 text-sm font-medium text-muted hover:text-ink transition-colors"
+          >
+            Close
+          </button>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+            className="keep-round tap-scale hidden md:flex absolute top-6 right-6 h-10 w-10 items-center justify-center text-slate-600 hover:bg-black/5 dark:hover:bg-white/10 hover:text-ink transition-colors"
+          >
+            <X size={20} />
+          </button>
         </div>
       )}
       {available && (notes?.version || notes?.date) && (
