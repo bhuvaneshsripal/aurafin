@@ -697,7 +697,7 @@ function NetWorthOverTimeCard({
                 minTickGap={28}
               />
               <YAxis
-                tickFormatter={(v: number) => (privacyMode ? '' : formatAxisAmount(v))}
+                tickFormatter={(v: number) => (privacyMode ? '••••' : formatAxisAmount(v))}
                 tick={chart.tick}
                 axisLine={false}
                 tickLine={false}
@@ -937,7 +937,7 @@ function CashflowCard({
                   <CartesianGrid stroke={chart.grid} strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="label" tick={chart.tick} axisLine={false} tickLine={false} />
                   <YAxis
-                    tickFormatter={(v: number) => (privacyMode ? '' : formatAxisAmount(v))}
+                    tickFormatter={(v: number) => (privacyMode ? '••••' : formatAxisAmount(v))}
                     tick={chart.tick}
                     axisLine={false}
                     tickLine={false}

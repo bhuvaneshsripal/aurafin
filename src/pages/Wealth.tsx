@@ -8131,7 +8131,7 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
                     minTickGap={28}
                   />
                   <YAxis
-                    tickFormatter={(v: number) => (privacyMode ? '' : formatAxisAmount(v))}
+                    tickFormatter={(v: number) => (privacyMode ? '••••' : formatAxisAmount(v))}
                     tick={chart.tick}
                     axisLine={false}
                     tickLine={false}

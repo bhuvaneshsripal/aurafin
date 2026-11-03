@@ -1,12 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useRegisterSW } from 'virtual:pwa-register/react';
-import { ArrowRight, RefreshCw, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useExitPresence } from '../hooks/useExitPresence';
-import { hardRefresh } from '../utils/hardRefresh';
 import { useUpdateStore } from '../store/updateStore';
 import { useSwipeDismiss } from '../hooks/useSwipeDismiss';
 import { startUpdateChecks } from '../utils/updateChecks';
-import WhatsNewModal, { useWhatsNew } from './WhatsNewModal';
 
 /** Four-point sparkle used in the notice's icon badge. */
 function SparkleIcon({ size = 26 }: { size?: number }) {
@@ -23,20 +22,18 @@ function SparkleIcon({ size = 26 }: { size?: number }) {
 }
 
 /** Top notice shown when a newer version of the app has been deployed.
- *  The new service worker installs in the background and waits; tapping
- *  "Update" activates it and reloads, so nothing changes under the user
- *  mid-task. The app checks for a new deploy every 10 seconds while it is
+ *  It only informs: there is no update button here. Tapping the message opens
+ *  Settings > New version, which is the one place the update is applied, so
+ *  nothing changes under the user mid-task. The app checks for a new deploy every 10 seconds while it is
  *  on screen and immediately whenever it comes back to the foreground (see
  *  utils/updateChecks). */
 export default function UpdateBanner() {
-  const [updating, setUpdating] = useState(false);
+  const navigate = useNavigate();
   // True as soon as the version ping sees a newer deploy, before the new service worker has finished installing.
   const [stale, setStale] = useState(false);
-  const [showNotes, setShowNotes] = useState(false);
   const stopChecksRef = useRef<(() => void) | null>(null);
   const {
     needRefresh: [needRefresh, setNeedRefresh],
-    updateServiceWorker,
   } = useRegisterSW({
     onRegisteredSW(_url, reg) {
       if (!reg) return;
@@ -57,7 +54,6 @@ export default function UpdateBanner() {
   // Dismissing the banner doesn't clear the red dots: the update is still pending.
   const setUpdateAvailable = useUpdateStore((s) => s.setUpdateAvailable);
   const show = needRefresh || stale;
-  const notes = useWhatsNew(show);
   useEffect(() => {
     if (show) setUpdateAvailable(true);
   }, [show, setUpdateAvailable]);
@@ -96,15 +92,10 @@ export default function UpdateBanner() {
 
   if (!mounted) return null;
 
-  const onUpdate = () => {
-    setUpdating(true);
-    // New worker already waiting: activate it and the page reloads. If the
-    // notice came from the quick version ping and the worker is still
-    // downloading, go straight to the full refresh instead of waiting.
-    if (needRefresh) void updateServiceWorker(true);
-    window.setTimeout(() => {
-      void hardRefresh().then((ok) => { if (!ok) setUpdating(false); });
-    }, needRefresh ? 4000 : 0);
+  // Updating happens only from Settings: open it with the "New version" dialog showing.
+  const openSettings = () => {
+    dismiss();
+    navigate('/settings', { state: { openWhatsNew: true } });
   };
 
   return (
@@ -129,26 +120,17 @@ export default function UpdateBanner() {
         >
           <SparkleIcon size={26} />
         </span>
-        {/* Tapping the message (not just "Update now") shows what's new. */}
+        {/* Tapping the message goes to Settings, where the update is applied. */}
         <button
           type="button"
-          onClick={() => setShowNotes(true)}
-          aria-label="See what's new in this update"
+          onClick={openSettings}
+          aria-label="Open Settings to update"
           className="min-w-0 flex-1 text-left"
         >
           <p className="text-[15px] font-bold leading-tight text-[#0b2420] dark:text-white">New AuraFin update</p>
           <p className="text-[12.5px] leading-snug text-[#5b6a80] dark:text-slate-400 mt-1">
-            Tap to see what&apos;s new
+            Open Settings to update
           </p>
-        </button>
-        <button
-          type="button"
-          disabled={updating}
-          onClick={onUpdate}
-          className="tap-scale shrink-0 inline-flex items-center gap-1.5 px-1 py-2 text-[14px] font-semibold text-[#0a9a4b] disabled:opacity-60"
-        >
-          {updating ? 'Updating…' : 'Update now'}
-          {updating ? <RefreshCw size={15} className="animate-spin" /> : <ArrowRight size={16} strokeWidth={2.25} />}
         </button>
         <button
           type="button"
@@ -160,13 +142,6 @@ export default function UpdateBanner() {
         </button>
       </div>
     </div>
-    <WhatsNewModal
-      open={showNotes}
-      onClose={() => setShowNotes(false)}
-      notes={notes}
-      updating={updating}
-      onUpdate={onUpdate}
-    />
     </>
   );
 }

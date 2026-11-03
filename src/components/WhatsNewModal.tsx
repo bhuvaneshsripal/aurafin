@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, Check, RefreshCw, X } from 'lucide-react';
 import Modal from './Modal';
+import { APP_VERSION } from '../config/version';
 
 export interface WhatsNew {
   version?: string;
@@ -41,6 +42,8 @@ export default function WhatsNewModal({
   updating,
   onUpdate,
   status = 'available',
+  lastChecked = null,
+  onRecheck,
 }: {
   open: boolean;
   onClose: () => void;
@@ -50,12 +53,17 @@ export default function WhatsNewModal({
   /** 'checking': looking for an update (spinner). 'uptodate': nothing new, so
    *  the list is empty. 'available': show the release notes + Update button. */
   status?: 'checking' | 'available' | 'uptodate';
+  /** When the last check for updates finished (shown on the up-to-date view). */
+  lastChecked?: Date | null;
+  /** Runs the update check again ("Check again" on the up-to-date view). */
+  onRecheck?: () => void;
 }) {
   const available = status === 'available';
   return (
     <Modal open={open} onClose={onClose}
       title={available ? notes?.title ?? "What's new" : "What's new"}
       contentPanel={status === 'uptodate'}
+      flush
       hideHeader={status === 'uptodate'}
       fullScreenOnMobile
       footer={
@@ -86,27 +94,59 @@ export default function WhatsNewModal({
         </div>
       )}
       {status === 'uptodate' && (
-        // Desktop: the working area (sidebar, top bar and index strip stay visible) split in two. The message fills the left
-        // half; the right half is the sandal page colour, edge to edge inside the panel.
-        // Phones keep the simple stacked message inside the full-screen sheet.
-        <div className="relative md:absolute md:inset-0 md:grid md:grid-cols-2">
-          <div className="relative flex flex-col items-start justify-center gap-6 py-2 md:px-16 md:py-10">
-            <h3 className="hidden md:block absolute top-8 left-16 text-[18px] font-semibold text-ink tracking-tight">What's new</h3>
-            <div className="flex flex-col items-start gap-2 md:gap-3">
-              <span className="h-11 w-11 md:h-14 md:w-14 rounded-full bg-[#e7f4ec] dark:bg-[#0a9a4b]/15 text-[#0a9a4b] inline-flex items-center justify-center">
-                <Check size={22} strokeWidth={2.5} />
+        // Centered status view. On desktop it fills the working area (sidebar
+        // and top bar stay visible); on phones it sits inside the full-screen
+        // sheet, whose footer carries Close.
+        <div className="relative md:absolute md:inset-0 flex items-center justify-center py-10 md:py-0">
+          <h3 className="hidden md:block absolute top-8 left-14 text-[18px] font-semibold text-ink tracking-tight">What's new</h3>
+          <div className="flex flex-col items-center text-center w-full max-w-[420px] md:-mt-6">
+            <div className="relative h-20 w-20 md:h-24 md:w-24 mb-6">
+              <span
+                aria-hidden
+                className="absolute -inset-5 rounded-full"
+                style={{ background: 'radial-gradient(circle, rgba(10,154,75,0.20), rgba(10,154,75,0) 70%)' }}
+              />
+              <span className="relative h-full w-full rounded-full bg-[#e7f4ec] dark:bg-[#0a9a4b]/15 text-[#0a9a4b] inline-flex items-center justify-center">
+                <svg viewBox="0 0 24 24" className="h-9 w-9 md:h-11 md:w-11" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M5 12.5l4.5 4.5L19 7.5" pathLength={1} style={{ strokeDasharray: 1, strokeDashoffset: 1, animation: 'wn-check 0.6s 0.15s ease-out forwards' }} />
+                </svg>
               </span>
-              <p className="text-sm md:text-2xl font-semibold text-ink mt-1">You're up to date</p>
-              <p className="text-[13px] md:text-base text-muted">There's nothing new to show right now.</p>
             </div>
+            <style>{'@keyframes wn-check{to{stroke-dashoffset:0}}'}</style>
+            <h3 className="text-xl md:text-[28px] font-semibold text-ink tracking-tight">You're up to date</h3>
+            <p className="mt-2 text-sm md:text-base text-muted">You have the latest version of AuraFin.</p>
+            <dl className="mt-7 w-full rounded-2xl border border-line bg-surface px-4 text-left text-sm shadow-sm">
+              <div className="flex items-center justify-between py-3">
+                <dt className="text-muted">Version</dt>
+                <dd className="font-semibold text-ink">{APP_VERSION}</dd>
+              </div>
+              <div className="flex items-center justify-between py-3 border-t border-line-soft">
+                <dt className="text-muted">Last checked</dt>
+                <dd className="font-semibold text-ink">
+                  {lastChecked
+                    ? `Today, ${lastChecked.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}`
+                    : '—'}
+                </dd>
+              </div>
+            </dl>
+            {onRecheck && (
+              <button
+                type="button"
+                onClick={onRecheck}
+                className="tap-scale mt-5 inline-flex items-center gap-2 rounded-xl border border-[#0a9a4b] px-5 py-2.5 text-sm font-semibold text-[#0a9a4b] hover:bg-[#e7f4ec] dark:hover:bg-[#0a9a4b]/15 transition-colors"
+              >
+                <RefreshCw size={15} />
+                Check again
+              </button>
+            )}
+            <p className="mt-4 text-[12.5px] text-muted">Updates are installed only from Settings.</p>
           </div>
-          <div className="hidden md:block bg-sandal" aria-hidden />
           {/* Desktop's full-screen view has no footer slot, so pin Close to the
               bottom-left here. On phones the pinned footer carries it. */}
           <button
             type="button"
             onClick={onClose}
-            className="tap-scale hidden md:block absolute bottom-8 left-12 px-4 py-2.5 text-sm font-medium text-muted hover:text-ink transition-colors"
+            className="tap-scale hidden md:block absolute bottom-8 left-10 px-4 py-2.5 text-sm font-medium text-muted hover:text-ink transition-colors"
           >
             Close
           </button>

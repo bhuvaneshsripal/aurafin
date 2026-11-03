@@ -1986,12 +1986,17 @@ export default function Settings() {
     initialTab && TABS.some((t) => t.key === initialTab) ? initialTab : 'basic'
   );
 
-  const [whatsNewOpen, setWhatsNewOpen] = useState(false);
+  // The update banner sends people here with the "New version" dialog already open.
+  const [whatsNewOpen, setWhatsNewOpen] = useState(
+    () => !!(location.state as { openWhatsNew?: boolean } | null)?.openWhatsNew
+  );
   const [updating, setUpdating] = useState(false);
   // Opening "New version" first checks for a deployed update (spinner), then
   // shows the release list only if one is waiting; otherwise the list is empty.
   const pendingUpdate = useUpdateStore((s) => s.updateAvailable);
   const [updateStatus, setUpdateStatus] = useState<'checking' | 'available' | 'uptodate'>('checking');
+  const [lastChecked, setLastChecked] = useState<Date | null>(null);
+  const [checkNonce, setCheckNonce] = useState(0); // bumped by "Check again"
   const whatsNew = useWhatsNew(whatsNewOpen && updateStatus === 'available');
   useEffect(() => {
     if (!whatsNewOpen) return;
@@ -2000,13 +2005,14 @@ export default function Settings() {
     const minSpinner = new Promise((r) => window.setTimeout(r, 700));
     void Promise.all([isNewVersionDeployed(), minSpinner]).then(([deployed]) => {
       if (cancelled) return;
+      setLastChecked(new Date());
       setUpdateStatus(pendingUpdate || deployed === true ? 'available' : 'uptodate');
     });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [whatsNewOpen]);
+  }, [whatsNewOpen, checkNonce]);
 
   // Phones show the menu first and one section at a time; desktop shows both side by side.
   // Desktop: the menu (left) and the section (right) are two separate scroll
@@ -2050,6 +2056,13 @@ export default function Settings() {
   // landing on some other section. Desktop ignores `open`.
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  // Forget the one-time "open the dialog" flag so a reload doesn't reopen it.
+  useEffect(() => {
+    if ((location.state as { openWhatsNew?: boolean } | null)?.openWhatsNew) {
+      navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Arriving straight at a section (a link, a refresh, or "go to Profiles")
   // shows that section; the entry is then tagged open=1 so Back leaves it normally.
   const [deepLinked, setDeepLinked] = useState(
@@ -2166,6 +2179,8 @@ export default function Settings() {
         onClose={() => setWhatsNewOpen(false)}
         notes={whatsNew}
         status={updateStatus}
+        lastChecked={lastChecked}
+        onRecheck={() => setCheckNonce((n) => n + 1)}
         updating={updating}
         onUpdate={() => {
           setUpdating(true);

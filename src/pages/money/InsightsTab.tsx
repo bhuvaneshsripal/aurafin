@@ -361,7 +361,7 @@ export default function InsightsTab() {
               >
                 <CartesianGrid vertical={false} stroke={chart.grid} />
                 <XAxis dataKey="label" tick={chart.tick} axisLine={false} tickLine={false} />
-                <YAxis tick={chart.tick} axisLine={false} tickLine={false} width={44} tickFormatter={(v) => (privacyMode ? '' : compact(Number(v)))} />
+                <YAxis tick={chart.tick} axisLine={false} tickLine={false} width={44} tickFormatter={(v) => (privacyMode ? '••••' : compact(Number(v)))} />
                 <Tooltip formatter={tooltipMoney} {...chart.tooltip} cursor={{ fill: 'var(--color-surface-hover)' }} />
                 <Bar dataKey="income" isAnimationActive={false} name="Income" fill={chart.primary} radius={[4, 4, 0, 0]} maxBarSize={28} />
                 <Bar dataKey="expense" isAnimationActive={false} name="Spent" fill="#f97316" radius={[4, 4, 0, 0]} maxBarSize={28} />
@@ -530,7 +530,7 @@ export default function InsightsTab() {
               <BarChart data={daily}>
                 <CartesianGrid vertical={false} stroke={chart.grid} />
                 <XAxis dataKey="day" tick={chart.tick} axisLine={false} tickLine={false} interval={Math.max(0, Math.ceil(daysInMonth / 10) - 1)} />
-                <YAxis tick={chart.tick} axisLine={false} tickLine={false} width={44} tickFormatter={(v) => (privacyMode ? '' : compact(Number(v)))} />
+                <YAxis tick={chart.tick} axisLine={false} tickLine={false} width={44} tickFormatter={(v) => (privacyMode ? '••••' : compact(Number(v)))} />
                 <Tooltip
                   formatter={tooltipMoney}
                   labelFormatter={(d) => `${d} ${monthLabel(month, true)}`}

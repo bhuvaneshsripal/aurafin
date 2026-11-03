@@ -37,6 +37,9 @@ interface ModalProps {
    *  the header and `footer` pinned and only the body scrolling. Desktop
    *  keeps the normal centered dialog. */
   fullScreenOnMobile?: boolean;
+  /** With `contentPanel`: no gap, rounding, border or backdrop around the
+   *  panel, so it sits flush against the sidebar and top bar like a page. */
+  flush?: boolean;
 }
 
 /** True on phone-width screens; follows rotation/resize. */
@@ -114,12 +117,14 @@ function ContentPanel({
   onClose,
   hideHeader,
   closing,
+  flush,
   children,
 }: {
   title: ReactNode;
   onClose: () => void;
   hideHeader?: boolean;
   closing?: boolean;
+  flush?: boolean;
   children: ReactNode;
 }) {
   const [top, setTop] = useState(0);
@@ -167,12 +172,12 @@ function ContentPanel({
          to fill edge-to-edge) with a blur + dim, so the inset margin around
          the panel below reveals a softened version of the page instead of
          sharp content (e.g. asset rows) peeking through. */}
-      <div
+      {!flush && <div
         className={`fixed left-0 right-0 md:left-[var(--sb-w)] bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-40 bg-slate-900/30 backdrop-blur-[3px] pointer-events-none ${closing ? 'animate-backdrop-out' : 'animate-backdrop-in'}`}
         style={{ top }}
-      />
+      />}
       <div
-        className={`${closing ? 'animate-menu-out' : 'animate-dialog-in'} fixed left-0 right-0 md:left-[var(--sb-w)] bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-50 bg-surface flex flex-col m-3 sm:m-4 rounded-2xl border border-line shadow-lg overflow-hidden`}
+        className={`${closing ? 'animate-menu-out' : 'animate-dialog-in'} fixed left-0 right-0 md:left-[var(--sb-w)] bottom-[calc(56px_+_env(safe-area-inset-bottom))] md:bottom-0 z-50 bg-surface flex flex-col overflow-hidden ${flush ? '' : 'm-3 sm:m-4 rounded-2xl border border-line shadow-lg'}`}
         style={{ top }}
       >
         {hideHeader ? (
@@ -257,6 +262,7 @@ export default function Modal({
   hideHeader = false,
   footer,
   fullScreenOnMobile = false,
+  flush = false,
 }: ModalProps) {
   const isMobile = useIsMobile();
   const barsBottom = useBarsBottom(open && fullScreenOnMobile && isMobile);
@@ -288,12 +294,12 @@ export default function Modal({
 
   if (fullScreenOnMobile && isMobile) {
     return createPortal(
-      <div role="dialog" aria-modal="true" className={`${closing ? 'animate-detail-out' : 'animate-detail-in'} fixed inset-x-0 bottom-0 z-[80] bg-surface flex flex-col`} style={{ top: barsBottom }}>
+      <div role="dialog" aria-modal="true" className={`${closing ? 'animate-detail-out' : 'animate-detail-in'} fixed inset-x-0 ${flush ? 'bottom-[calc(56px_+_env(safe-area-inset-bottom))] z-40' : 'bottom-0 z-[80]'} bg-surface flex flex-col`} style={{ top: barsBottom }}>
         <PanelBody title={title} onClose={onClose} belowBars>
           {children}
         </PanelBody>
         {footer && (
-          <div className="shrink-0 border-t border-line-soft bg-surface px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)]">
+          <div className={`shrink-0 border-t border-line-soft bg-surface px-4 pt-3 ${flush ? 'pb-3' : 'pb-[calc(env(safe-area-inset-bottom)+12px)]'}`}>
             {footer}
           </div>
         )}
@@ -325,7 +331,7 @@ export default function Modal({
   if (contentPanel) {
     // Same "escape .app-scale" reasoning as fullScreen above.
     return createPortal(
-      <ContentPanel title={title} onClose={onClose} hideHeader={hideHeader} closing={closing}>
+      <ContentPanel title={title} onClose={onClose} hideHeader={hideHeader} closing={closing} flush={flush}>
         {children}
       </ContentPanel>,
       document.body
