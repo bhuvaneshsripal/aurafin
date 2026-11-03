@@ -8,8 +8,9 @@ import {
   sendPasswordResetEmail,
   EmailAuthProvider,
 } from 'firebase/auth';
-import { ArrowLeft, ChevronRight, Database, FileText, KeyRound, LockKeyhole, RefreshCw, Share2, SlidersHorizontal, Sparkles, UserRound, Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, Download, Upload, Mail, Bell } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Database, FileText, KeyRound, LockKeyhole, RefreshCw, Share2, SlidersHorizontal, Sparkles, UserRound, Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, Download, Upload, Mail, Bell, Keyboard } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import { SHORTCUT_GROUPS } from '../config/shortcuts';
 import { useAvatarStore } from '../store/avatarStore';
 import { useAvatarUrl } from '../hooks/useAvatarUrl';
 import { useDisplayName } from '../hooks/useDisplayName';
@@ -76,7 +77,7 @@ const REPORT_SECTIONS: { key: ReportSectionKey; label: string }[] = [
   { key: 'sold', label: 'Sold investments' },
 ];
 
-type Tab = 'basic' | 'reports' | 'password' | 'pin' | 'shared' | 'preferences' | 'notifications' | 'profiles' | 'data';
+type Tab = 'basic' | 'reports' | 'password' | 'pin' | 'shared' | 'preferences' | 'notifications' | 'profiles' | 'data' | 'shortcuts';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'basic', label: 'Basic details' },
@@ -88,6 +89,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'profiles', label: 'Profiles' },
   { key: 'shared', label: 'Shared access' },
   { key: 'data', label: 'Data' },
+  { key: 'shortcuts', label: 'Shortcuts' },
 ];
 
 const NAV_ICONS: Record<string, LucideIcon> = {
@@ -100,6 +102,7 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   profiles: Users,
   shared: Share2,
   data: Database,
+  shortcuts: Keyboard,
 };
 
 const NAV_ITEMS = TABS;
@@ -1750,6 +1753,44 @@ function ProfilesTab() {
   );
 }
 
+/** Settings > Shortcuts: the keyboard shortcuts the app understands. */
+function ShortcutsTab() {
+  return (
+    <div className="space-y-6">
+      {SHORTCUT_GROUPS.map((group) => (
+        <Card key={group.title}>
+          <h2 className="text-sm font-semibold text-ink mb-1">{group.title}</h2>
+          <ul className="divide-y divide-line-soft">
+            {group.items.map((it) => (
+              <li key={it.label} className="flex items-center justify-between gap-4 py-3.5">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-ink">{it.label}</p>
+                  <p className="text-xs text-muted mt-0.5">{it.description}</p>
+                </div>
+                <div className="shrink-0 flex items-center gap-1.5">
+                  {it.keys.map((k, i) => (
+                    <span key={k} className="inline-flex items-center gap-1.5">
+                      {i > 0 && <span className="text-xs text-faint">+</span>}
+                      <kbd className="min-w-[2rem] rounded-lg border border-line border-b-2 bg-surface-muted px-2.5 py-1 text-center font-sans text-[13px] font-semibold text-ink-2">
+                        {k}
+                      </kbd>
+                    </span>
+                  ))}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ))}
+      <p className="text-xs text-muted px-1">
+        Shortcuts work on a computer with a keyboard. On a Mac, use Cmd in place of Ctrl (Cmd+Q is kept by the
+        browser, so Settings has no shortcut there). Ctrl+A and Alt+N are ignored while you are typing in a box, and
+        no shortcut fires while a dialog is open.
+      </p>
+    </div>
+  );
+}
+
 function DataTab() {
   const user = useAuthStore((s) => s.user);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -2172,6 +2213,7 @@ export default function Settings() {
           {tab === 'notifications' && <NotificationsTab />}
           {tab === 'profiles' && <ProfilesTab />}
           {tab === 'data' && <DataTab />}
+          {tab === 'shortcuts' && <ShortcutsTab />}
         </div>
       </div>
       <WhatsNewModal

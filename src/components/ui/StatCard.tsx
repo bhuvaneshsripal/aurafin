@@ -11,6 +11,10 @@ export interface StatCardProps {
   tone?: 'default' | 'positive' | 'negative';
   /** Change chip next to the value, e.g. { value: '13.2%', positive: true }. */
   delta?: { value: string; positive: boolean };
+  /** Show the change chip at the top right of the card instead of under the value. */
+  deltaInCorner?: boolean;
+  /** Small neutral tag at the top right (e.g. "Realized"). */
+  cornerLabel?: ReactNode;
   sublabel?: ReactNode;
   icon?: ReactNode;
   loading?: boolean;
@@ -29,7 +33,21 @@ export interface StatCardProps {
 const tones = { default: 'text-ink', positive: 'text-positive', negative: 'text-negative' };
 
 /** KPI tile. Values are never truncated — long ₹ figures wrap instead of being cut off. */
-export default function StatCard({ label, value, tone = 'default', delta, sublabel, icon, loading, dense, hero, onToggle, toggled, className }: StatCardProps) {
+function DeltaChip({ delta }: { delta: { value: string; positive: boolean } }) {
+  return (
+    <span
+      className={cn(
+        'font-medium px-1.5 py-0.5 rounded-md font-numeric text-xs',
+        delta.positive ? 'bg-positive-soft text-positive' : 'bg-negative-soft text-negative'
+      )}
+    >
+      {delta.positive ? '+' : '−'}
+      {delta.value}
+    </span>
+  );
+}
+
+export default function StatCard({ label, value, tone = 'default', delta, deltaInCorner, cornerLabel, sublabel, icon, loading, dense, hero, onToggle, toggled, className }: StatCardProps) {
   return (
     <Card padding="md" className={cn(dense && '!p-3 sm:!p-5', className)}>
       <div className="flex items-center justify-between gap-2 min-h-6">
@@ -46,6 +64,16 @@ export default function StatCard({ label, value, tone = 'default', delta, sublab
           </button>
         )}
         {icon && <span className="text-faint shrink-0">{icon}</span>}
+        {cornerLabel && !(deltaInCorner && !loading && delta) && (
+          <span className="ml-auto shrink-0 text-xs font-medium px-1.5 py-0.5 rounded-md bg-surface-muted text-muted">
+            {cornerLabel}
+          </span>
+        )}
+        {deltaInCorner && !loading && delta && (
+          <span className="ml-auto shrink-0">
+            <DeltaChip delta={delta} />
+          </span>
+        )}
       </div>
       <div className={cn('mt-2 flex items-baseline gap-2', hero ? 'min-h-9 sm:min-h-[28px]' : 'min-h-[28px]')}>
         {loading ? (
@@ -64,19 +92,9 @@ export default function StatCard({ label, value, tone = 'default', delta, sublab
           </span>
         )}
       </div>
-      {(sublabel || (!loading && delta)) && (
+      {(sublabel || (!loading && delta && !deltaInCorner)) && (
         <div className={cn('mt-1.5 flex items-center gap-2 text-xs text-muted', dense ? 'sm:min-h-[20px]' : 'min-h-[20px]')}>
-          {!loading && delta && (
-            <span
-              className={cn(
-                'font-medium px-1.5 py-0.5 rounded-md font-numeric',
-                delta.positive ? 'bg-positive-soft text-positive' : 'bg-negative-soft text-negative'
-              )}
-            >
-              {delta.positive ? '+' : '−'}
-              {delta.value}
-            </span>
-          )}
+          {!loading && delta && !deltaInCorner && <DeltaChip delta={delta} />}
           {sublabel && <span className="min-w-0">{sublabel}</span>}
         </div>
       )}

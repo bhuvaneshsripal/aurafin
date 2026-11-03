@@ -1,3 +1,4 @@
+import { SHORTCUT_HINT } from '../config/shortcuts';
 import { toast } from '../store/toastStore';
 import { useEffect, useRef, useState } from 'react';
 import { hideNumber } from '../utils/privateFormat';
@@ -42,6 +43,25 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, []);
 
+  // Keyboard shortcut (desktop): Ctrl+A (Cmd+A on Mac) opens the Add Asset
+  // page. It leaves the normal "Select all" alone while typing in a field or
+  // while a dialog is open, so copying text out of inputs still works.
+  useEffect(() => {
+    if (variant !== 'desktop') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.shiftKey || e.altKey) return;
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'a') return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
+      e.preventDefault();
+      setMenuOpen(false);
+      navigate('/wealth?add=1&entry=asset&step=category');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [variant, navigate]);
+
   // Locks background scroll while the pill/dropdown menu is open — its
   // backdrop (fab variant) or the page behind it (desktop variant) would
   // otherwise keep scrolling underneath the open menu.
@@ -78,6 +98,7 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
         <button
           onClick={() => setMenuOpen((o) => !o)}
           aria-label="Quick add"
+          title={isFab ? 'Quick add' : `Quick add (${SHORTCUT_HINT.addAsset} adds an asset)`}
           className={
             isFab
               ? `fab-button${menuOpen ? ' fab-open' : ''} tap-scale relative z-30 flex items-center justify-center text-white h-14 w-14`
@@ -118,7 +139,7 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
             <p className="px-4 pt-3 pb-1 text-xs font-medium text-faint">
               Wealth
             </p>
-            <MenuItem icon={Coins} color="text-muted" label="Asset" onClick={() => open('asset')} />
+            <MenuItem icon={Coins} color="text-muted" label="Asset" hint={SHORTCUT_HINT.addAsset} onClick={() => open('asset')} />
             <MenuItem icon={Landmark} color="text-muted" label="Liability" onClick={() => open('liability')} />
             <MenuItem icon={Camera} color="text-muted" label="Snapshot" onClick={() => open('snapshot')} />
           </div>
@@ -173,11 +194,14 @@ function MenuItem({
   icon: Icon,
   color,
   label,
+  hint,
   onClick,
 }: {
   icon: typeof Plus;
   color: string;
   label: string;
+  /** Shortcut shown on the right, e.g. "Ctrl+A". */
+  hint?: string;
   onClick: () => void;
 }) {
   return (
@@ -187,6 +211,7 @@ function MenuItem({
     >
       <Icon size={18} className={color} />
       {label}
+      {hint && <span className="ml-auto text-xs font-normal text-faint">{hint}</span>}
     </button>
   );
 }

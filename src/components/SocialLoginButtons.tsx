@@ -42,6 +42,11 @@ const ITEMS: { id: Provider; label: string; icon: ReactNode }[] = [
   },
 ];
 
+/** Set to true once Apple, Microsoft and Yahoo are enabled under Firebase
+ *  Authentication > Sign-in method. Until then the buttons stay hidden, because
+ *  Firebase rejects them with "auth/operation-not-allowed". */
+const SHOW_EXTRA_PROVIDERS = false;
+
 /** Apple / Microsoft (Outlook, Hotmail, Live) / Yahoo sign-in, for people whose
  *  email isn't Gmail. Works for both logging in and signing up: a first-time
  *  account is created automatically and goes through onboarding. */
@@ -69,6 +74,8 @@ export default function SocialLoginButtons({
       setBusy(null);
     }
   };
+
+  if (!SHOW_EXTRA_PROVIDERS) return null;
 
   return (
     <div className="grid grid-cols-3 gap-2 mt-3 mb-1">

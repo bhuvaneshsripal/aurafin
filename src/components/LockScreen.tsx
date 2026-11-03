@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Delete } from 'lucide-react';
+import { Delete, LogOut, Moon, MoreVertical, Sun } from 'lucide-react';
 import { useAppLockStore } from '../store/appLockStore';
+import { useAuthStore } from '../store/authStore';
+import { useUiStore } from '../store/uiStore';
+import { toast } from '../store/toastStore';
 import { LOGO_SRC } from '../config/logo';
 
 const KEY_CLASS =
@@ -16,6 +19,37 @@ export default function LockScreen() {
   const pinRef = useRef('');
   const busyRef = useRef(false); // wrong-PIN shake or cache check running
   const keyEls = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  // Three-dot menu (top right): switch theme or log out without unlocking.
+  const theme = useUiStore((st) => st.theme);
+  const toggleTheme = useUiStore((st) => st.toggleTheme);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: PointerEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMenuOpen(false);
+    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown, true);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
+  const handleLogout = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    setMenuOpen(false);
+    try {
+      await useAuthStore.getState().logout();
+    } catch {
+      setSigningOut(false);
+      toast.error('Could not log out. Please check your connection and try again.');
+    }
+  };
   const setPin = useCallback((v: string) => {
     pinRef.current = v;
     setPinInput(v);
@@ -179,6 +213,49 @@ export default function LockScreen() {
         unlocking ? 'animate-lock-unlock pointer-events-none' : 'animate-lock-in'
       }`}
     >
+      <div ref={menuRef} className="fixed right-4 top-[calc(env(safe-area-inset-top)+12px)] z-10">
+        <button
+          type="button"
+          aria-label="Menu"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((o) => !o)}
+          className="tap-scale keep-round h-10 w-10 inline-flex items-center justify-center text-ink-2 hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+        >
+          <MoreVertical size={20} />
+        </button>
+        {menuOpen && (
+          <div
+            role="menu"
+            className="animate-menu-in absolute right-0 mt-2 w-48 overflow-hidden rounded-xl border border-line bg-surface py-1 shadow-lg"
+          >
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                toggleTheme();
+                setMenuOpen(false);
+              }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-ink-2 hover:bg-surface-hover"
+            >
+              {theme === 'dark' ? <Sun size={17} className="text-muted" /> : <Moon size={17} className="text-muted" />}
+              {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+            </button>
+            <div className="border-t border-line-soft" />
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => void handleLogout()}
+              disabled={signingOut}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-surface-hover disabled:opacity-60"
+            >
+              <LogOut size={17} />
+              {signingOut ? 'Logging out…' : 'Log out'}
+            </button>
+          </div>
+        )}
+      </div>
+
       <div className="w-full max-w-[300px] mx-auto text-center flex flex-col items-center">
         <img
           src={LOGO_SRC}

@@ -35,6 +35,7 @@ import { useWeeklyDigestScheduler } from './hooks/useWeeklyDigestScheduler';
 import { useMarketAlerts } from './hooks/useMarketAlerts';
 import { usePushSubscription } from './hooks/usePushSubscription';
 import { useDailyHardRefresh } from './hooks/useDailyHardRefresh';
+import { usePageShortcuts } from './hooks/usePageShortcuts';
 import { useScrollRestoration } from './hooks/useScrollRestoration';
 import Sidebar from './components/Sidebar';
 import TopHeader from './components/TopHeader';
@@ -109,6 +110,8 @@ function AppShell() {
   // Auto hard-refresh every day at 6:00 a.m.
   useDailyHardRefresh();
   useVisualViewportOffset();
+  // Ctrl+O Overview, Alt+W Wealth, Ctrl+P Performance (not during onboarding).
+  usePageShortcuts(!needsOnboarding);
 
   // First-time sign-ups/sign-ins get the full-screen onboarding wizard with
   // none of the normal chrome (sidebar/topbar/bottom nav) — matches how

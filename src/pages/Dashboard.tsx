@@ -266,7 +266,7 @@ export default function Dashboard() {
             value={money(hasWealth ? netWorthShown : 0)}
             onToggle={hasWealth ? () => setIncludeSold((v) => !v) : undefined}
             toggled={includeSold}
-            sublabel={hasWealth ? (includeSold ? `Incl. ${signedMoney(realizedPnl)} realized P&L` : 'Assets minus liabilities') : <Link to="/wealth" className="text-primary-ink font-medium hover:underline">Add your first asset</Link>}
+            sublabel={hasWealth ? undefined : <Link to="/wealth" className="text-primary-ink font-medium hover:underline">Add your first asset</Link>}
           />
         </div>
         <StatCard
@@ -274,12 +274,13 @@ export default function Dashboard() {
           label="Total invested"
           loading={!wealthDataKnown}
           value={money(hasWealth ? investedShown : 0)}
-          sublabel={includeSold ? `Incl. ${money(realizedCost)} realized investment` : 'Cost basis'}
         />
         <StatCard
           dense
           label="Profit / loss"
           loading={!ready}
+          deltaInCorner
+          cornerLabel={includeSold ? 'Realized' : undefined}
           tone={!hasWealth || (!includeSold && investedShown <= 0) ? 'default' : netWorthPnl >= 0 ? 'positive' : 'negative'}
           value={hasWealth ? signedMoney(netWorthPnl) : money(0)}
           delta={
@@ -287,7 +288,6 @@ export default function Dashboard() {
               ? { value: formatPercentMagnitude(netWorthPnlPercent), positive: netWorthPnl >= 0 }
               : undefined
           }
-          sublabel={includeSold ? 'realized only' : 'vs. invested'}
         />
       </div>
 
@@ -510,6 +510,10 @@ function NetWorthOverTimeCard({
   const handleChartTap = (e: ReactMouseEvent<HTMLDivElement>) => {
     // Taps on the pinned tooltip itself are handled by its own onClick (close).
     if ((e.target as HTMLElement).closest('[data-pinned-tip]')) return;
+    // Touch is handled entirely by the pointer handlers. Ignoring touch clicks here
+    // stops a stray one (e.g. the last tap on the PIN pad landing on the chart as
+    // the lock screen closes) from pinning a value nobody touched.
+    if (isTouchDevice() || (e.nativeEvent as PointerEvent).pointerType === 'touch') return;
     // The click that follows a touch was already handled on pointer up.
     if (justTouchedRef.current) {
       justTouchedRef.current = false;

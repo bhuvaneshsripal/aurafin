@@ -1,3 +1,4 @@
+import { SHORTCUT_HINT } from '../config/shortcuts';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, X, TrendingUp, CreditCard, Target, ArrowLeftRight, Clock } from 'lucide-react';
@@ -104,6 +105,21 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
     setQuery('');
   }, [open]);
 
+  // Keyboard shortcut: Ctrl+K (Cmd+K on Mac) opens the search, and closes it
+  // again if it is already open. Works even while typing in a field, as in most
+  // apps; skipped only when some other dialog is open.
+  useEffect(() => {
+    const onShortcut = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.shiftKey || e.altKey) return;
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'k') return;
+      if (document.querySelector('[aria-modal="true"]')) return;
+      e.preventDefault();
+      setOpen((o) => !o);
+    };
+    window.addEventListener('keydown', onShortcut);
+    return () => window.removeEventListener('keydown', onShortcut);
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -202,7 +218,7 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
         <button
           type="button"
           onClick={() => setOpen(true)}
-          title="Search Aurafin"
+          title={`Search Aurafin (${SHORTCUT_HINT.search})`}
           aria-label="Search Aurafin"
           className="tap-scale h-9 w-9 flex items-center justify-center rounded-lg text-muted hover:bg-surface-hover hover:text-ink shrink-0 transition-colors"
         >

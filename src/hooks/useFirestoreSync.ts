@@ -770,6 +770,82 @@ export async function saveWealthFilters(
   await setDoc(ref, value, { merge: true });
 }
 
+/* ---- Basic details: on-device copy + unsent-change journal --------------
+ * Signed-in accounts keep a copy of their details on this device (so they show
+ * instantly and offline, and a slow/cache-only Firestore answer never blanks
+ * them) plus a journal of changes the server hasn't confirmed yet (so a save
+ * made on a weak connection, or right before closing the tab, is re-sent next
+ * time instead of being lost). */
+type PendingDetail = { v: string | null; at: number };
+type PendingDetails = Record<string, PendingDetail>;
+
+const basicBackupKey = (uid: string) => `aurafin-${uid}-basicDetails-backup`;
+const basicPendingKey = (uid: string) => `aurafin-${uid}-basicDetails-pending`;
+
+function readBasicBackup(uid: string): BasicDetails | null {
+  try {
+    const raw = localStorage.getItem(basicBackupKey(uid));
+    return raw ? cleanBasicDetails(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+}
+function writeBasicBackup(uid: string, value: BasicDetails) {
+  try {
+    localStorage.setItem(basicBackupKey(uid), JSON.stringify(value));
+  } catch {
+    /* storage unavailable: just no offline copy */
+  }
+}
+function readBasicPending(uid: string): PendingDetails {
+  try {
+    const raw = localStorage.getItem(basicPendingKey(uid));
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' ? (parsed as PendingDetails) : {};
+  } catch {
+    return {};
+  }
+}
+function writeBasicPending(uid: string, value: PendingDetails) {
+  try {
+    if (Object.keys(value).length === 0) localStorage.removeItem(basicPendingKey(uid));
+    else localStorage.setItem(basicPendingKey(uid), JSON.stringify(value));
+  } catch {
+    /* storage unavailable */
+  }
+}
+/** Lays the not-yet-confirmed changes on top of `base`, so a stale snapshot can't revert them. */
+function applyBasicPending(uid: string, base: BasicDetails): BasicDetails {
+  const out: Record<string, string> = { ...(base as Record<string, string>) };
+  for (const [key, p] of Object.entries(readBasicPending(uid))) {
+    if (p.v == null || p.v === '') delete out[key];
+    else out[key] = p.v;
+  }
+  return out as BasicDetails;
+}
+function toRemoteDetails(entries: Array<[string, string | null]>): Record<string, unknown> {
+  const remote: Record<string, unknown> = {};
+  for (const [key, v] of entries) remote[key] = v == null || v === '' ? deleteField() : v;
+  return remote;
+}
+/** Sends the journaled changes; each entry is dropped only once the server confirms it. */
+function flushBasicPending(uid: string) {
+  const pending = readBasicPending(uid);
+  const entries = Object.entries(pending);
+  if (entries.length === 0) return;
+  setDoc(
+    doc(db, 'users', uid, 'meta', 'basicDetails'),
+    toRemoteDetails(entries.map(([k, p]) => [k, p.v])),
+    { merge: true }
+  )
+    .then(() => {
+      const now = readBasicPending(uid);
+      for (const [k, p] of entries) if (now[k]?.at === p.at) delete now[k];
+      writeBasicPending(uid, now);
+    })
+    .catch((err) => console.warn('Basic details will retry later.', err));
+}
+
 function guestBasicDetailsKey(uid: string): string {
   return `aurafin-guest-${uid}-basicDetails`;
 }
@@ -802,6 +878,9 @@ export function useBasicDetailsSync() {
   // swap on startup doesn't tear the listener down and back up.
   const uid = useAuthStore((s) => s.user?.uid ?? null);
   const guest = useAuthStore((s) => isAnonymousUser(s.user));
+  // While the app shows a cached user that Firebase hasn't confirmed yet, a
+  // listener can be refused; re-subscribe once the session is confirmed.
+  const verifying = useAuthStore((s) => s.verifying);
   const setDetails = useBasicDetailsStore((s) => s.setDetails);
 
   // A layout effect so a demo account's saved details (its gender picks the
@@ -817,33 +896,54 @@ export function useBasicDetailsSync() {
       return;
     }
 
-    setDetails({}, false);
+    // Show the last-known details straight away (and while offline).
+    const backup = readBasicBackup(uid);
+    if (backup) setDetails(applyBasicPending(uid, backup), true);
+    else setDetails(applyBasicPending(uid, {}), false);
+
     const ref = doc(db, 'users', uid, 'meta', 'basicDetails');
+    let cancelled = false;
+    let unsub: () => void = () => {};
+    let retry: ReturnType<typeof setTimeout> | undefined;
+
     // If the server doesn't answer (offline, slow network), don't leave the
     // screen stuck loading with editing disabled: show what we have after a moment.
     const fallback = setTimeout(() => {
       const s = useBasicDetailsStore.getState();
       if (!s.loaded) s.setDetails(s.details);
     }, 4000);
-    const unsub = onSnapshot(
-      ref,
-      (snap) => {
-        // A cache-only "doesn't exist" answer isn't trustworthy: wait for the server.
-        if (!snap.exists() && snap.metadata.fromCache) return;
-        clearTimeout(fallback);
-        setDetails(cleanBasicDetails(snap.data()));
-      },
-      (err) => {
-        console.error('Basic details sync error', err);
-        // Stop showing the loading state; keep whatever we already have.
-        setDetails(useBasicDetailsStore.getState().details);
-      }
-    );
+
+    const subscribe = () => {
+      unsub = onSnapshot(
+        ref,
+        (snap) => {
+          // A cache-only "doesn't exist" answer isn't trustworthy: wait for the server.
+          if (!snap.exists() && snap.metadata.fromCache) return;
+          clearTimeout(fallback);
+          const merged = applyBasicPending(uid, cleanBasicDetails(snap.data()));
+          setDetails(merged);
+          writeBasicBackup(uid, merged);
+        },
+        (err) => {
+          console.error('Basic details sync error', err);
+          // Stop showing the loading state; keep whatever we already have, and
+          // try again shortly (a failed listener never recovers on its own).
+          setDetails(useBasicDetailsStore.getState().details);
+          if (!cancelled) retry = setTimeout(subscribe, 5000);
+        }
+      );
+    };
+    subscribe();
+    // Re-send any change that was never confirmed (weak connection, tab closed).
+    flushBasicPending(uid);
+
     return () => {
+      cancelled = true;
       clearTimeout(fallback);
+      clearTimeout(retry);
       unsub();
     };
-  }, [uid, guest, setDetails]);
+  }, [uid, guest, verifying, setDetails]);
 }
 
 /** A change to the details: `null` (or an empty string) clears that field. */
@@ -851,21 +951,21 @@ export type BasicDetailsPatch = { [K in keyof BasicDetails]?: BasicDetails[K] | 
 
 /**
  * Saves a change to the person's basic details. The screen updates straight
- * away; if the save fails the previous values are put back and the error is
- * rethrown so the caller can show it.
+ * away and the change is kept on this device until the server confirms it, so
+ * it can't be lost to a weak connection or a closed tab.
  */
 export async function saveBasicDetails(user: { uid: string; isAnonymous?: boolean }, patch: BasicDetailsPatch) {
   const store = useBasicDetailsStore.getState();
   const previous = store.details;
   const next: Record<string, string> = { ...previous };
-  const remote: Record<string, unknown> = {};
+  const entries: Array<[string, string | null]> = [];
   for (const [key, value] of Object.entries(patch)) {
     if (value == null || value === '') {
       delete next[key];
-      remote[key] = deleteField();
+      entries.push([key, null]);
     } else {
       next[key] = value;
-      remote[key] = value;
+      entries.push([key, value]);
     }
   }
   const nextDetails = next as BasicDetails;
@@ -875,15 +975,28 @@ export async function saveBasicDetails(user: { uid: string; isAnonymous?: boolea
     writeGuestBasicDetails(user.uid, nextDetails);
     return;
   }
+
+  // Journal first, so the change survives a refresh/offline before it is sent.
+  writeBasicBackup(user.uid, nextDetails);
+  const at = Date.now();
+  const pending = readBasicPending(user.uid);
+  for (const [k, v] of entries) pending[k] = { v, at };
+  writeBasicPending(user.uid, pending);
+
   // Don't wait for the server's confirmation: offline, that never arrives until
   // the connection is back, which left "Saving..." stuck. The change is already
-  // on screen and Firestore queues the write and sends it when online. If the
-  // server rejects it, put the old values back and say so.
-  setDoc(doc(db, 'users', user.uid, 'meta', 'basicDetails'), remote, { merge: true }).catch((err) => {
-    console.error('Basic details save failed', err);
-    useBasicDetailsStore.getState().setDetails(previous);
-    toast.bottom.error('Could not sync your details. Please try again.', 5000);
-  });
+  // on screen and journaled; it is dropped from the journal once confirmed and
+  // re-sent on the next start if it never was.
+  setDoc(doc(db, 'users', user.uid, 'meta', 'basicDetails'), toRemoteDetails(entries), { merge: true })
+    .then(() => {
+      const now = readBasicPending(user.uid);
+      for (const [k] of entries) if (now[k]?.at === at) delete now[k];
+      writeBasicPending(user.uid, now);
+    })
+    .catch((err) => {
+      console.error('Basic details save failed', err);
+      toast.bottom.error("Couldn't sync your details right now. They're kept and will retry.", 5000);
+    });
 }
 
 /**

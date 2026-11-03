@@ -1,3 +1,4 @@
+import { SHORTCUT_HINT } from '../config/shortcuts';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Moon, Sun, Globe, Eye, EyeOff, ChevronDown, MoreVertical, LogOut } from 'lucide-react';
@@ -160,7 +161,7 @@ export default function TopHeader() {
           </div>
 
           <IconButton
-            label={`${privacyMode ? 'Show amounts' : 'Hide amounts'} (Ctrl+M)`}
+            label={`${privacyMode ? 'Show amounts' : 'Hide amounts'} (${SHORTCUT_HINT.privacy})`}
             onClick={togglePrivacy}
           >
             {privacyMode ? <EyeOff size={18} /> : <Eye size={18} />}

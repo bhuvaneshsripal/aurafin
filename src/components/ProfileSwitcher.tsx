@@ -34,7 +34,8 @@ export default function ProfileSwitcher({ compact = false }: { compact?: boolean
   // default one, or the oldest when none is flagged); other household
   // members keep their coloured initial.
   const ownerProfile = profiles.find((p) => p.isDefault) ?? profiles[0];
-  const showPhoto = !!avatarUrl && !!activeProfile && activeProfile.id === ownerProfile?.id;
+  // "All profiles" is the account owner's combined view, so it shows their photo too.
+  const showPhoto = !!avatarUrl && (!activeProfile || activeProfile.id === ownerProfile?.id);
 
   // Only worth showing once there's actually more than one profile to
   // switch between — otherwise it's just an inert label.

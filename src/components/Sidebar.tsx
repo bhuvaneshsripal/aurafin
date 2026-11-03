@@ -1,3 +1,4 @@
+import { PAGE_SHORTCUT_BY_PATH } from '../config/shortcuts';
 import { useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -68,7 +69,7 @@ function NavItem({ to, label, icon: Icon, end }: NavLinkDef) {
         if (location.pathname === to) void hardRefresh();
       }}
       end={end ?? to === '/'}
-      title={label}
+      title={PAGE_SHORTCUT_BY_PATH[to] ? `${label} (${PAGE_SHORTCUT_BY_PATH[to]})` : label}
       className={({ isActive }) =>
         `sb-item flex items-center gap-2.5 h-9 px-2.5 rounded-lg text-[14px] font-medium transition-colors duration-150 ${
           isActive

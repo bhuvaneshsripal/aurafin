@@ -1,3 +1,4 @@
+import { SHORTCUT_HINT } from '../config/shortcuts';
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
@@ -278,6 +279,25 @@ export default function NotificationBell(_props: { align?: 'right' | 'left' } = 
     setOpen(!open);
   };
 
+  // Keyboard shortcut: Alt+N opens / closes the notifications panel. (Ctrl+N
+  // can't be used: browsers keep it for "New window" and never pass it to the
+  // page.) Ignored while typing in a field or while a dialog is open.
+  const toggleRef = useRef(toggle);
+  toggleRef.current = toggle;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.shiftKey || !e.altKey) return;
+      if (e.code !== 'KeyN') return; // e.code, because Alt changes e.key on some layouts
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
+      e.preventDefault();
+      toggleRef.current();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   // Close the ⋯ menu on any tap outside it.
   useEffect(() => {
     if (!menuOpen) return;
@@ -305,7 +325,7 @@ export default function NotificationBell(_props: { align?: 'right' | 'left' } = 
 
   return (
     <div className="relative shrink-0" ref={ref}>
-      <IconButton label="Notifications" onClick={toggle}>
+      <IconButton label={`Notifications (${SHORTCUT_HINT.notifications})`} onClick={toggle}>
         <span className="relative inline-flex">
           {enabled ? <Bell size={18} /> : <BellOff size={18} />}
           {unread > 0 && (
