@@ -499,7 +499,7 @@ export default function BottomNav() {
             />
           </div>
 
-          {/* "+" centred in the middle of the bar (vertically centred inside the pill). Lives beside the pill (not inside it) because
+          {/* "+" centred horizontally and raised so it sits on the bar's top edge. Lives beside the pill (not inside it) because
               the pill's backdrop blur would trap the menu's full-screen backdrop. Hidden when a
               page's own bottom toolbar needs the space, and while typing. */}
           {!hideFab && (
@@ -507,7 +507,7 @@ export default function BottomNav() {
             // full-screen backdrop inside a small square around the button.
             <div
               className="pointer-events-none absolute inset-x-0 flex justify-center"
-              style={{ bottom: 'calc(env(safe-area-inset-bottom) + 14px)' }}
+              style={{ bottom: 'calc(env(safe-area-inset-bottom) + 36px)' }}
             >
               <div className="pointer-events-auto">
                 <QuickAddMenu variant="center" />
