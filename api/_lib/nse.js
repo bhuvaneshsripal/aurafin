@@ -20,25 +20,36 @@ let cachedCookie = null;
 let cookieFetchedAt = 0;
 const COOKIE_TTL_MS = 4 * 60 * 1000; // NSE session cookies are short-lived; refresh every 4 min
 
+// One handshake at a time: when several quotes are requested together on a cold
+// instance (a batch of holdings), they all wait for the same cookie instead of
+// each opening its own session with NSE (which is slow and gets throttled).
+let cookieInFlight = null;
+
 async function getNseCookie() {
   if (cachedCookie && Date.now() - cookieFetchedAt < COOKIE_TTL_MS) return cachedCookie;
+  if (cookieInFlight) return cookieInFlight;
 
-  const res = await fetch('https://www.nseindia.com/get-quotes/equity?symbol=RELIANCE', {
-    headers: {
-      ...BROWSER_HEADERS,
-      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    },
+  cookieInFlight = (async () => {
+    const res = await fetch('https://www.nseindia.com/get-quotes/equity?symbol=RELIANCE', {
+      headers: {
+        ...BROWSER_HEADERS,
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+    });
+
+    const cookies =
+      typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : [];
+    const cookie = cookies.map((c) => c.split(';')[0]).join('; ');
+
+    if (!cookie) throw new Error('NSE did not return a session cookie');
+
+    cachedCookie = cookie;
+    cookieFetchedAt = Date.now();
+    return cookie;
+  })().finally(() => {
+    cookieInFlight = null;
   });
-
-  const cookies =
-    typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : [];
-  const cookie = cookies.map((c) => c.split(';')[0]).join('; ');
-
-  if (!cookie) throw new Error('NSE did not return a session cookie');
-
-  cachedCookie = cookie;
-  cookieFetchedAt = Date.now();
-  return cookie;
+  return cookieInFlight;
 }
 
 /** Invalidate the cached cookie — call this after a failed request so the next call re-handshakes. */

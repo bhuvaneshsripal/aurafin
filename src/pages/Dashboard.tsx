@@ -116,36 +116,55 @@ export default function Dashboard() {
   // Fully sold-out holdings are no longer part of the portfolio (the Wealth
   // page hides them too), so they must not count toward Net worth /
   // Profit-loss here — otherwise the Dashboard disagrees with Wealth.
-  const assets = (activeProfileId ? allAssets.filter((a) => a.profileId === activeProfileId) : allAssets).filter(
-    (a) => !isFullySold(a)
+  // These are memoised on their store arrays: a plain `.filter()` here made a
+  // brand-new array on EVERY render, which silently defeated every useMemo
+  // below that lists them as a dependency (allocation, top holdings, ...), so
+  // they were recomputed on each price tick and each tooltip hover.
+  const assets = useMemo(
+    () =>
+      (activeProfileId ? allAssets.filter((a) => a.profileId === activeProfileId) : allAssets).filter(
+        (a) => !isFullySold(a)
+      ),
+    [allAssets, activeProfileId]
   );
-  const liabilities = activeProfileId
-    ? allLiabilities.filter((l) => l.profileId === activeProfileId)
-    : allLiabilities;
-  const transactions = activeProfileId
-    ? allTransactions.filter((t) => t.profileId === activeProfileId)
-    : allTransactions;
-  const goals = activeProfileId ? allGoals.filter((g) => g.profileId === activeProfileId) : allGoals;
+  const liabilities = useMemo(
+    () => (activeProfileId ? allLiabilities.filter((l) => l.profileId === activeProfileId) : allLiabilities),
+    [allLiabilities, activeProfileId]
+  );
+  const transactions = useMemo(
+    () => (activeProfileId ? allTransactions.filter((t) => t.profileId === activeProfileId) : allTransactions),
+    [allTransactions, activeProfileId]
+  );
+  const goals = useMemo(
+    () => (activeProfileId ? allGoals.filter((g) => g.profileId === activeProfileId) : allGoals),
+    [allGoals, activeProfileId]
+  );
 
-  const totalAssets = assets.reduce(
-    (s, a) => s + resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).value,
-    0
+  const totalAssets = useMemo(
+    () => assets.reduce((s, a) => s + resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).value, 0),
+    [assets, livePrices, sipValues, liveGoldPricePerGram]
   );
-  const totalLiabilities = liabilities.reduce((s, l) => s + l.outstanding, 0);
+  const totalLiabilities = useMemo(() => liabilities.reduce((s, l) => s + l.outstanding, 0), [liabilities]);
   const netWorth = totalAssets - totalLiabilities;
   // The history chart is saved for the whole household (snapshots carry no
   // profile), so its live "today" point must be the household total too —
   // otherwise it disagrees with the profile-scoped cards above it.
-  const householdNetWorth =
-    allAssets
-      .filter((a) => !isFullySold(a))
-      .reduce((s, a) => s + resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).value, 0) -
-    allLiabilities.reduce((s, l) => s + l.outstanding, 0);
+  const householdNetWorth = useMemo(
+    () =>
+      allAssets
+        .filter((a) => !isFullySold(a))
+        .reduce((s, a) => s + resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).value, 0) -
+      allLiabilities.reduce((s, l) => s + l.outstanding, 0),
+    [allAssets, allLiabilities, livePrices, sipValues, liveGoldPricePerGram]
+  );
 
   // Lifetime view (revealed by the arrow on the Net worth card): money
   // already taken out by selling — fully or partly — and the entire amount
   // ever invested, i.e. what's still invested plus the cost of what was sold.
-  const profileAssets = activeProfileId ? allAssets.filter((a) => a.profileId === activeProfileId) : allAssets;
+  const profileAssets = useMemo(
+    () => (activeProfileId ? allAssets.filter((a) => a.profileId === activeProfileId) : allAssets),
+    [allAssets, activeProfileId]
+  );
   // Arrow on the Net worth card flips the strip in place:
   //  - Net worth      = current value + total realized profit/loss
   //  - Total invested = currently invested + cost of what was sold
@@ -153,16 +172,23 @@ export default function Dashboard() {
   const [includeSold, setIncludeSold] = useState(false);
   // Profit / loss and return come from the same engine as the Performance
   // page so both screens always show identical numbers.
-  const portfolioPnl = computePortfolioPnl(profileAssets, 'INR', livePrices, sipValues, liveGoldPricePerGram);
+  const portfolioPnl = useMemo(
+    () => computePortfolioPnl(profileAssets, 'INR', livePrices, sipValues, liveGoldPricePerGram),
+    [profileAssets, livePrices, sipValues, liveGoldPricePerGram]
+  );
   // Cash & Savings is part of Net worth but the P&L engine (rightly) gives it
   // no cost basis. Count it at face value (cost = value, zero P&L) so Total
   // invested reconciles with Net worth. Same scoping as above: ₹ only.
-  const cashBasis = profileAssets.reduce(
-    (s, a) =>
-      a.assetClass === 'cash' && a.currency === 'INR'
-        ? s + resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).value
-        : s,
-    0
+  const cashBasis = useMemo(
+    () =>
+      profileAssets.reduce(
+        (s, a) =>
+          a.assetClass === 'cash' && a.currency === 'INR'
+            ? s + resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).value
+            : s,
+        0
+      ),
+    [profileAssets, livePrices, sipValues, liveGoldPricePerGram]
   );
   const realizedPnl = portfolioPnl.realizedPnl;
   // Cost basis of everything already sold (the "realised investment").
@@ -176,14 +202,18 @@ export default function Dashboard() {
   const netWorthPnlPercent = portfolioPnl.unrealizedPnlPercent ?? 0;
 
   const thisMonth = toIsoMonth();
-  const monthIncome = transactions
-    .filter((t) => t.type === 'income' && t.date.startsWith(thisMonth))
-    .reduce((s, t) => s + t.amount, 0);
-  const monthExpense = transactions
-    .filter((t) => t.type === 'expense' && t.date.startsWith(thisMonth))
-    .reduce((s, t) => s + t.amount, 0);
+  const { monthIncome, monthExpense } = useMemo(() => {
+    let income = 0;
+    let expense = 0;
+    for (const t of transactions) {
+      if (!t.date.startsWith(thisMonth)) continue;
+      if (t.type === 'income') income += t.amount;
+      else if (t.type === 'expense') expense += t.amount;
+    }
+    return { monthIncome: income, monthExpense: expense };
+  }, [transactions, thisMonth]);
 
-  const investments = assets.filter((a) => INVESTMENT_CLASSES.has(a.assetClass));
+  const investments = useMemo(() => assets.filter((a) => INVESTMENT_CLASSES.has(a.assetClass)), [assets]);
   // Whether "does this person actually have any wealth/cashflow/goals data"
   // can be trusted yet, as opposed to just reflecting an offline cache that
   // hasn't finished loading. If the (unfiltered, all-profiles) collection

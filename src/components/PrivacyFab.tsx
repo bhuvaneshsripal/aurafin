@@ -68,7 +68,8 @@ function useKeyboardShift(): number {
  * not draggable, and the Settings toggle is hidden. Phones keep the above.
  */
 export default function PrivacyFab() {
-  const { privacyMode, togglePrivacy } = useUiStore();
+  const privacyMode = useUiStore((s) => s.privacyMode);
+  const togglePrivacy = useUiStore((s) => s.togglePrivacy);
   const show = useDisplaySettingsStore((s) => s.floatingEye);
   const savedPos = useDisplaySettingsStore((s) => s.eyePos);
   const setEyePos = useDisplaySettingsStore((s) => s.setEyePos);

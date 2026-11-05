@@ -103,6 +103,7 @@ import CurrencySelect from '../components/CurrencySelect';
 import CustomSelect from '../components/CustomSelect';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { usePauseHoverOnScroll } from '../hooks/usePauseHoverOnScroll';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { ACCOUNT_TYPES, resolveAccountIcon, type AccountType } from '../utils/accountVisuals';
 import type { Asset, AssetClass, EpfDetails, PpfDetails, PropertyDetails, EsopDetails, FundDetails, DividendKind, Liability, LiabilityClass, Snapshot, Transaction } from '../types';
 import { useTransactionsStore } from '../store/transactionsStore';
@@ -949,7 +950,10 @@ function AssetsTab({
 }) {
   const allAssets = useAssetsStore((s) => s.assets);
   const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
-  const assets = activeProfileId ? allAssets.filter((a) => a.profileId === activeProfileId) : allAssets;
+  const assets = useMemo(
+    () => (activeProfileId ? allAssets.filter((a) => a.profileId === activeProfileId) : allAssets),
+    [allAssets, activeProfileId]
+  );
   const livePrices = useLivePricesStore((s) => s.prices);
   const previousCloses = useLivePricesStore((s) => s.previousCloses);
   const dayChangeResetActive = useDayChangeResetWindow();
@@ -1005,6 +1009,8 @@ function AssetsTab({
   const togglePrivacy = useUiStore((s) => s.togglePrivacy);
   // Long holdings list: stop rows re-running hover while the page scrolls.
   usePauseHoverOnScroll();
+  // Build only the layout that is on screen (phone list OR desktop table), not both.
+  const isSmUp = useMediaQuery('(min-width: 40rem)');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Asset | null>(null);
   // When Edit was opened from a holding's detail page, closing it (phone Back, the arrow, or
@@ -1574,84 +1580,156 @@ function AssetsTab({
   };
 
   const activeAssetCount = assets.filter((a) => !isFullySold(a)).length;
-  const filtered = assets
-    .filter((a) => {
-      // Once a holding has been completely sold out it moves to
-      // Investments → Profit & Loss → Sold Investments instead of
-      // lingering here as a "0 shares" ghost card — it isn't deleted,
-      // just no longer an active position. See utils/investmentPnl.ts.
-      if (isFullySold(a)) return false;
-      const q = search.trim().toLowerCase();
-      const matchesSearch =
-        !q || a.name.toLowerCase().includes(q) || (a.symbol ?? '').toLowerCase().includes(q);
-      const category = ASSET_CLASS_TO_CATEGORY[a.assetClass];
-      const matchesCategory =
-        selectedCategories.length === 0 || (category && selectedCategories.includes(category.key));
-      const matchesType = selectedTypes.length === 0 || selectedTypes.includes(a.assetClass);
-      const matchesCurrency = selectedCurrencies.length === 0 || selectedCurrencies.includes(a.currency);
-      const matchesTags = selectedTags.length === 0 || (a.tags ?? []).some((t) => selectedTags.includes(t));
-      return matchesSearch && matchesCategory && matchesType && matchesCurrency && matchesTags;
-    })
-    .sort(compareAssetsDefault);
+  // The whole holdings book (filter -> value every holding once -> totals -> sort)
+  // is recomputed only when its inputs change. It used to re-run on EVERY render
+  // of this 2,000-line component -- opening a menu, typing in search, a drag
+  // tick -- and valued each asset twice.
+  const book = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const filtered = assets
+      .filter((a) => {
+        // Once a holding has been completely sold out it moves to
+        // Investments → Profit & Loss → Sold Investments instead of
+        // lingering here as a "0 shares" ghost card — it isn't deleted,
+        // just no longer an active position. See utils/investmentPnl.ts.
+        if (isFullySold(a)) return false;
+        const matchesSearch =
+          !q || a.name.toLowerCase().includes(q) || (a.symbol ?? '').toLowerCase().includes(q);
+        const category = ASSET_CLASS_TO_CATEGORY[a.assetClass];
+        const matchesCategory =
+          selectedCategories.length === 0 || (category && selectedCategories.includes(category.key));
+        const matchesType = selectedTypes.length === 0 || selectedTypes.includes(a.assetClass);
+        const matchesCurrency = selectedCurrencies.length === 0 || selectedCurrencies.includes(a.currency);
+        const matchesTags = selectedTags.length === 0 || (a.tags ?? []).some((t) => selectedTags.includes(t));
+        return matchesSearch && matchesCategory && matchesType && matchesCurrency && matchesTags;
+      })
+      .sort(compareAssetsDefault);
 
-  // Allocation % is based on money put in (cost basis), not current
-  // market value — so a holding's slice of the pie stays put day to day
-  // and only moves when you actually buy/sell, instead of shifting every
-  // time prices move (which used to make winners look "more allocated"
-  // and losers look "less allocated" with no actual trade behind it).
-  const totalInvestedForAlloc = assets.reduce((s, a) => {
-    const c = resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram);
-    return s + (c.invested ?? c.value);
-  }, 0);
+    // Value every holding of the active profile ONCE; both the allocation
+    // denominator and the visible rows read from this map.
+    const resolvedById = new Map<string, ReturnType<typeof resolveAssetValues>>();
+    const resolveOnce = (a: Asset) => {
+      let c = resolvedById.get(a.id);
+      if (!c) {
+        c = resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram);
+        resolvedById.set(a.id, c);
+      }
+      return c;
+    };
 
-  const rows = filtered.map((a) => {
-    const computed = resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram);
-    const allocBasis = computed.invested ?? computed.value;
-    const alloc = totalInvestedForAlloc > 0 ? (allocBasis / totalInvestedForAlloc) * 100 : 0;
-    // Per-unit 1D change (only meaningful for symbol-priced holdings that
-    // have a previous close — e.g. direct stocks; undefined for everything
-    // else, which the Holdings table below renders as "—" rather than 0).
-    // Between 5:30 AM and market open (9:15 AM) IST, this is pinned to 0
-    // instead of showing last night's now-stale change — see
-    // useDayChangeResetWindow / isDayChangeResetWindow for why.
-    const previousClose = resolvePreviousClose(a.symbol, previousCloses);
-    const hasDayChangeData = previousClose !== undefined && computed.currentPrice !== undefined;
-    const dayChangePerUnit = hasDayChangeData
-      ? dayChangeResetActive
-        ? 0
-        : computed.currentPrice! - previousClose!
-      : undefined;
-    const dayChangePercent =
-      dayChangePerUnit !== undefined && previousClose
+    // Allocation % is based on money put in (cost basis), not current
+    // market value — so a holding's slice of the pie stays put day to day
+    // and only moves when you actually buy/sell, instead of shifting every
+    // time prices move (which used to make winners look "more allocated"
+    // and losers look "less allocated" with no actual trade behind it).
+    const totalInvestedForAlloc = assets.reduce((s, a) => {
+      const c = resolveOnce(a);
+      return s + (c.invested ?? c.value);
+    }, 0);
+
+    const rows = filtered.map((a) => {
+      const computed = resolveOnce(a);
+      const allocBasis = computed.invested ?? computed.value;
+      const alloc = totalInvestedForAlloc > 0 ? (allocBasis / totalInvestedForAlloc) * 100 : 0;
+      // Per-unit 1D change (only meaningful for symbol-priced holdings that
+      // have a previous close — e.g. direct stocks; undefined for everything
+      // else, which the Holdings table below renders as "—" rather than 0).
+      // Between 5:30 AM and market open (9:15 AM) IST, this is pinned to 0
+      // instead of showing last night's now-stale change — see
+      // useDayChangeResetWindow / isDayChangeResetWindow for why.
+      const previousClose = resolvePreviousClose(a.symbol, previousCloses);
+      const hasDayChangeData = previousClose !== undefined && computed.currentPrice !== undefined;
+      const dayChangePerUnit = hasDayChangeData
         ? dayChangeResetActive
           ? 0
-          : (dayChangePerUnit / previousClose) * 100
+          : computed.currentPrice! - previousClose!
         : undefined;
-    return { asset: a, ...computed, alloc, previousClose, dayChangePerUnit, dayChangePercent };
-  });
+      const dayChangePercent =
+        dayChangePerUnit !== undefined && previousClose
+          ? dayChangeResetActive
+            ? 0
+            : (dayChangePerUnit / previousClose) * 100
+          : undefined;
+      return { asset: a, ...computed, alloc, previousClose, dayChangePerUnit, dayChangePercent };
+    });
 
-  const totalInvested = rows.reduce((s, r) => s + (r.invested ?? r.value), 0);
-  const totalCurrentValue = rows.reduce((s, r) => s + r.value, 0);
-  const totalPnl = totalCurrentValue - totalInvested;
-  const totalPnlPercent = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
+    const totalInvested = rows.reduce((s, r) => s + (r.invested ?? r.value), 0);
+    const totalCurrentValue = rows.reduce((s, r) => s + r.value, 0);
+    const totalPnl = totalCurrentValue - totalInvested;
+    const totalPnlPercent = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
 
-  // 1D return on the filtered book: sum of each holding's per-unit change ×
-  // quantity, expressed as a % of what the book was worth at yesterday's
-  // close (not today's) — the standard way brokers compute this, so a
-  // holding you bought today at a gain doesn't inflate "how much did my
-  // *existing* portfolio move today". Only holdings with a known previous
-  // close (i.e. actual live symbol quotes) contribute.
-  const rowsWithDayChange = rows.filter((r) => r.dayChangePerUnit !== undefined);
-  const has1dData = rowsWithDayChange.length > 0;
-  const total1dAbs = rowsWithDayChange.reduce(
-    (s, r) => s + r.dayChangePerUnit! * (r.asset.quantity ?? 0),
-    0
-  );
-  const prev1dTotalValue = rowsWithDayChange.reduce(
-    (s, r) => s + (r.previousClose ?? 0) * (r.asset.quantity ?? 0),
-    0
-  );
-  const total1dPercent = prev1dTotalValue > 0 ? (total1dAbs / prev1dTotalValue) * 100 : 0;
+    // 1D return on the filtered book: sum of each holding's per-unit change ×
+    // quantity, expressed as a % of what the book was worth at yesterday's
+    // close (not today's) — the standard way brokers compute this, so a
+    // holding you bought today at a gain doesn't inflate "how much did my
+    // *existing* portfolio move today". Only holdings with a known previous
+    // close (i.e. actual live symbol quotes) contribute.
+    const rowsWithDayChange = rows.filter((r) => r.dayChangePerUnit !== undefined);
+    const has1dData = rowsWithDayChange.length > 0;
+    const total1dAbs = rowsWithDayChange.reduce(
+      (s, r) => s + r.dayChangePerUnit! * (r.asset.quantity ?? 0),
+      0
+    );
+    const prev1dTotalValue = rowsWithDayChange.reduce(
+      (s, r) => s + (r.previousClose ?? 0) * (r.asset.quantity ?? 0),
+      0
+    );
+    const total1dPercent = prev1dTotalValue > 0 ? (total1dAbs / prev1dTotalValue) * 100 : 0;
+
+    const sortedRows =
+      sortKey === 'manual'
+        ? rows
+        : [...rows].sort((a, b) => {
+            const dir = sortDir === 'asc' ? 1 : -1;
+            const getVal = (r: (typeof rows)[number]): string | number => {
+              switch (sortKey) {
+                case 'name':
+                  return r.asset.name.toLowerCase();
+                case 'qty':
+                  return r.asset.quantity ?? 0;
+                case 'avgCost':
+                  return r.asset.avgCost ?? 0;
+                case 'perUnit':
+                  return r.currentPrice ?? 0;
+                case 'invested':
+                  return r.invested ?? 0;
+                case 'value':
+                  return r.value;
+                case 'pnl':
+                  return r.pnl ?? 0;
+                case 'alloc':
+                  return r.alloc;
+                case 'dayChange':
+                  return r.dayChangePercent ?? 0;
+                default:
+                  return 0;
+              }
+            };
+            const av = getVal(a);
+            const bv = getVal(b);
+            if (typeof av === 'string' || typeof bv === 'string') {
+              return String(av).localeCompare(String(bv)) * dir;
+            }
+            return (av - bv) * dir;
+          });
+
+    return { filtered, rows, sortedRows, totalInvested, totalCurrentValue, totalPnl, totalPnlPercent, has1dData, total1dAbs, total1dPercent };
+  }, [
+    assets,
+    search,
+    selectedCategories,
+    selectedTypes,
+    selectedCurrencies,
+    selectedTags,
+    livePrices,
+    sipValues,
+    liveGoldPricePerGram,
+    previousCloses,
+    dayChangeResetActive,
+    sortKey,
+    sortDir,
+  ]);
+  const { filtered, rows, sortedRows, totalInvested, totalCurrentValue, totalPnl, totalPnlPercent, has1dData, total1dAbs, total1dPercent } = book;
 
   const categoryOptions = ASSET_TAXONOMY.filter((cat) =>
     assets.some((a) => (ASSET_CLASS_TO_CATEGORY[a.assetClass] ?? cat).key === cat.key)
@@ -1694,43 +1772,6 @@ function AssetsTab({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategories.join(',')]);
-
-  const sortedRows =
-    sortKey === 'manual'
-      ? rows
-      : [...rows].sort((a, b) => {
-          const dir = sortDir === 'asc' ? 1 : -1;
-          const getVal = (r: (typeof rows)[number]): string | number => {
-            switch (sortKey) {
-              case 'name':
-                return r.asset.name.toLowerCase();
-              case 'qty':
-                return r.asset.quantity ?? 0;
-              case 'avgCost':
-                return r.asset.avgCost ?? 0;
-              case 'perUnit':
-                return r.currentPrice ?? 0;
-              case 'invested':
-                return r.invested ?? 0;
-              case 'value':
-                return r.value;
-              case 'pnl':
-                return r.pnl ?? 0;
-              case 'alloc':
-                return r.alloc;
-              case 'dayChange':
-                return r.dayChangePercent ?? 0;
-              default:
-                return 0;
-            }
-          };
-          const av = getVal(a);
-          const bv = getVal(b);
-          if (typeof av === 'string' || typeof bv === 'string') {
-            return String(av).localeCompare(String(bv)) * dir;
-          }
-          return (av - bv) * dir;
-        });
 
   // While a long-press drag is in progress, render rows in the live drag
   // order instead of sortedRows, so the row visibly moves as you drag it.
@@ -2275,7 +2316,8 @@ function AssetsTab({
               wide multi-column table, so nothing gets cut off on small
               screens. The full table below is for sm+ screens where there's
               room for every column. */}
-          <div className="sm:hidden bg-surface divide-y divide-line-soft -mx-4">
+          {!isSmUp && (
+          <div className="bg-surface divide-y divide-line-soft -mx-4">
             {displayRows.map((r) => {
               const a = r.asset;
               const invested = r.invested ?? r.value;
@@ -2383,12 +2425,13 @@ function AssetsTab({
               );
             })}
           </div>
+          )}
 
           {/* Per-holding table (sm and up). Column headers are clickable and
               sort the rows (click again to flip direction). Rows still
               support press-and-drag manual ordering + click-through. */}
-          {sortKey !== 'manual' && (
-            <div className="hidden sm:flex justify-end">
+          {isSmUp && sortKey !== 'manual' && (
+            <div className="flex justify-end">
               <button
                 type="button"
                 onClick={resetOrder}
@@ -2398,9 +2441,10 @@ function AssetsTab({
               </button>
             </div>
           )}
+          {isSmUp && (
           <Card
             padding="none"
-            className={cn('hidden sm:block overflow-hidden', !draggingId && 'scroll-pause-hover')}
+            className={cn('overflow-hidden', !draggingId && 'scroll-pause-hover')}
           >
             <TableContainer>
               <Table className="min-w-[1020px]">
@@ -2594,6 +2638,7 @@ function AssetsTab({
               </Table>
             </TableContainer>
           </Card>
+          )}
         </div>
       )}
 

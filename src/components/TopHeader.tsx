@@ -26,7 +26,10 @@ const menuItem =
  *  Mobile: brand + profile on the left, search / privacy / overflow menu on the right. */
 export default function TopHeader() {
   const logout = useAuthStore((s) => s.logout);
-  const { theme, toggleTheme, privacyMode, togglePrivacy } = useUiStore();
+  const theme = useUiStore((s) => s.theme);
+  const toggleTheme = useUiStore((s) => s.toggleTheme);
+  const privacyMode = useUiStore((s) => s.privacyMode);
+  const togglePrivacy = useUiStore((s) => s.togglePrivacy);
   const navigate = useNavigate();
   const location = useLocation();
 

@@ -172,16 +172,8 @@ async function fetchQuote(symbol: string, market: 'IN' | 'US' = 'IN'): Promise<L
     try {
       const res = await fetchWithTimeout(`${QUOTE_BASE}/${encodeURIComponent(symbol)}?market=${market}`);
       if (!res.ok) continue;
-
-      const json = await res.json();
-      const price = json?.price;
-      if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) continue;
-      const previousClose = json?.previousClose;
-
-      return {
-        price,
-        previousClose: typeof previousClose === 'number' && Number.isFinite(previousClose) ? previousClose : undefined,
-      };
+      const quote = parseQuote(await res.json());
+      if (quote) return quote;
     } catch {
       /* timeout / network error → retry once */
     }
@@ -189,11 +181,69 @@ async function fetchQuote(symbol: string, market: 'IN' | 'US' = 'IN'): Promise<L
   return null;
 }
 
+/** Reads one quote out of a server response, rejecting anything that isn't a sane positive price. */
+function parseQuote(json: unknown): LiveQuoteDetail | null {
+  const q = json as { price?: unknown; previousClose?: unknown } | null | undefined;
+  const price = q?.price;
+  if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) return null;
+  const previousClose = q?.previousClose;
+  return {
+    price,
+    previousClose: typeof previousClose === 'number' && Number.isFinite(previousClose) ? previousClose : undefined,
+  };
+}
+
+/** Most symbols sent in one batch request (the server caps a call at 60). */
+const BATCH_CHUNK = 40;
+/** After a batch, symbols it didn't price are retried one by one -- but only a few,
+ *  so a provider outage can't turn one poll into dozens of requests again. */
+const MAX_SINGLE_RETRIES = 4;
+
+/**
+ * Prices many symbols in ONE request (api/market/chart/_batch). Returns `null`
+ * when the request itself failed, so the caller can fall back to per-symbol
+ * requests; an empty map means "the server answered but priced nothing".
+ */
+async function fetchQuoteBatch(symbols: string[], market: 'IN' | 'US'): Promise<Map<string, LiveQuoteDetail> | null> {
+  try {
+    const res = await fetchWithTimeout(
+      `${QUOTE_BASE}/_batch?market=${market}&symbols=${encodeURIComponent(symbols.join(','))}`,
+      12000
+    );
+    if (!res.ok) return null;
+    const json = await res.json();
+    const raw = json?.quotes;
+    if (!raw || typeof raw !== 'object') return null;
+    const out = new Map<string, LiveQuoteDetail>();
+    for (const sym of symbols) {
+      const q = parseQuote(raw[sym]);
+      if (q) out.set(sym, q);
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+/** Runs `fn` over `items` with at most `limit` in flight (keeps a burst of name lookups polite). */
+async function mapPool<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (next < items.length) await fn(items[next++]);
+    })
+  );
+}
+
 /**
  * Fetch live quotes (price + previous close) for a batch of holdings. Same
  * lookup/resolution logic as `fetchLivePrices` below, just returning the
  * richer per-symbol detail that a 1D-change figure needs instead of only
  * the price.
+ *
+ * Prices come from ONE batched request per market (per 40 symbols) instead of
+ * one request per holding -- with 60 stocks refreshed every 5 s that is 1
+ * request instead of 60, which is what keeps the page responsive.
  */
 export async function fetchLiveQuotes(lookups: PriceLookup[]): Promise<Map<string, LiveQuoteDetail>> {
   const results = new Map<string, LiveQuoteDetail>();
@@ -204,34 +254,70 @@ export async function fetchLiveQuotes(lookups: PriceLookup[]): Promise<Map<strin
     const key = l.key.trim().toUpperCase();
     if (key) unique.set(key, { ...l, key });
   }
-
   const entries = [...unique.values()];
 
-  // Yahoo has no batch endpoint — fetch in small parallel groups.
-  const batchSize = 10;
-  for (let i = 0; i < entries.length; i += batchSize) {
-    const batch = entries.slice(i, i + batchSize);
-    await Promise.all(
-      batch.map(async (lookup) => {
-        let yahooSymbol: string | null = null;
-        const market = lookup.market ?? 'IN';
+  // 1. Work out the real ticker for every holding (cheap for plain tickers;
+  //    ISIN / company-name holdings use the cached symbol search).
+  const resolved: { key: string; symbol: string; market: 'IN' | 'US' }[] = [];
+  await mapPool(entries, 6, async (lookup) => {
+    let yahooSymbol: string | null = null;
+    if (looksLikeTicker(lookup.key)) {
+      yahooSymbol = toYahooSymbol(lookup.key);
+    } else if (lookup.isin) {
+      yahooSymbol = await searchYahooSymbol(lookup.isin);
+      if (!yahooSymbol && lookup.name) yahooSymbol = await searchYahooSymbol(lookup.name, true);
+    } else if (lookup.name) {
+      yahooSymbol = await searchYahooSymbol(lookup.name, true);
+    }
+    if (yahooSymbol) resolved.push({ key: lookup.key, symbol: yahooSymbol.trim().toUpperCase(), market: lookup.market ?? 'IN' });
+  });
+  if (resolved.length === 0) return results;
 
-        if (looksLikeTicker(lookup.key)) {
-          yahooSymbol = toYahooSymbol(lookup.key);
-        } else if (lookup.isin) {
-          yahooSymbol = await searchYahooSymbol(lookup.isin);
-          if (!yahooSymbol && lookup.name) yahooSymbol = await searchYahooSymbol(lookup.name, true);
-        } else if (lookup.name) {
-          yahooSymbol = await searchYahooSymbol(lookup.name, true);
-        }
-
-        if (!yahooSymbol) return;
-        const quote = await fetchQuote(yahooSymbol, market);
-        if (quote) results.set(lookup.key, quote);
-      })
-    );
+  // 2. Group by market -> unique symbols -> chunks of BATCH_CHUNK.
+  const byMarket = new Map<'IN' | 'US', Set<string>>();
+  for (const r of resolved) {
+    if (!byMarket.has(r.market)) byMarket.set(r.market, new Set());
+    byMarket.get(r.market)!.add(r.symbol);
   }
+  const bySymbol = new Map<string, LiveQuoteDetail>(); // "IN:TCS" -> quote
+  const missing: { symbol: string; market: 'IN' | 'US' }[] = [];
 
+  await Promise.all(
+    [...byMarket.entries()].flatMap(([market, set]) => {
+      const symbols = [...set];
+      const chunks: string[][] = [];
+      for (let i = 0; i < symbols.length; i += BATCH_CHUNK) chunks.push(symbols.slice(i, i + BATCH_CHUNK));
+      return chunks.map(async (chunk) => {
+        const got = await fetchQuoteBatch(chunk, market);
+        if (got === null) {
+          // The batch call itself failed (old deploy without the endpoint, flaky
+          // network): fall back to the original one-request-per-symbol path.
+          await mapPool(chunk, 10, async (symbol) => {
+            const q = await fetchQuote(symbol, market);
+            if (q) bySymbol.set(`${market}:${symbol}`, q);
+          });
+          return;
+        }
+        for (const symbol of chunk) {
+          const q = got.get(symbol);
+          if (q) bySymbol.set(`${market}:${symbol}`, q);
+          else missing.push({ symbol, market });
+        }
+      });
+    })
+  );
+
+  // 3. A few symbols the batch couldn't price get one individual retry (a single
+  //    dropped upstream lookup must not leave that holding on a stale price).
+  await mapPool(missing.slice(0, MAX_SINGLE_RETRIES), MAX_SINGLE_RETRIES, async ({ symbol, market }) => {
+    const q = await fetchQuote(symbol, market);
+    if (q) bySymbol.set(`${market}:${symbol}`, q);
+  });
+
+  for (const r of resolved) {
+    const q = bySymbol.get(`${r.market}:${r.symbol}`);
+    if (q) results.set(r.key, q);
+  }
   return results;
 }
 

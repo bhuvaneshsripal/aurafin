@@ -86,3 +86,35 @@
 - Before: the spot was saved as px from the **top** of the screen. A Chrome tab has the address bar on top and the installed app doesn't, so the same saved spot sat about 56 dp apart in the two; and when the keyboard opened the page shrank and the eye hopped up above it. A held finger that wobbled a few px also re-saved a slightly different spot.
 - Now (`components/PrivacyFab.tsx`, `store/displaySettingsStore.ts`): the spot is saved as distance from the left and the **bottom** edge (the bottom is identical in the browser and the app). The keyboard no longer moves it (it stays put, under the keyboard if that is where it sits). After the hold, the finger must travel 6 px before anything moves, so a steady hold never nudges it; it only changes when you press, hold and drag.
 - Spots saved by the old version are converted once and appear in the same place. Tap still toggles, a quick swipe still doesn't move it, and Settings → "Reset position" still works.
+
+---
+
+## Performance pass 3 — network storm, duplicate DOM, wasted renders
+
+**Live prices: one request instead of one per stock.**
+`fetchLiveQuotes` (src/utils/marketPrices.ts) now asks `/api/market/chart/_batch?symbols=A,B,C`
+for all holdings at once (40 per request). Before: 60 stocks = ~720 serverless calls/min per open tab.
+- The route lives in the existing `api/market/chart/[symbol].js` + `api/_lib/batchQuotes.js`
+  (NOT a new file under api/ — the project is at 11 of Vercel Hobby's 12 function limit).
+- Dev server mirrors it in vite.config.ts.
+- If the batch call fails (old deploy, network blip) the client falls back to the old per-symbol path;
+  unpriced symbols get at most 4 individual retries per poll.
+- `api/_lib/nse.js`: concurrent calls now share one NSE cookie handshake.
+- Index ticker poll: 1 s -> 2 s (`LIVE_MS` in src/utils/indexQuotes.ts). Set back to 1_000 if preferred.
+
+**Wealth → Holdings.**
+- Phone list and desktop table were both rendered (one hidden with CSS) -> every holding built twice.
+  Now only the visible layout renders (`useMediaQuery('(min-width: 40rem)')`, src/hooks/useMediaQuery.ts).
+- Filter / value / totals / sort moved into one `useMemo` (`book`); each asset is valued once, not twice.
+- `assets` is memoised (was a new array every render when a profile was active).
+
+**Dashboard.** `assets`, `liabilities`, `transactions`, `goals`, `profileAssets` were fresh arrays every
+render, which defeated every `useMemo` that depended on them. Now memoised, along with net worth,
+portfolio P&L, cash basis and month income/expense.
+
+**Login.** Slide photos 3000 px / 5.4 MB -> 1920 px / 1.2 MB. Only the current + next slide mount an
+`<img>` (stacked opacity:0 images still count as on-screen for lazy loading, so all 7 used to download).
+
+**Selectors.** LockScreen, TopHeader, Topbar, PrivacyFab and App no longer subscribe to whole stores.
+
+Deliberately NOT done: `content-visibility` on rows (would skew scroll restoration), changing CSS `zoom`.

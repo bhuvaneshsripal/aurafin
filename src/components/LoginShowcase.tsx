@@ -36,6 +36,11 @@ const INTERVAL_MS = 6000;
 export default function LoginShowcase({ onCta }: { onCta?: () => void }) {
   const [index, setIndex] = useState(0);
   const [failed, setFailed] = useState<Record<number, boolean>>({});
+  // Only the slides that are showing or about to show get an <img>. All seven
+  // used to be mounted at once; the stacked, faded-out copies still count as
+  // "on screen" for lazy loading, so the browser downloaded every photo
+  // before the login form was even usable.
+  const [seen, setSeen] = useState<number[]>([0, 1]);
   const timer = useRef<number | null>(null);
 
   const restart = useCallback(() => {
@@ -64,6 +69,13 @@ export default function LoginShowcase({ onCta }: { onCta?: () => void }) {
     };
   }, [restart]);
 
+  useEffect(() => {
+    setSeen((cur) => {
+      const next = [...new Set([...cur, index, (index + 1) % SLIDES.length])];
+      return next.length === cur.length ? cur : next;
+    });
+  }, [index]);
+
   const go = (i: number) => {
     setIndex((i + SLIDES.length) % SLIDES.length);
     restart();
@@ -76,13 +88,14 @@ export default function LoginShowcase({ onCta }: { onCta?: () => void }) {
       <div className="lp-stage">
         {SLIDES.map((s, i) => (
           <div key={s.title} className={`lp-slide${i === index ? ' is-on' : ''}`} aria-hidden={i !== index} style={{ background: s.gradient }}>
-            {!failed[i] && (
+            {!failed[i] && (i === index || seen.includes(i)) && (
               <img
                 src={s.image}
                 alt={s.alt}
                 className="lp-img"
                 style={{ objectPosition: s.pos ?? 'center' }}
                 loading={i === 0 ? 'eager' : 'lazy'}
+                decoding="async"
                 draggable={false}
                 onError={() => setFailed((f) => ({ ...f, [i]: true }))}
               />

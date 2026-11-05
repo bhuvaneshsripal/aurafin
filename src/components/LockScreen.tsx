@@ -10,7 +10,9 @@ const KEY_CLASS =
   'aspect-square w-full rounded-2xl border border-line bg-surface shadow-xs select-none hover:bg-surface-hover transition-colors duration-100 focus-visible:outline-2 focus-visible:outline-brand-600';
 
 export default function LockScreen() {
-  const { locked, pinAttemptError, unlock } = useAppLockStore();
+  const locked = useAppLockStore((s) => s.locked);
+  const pinAttemptError = useAppLockStore((s) => s.pinAttemptError);
+  const unlock = useAppLockStore((s) => s.unlock);
   const [pin, setPinInput] = useState('');
   const [shake, setShake] = useState(false);
   const [, setChecking] = useState(false);

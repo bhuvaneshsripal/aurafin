@@ -9,6 +9,20 @@ let htmlOverflowBeforeLock = '';
 let lockedScrollY = 0;
 let pinScroll: (() => void) | null = null;
 let onFocusOut: (() => void) | null = null;
+let onTouchMove: ((e: TouchEvent) => void) | null = null;
+
+/** True when `el` or an ancestor is its own scrollable box (modal body, sheet, chip row...). */
+function insideScroller(el: EventTarget | null): boolean {
+  let n = el instanceof Element ? el : null;
+  while (n && n !== document.documentElement) {
+    const cs = getComputedStyle(n);
+    const y = /(auto|scroll)/.test(cs.overflowY) && n.scrollHeight > n.clientHeight;
+    const x = /(auto|scroll)/.test(cs.overflowX) && n.scrollWidth > n.clientWidth;
+    if (y || x) return true;
+    n = n.parentElement;
+  }
+  return false;
+}
 
 /**
  * Locks page scrolling while `active` is true. Used by every overlay (modals,
@@ -58,6 +72,14 @@ export function useBodyScrollLock(active: boolean) {
       window.addEventListener('scroll', pinScroll, { passive: true });
       onFocusOut = () => window.setTimeout(() => pinScroll?.(), 150);
       document.addEventListener('focusout', onFocusOut);
+      // The scroll pin above only reacts AFTER the page has moved, which shows
+      // as a small nudge when a finger drags on the backdrop / the "+" itself.
+      // Stop the gesture before it scrolls anything, unless it is inside an
+      // overlay's own scroll area (modal body, bottom sheet, etc.).
+      onTouchMove = (e: TouchEvent) => {
+        if (e.cancelable && !insideScroller(e.target)) e.preventDefault();
+      };
+      document.addEventListener('touchmove', onTouchMove, { passive: false });
     }
     lockCount += 1;
 
@@ -68,6 +90,8 @@ export function useBodyScrollLock(active: boolean) {
         pinScroll = null;
         if (onFocusOut) document.removeEventListener('focusout', onFocusOut);
         onFocusOut = null;
+        if (onTouchMove) document.removeEventListener('touchmove', onTouchMove);
+        onTouchMove = null;
         document.documentElement.style.overflow = htmlOverflowBeforeLock;
       }
     };

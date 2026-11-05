@@ -422,7 +422,9 @@ export default function App() {
   // Public policy pages: reachable signed-out (and by Google's verification bot).
   const legalPath = window.location.pathname.replace(/\/+$/, '');
   const legalKind = legalPath === '/privacy' ? 'privacy' : legalPath === '/terms' ? 'terms' : null;
-  const { user, loading, init } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
+  const loading = useAuthStore((s) => s.loading);
+  const init = useAuthStore((s) => s.init);
   const initTheme = useUiStore((s) => s.initTheme);
   const initPrivacy = useUiStore((s) => s.initPrivacy);
   const initSidebar = useUiStore((s) => s.initSidebar);

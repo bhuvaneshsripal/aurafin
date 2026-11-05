@@ -283,6 +283,9 @@ export default function Modal({
 }: ModalProps) {
   const isMobile = useIsMobile();
   const barsBottom = useBarsBottom(open && fullScreenOnMobile && isMobile);
+  // NOTE: the flush phone sheet sits at z-[39], one below the bottom bar (z-40),
+  // so the raised centre "+" (which rises above the sheet's bottom edge) is
+  // never clipped by the sheet's footer.
   // Escape closes whichever variant is open, same as the phone/PWA back
   // button already does via useModalBackClose at the call site.
   useEffect(() => {
@@ -311,7 +314,7 @@ export default function Modal({
 
   if (fullScreenOnMobile && isMobile) {
     return createPortal(
-      <div role="dialog" aria-modal="true" className={`${closing ? 'animate-detail-out' : 'animate-detail-in'} fixed inset-x-0 ${flush ? 'bottom-[calc(80px_+_env(safe-area-inset-bottom))] z-40' : 'bottom-0 z-[80]'} bg-surface flex flex-col`} style={{ top: flush ? Math.max(0, barsBottom - 2) : barsBottom }}>
+      <div role="dialog" aria-modal="true" className={`${closing ? 'animate-detail-out' : 'animate-detail-in'} fixed inset-x-0 ${flush ? 'bottom-[calc(80px_+_env(safe-area-inset-bottom))] z-[39]' : 'bottom-0 z-[80]'} bg-surface flex flex-col`} style={{ top: flush ? Math.max(0, barsBottom - 2) : barsBottom }}>
         <PanelBody title={title} onClose={onClose} belowBars>
           {children}
         </PanelBody>

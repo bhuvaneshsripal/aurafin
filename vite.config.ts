@@ -7,6 +7,8 @@ import { searchIndia } from './api/_lib/indiaSearch.js'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
 import { resolveQuote } from './api/_lib/quote.js'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
+import { parseSymbols, resolveQuotes } from './api/_lib/batchQuotes.js'
+// @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
 import { fetchLiveGoldPricePerGram24k } from './api/_lib/gold.js'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
 import { fetchFundamentals } from './api/_lib/fundamentals.js'
@@ -44,6 +46,17 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
     if (url.pathname.startsWith('/api/market/chart/')) {
       const raw = decodeURIComponent(url.pathname.split('/').pop() ?? '').toUpperCase()
       const market = (url.searchParams.get('market') ?? 'IN').toUpperCase() === 'US' ? 'US' : 'IN'
+      // One request for every holding's price (mirrors api/market/chart/[symbol].js).
+      if (raw === '_BATCH') {
+        const symbols: string[] = parseSymbols(url.searchParams.get('symbols'))
+        if (symbols.length === 0) { send(400, { error: 'Missing symbols' }); return }
+        try {
+          send(200, { quotes: await resolveQuotes(symbols, market), asOf: Date.now() })
+        } catch {
+          send(502, { error: 'Could not reach the live price source' })
+        }
+        return
+      }
       try {
         const quote = await resolveQuote(raw, market)
         if (!quote) {

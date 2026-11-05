@@ -97,17 +97,17 @@ export default function WhatsNewModal({
         // Centered status view. On desktop it fills the working area (sidebar
         // and top bar stay visible); on phones it sits inside the full-screen
         // sheet, whose footer carries Close.
-        <div className="relative md:absolute md:inset-0 flex items-center justify-center py-10 md:py-0">
+        <div className="relative md:absolute md:inset-0 flex items-center justify-center py-4 md:py-0">
           <DesktopHeading text={heading} />
           <div className="flex flex-col items-center text-center w-full max-w-[420px] md:-mt-6">
-            <div className="relative h-20 w-20 md:h-24 md:w-24 mb-6">
+            <div className="relative h-16 w-16 md:h-24 md:w-24 mb-5 md:mb-6 mt-4 md:mt-0">
               <span
                 aria-hidden
                 className="absolute -inset-5 rounded-full"
                 style={{ background: 'radial-gradient(circle, rgba(10,154,75,0.20), rgba(10,154,75,0) 70%)' }}
               />
               <span className="relative h-full w-full rounded-full bg-[#e7f4ec] dark:bg-[#0a9a4b]/15 text-[#0a9a4b] inline-flex items-center justify-center">
-                <svg viewBox="0 0 24 24" className="h-9 w-9 md:h-11 md:w-11" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <svg viewBox="0 0 24 24" className="h-7 w-7 md:h-11 md:w-11" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <path d="M5 12.5l4.5 4.5L19 7.5" pathLength={1} style={{ strokeDasharray: 1, strokeDashoffset: 1, animation: 'wn-check 0.6s 0.15s ease-out forwards' }} />
                 </svg>
               </span>
@@ -115,7 +115,7 @@ export default function WhatsNewModal({
             <style>{'@keyframes wn-check{to{stroke-dashoffset:0}}'}</style>
             <h3 className="text-xl md:text-[28px] font-semibold text-ink tracking-tight">You're up to date</h3>
             <p className="mt-2 text-sm md:text-base text-muted">You have the latest version of AuraFin.</p>
-            <dl className="mt-7 w-full rounded-2xl border border-line bg-surface px-4 text-left text-sm shadow-sm">
+            <dl className="mt-5 md:mt-7 w-full rounded-2xl border border-line bg-surface px-4 text-left text-sm shadow-sm">
               <div className="flex items-center justify-between py-3">
                 <dt className="text-muted">Version</dt>
                 <dd className="font-semibold text-ink">{APP_VERSION}</dd>
@@ -123,9 +123,7 @@ export default function WhatsNewModal({
               <div className="flex items-center justify-between py-3 border-t border-line-soft">
                 <dt className="text-muted">Last checked</dt>
                 <dd className="font-semibold text-ink">
-                  {lastChecked
-                    ? `Today, ${lastChecked.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}`
-                    : '—'}
+                  {lastChecked ? formatLastChecked(lastChecked) : '—'}
                 </dd>
               </div>
             </dl>
@@ -133,13 +131,13 @@ export default function WhatsNewModal({
               <button
                 type="button"
                 onClick={onRecheck}
-                className="tap-scale mt-5 inline-flex items-center gap-2 rounded-xl border border-[#0a9a4b] px-5 py-2.5 text-sm font-semibold text-[#0a9a4b] hover:bg-[#e7f4ec] dark:hover:bg-[#0a9a4b]/15 transition-colors"
+                className="tap-scale mt-4 inline-flex items-center gap-2 rounded-xl border border-[#0a9a4b] px-5 py-2.5 text-sm font-semibold text-[#0a9a4b] hover:bg-[#e7f4ec] dark:hover:bg-[#0a9a4b]/15 transition-colors"
               >
                 <RefreshCw size={15} />
                 Check again
               </button>
             )}
-            <p className="mt-4 text-[12.5px] text-muted">Updates are installed only from Settings.</p>
+            <p className="mt-3 pb-2 text-[12.5px] text-muted">Updates are installed only from Settings.</p>
           </div>
           {/* Desktop's full-screen view has no footer slot, so pin Close to the
               bottom-left here. On phones the pinned footer carries it. */}
@@ -229,6 +227,15 @@ export default function WhatsNewModal({
       )}
     </Modal>
   );
+}
+
+/** "Today, 9:36 pm" for a check made today, otherwise "5 Nov, 9:36 pm". */
+function formatLastChecked(d: Date): string {
+  const time = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  return sameDay ? `Today, ${time}` : `${d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}, ${time}`;
 }
 
 function UpdateButton({ updating, onUpdate }: { updating: boolean; onUpdate: () => void }) {

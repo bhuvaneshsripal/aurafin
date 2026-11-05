@@ -25,7 +25,7 @@ export interface IndexQuote {
 /** Latest quotes: undefined = still loading, null = unavailable, array = data. */
 export type IndexQuotesState = IndexQuote[] | null | undefined;
 
-const LIVE_MS = 1_000; // from just before the pre-open until just after the close: refresh every second
+const LIVE_MS = 2_000; // from just before the pre-open until just after the close: every 2 s (half the requests/renders of 1 s, still looks live)
 const IDLE_MS = 30_000; // otherwise nothing moves, so poll lazily
 const CACHE_KEY = 'aurafin.tickerQuotes';
 /** The last levels seen *outside* the 4:30–9:15 AM reset window, i.e. the
