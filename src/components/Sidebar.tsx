@@ -65,8 +65,10 @@ function NavItem({ to, label, icon: Icon, end }: NavLinkDef) {
     <NavLink
       to={to}
       onClick={() => {
-        // Clicking the page you're already on refreshes it.
-        if (location.pathname === to) void hardRefresh({ showBar: true, keepPage: true });
+        // Clicking the page you're already on refreshes it, but only from its main
+        // view. From a sub-view (?holding=, ?edit=... written via replaceState, so
+        // check the real address bar) the click just goes back to the main view.
+        if (location.pathname === to && !window.location.search) void hardRefresh({ showBar: true, keepPage: true });
       }}
       end={end ?? to === '/'}
       title={PAGE_SHORTCUT_BY_PATH[to] ? `${label} (${PAGE_SHORTCUT_BY_PATH[to]})` : label}

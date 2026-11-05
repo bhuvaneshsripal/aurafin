@@ -72,9 +72,9 @@ function tapFeedback() {
 export default function BottomNav() {
   const [moreOpen, setMoreOpen] = useState(false);
   const [typing, setTyping] = useState(false);
-  // While a text field has focus the keyboard covers the bottom of the screen.
-  // Native apps hide their tab bar in that state; do the same so it never sits
-  // on top of the field being typed into.
+  // While the on-screen keyboard is up over a focused text field it covers the
+  // bottom of the screen. Native apps hide their tab bar in that state; do the same
+  // so it never sits on top of the field being typed into (see the effect below).
   const location = useLocation();
   // Index of the tab the sliding indicator sits behind (-1 = none, e.g. on
   // pages that only live in the More sheet).
@@ -229,28 +229,54 @@ export default function BottomNav() {
     };
   }, [location.pathname]);
 
-  // Swipe up on the nav pill to open the More sheet (replaces the old "..." button).
-  const navSwipe = useRef<{ x: number; y: number; fired: boolean } | null>(null);
-  const onNavTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length !== 1) return;
-    navSwipe.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, fired: false };
-  };
-  const onNavTouchMove = (e: React.TouchEvent) => {
-    const s = navSwipe.current;
-    if (!s || s.fired) return;
-    const dy = s.y - e.touches[0].clientY; // positive = finger moved up
-    const dx = Math.abs(e.touches[0].clientX - s.x);
-    if (dy > 24 && dy > dx) {
-      s.fired = true;
-      tapFeedback();
-      setMoreOpen(true);
-    }
-  };
-  const onNavTouchEnd = () => {
-    navSwipe.current = null;
-  };
+  // Swipe up anywhere along the bottom bar area (the pill, the "+", or the strip
+  // beside them) to open the More sheet, on every page. Listens on the document so it
+  // does not depend on where inside the bar the finger lands.
+  const barHidden = searchOpen || typing;
+  useEffect(() => {
+    if (barHidden || moreOpen) return;
+    const BAR_HEIGHT = 96; // a little taller than the 80px bar so a slightly high start still counts
+    let s: { x: number; y: number; fired: boolean } | null = null;
+    const inBarZone = (y: number) => y >= window.innerHeight - BAR_HEIGHT;
+    // Another overlay (modal, menu, search) has locked the page: leave the gesture to it.
+    const overlayOpen = () => document.documentElement.style.overflow === 'hidden';
+    const onStart = (e: TouchEvent) => {
+      s = null;
+      if (e.touches.length !== 1 || window.innerWidth >= 768 || overlayOpen()) return;
+      const t = e.touches[0];
+      if (inBarZone(t.clientY)) s = { x: t.clientX, y: t.clientY, fired: false };
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!s || s.fired) return;
+      const t = e.touches[0];
+      const dy = s.y - t.clientY; // positive = finger moved up
+      const dx = Math.abs(t.clientX - s.x);
+      if (dy > 24 && dy > dx) {
+        s.fired = true;
+        tapFeedback();
+        setMoreOpen(true);
+      }
+    };
+    const onEnd = () => {
+      s = null;
+    };
+    document.addEventListener('touchstart', onStart, { passive: true });
+    document.addEventListener('touchmove', onMove, { passive: true });
+    document.addEventListener('touchend', onEnd);
+    document.addEventListener('touchcancel', onEnd);
+    return () => {
+      document.removeEventListener('touchstart', onStart);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onEnd);
+      document.removeEventListener('touchcancel', onEnd);
+    };
+  }, [barHidden, moreOpen]);
 
-  // Hide the bar only while a text field is focused (keyboard up).
+  // Hide the bar only while a text field is focused AND the on-screen keyboard is
+  // really covering the screen. Focus alone is not enough: a field can keep focus
+  // after the keyboard is dismissed (back button / swipe), be auto-focused without
+  // a keyboard, or be used with a hardware keyboard. In those cases the bar used to
+  // vanish and never come back, leaving the user without navigation.
   useEffect(() => {
     const NON_TEXT = ['checkbox', 'radio', 'button', 'submit', 'reset', 'file', 'range', 'color', 'image'];
     const isTextField = (el: Element | null) => {
@@ -259,22 +285,61 @@ export default function BottomNav() {
       if (el instanceof HTMLInputElement) return !el.readOnly && !NON_TEXT.includes(el.type);
       return (el as HTMLElement).isContentEditable === true;
     };
+    const vv = window.visualViewport;
+    // Keyboard counts as open when the visible height drops this far below the
+    // tallest height seen at the current width (the layout resizes with the keyboard).
+    const KEYBOARD_MIN = 140;
+    let baseline = Math.max(window.innerHeight, vv?.height ?? 0);
+    let baselineWidth = window.innerWidth;
+    const keyboardOpen = () => {
+      if (!vv) return true; // can't measure: fall back to "focused = typing"
+      if (window.innerWidth !== baselineWidth) {
+        // Rotation / window resize: start measuring again.
+        baselineWidth = window.innerWidth;
+        baseline = 0;
+      }
+      const h = Math.min(vv.height, window.innerHeight);
+      baseline = Math.max(baseline, vv.height, window.innerHeight);
+      return baseline - h > KEYBOARD_MIN;
+    };
+    const compute = () => setTyping(isTextField(document.activeElement) && keyboardOpen());
+
     let t: number | undefined;
-    const onIn = (e: FocusEvent) => {
+    const onIn = () => {
       window.clearTimeout(t);
-      if (isTextField(e.target as Element)) setTyping(true);
+      compute();
     };
     const onOut = () => {
       window.clearTimeout(t);
       // Delay so hopping between two fields doesn't flash the bar.
-      t = window.setTimeout(() => setTyping(isTextField(document.activeElement)), 120);
+      t = window.setTimeout(compute, 120);
+    };
+    // The keyboard opens/closes after focus changes; re-check whenever the viewport moves.
+    const onViewport = () => compute();
+    // A tap outside any field, or Enter in one, dismisses the keyboard on most phones
+    // without a blur on the field; resize covers it, this is the safety net.
+    const onPointerDown = (e: Event) => {
+      const el = e.target as Element | null;
+      if (!isTextField(el) && isTextField(document.activeElement)) {
+        window.clearTimeout(t);
+        t = window.setTimeout(compute, 350);
+      }
     };
     document.addEventListener('focusin', onIn);
     document.addEventListener('focusout', onOut);
+    document.addEventListener('pointerdown', onPointerDown, true);
+    vv?.addEventListener('resize', onViewport);
+    window.addEventListener('resize', onViewport);
+    window.addEventListener('orientationchange', onViewport);
+    compute();
     return () => {
       window.clearTimeout(t);
       document.removeEventListener('focusin', onIn);
       document.removeEventListener('focusout', onOut);
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      vv?.removeEventListener('resize', onViewport);
+      window.removeEventListener('resize', onViewport);
+      window.removeEventListener('orientationchange', onViewport);
     };
   }, []);
 
@@ -305,7 +370,10 @@ export default function BottomNav() {
     // Only on the page's own main view. On a sub-view of the same page (an open
     // edit / add form, a holding detail... these live in the URL as ?edit=, ?add=...)
     // the tap just goes back to the main view instead of refreshing.
-    if (location.pathname === to && !location.search) {
+    // Read the real address bar, not the router's `location`: open sub-views
+    // (?holding=, ?edit=) are written with history.replaceState, which the router
+    // never sees, so `location.search` would wrongly look empty there.
+    if (location.pathname === to && !window.location.search && !location.search) {
       void hardRefresh({ showBar: true, keepPage: true }).then((ok) => {
         if (!ok) window.scrollTo({ top: 0, behavior: 'smooth' });
       });
@@ -329,10 +397,6 @@ export default function BottomNav() {
           className="md:hidden fixed bottom-0 left-0 right-0 z-40 h-[calc(80px+env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)] flex items-center justify-center pointer-events-none"
         >
           <div
-            onTouchStart={onNavTouchStart}
-            onTouchMove={onNavTouchMove}
-            onTouchEnd={onNavTouchEnd}
-            onTouchCancel={onNavTouchEnd}
             style={
               {
                 // Each size blends from its full value (--x0) to its shrunk value (--x1) by --p.
@@ -345,7 +409,7 @@ export default function BottomNav() {
               } as React.CSSProperties
             }
             className={[
-              'pointer-events-auto relative grid grid-cols-5 items-center justify-items-center touch-none rounded-full border border-line/60',
+              'pointer-events-auto relative grid grid-cols-5 items-center justify-items-center touch-none rounded-full border border-black dark:border-white/40',
               // Frosted glass: translucent surface + blur of the page scrolling behind it.
               'bg-surface/96 supports-[backdrop-filter]:bg-surface/93 backdrop-blur-[80px] backdrop-saturate-150',
               'shadow-[0_10px_28px_-10px_rgba(23,23,23,0.35),inset_0_1px_0_rgba(255,255,255,0.55)]',

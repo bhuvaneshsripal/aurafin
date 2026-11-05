@@ -1,8 +1,43 @@
 {
   "version": "1.0",
-  "date": "2 Nov 2026",
+  "date": "5 Nov 2026",
   "title": "What's new in Aurafin v1.0 🎉",
   "items": [
+    {
+      "emoji": "📈",
+      "title": "Swing scanner",
+      "description": "Nifty 200 stocks ranked by daily-chart swing setups (breakout, pullback, bounce), with RSI, volume and an entry, stop and target plan for each."
+    },
+    {
+      "emoji": "🔊",
+      "title": "High volume scan",
+      "description": "See which stocks are trading on unusually heavy volume, and sort by volume, price change or volume spike."
+    },
+    {
+      "emoji": "⚖️",
+      "title": "More accurate valuation (X/2 · X/3)",
+      "description": "Lowest P/E and EPS growth are now calculated more carefully, and cyclical or unreliable results are flagged with a \"Things to check\" card."
+    },
+    {
+      "emoji": "👆",
+      "title": "Swipe up for More",
+      "description": "On phones, swipe up anywhere along the bottom bar to open the More menu, on every page."
+    },
+    {
+      "emoji": "🧭",
+      "title": "Smarter bottom navigation",
+      "description": "The bar now hides only while the keyboard is actually open, so it no longer disappears when you aren't typing."
+    },
+    {
+      "emoji": "👆",
+      "title": "Tab taps go back first",
+      "description": "Tapping a tab while inside a holding or edit screen takes you to that tab's first page. Tap it again there to refresh."
+    },
+    {
+      "emoji": "📄",
+      "title": "Portfolio export",
+      "description": "Export your complete portfolio report as a PDF from Settings."
+    },
     {
       "emoji": "✨",
       "title": "New version moved into Settings",
