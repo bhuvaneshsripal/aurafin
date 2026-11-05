@@ -6,8 +6,8 @@ import { searchStockSymbols, type StockSearchResult } from '../utils/marketPrice
 import { useAuthStore } from '../store/authStore';
 import { subscribeValuationHistory, saveValuationHistory } from '../hooks/useFirestoreSync';
 import {
-  computeValuation, epsCagr, fetchFundamentals, inr, signedPct,
-  type FundamentalsResponse,
+  analyseEps, computeValuation, epsCagr, fetchFundamentals, inr, signedPct,
+  type EpsAnalysis, type FundamentalsResponse,
 } from '../utils/valuation';
 
 type Src = 'auto' | 'you';
@@ -28,7 +28,7 @@ const num = (s: string) => (s.trim() === '' ? NaN : Number(s));
 /** Give up on a symbol lookup after this long and report it as unreachable. */
 const SEARCH_TIMEOUT_MS = 10_000;
 
-function Field({ label, src, children }: { label: string; src?: Src; children: React.ReactNode }) {
+function Field({ label, src, hint, children }: { label: string; src?: Src; hint?: string; children: React.ReactNode }) {
   return (
     <label className="block min-w-0">
       <span className="flex items-start justify-between gap-1.5 text-xs text-muted mb-1 leading-snug">
@@ -36,9 +36,15 @@ function Field({ label, src, children }: { label: string; src?: Src; children: R
         {src && <span className={cn('shrink-0 text-[10px] px-1.5 rounded-full border', src === 'auto' ? 'border-brand-300 text-brand-700' : 'border-line')}>{src === 'auto' ? 'Auto' : 'Yours'}</span>}
       </span>
       {children}
+      {hint && <span className="block mt-1 text-[11px] leading-snug text-muted break-words">{hint}</span>}
     </label>
   );
 }
+
+const monthYear = (iso: string) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+};
 
 const LEVEL_COLOR = { X: '#2b5fd9', 'X/2': '#0b8a6a', 'X/3': '#a8571c' } as const;
 
@@ -88,6 +94,7 @@ export default function Valuation() {
   const [weakPe, setWeakPe] = useState(false);
   const [roundEps, setRoundEps] = useState(false);
   const [growthNote, setGrowthNote] = useState('');
+  const [earnings, setEarnings] = useState<EpsAnalysis | null>(null);
   const reqId = useRef(0);
   // Query text we set ourselves after a pick; the search effect must not reopen the list for it.
   const [epsOpen, setEpsOpen] = useState(false); // EPS table starts collapsed; stays as the person leaves it
@@ -161,16 +168,22 @@ export default function Valuation() {
       });
       pickedRef.current = d.symbol;
       setQuery(d.symbol);
-      const hist = d.epsHistory.map((h) => h.eps);
-      const cagr = epsCagr(hist);
+      const cagr = epsCagr(d.epsHistory);
+      const ea = analyseEps(d.epsHistory);
+      setEarnings(ea);
+      // Loss years / repeated sharp EPS falls: tick "Cyclical" for the person (they can untick it).
+      setCyclical(ea?.cyclical ?? false);
       let g: number | null = null;
       let note = '';
       if (d.growth.next5y !== null) { g = d.growth.next5y; note = 'Analyst 5-year EPS growth estimate (Yahoo Finance)'; }
-      else if (d.growth.nextYear !== null) { g = d.growth.nextYear; note = 'Analyst next-year EPS growth estimate (Yahoo Finance); no 5-year estimate available'; }
-      else if (cagr !== null) { g = cagr; note = `EPS CAGR over ${hist.length - 1} reported years (historical, not a forecast)`; }
+      else if (d.growth.nextYear !== null) { g = d.growth.nextYear; note = 'Analyst next-year EPS growth estimate (Yahoo Finance), applied to every year because no 5-year estimate is available. A one-year jump can overstate five years of growth.'; }
+      else if (cagr !== null) {
+        g = cagr.pct;
+        note = `EPS CAGR over ${cagr.years.toFixed(1)} reported years (historical, not a forecast)${ea?.cyclical ? '. Earnings are volatile, so this depends heavily on which years the history starts and ends on.' : ''}`;
+      }
       else if (d.forwardEps && d.forwardEps > 0 && d.ttmEps && d.ttmEps > 0) {
         g = (d.forwardEps / d.ttmEps - 1) * 100;
-        note = 'Growth implied by forward EPS vs trailing EPS (Yahoo Finance); no analyst growth or EPS history available yet';
+        note = 'Growth implied by forward EPS vs trailing EPS (Yahoo Finance), applied to every year. No analyst growth or EPS history available yet.';
       }
       else note = 'No analyst or historical growth available. Enter your own assumption.';
       // A raw 3-4 year EPS CAGR from a tiny base can be 50%+; compounding that for 5 years wildly
@@ -194,6 +207,7 @@ export default function Valuation() {
     } catch (e) {
       if (id !== reqId.current) return;
       setData(null);
+      setEarnings(null);
       setError(e instanceof Error ? e.message : 'Could not load data');
     } finally {
       if (id === reqId.current) setLoading(false);
@@ -209,9 +223,11 @@ export default function Valuation() {
       peReadings: data?.lowestPe && src.pe === 'auto' ? data.lowestPe.points : undefined,
       peSpanYears: data?.lowestPe && src.pe === 'auto' ? data.lowestPe.spanYears : undefined,
       growthNote: src.growth === 'auto' ? growthNote : undefined,
+      earnings,
     }),
-    [f, roundEps, cyclical, weakPe, data, edited, src, growthNote]
+    [f, roundEps, cyclical, weakPe, data, edited, src, growthNote, earnings]
   );
+  const peInfo = data?.lowestPe && src.pe === 'auto' ? data.lowestPe : null;
 
   // --- What the dropdown shows for the text in the box -------------------------------
   // Typing: matches for that text, or a plain "searching / no matches / couldn't search"
@@ -382,8 +398,12 @@ export default function Valuation() {
             <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-3">
               <Field label="Price (₹)" src={src.price}><Input type="number" inputMode="decimal" value={f.price} onChange={set('price')} /></Field>
               <Field label="Current EPS, TTM (₹)" src={src.eps}><Input type="number" inputMode="decimal" value={f.eps} onChange={set('eps')} /></Field>
-              <Field label="EPS growth / year (%)" src={src.growth}><Input type="number" inputMode="decimal" value={f.growth} onChange={set('growth')} /></Field>
-              <Field label="Lowest historical P/E" src={src.pe}><Input type="number" inputMode="decimal" value={f.pe} onChange={set('pe')} /></Field>
+              <Field label="EPS growth / year (%)" src={src.growth} hint={src.growth === 'auto' ? growthNote : undefined}><Input type="number" inputMode="decimal" value={f.growth} onChange={set('growth')} /></Field>
+              <Field
+                label="Lowest historical P/E"
+                src={src.pe}
+                hint={peInfo ? `Low in ${monthYear(peInfo.date)}. ${peInfo.points} readings over ${peInfo.spanYears.toFixed(1)} years. Source: ${peInfo.method}.` : undefined}
+              ><Input type="number" inputMode="decimal" value={f.pe} onChange={set('pe')} /></Field>
               <Field label="Projection years"><Input type="number" min={1} max={10} value={f.years} onChange={set('years')} /></Field>
               <Field label="P/E lookback (years)" src={src.lookback}><Input type="number" min={1} value={f.lookback} onChange={set('lookback')} /></Field>
               <Field label="Exceptional items in EPS (₹)"><Input type="number" inputMode="decimal" value={f.exc} onChange={set('exc')} /></Field>
@@ -441,6 +461,15 @@ export default function Valuation() {
                       <div className="text-2xl font-bold tabular-nums">{inr(result.adequate.target)}</div>
                     </div>
                   </div>
+                </Card>
+              )}
+              {(result.reasons.length > 0 || result.warnings.length > 0) && (
+                <Card>
+                  <p className="text-sm font-semibold mb-2">{result.reasons.length > 0 ? 'Why these numbers may be unreliable' : 'Things to check'}</p>
+                  <ul className="space-y-1.5 text-sm">
+                    {result.reasons.map((m) => <li key={m} className="text-amber-700">{m}</li>)}
+                    {result.warnings.map((m) => <li key={m} className="text-muted">{m}</li>)}
+                  </ul>
                 </Card>
               )}
               <div className="grid gap-3 sm:grid-cols-2">

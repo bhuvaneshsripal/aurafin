@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   Target,
-  MoreHorizontal,
   FileUp,
   Calculator,
   Settings,
@@ -13,6 +12,8 @@ import {
   Gem,
   Wallet,
   Scale,
+  Activity,
+  TrendingUp,
 } from 'lucide-react';
 import { hardRefresh } from '../utils/hardRefresh';
 import { APP_VERSION } from '../config/version';
@@ -26,7 +27,8 @@ import { useExitPresence } from '../hooks/useExitPresence';
 const primaryLinks = [
   { to: '/', label: 'Overview', icon: LayoutDashboard },
   { to: '/wealth', label: 'Wealth', icon: Gem },
-  { to: '/transactions', label: 'Money', icon: Wallet },
+  { to: '/valuation', label: 'Valuation', icon: Scale },
+  { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
 interface MoreLink {
@@ -40,19 +42,20 @@ const COMING_SOON_LABEL = 'Coming soon';
 
 const moreLinks: MoreLink[] = [
   { to: '/wealth/performance', label: 'Performance', icon: LineChart },
+  { to: '/transactions', label: 'Money', icon: Wallet },
   { to: '/essentials', label: 'Essentials', icon: Target },
   { to: '/import', label: 'Import', icon: FileUp },
-  { to: '/valuation', label: 'Valuation', icon: Scale },
+  { to: '/volume', label: 'High volume', icon: Activity },
+  { to: '/swing', label: 'Swing scan', icon: TrendingUp },
   { to: '/calculators', label: 'Calculators', icon: Calculator },
-  { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
-/** Round nav button: soft green disc when active, plain otherwise (app theme colors). */
+/** Round nav button. Its size comes from the pill's `--nb` variable so the whole
+ *  bar can shrink smoothly; the green "active" disc is a separate sliding
+ *  indicator behind the buttons, so the button itself only changes color. */
 function navBtn(active: boolean) {
-  return `tap-scale relative h-14 w-14 shrink-0 rounded-full inline-flex items-center justify-center transition-all duration-200 ${
-    active
-      ? 'bg-primary-soft text-primary-ink shadow-[inset_0_0_0_1.5px_var(--color-primary)]'
-      : 'text-muted hover:bg-surface-hover'
+  return `tap-scale relative z-10 h-[var(--nb)] w-[var(--nb)] shrink-0 rounded-full inline-flex items-center justify-center transition-colors duration-100 ${
+    active ? 'text-primary-ink' : 'text-muted hover:bg-surface-hover/70'
   }`;
 }
 
@@ -73,7 +76,33 @@ export default function BottomNav() {
   // Native apps hide their tab bar in that state; do the same so it never sits
   // on top of the field being typed into.
   const location = useLocation();
-  const isMoreActive = moreLinks.some((l) => l.to === location.pathname);
+  // Index of the tab the sliding indicator sits behind (-1 = none, e.g. on
+  // pages that only live in the More sheet).
+  const path = location.pathname.replace(/\/+$/, '') || '/';
+  const activeIdx = primaryLinks.findIndex(({ to }) =>
+    to === '/' || to === '/wealth' ? path === to : path === to || path.startsWith(`${to}/`),
+  );
+  // The tab just tapped. The highlight jumps to it right away instead of waiting
+  // for the route (and a lazy-loaded page) to finish switching.
+  const [tapIdx, setTapIdx] = useState<number | null>(null);
+  useEffect(() => {
+    setTapIdx(null);
+  }, [location.pathname]);
+  useEffect(() => {
+    if (tapIdx === null) return;
+    const t = window.setTimeout(() => setTapIdx(null), 1500); // safety net if navigation never happens
+    return () => window.clearTimeout(t);
+  }, [tapIdx]);
+  const shownIdx = tapIdx ?? activeIdx;
+  // The centre slot (raised "+") sits between the 2nd and 3rd tab, so tabs on
+  // its right are one slot further along.
+  const CENTER_AFTER = 2;
+  const slotIdx = shownIdx >= CENTER_AFTER ? shownIdx + 1 : shownIdx;
+  // 0 = full size, 1 = fully shrunk. Driven by how close the page is to its end
+  // and eased frame by frame, so the bar shrinks slowly instead of snapping.
+  const pillRef = useRef<HTMLElement | null>(null);
+  const shrinkTarget = useRef(0);
+  const shrinkNow = useRef(0);
   const searchOpen = useUiStore((s) => s.searchOpen);
   const notificationsOpen = useUiStore((s) => s.notificationsOpen);
   // The bottom nav stays visible on the notifications page; only the "+" button hides.
@@ -146,6 +175,81 @@ export default function BottomNav() {
     };
   }, [moreMounted]);
 
+  // Shrink the bar gradually over the last stretch of the page; grow it back as
+  // the user scrolls up or lands on another page. Pages too short to scroll
+  // never shrink it.
+  useEffect(() => {
+    const RANGE = 220; // px from the page end where shrinking begins
+    const EASE = 0.07; // fraction of the remaining distance covered per frame (lower = slower)
+    const MAX_STEP = 0.014; // cap per frame, so even a fast flick takes ~1s to fully shrink
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    let anim = 0;
+    let measure = 0;
+    const apply = () => {
+      pillRef.current?.style.setProperty('--p', shrinkNow.current.toFixed(4));
+    };
+    const step = () => {
+      const diff = shrinkTarget.current - shrinkNow.current;
+      if (reduceMotion || Math.abs(diff) < 0.002) {
+        shrinkNow.current = shrinkTarget.current;
+        anim = 0;
+      } else {
+        const move = Math.min(Math.abs(diff) * EASE, MAX_STEP);
+        shrinkNow.current += Math.sign(diff) * Math.max(move, 0.0015);
+        anim = requestAnimationFrame(step);
+      }
+      apply();
+    };
+    const check = () => {
+      measure = 0;
+      const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+      if (scrollable <= 120) {
+        shrinkTarget.current = 0;
+      } else {
+        const t = Math.min(1, Math.max(0, 1 - (scrollable - window.scrollY) / RANGE));
+        shrinkTarget.current = t * t * (3 - 2 * t); // smoothstep
+      }
+      if (!anim) anim = requestAnimationFrame(step);
+    };
+    const schedule = () => {
+      if (!measure) measure = requestAnimationFrame(check);
+    };
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    // Page height changes as data loads; re-check when it does.
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(schedule) : null;
+    ro?.observe(document.body);
+    schedule();
+    return () => {
+      if (anim) cancelAnimationFrame(anim);
+      if (measure) cancelAnimationFrame(measure);
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      ro?.disconnect();
+    };
+  }, [location.pathname]);
+
+  // Swipe up on the nav pill to open the More sheet (replaces the old "..." button).
+  const navSwipe = useRef<{ x: number; y: number; fired: boolean } | null>(null);
+  const onNavTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    navSwipe.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, fired: false };
+  };
+  const onNavTouchMove = (e: React.TouchEvent) => {
+    const s = navSwipe.current;
+    if (!s || s.fired) return;
+    const dy = s.y - e.touches[0].clientY; // positive = finger moved up
+    const dx = Math.abs(e.touches[0].clientX - s.x);
+    if (dy > 24 && dy > dx) {
+      s.fired = true;
+      tapFeedback();
+      setMoreOpen(true);
+    }
+  };
+  const onNavTouchEnd = () => {
+    navSwipe.current = null;
+  };
+
   // Hide the bar only while a text field is focused (keyboard up).
   useEffect(() => {
     const NON_TEXT = ['checkbox', 'radio', 'button', 'submit', 'reset', 'file', 'range', 'color', 'image'];
@@ -198,7 +302,10 @@ export default function BottomNav() {
     tapFeedback();
     // Tapping the tab you're already on refreshes the page (falls back to
     // scrolling to the top if the app can't reach the network).
-    if (location.pathname === to) {
+    // Only on the page's own main view. On a sub-view of the same page (an open
+    // edit / add form, a holding detail... these live in the URL as ?edit=, ?add=...)
+    // the tap just goes back to the main view instead of refreshing.
+    if (location.pathname === to && !location.search) {
       void hardRefresh({ showBar: true, keepPage: true }).then((ok) => {
         if (!ok) window.scrollTo({ top: 0, behavior: 'smooth' });
       });
@@ -207,56 +314,123 @@ export default function BottomNav() {
 
   return (
     <>
-      {/* Floating quick-add action button, sits just above the bottom nav.
-          Hidden when a page's own bottom toolbar (e.g. bulk-selection
-          actions on Wealth) is occupying the same corner, and while typing. */}
-      {!hideFab && (
-        <div className="md:hidden fixed right-4 z-40" style={{ bottom: 'calc(80px + env(safe-area-inset-bottom) + 12px)' }}>
-          <QuickAddMenu variant="fab" />
-        </div>
-      )}
-
       {!searchOpen && !typing && (
         // Floating glass pill with round icon buttons. The outer strip keeps the
         // 80px footprint (other layers are positioned above it),
         // is transparent and lets taps through everywhere except the pill.
         <nav
           aria-label="Primary"
+          ref={(el) => {
+            // --p (0 = full size, 1 = shrunk) lives on the nav so the pill and the "+" both follow it.
+            pillRef.current = el;
+            // Re-apply after the bar remounts (e.g. closing search).
+            el?.style.setProperty('--p', shrinkNow.current.toFixed(4));
+          }}
           className="md:hidden fixed bottom-0 left-0 right-0 z-40 h-[calc(80px+env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)] flex items-center justify-center pointer-events-none"
         >
-          <div className="pointer-events-auto flex items-center gap-2 rounded-full p-1.5 border border-line bg-surface shadow-[0_8px_24px_-8px_rgba(23,23,23,0.28)]">
-            {primaryLinks.map(({ to, label, icon: Icon }) => (
+          <div
+            onTouchStart={onNavTouchStart}
+            onTouchMove={onNavTouchMove}
+            onTouchEnd={onNavTouchEnd}
+            onTouchCancel={onNavTouchEnd}
+            style={
+              {
+                // Each size blends from its full value (--x0) to its shrunk value (--x1) by --p.
+                // The bar also narrows toward the page end.
+                width: 'min(560px, calc(100% - 32px - 24px * var(--p, 0)))',
+                '--nb': 'calc(var(--nb0) + (var(--nb1) - var(--nb0)) * var(--p, 0))',
+                '--ng': 'calc(var(--ng0) + (var(--ng1) - var(--ng0)) * var(--p, 0))',
+                '--np': 'calc(var(--np0) + (var(--np1) - var(--np0)) * var(--p, 0))',
+                transform: 'translateY(calc(3px * var(--p, 0)))',
+              } as React.CSSProperties
+            }
+            className={[
+              'pointer-events-auto relative grid grid-cols-5 items-center justify-items-center touch-none rounded-full border border-line/60',
+              // Frosted glass: translucent surface + blur of the page scrolling behind it.
+              'bg-surface/96 supports-[backdrop-filter]:bg-surface/93 backdrop-blur-[80px] backdrop-saturate-150',
+              'shadow-[0_10px_28px_-10px_rgba(23,23,23,0.35),inset_0_1px_0_rgba(255,255,255,0.55)]',
+              'dark:shadow-[0_10px_28px_-10px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.07)]',
+              // Size tokens: button (nb), gap (ng), padding (np); 0 = full size, 1 = shrunk.
+              '[--nb0:48px] [--nb1:44px] [--ng0:4px] [--ng1:4px] [--np0:5px] [--np1:5px]',
+              'max-[360px]:[--nb0:42px] max-[360px]:[--nb1:39px] max-[360px]:[--ng0:3px] max-[360px]:[--ng1:3px]',
+              'p-[var(--np)]',
+            ].join(' ')}
+          >
+            {/* Grab handle: hints that the bar can be swiped up for more options. */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute left-1/2 top-[1.5px] h-[3px] w-8 -translate-x-1/2 rounded-full bg-slate-300/80 dark:bg-slate-600"
+            />
+            {/* Sliding active indicator: glides behind whichever tab is current. */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute left-[var(--np)] top-[var(--np)] flex h-[var(--nb)] w-[calc((100%-2*var(--np))/5)] items-center justify-center motion-reduce:!transition-none"
+              style={
+                {
+                  // --nav-idx is a registered number property (see index.css) so only the
+                  // tab change animates, not the size changes while scrolling.
+                  '--nav-idx': Math.max(slotIdx, 0),
+                  transform: 'translateX(calc(var(--nav-idx) * 100%))',
+                  opacity: shownIdx < 0 ? 0 : 1,
+                  transition: '--nav-idx 140ms cubic-bezier(0.2,0,0,1), opacity 120ms ease',
+                } as React.CSSProperties
+              }
+            >
+              <span className="h-[var(--nb)] w-[var(--nb)] rounded-full bg-primary-soft shadow-[inset_0_0_0_1.5px_var(--color-primary)]" />
+            </span>
+            {primaryLinks.map(({ to, label, icon: Icon }, i) => (
+              <Fragment key={to}>
+                {i === CENTER_AFTER && (
+                  // Empty middle cell under the raised "+" (the button itself lives outside the pill).
+                  <span aria-hidden className="h-[var(--nb)]" />
+                )}
               <NavLink
-                key={to}
                 to={to}
                 end={to === '/' || to === '/wealth'}
-                onClick={() => onTabTap(to)}
+                onClick={() => {
+                  setTapIdx(i);
+                  onTabTap(to);
+                }}
                 aria-label={label}
                 title={label}
-                className={({ isActive }) => navBtn(isActive)}
+                className={({ isActive }) => navBtn(tapIdx !== null ? i === tapIdx : isActive)}
               >
-                <Icon size={26} strokeWidth={1.75} />
+                <span
+                  className="relative inline-flex"
+                  style={{ transform: 'scale(calc(1 - 0.05 * var(--p, 0)))' }}
+                >
+                  <Icon size={23} strokeWidth={1.75} />
+                  {to === '/settings' && <UpdateDot />}
+                </span>
               </NavLink>
+              </Fragment>
             ))}
-
+            {/* Keyboard / screen-reader way to reach the More sheet (swipe is touch-only). */}
             <button
               type="button"
-              onClick={() => {
-                tapFeedback();
-                setMoreOpen(true);
-              }}
+              onClick={() => setMoreOpen(true)}
               aria-label="More"
-              title="More"
               aria-haspopup="dialog"
               aria-expanded={moreOpen}
-              className={navBtn(isMoreActive)}
-            >
-              <span className="relative inline-flex">
-                <MoreHorizontal size={26} strokeWidth={1.75} />
-                <UpdateDot />
-              </span>
-            </button>
+              className="sr-only"
+            />
           </div>
+
+          {/* Raised "+" in the middle of the bar. Lives beside the pill (not inside it) because
+              the pill's backdrop blur would trap the menu's full-screen backdrop. Hidden when a
+              page's own bottom toolbar needs the space, and while typing. */}
+          {!hideFab && (
+            // No transform on this wrapper: a transformed parent would trap the menu's
+            // full-screen backdrop inside a small square around the button.
+            <div
+              className="pointer-events-none absolute inset-x-0 flex justify-center"
+              style={{ bottom: 'calc(env(safe-area-inset-bottom) + 25px + 1px * var(--p, 0))' }}
+            >
+              <div className="pointer-events-auto">
+                <QuickAddMenu variant="center" />
+              </div>
+            </div>
+          )}
         </nav>
       )}
 
@@ -299,10 +473,7 @@ export default function BottomNav() {
                     }`
                   }
                 >
-                  <span className="relative inline-flex">
-                    <Icon size={20} strokeWidth={1.75} />
-                    {to === '/settings' && <UpdateDot />}
-                  </span>
+                  <Icon size={20} strokeWidth={1.75} />
                   {label}
                 </NavLink>
               ))}

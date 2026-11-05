@@ -4,53 +4,32 @@ import { useNetworkStore } from '../store/networkStore';
 export type NetworkQuality = 'good' | 'low' | 'offline';
 
 const PROBE_EVERY_MS = 20_000;
-const SLOW_AFTER_MS = 2_500;
-const GIVE_UP_AFTER_MS = 8_000;
-
-interface NavigatorConnection {
-  effectiveType?: string;
-  downlink?: number;
-  rtt?: number;
-  saveData?: boolean;
-  addEventListener?: (t: string, cb: () => void) => void;
-  removeEventListener?: (t: string, cb: () => void) => void;
-}
-
-function connection(): NavigatorConnection | undefined {
-  return (navigator as Navigator & { connection?: NavigatorConnection }).connection;
-}
-
-/** Hint from the browser's Network Information API (Chromium) — instant, no
- *  request. Missing on Safari/Firefox, where the timed probe does the job. */
-function hintSaysSlow() {
-  const c = connection();
-  if (!c) return false;
-  return c.effectiveType === 'slow-2g' || c.effectiveType === '2g' || (c.rtt !== undefined && c.rtt > 1500);
-}
+const SLOW_AFTER_MS = 4_000;
+const GIVE_UP_AFTER_MS = 10_000;
+// A single slow or failed probe is often just a busy moment (page still loading
+// data, tab waking up), so "low" needs this many bad probes in a row.
+const BAD_PROBES_NEEDED = 2;
+const RECHECK_AFTER_BAD_MS = 3_000;
 
 /**
  * Tracks whether the connection is 'good', 'low' (slow or flaky) or
  * 'offline'. Offline comes from the browser's online/offline events; "low"
- * comes from the connection hint plus a tiny timed request to our own origin
+ * comes from a tiny timed request to our own origin
  * every 20s, so a bar of signal that never actually loads anything is still
  * reported honestly.
  */
 export function useNetworkQuality(): NetworkQuality {
   const [online, setOnline] = useState(() => navigator.onLine);
-  const [slow, setSlow] = useState(() => hintSaysSlow());
+  const [slow, setSlow] = useState(false);
 
   useEffect(() => {
     const goOnline = () => setOnline(true);
     const goOffline = () => setOnline(false);
     window.addEventListener('online', goOnline);
     window.addEventListener('offline', goOffline);
-    const c = connection();
-    const onChange = () => setSlow(hintSaysSlow());
-    c?.addEventListener?.('change', onChange);
     return () => {
       window.removeEventListener('online', goOnline);
       window.removeEventListener('offline', goOffline);
-      c?.removeEventListener?.('change', onChange);
     };
   }, []);
 
@@ -58,6 +37,24 @@ export function useNetworkQuality(): NetworkQuality {
     if (!online) return;
     let cancelled = false;
     let timer: number | undefined;
+    let recheck: number | undefined;
+    let bad = 0;
+
+    const report = (isBad: boolean) => {
+      if (cancelled) return;
+      if (!isBad) {
+        bad = 0;
+        setSlow(false);
+        return;
+      }
+      bad += 1;
+      if (bad >= BAD_PROBES_NEEDED) setSlow(true);
+      else {
+        // Confirm quickly instead of waiting for the next 20s round.
+        window.clearTimeout(recheck);
+        recheck = window.setTimeout(() => void probe(), RECHECK_AFTER_BAD_MS);
+      }
+    };
 
     const probe = async () => {
       if (document.visibilityState === 'hidden') return;
@@ -69,11 +66,12 @@ export function useNetworkQuality(): NetworkQuality {
         // cache can answer it — this measures the real network.
         const res = await fetch(`/favicon.svg?probe=${Date.now()}`, { cache: 'no-store', signal: ctrl.signal });
         await res.arrayBuffer();
-        if (!cancelled) setSlow(hintSaysSlow() || performance.now() - started > SLOW_AFTER_MS);
+        if (res.ok && performance.now() - started <= SLOW_AFTER_MS) report(false);
+        else report(true);
       } catch {
         // Timed out, or the request failed while the browser still thinks
-        // it's online (captive portal, dead Wi-Fi): treat as a weak link.
-        if (!cancelled) setSlow(true);
+        // it's online (captive portal, dead Wi-Fi): a weak link.
+        report(true);
       } finally {
         window.clearTimeout(abort);
       }
@@ -86,6 +84,7 @@ export function useNetworkQuality(): NetworkQuality {
     return () => {
       cancelled = true;
       window.clearInterval(timer);
+      window.clearTimeout(recheck);
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [online]);

@@ -72,7 +72,7 @@ async function listingLowPe(sym, ttmEps) {
 
 // P/E per month = month-end price ÷ the latest annual EPS already published at that time
 // (fiscal year end + 90 days reporting lag). Only positive EPS counts.
-function derivePeSeries(prices, annualEps) {
+export function derivePeSeries(prices, annualEps) {
   const eps = [...annualEps].filter((e) => e.value > 0).sort((a, b) => a.date.localeCompare(b.date));
   const out = [];
   for (const p of prices) {
@@ -83,12 +83,37 @@ function derivePeSeries(prices, annualEps) {
   return out;
 }
 
-function summarisePe(series, method) {
+export function summarisePe(series, method) {
   if (!series.length) return null;
   const low = series.reduce((a, b) => (b.value < a.value ? b : a));
   const from = series[0].date, to = series[series.length - 1].date;
   const spanYears = Math.max(0, (new Date(to).getTime() - new Date(from).getTime()) / (365.25 * 86400000));
   return { value: low.value, date: low.date, from, to, points: series.length, spanYears, method };
+}
+
+// Two independent P/E series can exist for one stock: Yahoo's own trailing-P/E
+// history (long, but often only a handful of quarterly points) and the monthly
+// series we derive from prices ÷ annual EPS (dense, but only as long as Yahoo's
+// EPS history). Each series' minimum is only an UPPER bound on the true lowest
+// P/E (a sparse series can step right over the low). The old rule kept whichever
+// series had the longer span, so a sparse 6-year series beat a dense 4-year one
+// and the real low was missed. The tightest bound is the lowest value across
+// both; confidence still needs one reasonably dense series (the best one counts).
+export function chooseLowestPe(a, b) {
+  const list = [a, b].filter(Boolean);
+  if (!list.length) return null;
+  if (list.length === 1) return list[0];
+  const low = list.reduce((m, s) => (s.value < m.value ? s : m));
+  const other = list.find((s) => s !== low);
+  return {
+    value: low.value,
+    date: low.date,
+    from: list.map((s) => s.from).sort()[0],
+    to: list.map((s) => s.to).sort().slice(-1)[0],
+    points: Math.max(...list.map((s) => s.points)),
+    spanYears: Math.max(...list.map((s) => s.spanYears)),
+    method: `${low.method}, cross-checked with ${other.method}`,
+  };
 }
 
 const raw = (o) => (typeof o?.raw === 'number' && Number.isFinite(o.raw) ? o.raw : null);
@@ -107,9 +132,9 @@ export async function fetchFundamentals(rawSymbol, exchange = 'NSE', lookbackYea
     let prices = [];
     try { prices = await monthlyCloses(sym, lookbackYears); } catch { /* derived series unavailable */ }
     const derived = derivePeSeries(prices, ts.annualDilutedEPS ?? []);
-    // Use whichever series covers the longer span (more points on ties).
+    // Lowest value across both series (see chooseLowestPe), not the longer-span one.
     const a = summarisePe(yahooPe, 'yahoo-trailing-pe'), b = summarisePe(derived, 'price-history ÷ annual EPS');
-    let lowestPe = a && b ? (b.spanYears > a.spanYears || (b.spanYears === a.spanYears && b.points > a.points) ? b : a) : (a ?? b);
+    let lowestPe = chooseLowestPe(a, b);
     if (!lowestPe) { try { lowestPe = await listingLowPe(sym, ttmEps); } catch { /* leave empty */ } }
     const priceHistoryYears = prices.length ? Math.max(0, (new Date(prices[prices.length - 1].date).getTime() - new Date(prices[0].date).getTime()) / (365.25 * 86400000)) : null;
     const trend = sum.earningsTrend?.trend ?? [];
@@ -127,7 +152,8 @@ export async function fetchFundamentals(rawSymbol, exchange = 'NSE', lookbackYea
       ttmEps,
       forwardEps: raw(sum.defaultKeyStatistics?.forwardEps),
       growth: { nextYear: g('+1y'), next5y: g('+5y') },
-      epsHistory: (ts.annualDilutedEPS ?? []).map((p) => ({ date: p.date, eps: p.value })),
+      // Oldest first: the growth maths (CAGR, cycle check) relies on the order.
+      epsHistory: (ts.annualDilutedEPS ?? []).map((p) => ({ date: p.date, eps: p.value })).sort((x, y) => x.date.localeCompare(y.date)),
       lowestPe,
       priceHistoryYears,
       source,

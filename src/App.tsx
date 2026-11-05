@@ -84,6 +84,8 @@ const Valuation = lazyWithRetry(() => import('./pages/Valuation'));
 const Calculators = lazyWithRetry(() => import('./pages/Calculators'));
 const Settings = lazyWithRetry(() => import('./pages/Settings'));
 const Indices = lazyWithRetry(() => import('./pages/Indices'));
+const HighVolume = lazyWithRetry(() => import('./pages/HighVolume'));
+const SwingScanner = lazyWithRetry(() => import('./pages/SwingScanner'));
 const WhatsNew = lazyWithRetry(() => import('./pages/WhatsNew'));
 const InstallApp = lazyWithRetry(() => import('./pages/InstallApp'));
 const Feedback = lazyWithRetry(() => import('./pages/Feedback'));
@@ -172,6 +174,8 @@ function AppShell() {
                   <Route path="/valuation" element={<Valuation />} />
                   <Route path="/calculators" element={<Calculators />} />
                   <Route path="/indices" element={<Indices />} />
+                  <Route path="/volume" element={<HighVolume />} />
+                  <Route path="/swing" element={<SwingScanner />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/whats-new" element={<WhatsNew />} />
                   <Route path="/install" element={<InstallApp />} />

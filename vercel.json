@@ -5,6 +5,14 @@
       "destination": "/api/market/indices?mode=global"
     },
     {
+      "source": "/api/market/swing",
+      "destination": "/api/market/indices?mode=swing"
+    },
+    {
+      "source": "/api/market/volume",
+      "destination": "/api/market/indices?mode=volume"
+    },
+    {
       "source": "/api/market/indian-indices",
       "destination": "/api/market/indices?mode=indian"
     },

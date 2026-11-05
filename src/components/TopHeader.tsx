@@ -191,7 +191,13 @@ export default function TopHeader() {
                 <div className="px-4 py-3 border-b border-line-soft">
                   <p className="text-sm font-semibold text-ink truncate">{displayName || 'Your account'}</p>
                 </div>
-                <button onClick={toggleTheme} className={menuItem}>
+                <button
+                  onClick={() => {
+                    toggleTheme();
+                    setProfileOpen(false);
+                  }}
+                  className={menuItem}
+                >
                   {theme === 'dark' ? <Sun size={16} className="text-muted" /> : <Moon size={16} className="text-muted" />}
                   {theme === 'dark' ? 'Light mode' : 'Dark mode'}
                 </button>
@@ -235,7 +241,13 @@ export default function TopHeader() {
                   </div>
                 </div>
 
-                <button onClick={toggleTheme} className={menuItem}>
+                <button
+                  onClick={() => {
+                    toggleTheme();
+                    setMobileMenuOpen(false);
+                  }}
+                  className={menuItem}
+                >
                   {theme === 'dark' ? <Sun size={17} className="text-muted" /> : <Moon size={17} className="text-muted" />}
                   {theme === 'dark' ? 'Light mode' : 'Dark mode'}
                 </button>

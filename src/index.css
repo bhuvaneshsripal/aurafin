@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/* Lets the bottom nav's active-tab indicator animate its position by itself
+   (see BottomNav): only a tab change glides, not the live size changes. */
+@property --nav-idx {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
 @layer base {
   .grid > *,
   .flex > * {
@@ -623,6 +631,19 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
     transform: translateY(0);
   }
 }
+.animate-fan-in {
+  animation: fan-in var(--dur-base) var(--ease-out) backwards;
+}
+@keyframes fan-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--fx)), calc(-50% + var(--fy))) scale(1);
+  }
+}
 .animate-pill-in {
   animation: pill-in var(--dur-base) var(--ease-out) backwards;
 }
@@ -851,6 +872,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   .animate-menu-in-3d,
   .animate-sheet-in,
   .animate-pill-in,
+  .animate-fan-in,
   .animate-fab-in,
   .animate-lock-in,
   .animate-lock-unlock,
@@ -1073,6 +1095,14 @@ input.global-search-input:focus,
   }
 }
 
+
+/* Backdrop behind the centre "+" fan menu: dim + strong blur so only the
+   buttons stand out. Named so the touch-device blur rule below doesn't strip it. */
+.fan-backdrop {
+  background: rgb(15 23 20 / 0.5);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
 
 /* Phones: a backdrop blur is re-rendered every frame while the on-screen
    keyboard slides in/out, which shows up as the screen flickering when typing.

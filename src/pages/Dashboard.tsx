@@ -133,6 +133,14 @@ export default function Dashboard() {
   );
   const totalLiabilities = liabilities.reduce((s, l) => s + l.outstanding, 0);
   const netWorth = totalAssets - totalLiabilities;
+  // The history chart is saved for the whole household (snapshots carry no
+  // profile), so its live "today" point must be the household total too —
+  // otherwise it disagrees with the profile-scoped cards above it.
+  const householdNetWorth =
+    allAssets
+      .filter((a) => !isFullySold(a))
+      .reduce((s, a) => s + resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).value, 0) -
+    allLiabilities.reduce((s, l) => s + l.outstanding, 0);
 
   // Lifetime view (revealed by the arrow on the Net worth card): money
   // already taken out by selling — fully or partly — and the entire amount
@@ -294,7 +302,7 @@ export default function Dashboard() {
       {/* Performance + allocation */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2">
-          <NetWorthOverTimeCard privacyMode={privacyMode} ready={netWorthReady} liveNetWorth={activeProfileId ? Number.NaN : netWorth} />
+          <NetWorthOverTimeCard privacyMode={privacyMode} ready={netWorthReady} liveNetWorth={householdNetWorth} allProfilesNote={!!activeProfileId} />
         </div>
         <AllocationCard
           data={allocation}
@@ -448,12 +456,15 @@ function NetWorthOverTimeCard({
   privacyMode,
   ready,
   liveNetWorth,
+  allProfilesNote = false,
 }: {
   privacyMode: boolean;
   /** True once live prices are in. Until then today's point is hidden: the saved one can be stale or wrong. */
   ready: boolean;
   /** Net worth computed from live prices right now — used for today's point so the chart matches the cards. */
   liveNetWorth: number;
+  /** A single profile is selected, but this chart always covers all profiles. */
+  allProfilesNote?: boolean;
 }) {
   // Real, stored history only — the same `snapshots` collection the manual
   // "Take Snapshot" action writes to, plus (via useAutoNetWorthHistory,
@@ -661,6 +672,7 @@ function NetWorthOverTimeCard({
         <div className="flex items-baseline gap-2 mb-3">
           <span className="text-xs text-muted">
             {selected ? 'Selected' : data.length === 1 ? 'Only data point' : 'Latest'} · {formatDate(shown.date)}
+            {allProfilesNote ? ' · All profiles' : ''}
           </span>
           <span className="font-numeric text-lg font-semibold text-ink">
             {!ready && !selected ? <LoadingDots /> : privacyMode ? '••••••' : formatPreciseCurrency(shown.netWorth)}

@@ -1,5 +1,13 @@
 # Aurafin — fixes & improvements (this pass)
 
+## X/2 · X/3 valuation: accuracy audit
+- Audited: the maths (Year-N EPS = TTM EPS × (1+g)^N, X = Year-N EPS × lowest P/E, X/2, X/3, adequate price = X ÷ (1+r)^N) matches an independent re-implementation on 2,000 random cases (0 mismatches) and reproduces the TATASTEEL screen exactly. No formula change was needed.
+- The page computed warnings and the growth-source note but never showed them. Now shown: under the growth and lowest-P/E fields, and in a "Why these numbers may be unreliable / Things to check" card.
+- Lowest P/E: the old rule kept whichever series (Yahoo trailing P/E or monthly price ÷ annual EPS) had the longer span, so a sparse series with a handful of points could beat a dense one and step over the real low. Now the lowest value across both series is used (`chooseLowestPe` in `api/_lib/fundamentals.js`). The source, month of the low and number of readings are shown.
+- EPS CAGR: exponent is now the real time between the first and last reported year (a year Yahoo skipped no longer inflates growth), input order no longer matters, and the EPS history is returned oldest-first.
+- Cyclical / volatile earnings (any loss year, or two or more EPS falls of 25%+) are detected automatically (`analyseEps`), tick "Cyclical business", and mark the result "unreliable" with the reason (best/worst EPS, mid-cycle EPS).
+- "Unreliable" now also covers cyclical earnings and the "weak earnings" flag, not only thin P/E history.
+
 ## Build / deploy
 - Added missing peer dependency `postprocessing` (production build failed without it).
 

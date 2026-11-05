@@ -163,4 +163,42 @@ async function fetchNseAllIndices() {
   return Array.isArray(data?.data) ? data.data : [];
 }
 
-export { fetchNseIsin, fetchNseQuote, searchNseSymbol, invalidateNseCookie, fetchNseAllIndices };
+/** NSE's live "most active by volume" and "volume gainers" tables (unofficial JSON). */
+async function fetchNseJson(path, referer) {
+  const cookie = await getNseCookie();
+  const res = await fetch(`https://www.nseindia.com/api/${path}`, {
+    headers: { ...BROWSER_HEADERS, Accept: 'application/json', Referer: referer, Cookie: cookie },
+  });
+  if (!res.ok) {
+    invalidateNseCookie();
+    throw new Error(`NSE ${path} request failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+async function fetchNseMostActiveByVolume() {
+  const data = await fetchNseJson(
+    'live-analysis-most-active-securities?index=volume',
+    'https://www.nseindia.com/market-data/most-active-equities'
+  );
+  return Array.isArray(data?.data) ? data.data : [];
+}
+
+async function fetchNseVolumeGainers() {
+  const data = await fetchNseJson(
+    'live-analysis-volume-gainers',
+    'https://www.nseindia.com/market-data/volume-gainers-spurts'
+  );
+  return Array.isArray(data?.data) ? data.data : [];
+}
+
+/** Constituents of an NSE index, e.g. "NIFTY 200": [{ symbol, meta: { companyName }, ... }]. */
+async function fetchNseIndexConstituents(indexName) {
+  const data = await fetchNseJson(
+    `equity-stockIndices?index=${encodeURIComponent(indexName)}`,
+    'https://www.nseindia.com/market-data/live-equity-market'
+  );
+  return Array.isArray(data?.data) ? data.data : [];
+}
+
+export { fetchNseIndexConstituents, fetchNseMostActiveByVolume, fetchNseVolumeGainers, fetchNseIsin, fetchNseQuote, searchNseSymbol, invalidateNseCookie, fetchNseAllIndices };

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { WifiLow, X } from 'lucide-react';
 import { useNetworkQuality, type NetworkQuality } from '../hooks/useNetworkQuality';
 import { useExitPresence } from '../hooks/useExitPresence';
@@ -43,6 +43,20 @@ export default function NetworkBanner() {
     if (show) resetSwipe();
   }, [show, resetSwipe]);
 
+  // A tap or click anywhere else on the screen also dismisses it. The tap still
+  // reaches whatever was tapped; taps on the banner itself are left to its own
+  // swipe / close button.
+  const bannerRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!show) return;
+    const onDown = (e: Event) => {
+      if (bannerRef.current?.contains(e.target as Node)) return;
+      setDismissedFor(quality);
+    };
+    document.addEventListener('pointerdown', onDown, true);
+    return () => document.removeEventListener('pointerdown', onDown, true);
+  }, [show, quality]);
+
   if (!mounted) return null;
   const { flung } = swipe;
 
@@ -54,6 +68,7 @@ export default function NetworkBanner() {
       className="fixed left-0 right-0 z-[70] flex justify-center px-4 pointer-events-none bottom-[calc(80px_+_env(safe-area-inset-bottom)_+_12px)] md:bottom-4"
     >
       <div
+        ref={bannerRef}
         role="status"
         aria-live="polite"
         {...swipe.bind}

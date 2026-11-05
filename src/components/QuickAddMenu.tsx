@@ -27,9 +27,22 @@ import CurrencySelect from './CurrencySelect';
 import CustomSelect from './CustomSelect';
 import { toIsoDate } from '../utils/date';
 
+/** Actions shown in the fan, left to right along the arc. */
+/** Half-width and (max) height of the arc, which is an ellipse so it spreads across the screen. */
+const FAN_RX = 135;
+const FAN_RY_MAX = 240;
+const FAN_ITEMS: { action: Exclude<QuickAction, null>; label: string; icon: typeof Plus }[] = [
+  { action: 'expense', label: 'Expense', icon: ArrowUpRight },
+  { action: 'income', label: 'Income', icon: ArrowDownLeft },
+  { action: 'transfer', label: 'Transfer', icon: ArrowLeftRight },
+  { action: 'asset', label: 'Asset', icon: Coins },
+  { action: 'liability', label: 'Liability', icon: Landmark },
+  { action: 'snapshot', label: 'Snapshot', icon: Camera },
+];
+
 type QuickAction = 'expense' | 'income' | 'transfer' | 'asset' | 'liability' | 'snapshot' | null;
 
-export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'desktop' | 'fab' }) {
+export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'desktop' | 'fab' | 'center' }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [active, setActive] = useState<QuickAction>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -82,14 +95,16 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
     setMenuOpen(false);
   };
 
-  const isFab = variant === 'fab';
+  // 'center' is the raised + in the middle of the bottom nav: same mobile FAB, but its menu opens centred above it.
+  const isCenter = variant === 'center';
+  const isFab = variant === 'fab' || isCenter;
 
   return (
     <>
       <div className={isFab ? 'relative' : 'relative'} ref={ref}>
         {menuOpen && isFab && (
           <div
-            className="fixed inset-0 bg-slate-900/30 z-20"
+            className={`fixed inset-0 z-20 ${isCenter ? 'fan-backdrop' : 'bg-slate-900/30'}`}
             onClick={() => setMenuOpen(false)}
             aria-hidden="true"
           />
@@ -97,11 +112,13 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
 
         <button
           onClick={() => setMenuOpen((o) => !o)}
+          // The centre "+" shrinks with the bottom bar (--p is set by BottomNav).
+          style={isCenter ? { width: 'calc(52px - 4px * var(--p, 0))', height: 'calc(52px - 4px * var(--p, 0))' } : undefined}
           aria-label="Quick add"
           title={isFab ? 'Quick add' : `Quick add (${SHORTCUT_HINT.addAsset} adds an asset)`}
           className={
             isFab
-              ? `fab-button${menuOpen ? ' fab-open' : ''} tap-scale relative z-30 flex items-center justify-center text-white h-14 w-14`
+              ? `fab-button${menuOpen ? ' fab-open' : ''} tap-scale relative z-30 flex items-center justify-center text-white ${isCenter ? '' : 'h-14 w-14'}`
               : buttonClasses('primary', 'md', 'pl-3 pr-3')
           }
         >
@@ -112,7 +129,39 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
           )}
         </button>
 
-        {menuOpen && isFab && (
+        {menuOpen && isCenter && (
+          // Fan: round action buttons spread in an arc around the centre "+".
+          <div className="absolute left-1/2 top-1/2 z-30 h-0 w-0">
+            {FAN_ITEMS.map(({ action, label, icon: Icon }, i) => {
+              // Six buttons, 30° apart, symmetric around the top (165°…15°).
+              const angle = ((165 - i * 30) * Math.PI) / 180;
+              const ry = Math.min(FAN_RY_MAX, window.innerHeight * 0.32);
+              const x = Math.cos(angle) * FAN_RX;
+              const y = -Math.sin(angle) * ry;
+              return (
+                <button
+                  key={action}
+                  onClick={() => open(action)}
+                  aria-label={label}
+                  style={
+                    {
+                      '--fx': `${x.toFixed(1)}px`,
+                      '--fy': `${y.toFixed(1)}px`,
+                      transform: 'translate(calc(-50% + var(--fx)), calc(-50% + var(--fy)))',
+                      animationDelay: `${i * 25}ms`,
+                    } as React.CSSProperties
+                  }
+                  className="animate-fan-in keep-round tap-scale absolute left-0 top-0 flex h-[62px] w-[62px] flex-col items-center justify-center gap-0.5 rounded-full border border-line bg-surface text-[10px] font-medium text-ink shadow-lg"
+                >
+                  <Icon size={18} className="text-muted" />
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {menuOpen && isFab && !isCenter && (
           <div
             className="absolute bottom-full right-0 mb-3 flex flex-col items-end gap-2 z-30"
             style={{ transformOrigin: 'bottom right' }}

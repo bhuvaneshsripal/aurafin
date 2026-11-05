@@ -20,6 +20,10 @@ import { resolveLogo } from './api/_lib/logo.js'
 import { fetchGlobalIndices } from './api/_lib/globalIndices.js'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
 import { fetchIndianIndices } from './api/_lib/indianIndices.js'
+// @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
+import { fetchVolumeLeaders } from './api/_lib/volumeLeaders.js'
+// @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
+import { runSwingScan } from './api/_lib/swingScan.js'
 
 // Local-dev/preview stand-in for the api/market/* serverless functions.
 // A plain URL-rewrite proxy (like /api/mf below) can't work for NSE,
@@ -98,6 +102,30 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
       } catch (err) {
         console.error(`[dev/valuation] ${symbol} failed:`, err instanceof Error ? err.message : err)
         send(502, { error: 'Could not reach the fundamentals source' })
+      }
+      return
+    }
+
+    if (url.pathname === '/api/market/volume') {
+      try {
+        const stocks = await fetchVolumeLeaders()
+        if (!stocks) { send(502, { error: 'Could not fetch volume data' }); return }
+        send(200, { stocks, asOf: Date.now() })
+      } catch (err) {
+        console.error('[dev/volume] failed:', err instanceof Error ? err.message : err)
+        send(502, { error: 'Could not reach the volume data source' })
+      }
+      return
+    }
+
+    if (url.pathname === '/api/market/swing') {
+      try {
+        const result = await runSwingScan()
+        if (!result) { send(502, { error: 'Could not build the swing scan' }); return }
+        send(200, { ...result, asOf: Date.now() })
+      } catch (err) {
+        console.error('[dev/swing] failed:', err instanceof Error ? err.message : err)
+        send(502, { error: 'Could not build the swing scan' })
       }
       return
     }
