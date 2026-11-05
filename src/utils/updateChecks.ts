@@ -35,7 +35,7 @@ export async function fetchDeployedBuildId(): Promise<string | null> {
   }
 }
 
-export function startUpdateChecks(reg: ServiceWorkerRegistration | undefined, onNewVersion?: () => void): () => void {
+export function startUpdateChecks(reg: ServiceWorkerRegistration | undefined, onNewVersion?: (deployedId: string) => void): () => void {
   let lastVersionCheck = 0;
   let lastSwCheck = 0;
   let versionInFlight = false;
@@ -62,7 +62,7 @@ export function startUpdateChecks(reg: ServiceWorkerRegistration | undefined, on
         checkSw(); // start downloading the new version now
         if (id !== announced) {
           announced = id;
-          onNewVersion?.();
+          onNewVersion?.(id);
         }
       })
       .finally(() => { versionInFlight = false; });

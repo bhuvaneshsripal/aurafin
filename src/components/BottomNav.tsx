@@ -101,6 +101,7 @@ export default function BottomNav() {
   // 0 = full size, 1 = fully shrunk. Driven by how close the page is to its end
   // and eased frame by frame, so the bar shrinks slowly instead of snapping.
   const pillRef = useRef<HTMLElement | null>(null);
+  const barRef = useRef<HTMLDivElement | null>(null); // the visible pill
   const shrinkTarget = useRef(0);
   const shrinkNow = useRef(0);
   const searchOpen = useUiStore((s) => s.searchOpen);
@@ -180,13 +181,13 @@ export default function BottomNav() {
   // never shrink it.
   useEffect(() => {
     const RANGE = 220; // px from the page end where shrinking begins
-    const EASE = 0.07; // fraction of the remaining distance covered per frame (lower = slower)
-    const MAX_STEP = 0.014; // cap per frame, so even a fast flick takes ~1s to fully shrink
+    const EASE = 0.18; // fraction of the remaining distance covered per frame (lower = slower)
+    const MAX_STEP = 0.045; // cap per frame, so even a fast flick takes ~0.4s to fully shrink
     const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     let anim = 0;
     let measure = 0;
     const apply = () => {
-      pillRef.current?.style.setProperty('--p', shrinkNow.current.toFixed(4));
+      pillRef.current?.style.setProperty('--p', shrinkNow.current.toFixed(3));
     };
     const step = () => {
       const diff = shrinkTarget.current - shrinkNow.current;
@@ -195,14 +196,21 @@ export default function BottomNav() {
         anim = 0;
       } else {
         const move = Math.min(Math.abs(diff) * EASE, MAX_STEP);
-        shrinkNow.current += Math.sign(diff) * Math.max(move, 0.0015);
+        shrinkNow.current += Math.sign(diff) * Math.max(move, 0.004);
         anim = requestAnimationFrame(step);
       }
       apply();
     };
+    // Page height is measured only when the layout changes (resize / content size),
+    // never inside the scroll handler: reading scrollHeight there forces a layout
+    // on every scroll frame, which is what made scrolling feel laggy.
+    let scrollable = 0;
+    const remeasure = () => {
+      scrollable = document.documentElement.scrollHeight - window.innerHeight;
+      schedule();
+    };
     const check = () => {
       measure = 0;
-      const scrollable = document.documentElement.scrollHeight - window.innerHeight;
       if (scrollable <= 120) {
         shrinkTarget.current = 0;
       } else {
@@ -215,16 +223,16 @@ export default function BottomNav() {
       if (!measure) measure = requestAnimationFrame(check);
     };
     window.addEventListener('scroll', schedule, { passive: true });
-    window.addEventListener('resize', schedule);
-    // Page height changes as data loads; re-check when it does.
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(schedule) : null;
+    window.addEventListener('resize', remeasure);
+    // Page height changes as data loads; re-measure when it does.
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(remeasure) : null;
     ro?.observe(document.body);
-    schedule();
+    remeasure();
     return () => {
       if (anim) cancelAnimationFrame(anim);
       if (measure) cancelAnimationFrame(measure);
       window.removeEventListener('scroll', schedule);
-      window.removeEventListener('resize', schedule);
+      window.removeEventListener('resize', remeasure);
       ro?.disconnect();
     };
   }, [location.pathname]);
@@ -235,19 +243,28 @@ export default function BottomNav() {
   const barHidden = searchOpen || typing;
   useEffect(() => {
     if (barHidden || moreOpen) return;
-    const BAR_HEIGHT = 96; // a little taller than the 80px bar so a slightly high start still counts
+    const PAD = 10; // forgiving margin around the visible bar
     let s: { x: number; y: number; fired: boolean } | null = null;
-    const inBarZone = (y: number) => y >= window.innerHeight - BAR_HEIGHT;
+    // Only a touch that starts on the bar itself counts, so scrolling the page from
+    // just above it still works normally.
+    const inBarZone = (x: number, y: number) => {
+      const r = barRef.current?.getBoundingClientRect();
+      if (!r) return false;
+      return x >= r.left - PAD && x <= r.right + PAD && y >= r.top - PAD - 14 && y <= r.bottom + PAD;
+    };
     // Another overlay (modal, menu, search) has locked the page: leave the gesture to it.
     const overlayOpen = () => document.documentElement.style.overflow === 'hidden';
     const onStart = (e: TouchEvent) => {
       s = null;
       if (e.touches.length !== 1 || window.innerWidth >= 768 || overlayOpen()) return;
       const t = e.touches[0];
-      if (inBarZone(t.clientY)) s = { x: t.clientX, y: t.clientY, fired: false };
+      if (inBarZone(t.clientX, t.clientY)) s = { x: t.clientX, y: t.clientY, fired: false };
     };
     const onMove = (e: TouchEvent) => {
-      if (!s || s.fired) return;
+      if (!s) return;
+      // The gesture belongs to the bar: keep the page behind it from moving with the finger.
+      if (e.cancelable) e.preventDefault();
+      if (s.fired) return;
       const t = e.touches[0];
       const dy = s.y - t.clientY; // positive = finger moved up
       const dx = Math.abs(t.clientX - s.x);
@@ -261,7 +278,7 @@ export default function BottomNav() {
       s = null;
     };
     document.addEventListener('touchstart', onStart, { passive: true });
-    document.addEventListener('touchmove', onMove, { passive: true });
+    document.addEventListener('touchmove', onMove, { passive: false });
     document.addEventListener('touchend', onEnd);
     document.addEventListener('touchcancel', onEnd);
     return () => {
@@ -397,21 +414,26 @@ export default function BottomNav() {
           className="md:hidden fixed bottom-0 left-0 right-0 z-40 h-[calc(80px+env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)] flex items-center justify-center pointer-events-none"
         >
           <div
+            ref={barRef}
             style={
               {
                 // Each size blends from its full value (--x0) to its shrunk value (--x1) by --p.
                 // The bar also narrows toward the page end.
-                width: 'min(560px, calc(100% - 32px - 24px * var(--p, 0)))',
-                '--nb': 'calc(var(--nb0) + (var(--nb1) - var(--nb0)) * var(--p, 0))',
-                '--ng': 'calc(var(--ng0) + (var(--ng1) - var(--ng0)) * var(--p, 0))',
-                '--np': 'calc(var(--np0) + (var(--np1) - var(--np0)) * var(--p, 0))',
+                width: 'min(560px, calc(100% - 32px))',
+                '--nb': 'var(--nb0)',
+                '--ng': 'var(--ng0)',
+                '--np': 'var(--np0)',
+                // Shrinking is a transform (GPU only), not a resize, so it never re-lays-out the page.
                 transform: 'translateY(calc(3px * var(--p, 0)))',
+                scale: 'calc(1 - 0.07 * var(--p, 0))',
+                willChange: 'transform, scale',
               } as React.CSSProperties
             }
             className={[
-              'pointer-events-auto relative grid grid-cols-5 items-center justify-items-center touch-none rounded-full border border-black dark:border-white/40',
+              'pointer-events-auto relative grid grid-cols-5 items-center justify-items-center touch-none rounded-full',
               // Frosted glass: translucent surface + blur of the page scrolling behind it.
-              'bg-surface/96 supports-[backdrop-filter]:bg-surface/93 backdrop-blur-[80px] backdrop-saturate-150',
+              // Solid white (dark theme keeps its dark surface).
+              'bg-white dark:bg-surface',
               'shadow-[0_10px_28px_-10px_rgba(23,23,23,0.35),inset_0_1px_0_rgba(255,255,255,0.55)]',
               'dark:shadow-[0_10px_28px_-10px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.07)]',
               // Size tokens: button (nb), gap (ng), padding (np); 0 = full size, 1 = shrunk.
@@ -459,10 +481,7 @@ export default function BottomNav() {
                 title={label}
                 className={({ isActive }) => navBtn(tapIdx !== null ? i === tapIdx : isActive)}
               >
-                <span
-                  className="relative inline-flex"
-                  style={{ transform: 'scale(calc(1 - 0.05 * var(--p, 0)))' }}
-                >
+                <span className="relative inline-flex">
                   <Icon size={23} strokeWidth={1.75} />
                   {to === '/settings' && <UpdateDot />}
                 </span>
@@ -480,7 +499,7 @@ export default function BottomNav() {
             />
           </div>
 
-          {/* Raised "+" in the middle of the bar. Lives beside the pill (not inside it) because
+          {/* "+" centred in the middle of the bar (vertically centred inside the pill). Lives beside the pill (not inside it) because
               the pill's backdrop blur would trap the menu's full-screen backdrop. Hidden when a
               page's own bottom toolbar needs the space, and while typing. */}
           {!hideFab && (
@@ -488,7 +507,7 @@ export default function BottomNav() {
             // full-screen backdrop inside a small square around the button.
             <div
               className="pointer-events-none absolute inset-x-0 flex justify-center"
-              style={{ bottom: 'calc(env(safe-area-inset-bottom) + 25px + 1px * var(--p, 0))' }}
+              style={{ bottom: 'calc(env(safe-area-inset-bottom) + 14px)' }}
             >
               <div className="pointer-events-auto">
                 <QuickAddMenu variant="center" />

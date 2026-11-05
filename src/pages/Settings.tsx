@@ -2038,12 +2038,16 @@ export default function Settings() {
   const [updateStatus, setUpdateStatus] = useState<'checking' | 'available' | 'uptodate'>('checking');
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
   const [checkNonce, setCheckNonce] = useState(0); // bumped by "Check again"
-  const whatsNew = useWhatsNew(whatsNewOpen && updateStatus === 'available');
+  // Fetch the release notes as soon as an update is known (not only after the dialog
+  // opens), so the list is already there when it appears.
+  const whatsNew = useWhatsNew(pendingUpdate || (whatsNewOpen && updateStatus === 'available'));
   useEffect(() => {
     if (!whatsNewOpen) return;
     let cancelled = false;
-    setUpdateStatus('checking');
-    const minSpinner = new Promise((r) => window.setTimeout(r, 700));
+    // An update is already known (banner / red dot): show the list straight away and
+    // re-verify quietly. Otherwise a short spinner while the check runs.
+    setUpdateStatus(pendingUpdate ? 'available' : 'checking');
+    const minSpinner = new Promise((r) => window.setTimeout(r, pendingUpdate ? 0 : 250));
     void Promise.all([isNewVersionDeployed(), minSpinner]).then(([deployed]) => {
       if (cancelled) return;
       setLastChecked(new Date());

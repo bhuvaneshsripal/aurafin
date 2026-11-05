@@ -39,6 +39,21 @@
       "description": "Export your complete portfolio report as a PDF from Settings."
     },
     {
+      "emoji": "➕",
+      "title": "Cleaner bottom bar",
+      "description": "A solid white bar with the quick-add \"+\" centred inside it, and a smoother, medium-speed shrink as you reach the end of a page."
+    },
+    {
+      "emoji": "⌨️",
+      "title": "Valuation loads on demand",
+      "description": "In X/2 · X/3 valuation, picking a stock only fills the search box. The valuation loads when you press Get valuation."
+    },
+    {
+      "emoji": "🔔",
+      "title": "Update notice stays dismissed",
+      "description": "Close the update notice once and it won't return for the same version. The update list now opens instantly."
+    },
+    {
       "emoji": "✨",
       "title": "New version moved into Settings",
       "description": "The New version button now sits at the end of the Settings menu, right below Data, so the Settings heading stays clean."

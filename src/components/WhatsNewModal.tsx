@@ -183,13 +183,13 @@ export default function WhatsNewModal({
               )}
               {notes ? (
                 <>
-                <style>{'@keyframes wn-in{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}.wn-item{opacity:0;animation:wn-in .45s ease-out forwards}@media (prefers-reduced-motion:reduce){.wn-item{opacity:1;animation:none}}'}</style>
+                <style>{'@keyframes wn-in{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}.wn-item{opacity:0;animation:wn-in .18s ease-out forwards}@media (prefers-reduced-motion:reduce){.wn-item{opacity:1;animation:none}}'}</style>
                 <ul className="space-y-3.5 md:space-y-0 md:divide-y md:divide-line-soft md:rounded-2xl md:border md:border-line md:bg-surface md:px-5 md:shadow-sm">
                   {notes.items.map((item, i) => (
                     <li
                       key={item.title}
                       className="wn-item flex items-center gap-3 md:gap-4 md:py-4"
-                      style={{ animationDelay: `${0.15 + i * 0.3}s` }}
+                      style={{ animationDelay: `${Math.min(i, 8) * 0.03}s` }}
                     >
                       {item.emoji ? (
                         <span className="shrink-0 h-9 w-9 md:h-11 md:w-11 rounded-xl bg-[#e7f4ec] dark:bg-[#0a9a4b]/15 inline-flex items-center justify-center text-xl md:text-2xl leading-none" aria-hidden>

@@ -5,7 +5,16 @@ import { X } from 'lucide-react';
 import { useExitPresence } from '../hooks/useExitPresence';
 import { useUpdateStore } from '../store/updateStore';
 import { useSwipeDismiss } from '../hooks/useSwipeDismiss';
-import { startUpdateChecks } from '../utils/updateChecks';
+import { fetchDeployedBuildId, startUpdateChecks } from '../utils/updateChecks';
+
+const DISMISSED_KEY = 'aurafin-dismissed-update';
+function readDismissed(): string | null {
+  try {
+    return localStorage.getItem(DISMISSED_KEY);
+  } catch {
+    return null;
+  }
+}
 
 /** Four-point sparkle used in the notice's icon badge. */
 function SparkleIcon({ size = 26 }: { size?: number }) {
@@ -31,14 +40,23 @@ export default function UpdateBanner() {
   const navigate = useNavigate();
   // True as soon as the version ping sees a newer deploy, before the new service worker has finished installing.
   const [stale, setStale] = useState(false);
+  // Which deployed build the notice is about, and which one the user already dismissed.
+  // A dismissed notice stays away (even after a reload) until a *different* build is deployed.
+  const [deployedId, setDeployedId] = useState<string | null>(null);
+  const [idReady, setIdReady] = useState(false);
+  const [dismissedId, setDismissedId] = useState<string | null>(readDismissed);
   const stopChecksRef = useRef<(() => void) | null>(null);
   const {
-    needRefresh: [needRefresh, setNeedRefresh],
+    needRefresh: [needRefresh],
   } = useRegisterSW({
     onRegisteredSW(_url, reg) {
       if (!reg) return;
       stopChecksRef.current?.();
-      stopChecksRef.current = startUpdateChecks(reg, () => setStale(true));
+      stopChecksRef.current = startUpdateChecks(reg, (id) => {
+        setDeployedId(id);
+        setIdReady(true);
+        setStale(true);
+      });
     },
   });
 
@@ -51,16 +69,36 @@ export default function UpdateBanner() {
     []
   );
 
+  // The service worker can report an update before the version ping does: look up the id.
+  useEffect(() => {
+    if (!needRefresh || idReady) return;
+    let cancelled = false;
+    void fetchDeployedBuildId().then((id) => {
+      if (cancelled) return;
+      if (id) setDeployedId(id);
+      setIdReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [needRefresh, idReady]);
+
   // Dismissing the banner doesn't clear the red dots: the update is still pending.
   const setUpdateAvailable = useUpdateStore((s) => s.setUpdateAvailable);
-  const show = needRefresh || stale;
+  const pending = needRefresh || stale;
+  const updateKey = deployedId ?? 'unknown';
+  const show = pending && idReady && updateKey !== dismissedId;
   useEffect(() => {
-    if (show) setUpdateAvailable(true);
-  }, [show, setUpdateAvailable]);
+    if (pending) setUpdateAvailable(true);
+  }, [pending, setUpdateAvailable]);
 
   const dismiss = () => {
-    setNeedRefresh(false);
-    setStale(false);
+    setDismissedId(updateKey);
+    try {
+      localStorage.setItem(DISMISSED_KEY, updateKey);
+    } catch {
+      /* private mode: stays dismissed for this session only */
+    }
   };
   const { mounted, closing } = useExitPresence(show, 180);
   // Swipe left / right / up to put the notice away.

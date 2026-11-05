@@ -113,7 +113,7 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
         <button
           onClick={() => setMenuOpen((o) => !o)}
           // The centre "+" shrinks with the bottom bar (--p is set by BottomNav).
-          style={isCenter ? { width: 'calc(52px - 4px * var(--p, 0))', height: 'calc(52px - 4px * var(--p, 0))' } : undefined}
+          style={isCenter ? { width: 52, height: 52, scale: 'calc(1 - 0.077 * var(--p, 0))' } : undefined}
           aria-label="Quick add"
           title={isFab ? 'Quick add' : `Quick add (${SHORTCUT_HINT.addAsset} adds an asset)`}
           className={

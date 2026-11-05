@@ -147,7 +147,9 @@ export default function Valuation() {
     setLastSearch(null);
     setQuery(bare);
     setExchange(ex);
-    load(bare, ex);
+    // Picking a match only fills the box. The valuation loads when "Get valuation" is pressed.
+    setListOpen(false);
+    inputRef.current?.blur();
   }
 
   async function load(symbol: string, ex: 'NSE' | 'BSE' = exchange) {
@@ -367,7 +369,7 @@ export default function Valuation() {
                         <li key={`${h.symbol}-${h.exchange}`}>
                           <button
                             type="button"
-                            onClick={() => { setQuery(h.symbol); setListOpen(false); load(h.symbol, h.exchange); }}
+                            onClick={() => { pickedRef.current = h.symbol; setQuery(h.symbol); setExchange(h.exchange); setListOpen(false); inputRef.current?.blur(); }}
                             className="w-full text-left px-3 py-2.5 hover:bg-surface-hover text-sm break-words"
                           >
                             <span className="font-semibold">{h.symbol}</span>
