@@ -30,7 +30,7 @@ function saveToInbox(item) {
         tx.oncomplete = () => { open.result.close(); resolve(); };
         tx.onerror = () => resolve();
       };
-    } catch (e) {
+    } catch {
       resolve();
     }
   });
@@ -41,7 +41,7 @@ self.addEventListener('push', (event) => {
   let data = {};
   try {
     data = event.data ? event.data.json() : {};
-  } catch (e) {
+  } catch {
     data = { title: 'Aurafin', body: event.data ? event.data.text() : '' };
   }
   event.waitUntil(
