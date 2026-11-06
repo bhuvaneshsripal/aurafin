@@ -15,6 +15,8 @@ import { fetchFundamentals } from './api/_lib/fundamentals.js'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
 import { fetchSectors } from './api/_lib/sector.js'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
+import { handleStockQuery } from './api/_lib/stockDetail.js'
+// @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
 import { fetchIndices } from './api/_lib/indices.js'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
 import { resolveLogo } from './api/_lib/logo.js'
@@ -101,6 +103,12 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
       } catch {
         send(502, { error: 'Could not reach the sector source' })
       }
+      return
+    }
+
+    if (url.pathname === '/api/market/valuation' && ['history', 'detail'].includes(url.searchParams.get('mode') ?? '')) {
+      const stock = await handleStockQuery(Object.fromEntries(url.searchParams))
+      if (stock) send(stock.status, stock.body)
       return
     }
 
@@ -380,6 +388,13 @@ export default defineConfig({
             // old — which looked like a real live price until a hard refresh
             // cleared the cache. The app keeps its own last-known copy.
             urlPattern: ({ url }) => url.pathname.startsWith('/api/market/chart/') || url.pathname === '/api/market/gold',
+            handler: 'NetworkOnly',
+          },
+          {
+            // Stock page: the chart and today's high / low / volume are live
+            // figures, so (like the quotes above) never serve them from the cache.
+            urlPattern: ({ url }) =>
+              url.pathname === '/api/market/valuation' && ['history', 'detail'].includes(url.searchParams.get('mode') ?? ''),
             handler: 'NetworkOnly',
           },
           {

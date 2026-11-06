@@ -212,4 +212,4 @@ async function fetchNseIndexConstituents(indexName) {
   return Array.isArray(data?.data) ? data.data : [];
 }
 
-export { fetchNseIndexConstituents, fetchNseMostActiveByVolume, fetchNseVolumeGainers, fetchNseIsin, fetchNseQuote, searchNseSymbol, invalidateNseCookie, fetchNseAllIndices };
+export { fetchNseIndexConstituents, fetchNseMostActiveByVolume, fetchNseVolumeGainers, fetchNseIsin, fetchNseQuote, searchNseSymbol, invalidateNseCookie, fetchNseAllIndices, fetchNseJson };

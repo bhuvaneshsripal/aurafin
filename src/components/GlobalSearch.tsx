@@ -1,24 +1,26 @@
 import { SHORTCUT_HINT } from '../config/shortcuts';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, X, TrendingUp, CreditCard, Target, ArrowLeftRight, Clock } from 'lucide-react';
-import { useAssetsStore } from '../store/assetsStore';
-import { useLiabilitiesStore } from '../store/liabilitiesStore';
-import { useGoalsStore } from '../store/goalsStore';
-import { useTransactionsStore } from '../store/transactionsStore';
-import { useLivePricesStore } from '../store/livePricesStore';
+import { Search, X, TrendingUp, Clock, LineChart, Loader2 } from 'lucide-react';
 import { useUiStore } from '../store/uiStore';
 import { useAuthStore } from '../store/authStore';
 import { subscribeSearchHistory, saveSearchHistory } from '../hooks/useFirestoreSync';
-import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
-import { resolveAssetValues } from '../utils/assetValues';
-import { ASSET_CLASS_LABELS, maskPreciseAmount } from '../utils/currency';
+import { fmtPrice, fmtNum } from '../utils/stockDetail';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
-import { formatDate } from '../utils/date';
+import { fetchLiveQuotes, searchStockSymbols, type LiveQuoteDetail } from '../utils/marketPrices';
+import { readSavedStocks, type SavedStock } from '../utils/savedStocks';
 
-const MAX_PER_GROUP = 5;
 const MAX_RECENT_SEARCHES = 5;
 const RECENT_SEARCHES_KEY = 'aurafin-recent-searches';
+
+/** A stock found by name/ticker on the market (not necessarily one the person holds). */
+type StockHit = { symbol: string; name: string; market: 'IN' | 'US'; exch?: string };
+
+const hitKey = (h: StockHit) => `${h.market}:${h.symbol.toUpperCase()}`;
+const bareSymbol = (s: string) => s.replace(/\.(NS|BO)$/i, '');
+/** Same key the stock page uses to fetch a live price. */
+const quoteKeyFor = (h: StockHit) =>
+  h.market === 'IN' && /\.BO$/i.test(h.symbol) ? `${bareSymbol(h.symbol).toUpperCase()}.BO` : bareSymbol(h.symbol).toUpperCase();
 
 function loadRecentSearches(): string[] {
   try {
@@ -51,6 +53,9 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [recentSearches, setRecentSearches] = useState<string[]>(() => loadRecentSearches());
+  // Market stocks (any listed stock, not just holdings) with their live prices.
+  const [stocks, setStocks] = useState<StockHit[]>([]);
+  const [stocksState, setStocksState] = useState<'idle' | 'loading' | 'failed' | 'done'>('idle');
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -77,24 +82,11 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
     if (user && !isGuest) void saveSearchHistory(user, next).catch(() => {});
   };
 
-  const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
-  const allAssets = useAssetsStore((s) => s.assets);
-  const allLiabilities = useLiabilitiesStore((s) => s.liabilities);
-  const allGoals = useGoalsStore((s) => s.goals);
-  const allTransactions = useTransactionsStore((s) => s.transactions);
-  const livePrices = useLivePricesStore((s) => s.prices);
-  const sipValues = useLivePricesStore((s) => s.sipValues);
-  const goldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
-  const privacyMode = useUiStore((s) => s.privacyMode);
-
-  const assets = activeProfileId ? allAssets.filter((a) => a.profileId === activeProfileId) : allAssets;
-  const liabilities = activeProfileId
-    ? allLiabilities.filter((l) => l.profileId === activeProfileId)
-    : allLiabilities;
-  const goals = activeProfileId ? allGoals.filter((g) => g.profileId === activeProfileId) : allGoals;
-  const transactions = activeProfileId
-    ? allTransactions.filter((t) => t.profileId === activeProfileId)
-    : allTransactions;
+  // Stocks bookmarked on the stock page (read fresh each time the panel opens).
+  const [savedStocks, setSavedStocks] = useState<SavedStock[]>([]);
+  useEffect(() => {
+    if (open) setSavedStocks(readSavedStocks().slice(0, MAX_RECENT_SEARCHES));
+  }, [open]);
 
   useEffect(() => {
     if (open) {
@@ -104,6 +96,80 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
     }
     setQuery('');
   }, [open]);
+
+  // Look the typed text up on the market: any stock, even one that isn't held.
+  // Indian (NSE/BSE) matches first; US only when there are few Indian ones.
+  const rawQ = query.trim();
+  useEffect(() => {
+    if (!open || rawQ.length < 3) {
+      setStocks([]);
+      setStocksState('idle');
+      return;
+    }
+    let cancelled = false;
+    setStocksState('loading');
+    const t = window.setTimeout(async () => {
+      const inRes = await searchStockSymbols(rawQ, 'IN');
+      const usRes = inRes === null || inRes.length < 3 ? await searchStockSymbols(rawQ, 'US') : [];
+      if (cancelled) return;
+      if (inRes === null && usRes === null) {
+        setStocks([]);
+        setStocksState('failed');
+        return;
+      }
+      const seen = new Set<string>();
+      const indian = new Set((inRes ?? []).map((r) => bareSymbol(r.symbol).toUpperCase()));
+      const hits: StockHit[] = [
+        ...(inRes ?? []).slice(0, 5).map((r) => ({ symbol: r.symbol, name: r.name, market: 'IN' as const, exch: r.exchDisp })),
+        ...(usRes ?? [])
+          .filter((r) => !/\.(NS|BO)$/i.test(r.symbol) && !indian.has(r.symbol.toUpperCase()))
+          .slice(0, 3)
+          .map((r) => ({ symbol: r.symbol, name: r.name, market: 'US' as const, exch: r.exchDisp })),
+      ].filter((h) => {
+        const k = `${h.market}:${bareSymbol(h.symbol).toUpperCase()}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+      setStocks(hits);
+      setStocksState('done');
+    }, 350);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [rawQ, open]);
+
+
+  // Live price (CMP) + day change for the stocks found, shown on each row.
+  const [quotes, setQuotes] = useState<Map<string, LiveQuoteDetail>>(new Map());
+  useEffect(() => {
+    const list = [...stocks, ...savedStocks.map((h) => ({ symbol: h.symbol, name: h.name, market: h.market, exch: h.exchange }))];
+    if (!open || list.length === 0) return;
+    let cancelled = false;
+    const lookups = list.map((h) => ({ key: quoteKeyFor(h), market: h.market }));
+    fetchLiveQuotes(lookups)
+      .then((got) => {
+        if (!cancelled) setQuotes((prev) => new Map([...prev, ...got]));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [stocks, savedStocks, open]);
+
+  const priceOf = (h: StockHit) => {
+    const qd = quotes.get(quoteKeyFor(h));
+    if (!qd) return { trailing: '›', sub: undefined as string | undefined, subColor: undefined as string | undefined };
+    const prev = qd.previousClose;
+    const diff = prev ? qd.price - prev : null;
+    const pct = prev && diff !== null ? (diff / prev) * 100 : null;
+    return {
+      trailing: fmtPrice(qd.price, h.market),
+      sub: diff !== null && pct !== null ? `${diff >= 0 ? '+' : '-'}${fmtNum(Math.abs(diff), h.market)} (${Math.abs(pct).toFixed(2)}%)` : undefined,
+      subColor: diff !== null && diff < 0 ? 'text-red-500' : 'text-emerald-600',
+    };
+  };
 
   // Keyboard shortcut: Ctrl+K (Cmd+K on Mac) opens the search, and closes it
   // again if it is already open. Works even while typing in a field, as in most
@@ -147,36 +213,6 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
 
   const q = query.trim().toLowerCase();
 
-  const assetMatches = useMemo(
-    () =>
-      q
-        ? assets
-            .filter((a) => a.name.toLowerCase().includes(q) || (a.symbol ?? '').toLowerCase().includes(q))
-            .slice(0, MAX_PER_GROUP)
-        : [],
-    [assets, q]
-  );
-  const liabilityMatches = useMemo(
-    () => (q ? liabilities.filter((l) => l.name.toLowerCase().includes(q)).slice(0, MAX_PER_GROUP) : []),
-    [liabilities, q]
-  );
-  const goalMatches = useMemo(
-    () => (q ? goals.filter((g) => g.name.toLowerCase().includes(q)).slice(0, MAX_PER_GROUP) : []),
-    [goals, q]
-  );
-  const transactionMatches = useMemo(
-    () =>
-      q
-        ? transactions
-            .filter((t) => t.category.toLowerCase().includes(q) || (t.note ?? '').toLowerCase().includes(q))
-            .slice(0, MAX_PER_GROUP)
-        : [],
-    [transactions, q]
-  );
-
-  const totalMatches =
-    assetMatches.length + liabilityMatches.length + goalMatches.length + transactionMatches.length;
-
   // Remembers a search term the person actually acted on (picked a result,
   // or hit Enter), most-recent-first, deduped case-insensitively, capped to
   // MAX_RECENT_SEARCHES — shown as quick-repeat suggestions the next time
@@ -196,6 +232,14 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
     persistRecent(recentSearches.filter((t) => t !== term));
   };
 
+  /** A stock result opens its own full page with the CMP. */
+  const openStock = (h: StockHit) =>
+    goTo(
+      `/stock?symbol=${encodeURIComponent(h.symbol)}&market=${h.market}&name=${encodeURIComponent(h.name)}&ex=${encodeURIComponent(
+        h.market === 'US' ? 'US market' : /\.BO$/i.test(h.symbol) ? 'BSE' : h.exch || 'NSE'
+      )}`
+    );
+
   const goTo = (path: string) => {
     addRecentSearch(query);
     setOpen(false);
@@ -212,7 +256,7 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
           className="group flex items-center gap-2 h-9 w-full max-w-sm px-3 rounded-lg border border-line bg-surface-muted text-sm text-faint hover:bg-surface hover:border-slate-300 transition-colors"
         >
           <Search size={16} className="text-muted shrink-0" />
-          <span className="flex-1 text-left truncate">Search holdings, goals, transactions</span>
+          <span className="flex-1 text-left truncate">Search stocks</span>
         </button>
       ) : (
         <button
@@ -242,7 +286,7 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && query.trim()) addRecentSearch(query);
                 }}
-                placeholder="Search Aurafin..."
+                placeholder="Search stocks..."
                 className="global-search-input flex-1 min-w-0 bg-transparent text-base text-ink placeholder:text-slate-400"
               />
               {query && (
@@ -263,8 +307,23 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
 
             <div className="overflow-y-auto">
               {!q ? (
-                recentSearches.length > 0 ? (
+                recentSearches.length > 0 || savedStocks.length > 0 ? (
                   <div className="py-2">
+                    {savedStocks.length > 0 && (
+                      <ResultGroup label="Saved stocks" icon={LineChart} iconColor="text-accent-600">
+                        {savedStocks.map((h) => (
+                          <ResultRow
+                            key={`${h.market}:${h.symbol}`}
+                            title={h.name}
+                            subtitle={`${bareSymbol(h.symbol)} · ${h.exchange}`}
+                            trailing={priceOf({ symbol: h.symbol, name: h.name, market: h.market, exch: h.exchange }).trailing}
+                            trailingColor={quotes.has(quoteKeyFor({ symbol: h.symbol, name: h.name, market: h.market })) ? 'text-ink' : 'text-slate-400'}
+                            onClick={() => openStock({ symbol: h.symbol, name: h.name, market: h.market, exch: h.exchange })}
+                          />
+                        ))}
+                      </ResultGroup>
+                    )}
+                    {recentSearches.length > 0 && (<>
                     <div className="px-4 pb-1 flex items-center justify-between">
                       <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
                         <Clock size={12} className="text-slate-600" />
@@ -301,75 +360,46 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
                         </div>
                       ))}
                     </div>
+                    </>)}
                   </div>
                 ) : (
                   <div className="px-4 py-10 text-center text-sm text-slate-600">
-                    Search your holdings, liabilities, goals and transactions.
+                    Search any stock to see its price and details.
                   </div>
                 )
-              ) : totalMatches === 0 ? (
+              ) : stocks.length === 0 ? (
                 <div className="px-4 py-10 text-center text-sm text-slate-600">
-                  No results for <span className="font-medium text-slate-500 dark:text-slate-300">“{query}”</span>
+                  {stocksState === 'loading' ? (
+                    <span className="inline-flex items-center gap-2">
+                      <Loader2 size={14} className="animate-spin" /> Searching stocks…
+                    </span>
+                  ) : stocksState === 'failed' ? (
+                    <>Couldn’t reach the stock search. Check your connection and try again.</>
+                  ) : (
+                    <>
+                      No results for <span className="font-medium text-slate-500 dark:text-slate-300">“{query}”</span>
+                    </>
+                  )}
                 </div>
               ) : (
                 <div className="py-2">
-                  {assetMatches.length > 0 && (
-                    <ResultGroup label="Holdings" icon={TrendingUp} iconColor="text-brand-600">
-                      {assetMatches.map((a) => {
-                        const { value } = resolveAssetValues(a, livePrices, sipValues, goldPricePerGram);
-                        return (
-                          <ResultRow
-                            key={a.id}
-                            title={a.name}
-                            subtitle={ASSET_CLASS_LABELS[a.assetClass] ?? a.assetClass}
-                            trailing={maskPreciseAmount(value, a.currency, privacyMode)}
-                            onClick={() => goTo(`/wealth?tab=assets&q=${encodeURIComponent(a.name)}`)}
-                          />
-                        );
-                      })}
-                    </ResultGroup>
-                  )}
-
-                  {liabilityMatches.length > 0 && (
-                    <ResultGroup label="Liabilities" icon={CreditCard} iconColor="text-red-500">
-                      {liabilityMatches.map((l) => (
+                  {(stocks.length > 0 || stocksState === 'loading') && (
+                    <ResultGroup label="Stocks" icon={LineChart} iconColor="text-accent-600">
+                      {stocks.map((h) => (
                         <ResultRow
-                          key={l.id}
-                          title={l.name}
-                          subtitle="Liability"
-                          trailing={maskPreciseAmount(l.outstanding, l.currency, privacyMode)}
-                          onClick={() => goTo('/wealth?tab=liabilities')}
+                          key={hitKey(h)}
+                          title={h.name}
+                          subtitle={`${bareSymbol(h.symbol)} · ${h.market === 'US' ? 'US' : h.exch || 'NSE'}`}
+                          trailing={priceOf(h).trailing}
+                          trailingColor={quotes.has(quoteKeyFor(h)) ? 'text-ink' : 'text-slate-400'}
+                          sub={priceOf(h).sub}
+                          subColor={priceOf(h).subColor}
+                          onClick={() => openStock(h)}
                         />
                       ))}
-                    </ResultGroup>
-                  )}
-
-                  {goalMatches.length > 0 && (
-                    <ResultGroup label="Goals" icon={Target} iconColor="text-orange-500">
-                      {goalMatches.map((g) => (
-                        <ResultRow
-                          key={g.id}
-                          title={g.name}
-                          subtitle="Goal"
-                          trailing={maskPreciseAmount(g.targetAmount, g.currency, privacyMode)}
-                          onClick={() => goTo('/essentials?tab=goals')}
-                        />
-                      ))}
-                    </ResultGroup>
-                  )}
-
-                  {transactionMatches.length > 0 && (
-                    <ResultGroup label="Transactions" icon={ArrowLeftRight} iconColor="text-violet-500">
-                      {transactionMatches.map((t) => (
-                        <ResultRow
-                          key={t.id}
-                          title={t.note?.trim() || t.category}
-                          subtitle={`${t.category} · ${formatDate(t.date)}`}
-                          trailing={`${t.type === 'expense' ? '-' : '+'}${maskPreciseAmount(t.amount, t.currency, privacyMode)}`}
-                          trailingColor={t.type === 'expense' ? 'text-red-500' : 'text-emerald-600'}
-                          onClick={() => goTo('/transactions?tab=transactions')}
-                        />
-                      ))}
+                      {stocksState === 'loading' && stocks.length === 0 && (
+                        <p className="px-2.5 py-2 text-xs text-slate-500 normal-case">Searching stocks…</p>
+                      )}
                     </ResultGroup>
                   )}
                 </div>
@@ -409,12 +439,17 @@ function ResultRow({
   subtitle,
   trailing,
   trailingColor = 'text-muted',
+  sub,
+  subColor = 'text-muted',
   onClick,
 }: {
   title: string;
   subtitle: string;
   trailing: string;
   trailingColor?: string;
+  /** Optional small line under the trailing value (e.g. day change). */
+  sub?: string;
+  subColor?: string;
   onClick: () => void;
 }) {
   return (
@@ -428,7 +463,10 @@ function ResultRow({
         </span>
         <span className="block text-xs text-slate-600 truncate normal-case">{subtitle}</span>
       </span>
-      <span className={`text-sm font-medium shrink-0 ${trailingColor}`}>{trailing}</span>
+      <span className="shrink-0 text-right">
+        <span className={`block text-sm font-medium ${trailingColor}`}>{trailing}</span>
+        {sub && <span className={`block text-xs font-medium ${subColor}`}>{sub}</span>}
+      </span>
     </button>
   );
 }

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, Loader2, ChevronDown, X } from 'lucide-react';
+import { Search, Loader2, ChevronDown, X, Star } from 'lucide-react';
 import { Card, CardHeader, PageHeader, Button, Input, CardSkeleton, Badge, cn } from '../components/ui';
 import ValuationBar from '../components/ValuationBar';
+import ValuationWatchlist, { readWatchlist, writeWatchlist, type WatchItem } from '../components/ValuationWatchlist';
 import InfoTip from '../components/ui/InfoTip';
 import { searchStockSymbols, type StockSearchResult } from '../utils/marketPrices';
 import { useAuthStore } from '../store/authStore';
@@ -67,6 +68,7 @@ export default function Valuation() {
   const [data, setData] = useState<FundamentalsResponse | null>(null);
 
   const [history, setHistory] = useState<HistoryItem[]>(readHistory);
+  const [watchlist, setWatchlist] = useState<WatchItem[]>(readWatchlist);
   const user = useAuthStore((st) => st.user);
   const userRef = useRef(user);
   userRef.current = user;
@@ -231,6 +233,18 @@ export default function Valuation() {
     }
   }
 
+  // Opened from the global search ("/valuation?symbol=COALINDIA&ex=NSE"): load that stock straight away.
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const sym = sp.get('symbol')?.trim();
+    if (!sym) return;
+    const ex: 'NSE' | 'BSE' = sp.get('ex') === 'BSE' ? 'BSE' : 'NSE';
+    setExchange(ex);
+    void load(sym, ex);
+    // Only on arrival; the address bar is left as is.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const edited = Object.values(src).includes('you');
   const result = useMemo(
     () => computeValuation({
@@ -269,6 +283,37 @@ export default function Valuation() {
   const years = Math.round(num(f.years)) || 5;
   const maxBar = Math.max(num(f.price) || 0, result.levels.find((l) => l.key === 'X/2')?.target || 0);
   const hasPeData = data?.lowestPe;
+
+  // --- Watchlist: saved stocks keep the numbers from their last valuation -------------
+  const lvl = (k: string) => result.levels.find((l) => l.key === k)?.target ?? NaN;
+  const priceV = num(f.price);
+  const x2v = lvl('X/2');
+  const x3v = lvl('X/3');
+  const canSave = !!data && priceV > 0 && x2v > 0 && x3v > 0;
+  const isSaved = !!data && watchlist.some((w) => w.symbol === data.symbol && w.exchange === exchange);
+  const updateWatchlist = (next: WatchItem[]) => { setWatchlist(next); writeWatchlist(next); };
+  const toggleSaved = () => {
+    if (!data || !canSave) return;
+    if (isSaved) {
+      updateWatchlist(watchlist.filter((w) => !(w.symbol === data.symbol && w.exchange === exchange)));
+    } else {
+      updateWatchlist([{ symbol: data.symbol, name: data.name ?? data.symbol, exchange, price: priceV, x2: x2v, x3: x3v, savedAt: Date.now() }, ...watchlist]);
+    }
+  };
+  // A saved stock that is valued again gets its numbers refreshed.
+  useEffect(() => {
+    if (!data || !canSave) return;
+    setWatchlist((prev) => {
+      const i = prev.findIndex((w) => w.symbol === data.symbol && w.exchange === exchange);
+      if (i < 0) return prev;
+      const cur = prev[i];
+      if (cur.price === priceV && cur.x2 === x2v && cur.x3 === x3v) return prev;
+      const next = [...prev];
+      next[i] = { ...cur, price: priceV, x2: x2v, x3: x3v, savedAt: Date.now() };
+      writeWatchlist(next);
+      return next;
+    });
+  }, [data, canSave, exchange, priceV, x2v, x3v]);
 
   return (
     <div>
@@ -407,6 +452,14 @@ export default function Valuation() {
         )}
       </Card>
 
+      {!started && (
+        <ValuationWatchlist
+          items={watchlist}
+          onOpen={(w) => { setExchange(w.exchange); void load(w.symbol, w.exchange); }}
+          onRemove={(w) => updateWatchlist(watchlist.filter((x) => !(x.symbol === w.symbol && x.exchange === w.exchange)))}
+        />
+      )}
+
       {started && <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-4 min-w-0 order-2">
           <Card>
@@ -467,6 +520,20 @@ export default function Valuation() {
                     x3={result.levels.find((l) => l.key === 'X/3')?.target ?? NaN}
                     unreliable={result.lowConfidence}
                   />
+                  {canSave && (
+                    <button
+                      type="button"
+                      onClick={toggleSaved}
+                      aria-pressed={isSaved}
+                      className={cn(
+                        'keep-round mt-4 inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold transition-colors tap-scale',
+                        isSaved ? 'border-transparent bg-primary-soft text-primary-ink' : 'border-line bg-surface text-ink-2 hover:bg-surface-hover',
+                      )}
+                    >
+                      <Star size={14} className={isSaved ? 'fill-current' : ''} />
+                      {isSaved ? 'In watchlist' : 'Save to watchlist'}
+                    </button>
+                  )}
                 </Card>
               )}
               {result.adequate && (

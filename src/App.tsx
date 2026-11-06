@@ -81,6 +81,7 @@ if (typeof window !== 'undefined') {
 }
 const Import = lazyWithRetry(() => import('./pages/Import'));
 const Valuation = lazyWithRetry(() => import('./pages/Valuation'));
+const StockQuote = lazyWithRetry(() => import('./pages/StockQuote'));
 const Calculators = lazyWithRetry(() => import('./pages/Calculators'));
 const Settings = lazyWithRetry(() => import('./pages/Settings'));
 const Indices = lazyWithRetry(() => import('./pages/Indices'));
@@ -172,6 +173,7 @@ function AppShell() {
                   <Route path="/import" element={<Import />} />
                   <Route path="/analytics" element={<Navigate to="/wealth?tab=analytics" replace />} />
                   <Route path="/valuation" element={<Valuation />} />
+                  <Route path="/stock" element={<StockQuote />} />
                   <Route path="/calculators" element={<Calculators />} />
                   <Route path="/indices" element={<Indices />} />
                   <Route path="/volume" element={<HighVolume />} />

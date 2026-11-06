@@ -1,6 +1,7 @@
 // Fundamentals for the X/2 · X/3 valuation page. See api/_lib/fundamentals.js.
 import { fetchFundamentals } from '../_lib/fundamentals.js';
 import { fetchSectors } from '../_lib/sector.js';
+import { handleStockQuery } from '../_lib/stockDetail.js';
 
 export default async function handler(req, res) {
   // ?mode=sector -> company sector lookup (shares this function so the project
@@ -14,6 +15,13 @@ export default async function handler(req, res) {
     } catch {
       res.status(502).json({ error: 'Could not reach the sector source' });
     }
+    return;
+  }
+  // ?mode=history | detail -> the full-page stock view (chart, performance, financials...).
+  const stock = await handleStockQuery(req.query);
+  if (stock) {
+    if (stock.cache) res.setHeader('Cache-Control', stock.cache);
+    res.status(stock.status).json(stock.body);
     return;
   }
   const symbol = String(req.query.symbol ?? '').trim();

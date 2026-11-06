@@ -441,6 +441,16 @@ export default function BottomNav() {
           }}
           className="md:hidden fixed bottom-0 left-0 right-0 z-40 h-[calc(80px+env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)] flex items-center justify-center pointer-events-none"
         >
+          {/* Soft fade at the bottom of the screen: page content melts into the
+              background behind the bar instead of being cut off by it. Taps pass through. */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-[calc(120px+env(safe-area-inset-bottom))]"
+            style={{
+              background:
+                'linear-gradient(to top, var(--color-page) 0%, color-mix(in srgb, var(--color-page) 85%, transparent) 35%, color-mix(in srgb, var(--color-page) 40%, transparent) 70%, transparent 100%)',
+            }}
+          />
           <div
             ref={barRef}
             style={
