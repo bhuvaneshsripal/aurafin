@@ -78,24 +78,43 @@ export interface StockSearchResult {
  * suggests GOOGL/GOOG). Returns `[]` for a genuine no-match, or `null`
  * if the request itself failed, so callers can tell those apart.
  */
-export async function searchStockSymbols(
+// Remembered results per (market, text): repeating or re-typing a search is instant,
+// and two callers asking at once share one request. Failures are never cached.
+const SEARCH_CACHE_TTL_MS = 10 * 60 * 1000;
+const searchCache = new Map<string, { at: number; value: StockSearchResult[] }>();
+const searchInflight = new Map<string, Promise<StockSearchResult[] | null>>();
+
+export function searchStockSymbols(
   query: string,
   market: 'IN' | 'US' = 'IN'
 ): Promise<StockSearchResult[] | null> {
   const q = query.trim();
-  if (q.length < 3) return [];
-  try {
-    const res = await fetch(`${SEARCH_BASE}?q=${encodeURIComponent(q)}&market=${market}`);
-    if (!res.ok) return null;
-    const json = await res.json();
-    const quotes: { symbol?: string; name?: string; exchDisp?: string }[] = json?.quotes ?? [];
-    return quotes
-      .filter((r): r is { symbol: string; name: string; exchDisp?: string } => !!r.symbol)
-      .slice(0, 8)
-      .map((r) => ({ symbol: r.symbol, name: r.name || r.symbol, exchDisp: r.exchDisp }));
-  } catch {
-    return null;
-  }
+  if (q.length < 3) return Promise.resolve([]);
+  const key = `${market}:${q.toLowerCase()}`;
+  const hit = searchCache.get(key);
+  if (hit && Date.now() - hit.at < SEARCH_CACHE_TTL_MS) return Promise.resolve(hit.value);
+  const running = searchInflight.get(key);
+  if (running) return running;
+  const p = (async () => {
+    try {
+      const res = await fetch(`${SEARCH_BASE}?q=${encodeURIComponent(q)}&market=${market}`);
+      if (!res.ok) return null;
+      const json = await res.json();
+      const quotes: { symbol?: string; name?: string; exchDisp?: string }[] = json?.quotes ?? [];
+      const value = quotes
+        .filter((r): r is { symbol: string; name: string; exchDisp?: string } => !!r.symbol)
+        .slice(0, 8)
+        .map((r) => ({ symbol: r.symbol, name: r.name || r.symbol, exchDisp: r.exchDisp }));
+      searchCache.set(key, { at: Date.now(), value });
+      return value;
+    } catch {
+      return null;
+    } finally {
+      searchInflight.delete(key);
+    }
+  })();
+  searchInflight.set(key, p);
+  return p;
 }
 
 // In-memory cache from ISIN/name -> resolved Yahoo symbol, so we don't hit the

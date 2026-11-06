@@ -95,6 +95,12 @@ export default function StockQuote() {
   useBodyScrollLock(terminal);
 
   // A different stock (or exchange) starts from scratch.
+  // Phone: the stock page sits on plain white (see .stock-page-white in index.css).
+  useEffect(() => {
+    document.documentElement.classList.add('stock-page-white');
+    return () => document.documentElement.classList.remove('stock-page-white');
+  }, []);
+
   useEffect(() => {
     setRange('1D');
     setQuote(null);

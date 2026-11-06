@@ -280,6 +280,20 @@ export default function Valuation() {
   // Until a stock is searched (or a lookup is running / failed), show nothing but the search box.
   const searchActive = showSuggestions || notice !== null;
   const started = loading || data !== null || error !== null;
+  // Tapping the Valuation tab while a stock is open goes back to the main page
+  // (the BottomNav only refreshes when this page is already on its main view).
+  const homeRef = useRef<{ started: boolean; reset: () => void }>({ started: false, reset: () => {} });
+  homeRef.current = { started, reset };
+  useEffect(() => {
+    const onHome = (e: Event) => {
+      if (!homeRef.current.started) return;
+      e.preventDefault();
+      homeRef.current.reset();
+    };
+    window.addEventListener('aurafin:tab-home', onHome);
+    return () => window.removeEventListener('aurafin:tab-home', onHome);
+  }, []);
+
   const years = Math.round(num(f.years)) || 5;
   const maxBar = Math.max(num(f.price) || 0, result.levels.find((l) => l.key === 'X/2')?.target || 0);
   const hasPeData = data?.lowestPe;

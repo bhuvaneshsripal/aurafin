@@ -109,31 +109,43 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
     let cancelled = false;
     setStocksState('loading');
     const t = window.setTimeout(async () => {
-      const inRes = await searchStockSymbols(rawQ, 'IN');
-      const usRes = inRes === null || inRes.length < 3 ? await searchStockSymbols(rawQ, 'US') : [];
+      // Ask the Indian and US lists at the same time (instead of one after the other),
+      // and show the Indian matches as soon as they are in when there are enough.
+      const inP = searchStockSymbols(rawQ, 'IN');
+      const usP = searchStockSymbols(rawQ, 'US');
+      const publish = (inRes: Awaited<typeof inP>, usRes: Awaited<typeof usP>) => {
+        if (inRes === null && usRes === null) {
+          setStocks([]);
+          setStocksState('failed');
+          return;
+        }
+        const seen = new Set<string>();
+        const indian = new Set((inRes ?? []).map((r) => bareSymbol(r.symbol).toUpperCase()));
+        const hits: StockHit[] = [
+          ...(inRes ?? []).slice(0, 5).map((r) => ({ symbol: r.symbol, name: r.name, market: 'IN' as const, exch: r.exchDisp })),
+          ...(usRes ?? [])
+            .filter((r) => !/\.(NS|BO)$/i.test(r.symbol) && !indian.has(r.symbol.toUpperCase()))
+            .slice(0, 3)
+            .map((r) => ({ symbol: r.symbol, name: r.name, market: 'US' as const, exch: r.exchDisp })),
+        ].filter((h) => {
+          const k = `${h.market}:${bareSymbol(h.symbol).toUpperCase()}`;
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
+        setStocks(hits);
+        setStocksState('done');
+      };
+      const inRes = await inP;
       if (cancelled) return;
-      if (inRes === null && usRes === null) {
-        setStocks([]);
-        setStocksState('failed');
+      if (inRes !== null && inRes.length >= 3) {
+        publish(inRes, []);
         return;
       }
-      const seen = new Set<string>();
-      const indian = new Set((inRes ?? []).map((r) => bareSymbol(r.symbol).toUpperCase()));
-      const hits: StockHit[] = [
-        ...(inRes ?? []).slice(0, 5).map((r) => ({ symbol: r.symbol, name: r.name, market: 'IN' as const, exch: r.exchDisp })),
-        ...(usRes ?? [])
-          .filter((r) => !/\.(NS|BO)$/i.test(r.symbol) && !indian.has(r.symbol.toUpperCase()))
-          .slice(0, 3)
-          .map((r) => ({ symbol: r.symbol, name: r.name, market: 'US' as const, exch: r.exchDisp })),
-      ].filter((h) => {
-        const k = `${h.market}:${bareSymbol(h.symbol).toUpperCase()}`;
-        if (seen.has(k)) return false;
-        seen.add(k);
-        return true;
-      });
-      setStocks(hits);
-      setStocksState('done');
-    }, 350);
+      const usRes = await usP;
+      if (cancelled) return;
+      publish(inRes, usRes);
+    }, 120);
     return () => {
       cancelled = true;
       window.clearTimeout(t);
@@ -233,15 +245,17 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
   };
 
   /** A stock result opens its own full page with the CMP. */
-  const openStock = (h: StockHit) =>
+  const openStock = (h: StockHit) => {
+    // Remember the stock that was picked (its name), never the text that was typed.
+    addRecentSearch(h.name);
     goTo(
       `/stock?symbol=${encodeURIComponent(h.symbol)}&market=${h.market}&name=${encodeURIComponent(h.name)}&ex=${encodeURIComponent(
         h.market === 'US' ? 'US market' : /\.BO$/i.test(h.symbol) ? 'BSE' : h.exch || 'NSE'
       )}`
     );
+  };
 
   const goTo = (path: string) => {
-    addRecentSearch(query);
     setOpen(false);
     navigate(path);
   };
@@ -283,9 +297,6 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
                 ref={inputRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && query.trim()) addRecentSearch(query);
-                }}
                 placeholder="Search stocks..."
                 className="global-search-input flex-1 min-w-0 bg-transparent text-base text-ink placeholder:text-slate-400"
               />

@@ -42,10 +42,22 @@ export function writeWatchlist(w: WatchItem[]) {
 }
 
 type Status = 'deep' | 'under' | 'exp';
-const STATUS: Record<Status, { label: string; variant: 'success' | 'warning' }> = {
-  deep: { label: 'Deep value', variant: 'success' },
-  under: { label: 'Undervalued', variant: 'success' },
-  exp: { label: 'Expensive', variant: 'warning' },
+const STATUS: Record<Status, { label: string; badge: string; text: string }> = {
+  deep: {
+    label: 'Deep value',
+    badge: '!bg-emerald-100 !text-emerald-700 dark:!bg-emerald-400/15 dark:!text-emerald-300',
+    text: 'text-emerald-700 dark:text-emerald-300',
+  },
+  under: {
+    label: 'Undervalued',
+    badge: '!bg-amber-100 !text-amber-700 dark:!bg-amber-400/15 dark:!text-amber-300',
+    text: 'text-amber-600 dark:text-amber-300',
+  },
+  exp: {
+    label: 'Expensive',
+    badge: '!bg-red-100 !text-red-700 dark:!bg-red-400/15 dark:!text-red-300',
+    text: 'text-red-600 dark:text-red-400',
+  },
 };
 const statusOf = (w: WatchItem): Status => (w.price <= w.x3 ? 'deep' : w.price <= w.x2 ? 'under' : 'exp');
 /** Negative = below X/2 (cheaper). Used for sorting and the text under the price. */
@@ -128,11 +140,11 @@ export default function ValuationWatchlist({
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="min-w-0 truncate text-sm font-semibold text-ink">{w.name || w.symbol}</span>
-                    <Badge variant={st.variant} className="!rounded-full px-2.5 shrink-0">{st.label}</Badge>
+                    <Badge className={cn('!rounded-full px-2.5 shrink-0', st.badge)}>{st.label}</Badge>
                   </div>
                   <div className="mt-2 flex items-end justify-between gap-2">
                     <span className="text-lg font-semibold text-ink font-numeric">{inr(w.price)}</span>
-                    <span className={cn('text-xs font-semibold', st.variant === 'success' ? 'text-positive' : 'text-warning')}>{note}</span>
+                    <span className={cn('text-xs font-semibold', st.text)}>{note}</span>
                   </div>
                   <div className="mt-1 text-[11px] text-muted font-numeric">
                     X/3 {inr(w.x3)} · X/2 {inr(w.x2)} · as of {new Date(w.savedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}

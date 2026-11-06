@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { fmtPrice, pointTimeLabel, type Candle, type Market, type RangeKey } from '../../utils/stockDetail';
 
 export const STOCK_UP = '#00b386';
@@ -24,6 +24,8 @@ export default function StockChart({ points, baseline, range, market, timezone, 
   const wrapRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(600);
   const [hover, setHover] = useState<number | null>(null);
+  const labelRef = useRef<HTMLDivElement>(null);
+  const [labelW, setLabelW] = useState(0);
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -79,6 +81,13 @@ export default function StockChart({ points, baseline, range, market, timezone, 
   const hp = hover !== null ? points[hover] : null;
   const hx = hover !== null ? geo.x(hover) : 0;
   const alignRight = hx > width * 0.62;
+
+  // Measure the readout so it can be kept fully inside the chart (the OHLC line is wide).
+  useLayoutEffect(() => {
+    if (labelRef.current) setLabelW(labelRef.current.offsetWidth);
+  }, [hover, mode, hp?.[4]]);
+  const rawLeft = alignRight ? hx - labelW - 6 : hx + 2;
+  const labelLeft = Math.max(0, Math.min(rawLeft, width - labelW));
 
   return (
     <div
@@ -141,8 +150,9 @@ export default function StockChart({ points, baseline, range, market, timezone, 
 
       {hp && (
         <div
+          ref={labelRef}
           className="pointer-events-none absolute top-0 whitespace-nowrap text-[13px] leading-5 text-ink-2"
-          style={alignRight ? { right: width - hx, paddingRight: 6 } : { left: hx, paddingLeft: 2 }}
+          style={{ left: labelLeft }}
         >
           <span className="font-semibold text-ink font-numeric">{fmtPrice(hp[4], market)}</span>
           <span className="mx-1 text-faint">|</span>

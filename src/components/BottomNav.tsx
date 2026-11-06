@@ -412,6 +412,17 @@ export default function BottomNav() {
     // Read the real address bar, not the router's `location`: open sub-views
     // (?holding=, ?edit=) are written with history.replaceState, which the router
     // never sees, so `location.search` would wrongly look empty there.
+    // A page that has its own in-page "opened" state (e.g. a stock loaded on Valuation)
+    // can claim the tap by cancelling this event: it goes back to its main view first,
+    // and only a second tap on the main view refreshes.
+    if (location.pathname === to) {
+      const ev = new CustomEvent('aurafin:tab-home', { cancelable: true });
+      window.dispatchEvent(ev);
+      if (ev.defaultPrevented) {
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        return;
+      }
+    }
     if (location.pathname === to && !window.location.search && !location.search) {
       void hardRefresh({ showBar: true, keepPage: true }).then((ok) => {
         if (!ok) window.scrollTo({ top: 0, behavior: 'smooth' });
