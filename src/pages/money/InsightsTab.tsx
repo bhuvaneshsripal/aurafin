@@ -2,9 +2,6 @@ import { useMemo, useState } from 'react';
 import { hideNumber } from '../../utils/privateFormat';
 import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, AlertTriangle, Sparkles, X } from 'lucide-react';
 import {
-  PieChart,
-  Pie,
-  Cell,
   ResponsiveContainer,
   Tooltip,
   BarChart,
@@ -25,6 +22,7 @@ import Amount from '../../components/Amount';
 import LoadingDots from '../../components/LoadingDots';
 import { chart } from '../../components/ui/chartTheme';
 import { cn } from '../../components/ui/cn';
+import ConcentricRings from '../../components/ui/ConcentricRings';
 import type { Transaction, TransactionType } from '../../types';
 
 const COLORS = ['#16a35d', '#3b82f6', '#f5b942', '#f97316', '#8b5cf6', '#ef4444', '#4ade93', '#94a3b8', '#0ea5e9', '#64748b'];
@@ -401,27 +399,18 @@ export default function InsightsTab() {
           </div>
         ) : (
           <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
-            <div className="w-full sm:w-56 h-56 shrink-0 relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={byCategory} isAnimationActive={false} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92} paddingAngle={2} stroke="none">
-                    {byCategory.map((c, i) => (
-                      <Cell
-                        key={c.key}
-                        fill={COLORS[i % COLORS.length]}
-                        opacity={drill && drill !== c.key ? 0.35 : 1}
-                        onClick={() => setDrill((d) => (d === c.key ? null : c.key))}
-                        style={{ cursor: 'pointer', outline: 'none' }}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={tooltipMoney} {...chart.tooltip} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-xs text-muted">Total</span>
-                <span className="text-base font-bold text-ink font-numeric">{money(flowTotal)}</span>
-              </div>
+            <div className="w-full sm:w-56 shrink-0">
+              <ConcentricRings
+                items={byCategory.map((c, i) => ({ key: c.key, label: c.name, value: c.value, color: COLORS[i % COLORS.length] }))}
+                size={224}
+                selectedKey={drill}
+                onSelect={(k) => setDrill((d) => (d === k ? null : k))}
+                formatPercent={(p) => hideNumber(`${p >= 10 ? p.toFixed(0) : p.toFixed(1)}%`)}
+                centerExtra={(r) => money(r.value)}
+              />
+              <p className="mt-2 text-center text-xs text-muted">
+                Total <span className="font-numeric font-semibold text-ink">{money(flowTotal)}</span>
+              </p>
             </div>
             <div className="flex-1 w-full space-y-1">
               {byCategory.map((c, i) => {

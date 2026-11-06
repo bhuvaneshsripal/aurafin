@@ -57,7 +57,7 @@ import { useUpdateStore } from '../store/updateStore';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useUrlTab } from '../hooks/useUrlTab';
 import CustomSelect from '../components/CustomSelect';
-import { PageHeader } from '../components/ui';
+import { PageHeader, Button } from '../components/ui';
 import type { ReportSectionKey } from '../components/PortfolioPdfReport';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 
@@ -507,6 +507,8 @@ function AppLockCard() {
   const { enabled, setPin, disable, lockNow, verifyPin } = useAppLockStore();
   const [open, setOpen] = useState(false);
   const [confirmDisable, setConfirmDisable] = useState(false);
+  const [disablePin, setDisablePin] = useState('');
+  const [disableError, setDisableError] = useState('');
   const [oldPin, setOldPin] = useState('');
   const [pin, setPinInput] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
@@ -537,6 +539,32 @@ function AppLockCard() {
       newPinRef.current?.focus();
     }
   }, [oldPin, needsOldPin]);
+
+  const openDisable = () => {
+    setDisablePin('');
+    setDisableError('');
+    setConfirmDisable(true);
+  };
+  const closeDisable = () => {
+    setConfirmDisable(false);
+    setDisablePin('');
+    setDisableError('');
+  };
+  // Turning the lock off must prove the current PIN, same as changing it.
+  const confirmDisableLock = () => {
+    if (!/^\d{4}$/.test(disablePin)) {
+      setDisableError('Enter your current 4-digit PIN.');
+      return;
+    }
+    const res = verifyPin(disablePin);
+    if (!res.ok) {
+      setDisableError(res.error ?? 'Incorrect current PIN.');
+      setDisablePin('');
+      return;
+    }
+    disable();
+    closeDisable();
+  };
 
   const savePin = () => {
     if (needsOldPin) {
@@ -582,25 +610,15 @@ function AppLockCard() {
         <div className="flex items-center gap-2 flex-wrap">
           {enabled ? (
             <>
-              <button
-                onClick={lockNow}
-                className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors bg-brand-600 hover:bg-brand-700 text-white"
-              >
-                <Lock size={16} />
+              <Button onClick={lockNow} leftIcon={<Lock size={16} />}>
                 Lock Now
-              </button>
-              <button
-                onClick={() => setConfirmDisable(true)}
-                className="bg-cream-100 dark:bg-slate-800 border border-cream-300 dark:border-slate-700 text-ink-2 px-4 py-2 rounded-full text-sm font-medium hover:bg-cream-200 dark:hover:bg-slate-700"
-              >
-                Disable Lock
-              </button>
-              <button
-                onClick={openModal}
-                className="bg-cream-100 dark:bg-slate-800 border border-cream-300 dark:border-slate-700 text-ink-2 px-4 py-2 rounded-full text-sm font-medium hover:bg-cream-200 dark:hover:bg-slate-700"
-              >
+              </Button>
+              <Button variant="soft" onClick={openModal}>
                 Change PIN
-              </button>
+              </Button>
+              <Button variant="danger" onClick={openDisable}>
+                Disable Lock
+              </Button>
             </>
           ) : (
             <button
@@ -650,28 +668,31 @@ function AppLockCard() {
         </div>
       </Modal>
 
-      <Modal open={confirmDisable} onClose={() => setConfirmDisable(false)} title="Disable App Lock?">
+      <Modal open={confirmDisable} onClose={closeDisable} title="Disable App Lock?">
         <div className="space-y-4">
           <p className="text-sm text-slate-600 dark:text-slate-300">
-            Anyone with access to this device will be able to open <span className="font-luxury">Aurafin</span> without a PIN.
+            Anyone with access to this device will be able to open <span className="font-luxury">Aurafin</span> without a PIN. Enter your current PIN to turn the lock off.
           </p>
+          <div>
+            <label className="block text-xs text-muted mb-2 text-center">Current PIN</label>
+            <PinBoxInput value={disablePin} onChange={setDisablePin} autoFocus />
+          </div>
+          {disableError && <p className="text-xs text-red-500">{disableError}</p>}
           <div className="flex gap-3">
             <button
-              onClick={() => setConfirmDisable(false)}
+              onClick={closeDisable}
               className="flex-1 border border-line text-ink-2 py-2 rounded-lg text-sm font-medium hover:bg-surface-hover"
             >
               Cancel
             </button>
             <button
-              onClick={() => {
-                disable();
-                setConfirmDisable(false);
-              }}
+              onClick={confirmDisableLock}
               className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg text-sm font-medium"
             >
               Disable
             </button>
           </div>
+          <p className="text-xs text-muted text-center">3 wrong tries signs you out.</p>
         </div>
       </Modal>
     </Card>
@@ -894,11 +915,13 @@ function FloatingEyeCard() {
     <Card>
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-ink mb-1">Floating eye button</h2>
-          <p className="text-xs text-muted">
-            A second show/hide-amounts eye on the screen. Press and hold it, then drag to move it
-            anywhere. Turn off to hide it.
-          </p>
+          <h2 className="text-sm font-semibold text-ink flex items-center gap-1.5">
+            Floating eye button
+            <InfoTip>
+              A second show/hide-amounts eye on the screen. Press and hold it, then drag to move it
+              anywhere. Turn off to hide it.
+            </InfoTip>
+          </h2>
         </div>
         <Toggle checked={on} onChange={() => setOn(!on)} label="Show floating eye button" />
       </div>
@@ -938,13 +961,15 @@ function GoldRateCard() {
 
   return (
     <Card>
-      <h2 className="text-sm font-semibold text-ink mb-1">Gold Rate Calibration</h2>
-      <p className="text-xs text-muted mb-4">
-        The live gold rate is derived from a global spot price, which typically reads lower than
-        Indian retail/bullion rates (import duty, GST, dealer margin). Compare the "Live Gold
-        Price" card on your Dashboard against a source you trust — like Goodreturns or your local
-        jeweller — and adjust this until they match.
-      </p>
+      <h2 className="text-sm font-semibold text-ink mb-4 flex items-center gap-1.5">
+        Gold Rate Calibration
+        <InfoTip>
+          The live gold rate is derived from a global spot price, which typically reads lower than
+          Indian retail/bullion rates (import duty, GST, dealer margin). Compare the "Live Gold
+          Price" card on your Dashboard against a source you trust — like Goodreturns or your local
+          jeweller — and adjust this until they match.
+        </InfoTip>
+      </h2>
       <div className="flex items-center gap-2">
         <input
           type="number"
@@ -1373,12 +1398,12 @@ function PreferencesTab() {
     <>
       <Card>
         <h2 className="text-sm font-semibold text-ink mb-4">Base Currency</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:max-w-xl">
-          <div>
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:max-w-xl">
+          <div className="min-w-0">
             <label className="block text-xs font-medium text-muted mb-1.5">Base currency</label>
             <CurrencySelect value={baseCurrency} onChange={setBaseCurrency} className="w-full border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
           </div>
-          <div>
+          <div className="min-w-0">
             <label className="block text-xs font-medium text-muted mb-1.5">Compare with</label>
             <CurrencySelect value={compareCurrency} onChange={setCompareCurrency} className="w-full border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
           </div>
@@ -1782,11 +1807,14 @@ function ShortcutsTab() {
           </ul>
         </Card>
       ))}
-      <p className="text-xs text-muted px-1">
-        Shortcuts work on a computer with a keyboard. On a Mac, use Cmd in place of Ctrl (Cmd+Q is kept by the
-        browser, so Settings has no shortcut there). Ctrl+A and Alt+N are ignored while you are typing in a box, and
-        no shortcut fires while a dialog is open.
-      </p>
+      <div className="flex items-center gap-1.5 px-1 text-xs text-muted">
+        <InfoTip size={16} label="About keyboard shortcuts">
+          Shortcuts work on a computer with a keyboard. On a Mac, use Cmd in place of Ctrl (Cmd+Q is kept by the
+          browser, so Settings has no shortcut there). Ctrl+A and Alt+N are ignored while you are typing in a box, and
+          no shortcut fires while a dialog is open.
+        </InfoTip>
+        <span>About shortcuts</span>
+      </div>
     </div>
   );
 }
@@ -2124,8 +2152,11 @@ export default function Settings() {
 
   const openItem = (key: Tab) => {
     openedFromMenu.current = true;
+    // No manual scrollTo here: scrolling to the top while still on the menu entry made
+    // that entry remember "top", so Back landed at the top of the menu. The router-level
+    // scroll handling (useScrollRestoration) already starts the new section at the top and
+    // returns the menu to exactly where it was left on Back.
     setSearchParams({ tab: key, open: '1' });
-    window.scrollTo({ top: 0 });
   };
   const backToMenu = () => {
     if (openedFromMenu.current) {
@@ -2160,14 +2191,16 @@ export default function Settings() {
                   key={t.key}
                   type="button"
                   onClick={() => openItem(t.key)}
-                  className={`press-row w-full text-left px-5 h-14 border-t border-line text-[15px] flex items-center justify-between gap-2 transition-colors ${
+                  className={`press-row w-full text-left px-5 h-16 border-t border-line text-[15px] flex items-center justify-between gap-2 transition-colors ${
                     active
                       ? 'font-normal text-slate-600 hover:bg-surface-hover hover:text-ink md:bg-surface-muted md:text-ink md:font-semibold'
                       : 'font-normal text-slate-600 hover:bg-surface-hover hover:text-ink'
                   }`}
                 >
                   <span className="flex items-center gap-3 min-w-0">
-                    <Icon size={20} strokeWidth={1.75} className="shrink-0 text-ink-2" />
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary-ink">
+                      <Icon size={18} strokeWidth={1.75} />
+                    </span>
                     {t.label}
                     {t.key === 'shared' && (
                       <span className="text-xs font-medium text-brand-600 bg-brand-50 dark:bg-brand-500/10 dark:text-brand-400 px-2 py-0.5 rounded-full shrink-0">
@@ -2175,23 +2208,23 @@ export default function Settings() {
                       </span>
                     )}
                   </span>
-                  <ChevronRight size={16} className="press-chevron text-ink-2 shrink-0" />
+                  <ChevronRight size={16} className="press-chevron text-faint shrink-0" />
                 </button>
               );
             })}
             <button
               type="button"
               onClick={() => setWhatsNewOpen(true)}
-              className="press-row w-full text-left px-5 h-14 border-t border-line text-[15px] font-normal text-slate-600 hover:bg-surface-hover hover:text-ink flex items-center justify-between gap-2 transition-colors"
+              className="press-row w-full text-left px-5 h-16 border-t border-line text-[15px] font-normal text-slate-600 hover:bg-surface-hover hover:text-ink flex items-center justify-between gap-2 transition-colors"
             >
               <span className="flex items-center gap-3 min-w-0">
-                <span className="relative shrink-0">
-                  <RefreshCw size={20} strokeWidth={1.75} className="text-ink-2" />
+                <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary-ink">
+                  <RefreshCw size={18} strokeWidth={1.75} />
                   <UpdateDot className="-top-0.5 -right-0.5" />
                 </span>
                 New version
               </span>
-              <ChevronRight size={16} className="press-chevron text-ink-2 shrink-0" />
+              <ChevronRight size={16} className="press-chevron text-faint shrink-0" />
             </button>
           </nav>
         </div>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Trash2, Pencil, Check, ChevronRight, ChevronDown, Shield, PiggyBank, Landmark, Pill } from 'lucide-react';
+import { Plus, Trash2, Pencil, Check, Target, ChevronRight, ChevronDown, Shield, PiggyBank, Landmark, Pill } from 'lucide-react';
 import { useGoalsStore } from '../store/goalsStore';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
@@ -24,7 +24,6 @@ import {
   type RiskLevel,
 } from '../utils/financialHealth';
 import Modal from '../components/Modal';
-import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import Amount from '../components/Amount';
 import LoadingDots from '../components/LoadingDots';
 import type { Goal } from '../types';
@@ -32,7 +31,8 @@ import { formatCurrency, hideNumber } from '../utils/privateFormat';
 import CurrencySelect from '../components/CurrencySelect';
 import { useUrlTab } from '../hooks/useUrlTab';
 import { inputClasses } from '../components/ui';
-import { PageHeader, Tabs } from '../components/ui';
+import { PageHeader, Tabs, ProgressRing, EmptyState, Button, Card } from '../components/ui';
+import { toast } from '../store/toastStore';
 
 type Tab = 'health' | 'goals';
 
@@ -41,7 +41,7 @@ export default function Essentials() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Essentials" description="Financial health check" />
+      <PageHeader title="Essentials" description="Your financial health and the goals you are saving towards" />
 
       <Tabs<Tab>
         value={tab}
@@ -548,7 +548,6 @@ function GoalsTab() {
   const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Goal | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<Goal | null>(null);
 
   const goals = activeProfileId ? allGoals.filter((g) => g.profileId === activeProfileId) : allGoals;
   const assets = activeProfileId ? allAssets.filter((a) => a.profileId === activeProfileId) : allAssets;
@@ -571,15 +570,13 @@ function GoalsTab() {
   const wealthDataKnown =
     assetsServerConfirmed && liabilitiesServerConfirmed;
 
-  const handleDelete = async (id: string) => {
+  // No confirm dialog: delete straight away and offer Undo, which writes the goal back.
+  const deleteWithUndo = async (goal: Goal) => {
     if (!user) return;
-    await removeDoc(user, 'goals', id);
-  };
-
-  const confirmDelete = async () => {
-    if (!pendingDelete) return;
-    await handleDelete(pendingDelete.id);
-    setPendingDelete(null);
+    await removeDoc(user, 'goals', goal.id);
+    toast.undo(`${goal.name} deleted`, () => {
+      void upsertDoc(user, 'goals', goal);
+    });
   };
 
   const handleSave = async (goal: Goal) => {
@@ -610,55 +607,64 @@ function GoalsTab() {
           const current = Math.max(0, netWorth);
           const pct = g.targetAmount > 0 ? Math.min(100, Math.round((current / g.targetAmount) * 100)) : 0;
           return (
-            <div key={g.id} className="bg-surface rounded-2xl border border-line p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-semibold text-ink text-lg">{g.name}</h3>
-                <div className="flex items-center gap-2">
+            <Card key={g.id} padding="lg">
+              <div className="flex items-center gap-4">
+                {wealthDataKnown ? (
+                  <ProgressRing percent={pct} size={72} stroke={9} />
+                ) : (
+                  <div className="h-[72px] w-[72px] shrink-0 flex items-center justify-center"><LoadingDots /></div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-semibold text-ink text-base truncate">{g.name}</h3>
+                  {wealthDataKnown && (
+                    <p className="text-sm text-muted mt-0.5">
+                      {formatCurrency(current, g.currency)} of {formatCurrency(g.targetAmount, g.currency)}
+                    </p>
+                  )}
+                  <p className="text-xs text-faint mt-0.5">from Net Worth</p>
+                </div>
+                <div className="flex flex-col items-center gap-2 self-start">
                   <button
                     onClick={() => {
                       setEditing(g);
                       setModalOpen(true);
                     }}
+                    aria-label={`Edit ${g.name}`}
                     className="text-muted hover:text-brand-600 dark:hover:text-brand-300"
                   >
                     <Pencil size={16} />
                   </button>
-                  <button onClick={() => setPendingDelete(g)} className="text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300">
+                  <button
+                    onClick={() => void deleteWithUndo(g)}
+                    aria-label={`Delete ${g.name}`}
+                    className="text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
+                  >
                     <Trash2 size={16} />
                   </button>
                 </div>
               </div>
-              <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mb-2">
-                <div className="h-full bg-brand-600 rounded-full" style={{ width: `${wealthDataKnown ? pct : 0}%` }} />
-              </div>
-              <div className="flex items-center justify-between text-sm text-muted">
-                {wealthDataKnown ? (
-                  <>
-                    <span>{formatCurrency(current, g.currency)} · from Net Worth</span>
-                    <span>{hideNumber(`${pct}%`)} of {formatCurrency(g.targetAmount, g.currency)}</span>
-                  </>
-                ) : (
-                  <LoadingDots />
-                )}
-              </div>
-            </div>
+            </Card>
           );
         })}
         {goals.length === 0 && (
-          <div className="col-span-full bg-surface rounded-2xl border border-line p-14 flex flex-col items-center justify-center text-center gap-4">
-            <p className="text-muted">
-              No goals yet. Set a retirement corpus, emergency fund, or education target.
-            </p>
-            <button
-              onClick={() => {
-                setEditing(null);
-                setModalOpen(true);
-              }}
-              className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors bg-brand-600 hover:bg-brand-700 text-white"
-            >
-              <Plus size={18} /> Add Goal
-            </button>
-          </div>
+          <Card className="col-span-full">
+            <EmptyState
+              icon={<Target size={22} />}
+              title="No goals yet"
+              description="Set a retirement corpus, emergency fund or education target."
+              action={
+                <Button
+                  leftIcon={<Plus size={16} />}
+                  onClick={() => {
+                    setEditing(null);
+                    setModalOpen(true);
+                  }}
+                >
+                  Add goal
+                </Button>
+              }
+            />
+          </Card>
         )}
       </div>
 
@@ -666,13 +672,6 @@ function GoalsTab() {
         <GoalForm initial={editing} onSave={handleSave} />
       </Modal>
 
-      <ConfirmDeleteModal
-        open={!!pendingDelete}
-        onClose={() => setPendingDelete(null)}
-        onConfirm={confirmDelete}
-        title="Delete this goal?"
-        description={<>This will permanently delete <strong>{pendingDelete?.name}</strong>. This can't be undone.</>}
-      />
     </div>
   );
 }

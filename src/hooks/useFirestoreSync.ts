@@ -1232,4 +1232,39 @@ export function useFloatingEyeSync() {
 
     return () => { unsub(); unsubStore(); };
   }, [user]);
+
+  // The on/off switch ("Floating eye button" in Settings) follows the account too,
+  // so hiding the eye on a laptop hides it on the phone as well (and vice versa).
+  useEffect(() => {
+    if (!user || isAnonymousUser(user)) return;
+    const ref = doc(db, 'users', user.uid, 'meta', 'floatingEyeShow');
+    const store = useDisplaySettingsStore;
+    let remote: boolean | undefined; // undefined = nothing heard from the account yet
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        const d = snap.data();
+        const first = remote === undefined;
+        if (d && typeof d.on === 'boolean') {
+          remote = d.on;
+          if (store.getState().floatingEye !== d.on) store.getState().syncFloatingEyeFromRemote(d.on);
+        } else {
+          remote = true; // no choice saved yet: the default is shown
+          // First contact and this device already has it hidden: share that choice.
+          if (first && !store.getState().floatingEye) {
+            remote = false;
+            setDoc(ref, { on: false, at: Date.now() }).catch(() => {});
+          }
+        }
+      },
+      () => { /* offline / permission: keep the local choice */ }
+    );
+    const unsubStore = store.subscribe((state, prev) => {
+      if (state.floatingEye === prev.floatingEye || remote === undefined) return;
+      if (state.floatingEye === remote) return;
+      remote = state.floatingEye;
+      setDoc(ref, { on: state.floatingEye, at: Date.now() }).catch(() => {});
+    });
+    return () => { unsub(); unsubStore(); };
+  }, [user]);
 }

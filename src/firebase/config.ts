@@ -52,11 +52,14 @@ function createFirestore() {
   try {
     return initializeFirestore(app, {
       ignoreUndefinedProperties: true,
+      // If the network (VPN, antivirus, Wi-Fi/ISP trouble with QUIC/HTTP3) breaks
+      // Firestore's streaming connection, switch to long polling instead of retrying forever.
+      experimentalAutoDetectLongPolling: true,
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
     });
   } catch (err) {
     console.warn('Firestore offline persistence unavailable, falling back to memory cache.', err);
-    return initializeFirestore(app, { ignoreUndefinedProperties: true });
+    return initializeFirestore(app, { ignoreUndefinedProperties: true, experimentalAutoDetectLongPolling: true });
   }
 }
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { cn } from './ui/cn';
 import { useIndexQuotes, isStaleIndexQuote, type IndexQuote } from '../utils/indexQuotes';
 import { useIndexResetWindow } from '../utils/marketHours';
@@ -99,19 +100,56 @@ export default function MarketTicker() {
 }
 
 /** Mobile: a thin one-line bar under the top bar. Each index shows
- *  NAME  level  ±points (±pct%) on a single line, and the person swipes the
- *  bar sideways to see all three (NIFTY, SENSEX, BANKNIFTY). */
+ *  NAME  level  ±points (±pct%) on a single line. Swipe it sideways to see all
+ *  three (NIFTY, SENSEX, BANKNIFTY), or swipe it DOWN to open the full
+ *  Indian / Global indices page. */
 export function MarketTickerMarquee({ className, id }: { className?: string; id?: string }) {
   const quotes = useIndexQuotes();
   const reset = useIndexResetWindow();
+  const navigate = useNavigate();
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let s: { x: number; y: number; fired: boolean } | null = null;
+    const onStart = (e: TouchEvent) => {
+      s = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY, fired: false } : null;
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!s || s.fired) return;
+      const dy = e.touches[0].clientY - s.y; // positive = finger moved down
+      const dx = Math.abs(e.touches[0].clientX - s.x);
+      if (dy > 28 && dy > dx * 1.5) {
+        s.fired = true;
+        if (e.cancelable) e.preventDefault();
+        try { navigator.vibrate?.(6); } catch { /* haptics are best-effort */ }
+        navigate('/indices');
+      }
+    };
+    const onEnd = () => { s = null; };
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    el.addEventListener('touchend', onEnd);
+    el.addEventListener('touchcancel', onEnd);
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+    };
+  }, [navigate]);
+
   return (
     <div
       id={id}
+      ref={ref}
       className={cn(
         'no-scrollbar overflow-x-auto overflow-y-hidden overscroll-x-contain h-9 flex items-center text-sm bg-surface border-b border-line',
         className
       )}
-      style={{ touchAction: 'pan-x pan-y', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}
+      // pan-x only: a vertical drag on the bar is the "open indices" gesture, not a page scroll.
+      style={{ touchAction: 'pan-x', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}
       aria-label="Market indices"
     >
       <div className="flex shrink-0 items-center gap-x-8 px-4 whitespace-nowrap">{renderItems(quotes, reset)}</div>

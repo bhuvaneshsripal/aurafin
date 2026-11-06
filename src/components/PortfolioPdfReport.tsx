@@ -9,7 +9,7 @@ import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import { resolveAssetValues } from '../utils/assetValues';
 import { formatCurrency, ASSET_CLASS_LABELS, maskPreciseAmount } from '../utils/currency';
 import { computePortfolioPnl } from '../utils/investmentPnl';
-import { Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import ConcentricRings from './ui/ConcentricRings';
 
 export type ReportSectionKey = 'summary' | 'cashflow' | 'breakdown' | 'liabilities' | 'holdings' | 'sold';
 
@@ -324,27 +324,30 @@ export const PortfolioPdfReport = ({
         <div className="mb-8 page-break-before">
           <h2 className="text-2xl font-bold mb-6">Asset Breakdown</h2>
 
-          {/* Pie Chart */}
-          <div className="mb-8 flex justify-center">
-            <ResponsiveContainer width="100%" height={400}>
-              <PieChart>
-                <Pie
-                  data={assetsByClass}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, value }) => `${name}: ${formatCurrency(value, 'INR')}`}
-                  outerRadius={150}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {assetsByClass.map((entry) => (
-                    <Cell key={`cell-${entry.assetClass}`} fill={ASSET_COLORS[entry.assetClass] || '#94A3B8'} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value) => formatCurrency(value as number, 'INR')} />
-              </PieChart>
-            </ResponsiveContainer>
+          {/* Concentric rings */}
+          <div className="mb-8 flex flex-col items-center gap-5">
+            <ConcentricRings
+              items={assetsByClass.map((e) => ({
+                key: e.assetClass,
+                label: e.name,
+                value: e.value,
+                color: ASSET_COLORS[e.assetClass] || '#94A3B8',
+              }))}
+              size={300}
+              trackClassName="stroke-slate-100"
+            />
+            <ul className="grid w-full max-w-md grid-cols-1 gap-2 text-sm">
+              {assetsByClass.map((e) => {
+                const tot = assetsByClass.reduce((s, x) => s + x.value, 0);
+                return (
+                  <li key={e.assetClass} className="flex items-center gap-2.5">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: ASSET_COLORS[e.assetClass] || '#94A3B8' }} />
+                    <span className="flex-1 truncate">{e.name}</span>
+                    <span className="font-medium">{tot > 0 ? ((e.value / tot) * 100).toFixed(0) : 0}%</span>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
 
           {/* Asset Table */}

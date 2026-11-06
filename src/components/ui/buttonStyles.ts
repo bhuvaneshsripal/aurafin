@@ -1,6 +1,6 @@
 import { cn } from './cn';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'danger-solid';
+export type ButtonVariant = 'primary' | 'secondary' | 'soft' | 'ghost' | 'danger' | 'danger-solid';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 const base =
@@ -8,12 +8,14 @@ const base =
   'transition-colors duration-150 disabled:opacity-50 disabled:pointer-events-none';
 
 const variants: Record<ButtonVariant, string> = {
-  primary: 'bg-brand-600 text-white shadow-xs hover:bg-brand-700 active:bg-brand-800',
+  primary:
+    'bg-brand-600 text-white shadow-[0_4px_12px_-2px_rgb(36_122_77/0.35)] hover:bg-brand-700 active:bg-brand-800',
   secondary:
     'bg-surface text-ink-2 border border-line shadow-xs hover:bg-surface-hover hover:border-slate-300',
+  /** Pale green: the quiet partner of a solid primary (e.g. Change PIN next to Lock Now). */
+  soft: 'bg-primary-soft text-primary-ink hover:bg-brand-100 dark:hover:bg-brand-500/25 active:opacity-90',
   ghost: 'text-muted hover:bg-surface-hover hover:text-ink',
-  danger:
-    'bg-negative-soft text-negative border border-red-200/70 dark:border-red-500/20 hover:bg-red-100 dark:hover:bg-red-500/20',
+  danger: 'bg-negative-soft text-negative hover:bg-red-100 dark:hover:bg-red-500/20 active:opacity-90',
   'danger-solid': 'bg-red-500 text-white shadow-xs hover:bg-red-600',
 };
 

@@ -39,9 +39,6 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import {
-  PieChart,
-  Pie,
-  Cell,
   ResponsiveContainer,
   Tooltip,
   AreaChart,
@@ -97,7 +94,10 @@ import {
   fieldBase,
   chart,
   DateInput,
+  TrendArrow,
+  ConcentricRings,
 } from '../components/ui';
+import { PriceStaleBanner } from '../components/PriceStatus';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import CurrencySelect from '../components/CurrencySelect';
 import CustomSelect from '../components/CustomSelect';
@@ -1193,7 +1193,6 @@ function AssetsTab({
     });
   };
 
-  const [confirmDeleteAsset, setConfirmDeleteAsset] = useState<Asset | null>(null);
 
   // Rows that are really the same stock (same symbol/class/currency) are
   // merged automatically into a single holding with a weighted-average
@@ -1237,7 +1236,6 @@ function AssetsTab({
     }
     setModalOpen(false);
     setViewingAsset(null);
-    setConfirmDeleteAsset(null);
     setHoldingsMenuOpenId(null);
     setSortSheetOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1250,6 +1248,24 @@ function AssetsTab({
     }
     try {
       await removeDoc(user, 'assets', id);
+    } catch (err) {
+      console.error('Failed to delete asset', err);
+      toast.error('Could not delete this asset. Please check your connection and try again.');
+    }
+  };
+
+  // Holdings-list delete: no confirm dialog. Remove straight away and offer Undo,
+  // which writes the same holding back.
+  const deleteWithUndo = async (asset: Asset) => {
+    if (!user) {
+      toast.error('You need to be signed in to delete an asset. Please reload the app and try again.');
+      return;
+    }
+    try {
+      await removeDoc(user, 'assets', asset.id);
+      toast.undo('Holding deleted', () => {
+        void upsertDoc(user, 'assets', asset).catch(() => toast.error('Could not restore the holding.'));
+      });
     } catch (err) {
       console.error('Failed to delete asset', err);
       toast.error('Could not delete this asset. Please check your connection and try again.');
@@ -1921,6 +1937,8 @@ function AssetsTab({
         }
       />
 
+      <PriceStaleBanner />
+
       {/* Typing a search query hides the tabs, filter row, and the holdings
           summary card so the list of matches gets the space — nothing here
           affects what's actually being filtered, just what's shown above
@@ -2040,17 +2058,17 @@ function AssetsTab({
       {filtered.length === 0 ? (
         <Card padding="none">
           <EmptyState
-            icon={<Wallet size={18} />}
-            title={activeAssetCount === 0 ? 'No assets yet' : 'No assets match your filters'}
+            icon={<TrendingUp size={22} />}
+            title={activeAssetCount === 0 ? 'No holdings yet' : 'No assets match your filters'}
             description={
               activeAssetCount === 0
-                ? 'Add your first holding to start tracking your portfolio.'
+                ? 'Add your first stock to see your net worth'
                 : 'Try a different search term or clear a filter.'
             }
             action={
               activeAssetCount === 0 ? (
                 <Button onClick={onAdd} leftIcon={<Plus size={16} />}>
-                  Add asset
+                  Add holding
                 </Button>
               ) : undefined
             }
@@ -2371,10 +2389,11 @@ function AssetsTab({
                       }}
                     >
                       {loading ? (
-                        <span className="inline-block h-3 w-12 rounded bg-slate-100 dark:bg-slate-800 animate-pulse ml-auto" />
+                        <span className="inline-block h-3 w-12 rounded skeleton-shimmer ml-auto" />
                       ) : displayMetric === 'returns' ? (
                         <>
                           <div className={`text-sm font-semibold animate-value-in ${(r.pnl ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                            {r.pnl !== undefined && !privacyMode && r.pnl !== 0 && <TrendArrow up={r.pnl > 0} className="mr-1" />}
                             {r.pnl !== undefined ? (privacyMode ? '••••••' : formatSignedCurrency(r.pnl, a.currency)) : '—'}
                           </div>
                           <div className={`text-[11px] mt-0.5 ${(r.pnl ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
@@ -2387,6 +2406,7 @@ function AssetsTab({
                             {r.currentPrice !== undefined ? maskPreciseAmount(r.currentPrice, a.currency, privacyMode) : '—'}
                           </div>
                           <div className={`text-[11px] mt-0.5 ${(r.dayChangePerUnit ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                            {r.dayChangePerUnit !== undefined && !privacyMode && r.dayChangePerUnit !== 0 && <TrendArrow up={r.dayChangePerUnit > 0} className="mr-1" />}
                             {r.dayChangePerUnit !== undefined && r.dayChangePercent !== undefined
                               ? privacyMode
                                 ? '••••'
@@ -2475,7 +2495,7 @@ function AssetsTab({
                     const isBeingDragged = draggingId === a.id;
                     const pending = isAssetLivePriced(a) && !totalsReady;
                     const tone = (n: number | undefined) => ((n ?? 0) >= 0 ? 'text-positive' : 'text-negative');
-                    const skeleton = <span className="inline-block h-4 w-16 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />;
+                    const skeleton = <span className="inline-block h-4 w-16 rounded skeleton-shimmer" />;
                     return (
                       <tr
                         key={a.id}
@@ -2543,6 +2563,7 @@ function AssetsTab({
                                 </div>
                                 {r.dayChangePerUnit !== undefined && r.dayChangePercent !== undefined ? (
                                   <div className={`text-xs mt-0.5 font-normal ${tone(r.dayChangePerUnit)}`}>
+                                    {!privacyMode && r.dayChangePerUnit !== 0 && <TrendArrow up={r.dayChangePerUnit > 0} className="mr-1" />}
                                     {privacyMode
                                       ? '••••'
                                       : `${formatSignedCurrency(r.dayChangePerUnit, a.currency)} (${formatPercentMagnitude(r.dayChangePercent)})`}
@@ -2570,6 +2591,7 @@ function AssetsTab({
                           ) : r.pnl !== undefined ? (
                             <div className={tone(r.pnl)}>
                               <div className="font-semibold">
+                                {!privacyMode && r.pnl !== 0 && <TrendArrow up={r.pnl > 0} className="mr-1" />}
                                 {privacyMode ? '••••••' : formatSignedCurrency(r.pnl, a.currency)}
                               </div>
                               <div className="text-xs mt-0.5 font-medium">
@@ -2712,7 +2734,7 @@ function AssetsTab({
             <button
               onClick={() => {
                 closeMenu();
-                setConfirmDeleteAsset(menuAsset);
+                void deleteWithUndo(menuAsset);
               }}
               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
             >
@@ -2722,33 +2744,6 @@ function AssetsTab({
           document.body
         );
       })()}
-
-      <Modal
-        open={!!confirmDeleteAsset}
-        onClose={() => setConfirmDeleteAsset(null)}
-        title="Delete this asset?"
-      >
-        <p className="text-sm text-slate-500 mb-6">
-          This will permanently delete <strong>{confirmDeleteAsset?.name}</strong>. This can't be undone.
-        </p>
-        <div className="flex gap-3">
-          <button
-            onClick={() => setConfirmDeleteAsset(null)}
-            className="flex-1 border border-line text-slate-600 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={async () => {
-              if (confirmDeleteAsset) await handleDelete(confirmDeleteAsset.id);
-              setConfirmDeleteAsset(null);
-            }}
-            className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg text-sm font-medium"
-          >
-            Delete
-          </button>
-        </div>
-      </Modal>
 
       {sortSheetOpen && (
         <div
@@ -3742,6 +3737,7 @@ function HoldingDetailView({
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-600 dark:text-slate-300">1D returns</span>
               <span className={`font-semibold ${dayChangeTotal >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                {dayChangeTotal !== 0 && <TrendArrow up={dayChangeTotal > 0} className="mr-1" />}
                 {mSigned(dayChangeTotal, asset.currency)} ({mPct(dayChangePercent)})
               </span>
             </div>
@@ -8481,7 +8477,7 @@ function AllocationTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) 
   // Same numbers as Analytics → Rebalance: active profile, fully sold holdings
   // dropped, "exclude from allocation" respected, one currency at a time.
   const { allocItems, currency, currencies } = useAnalyticsData();
-  const { total, categories } = useMemo(() => buildCategoryBreakdown(allocItems), [allocItems]);
+  const { categories } = useMemo(() => buildCategoryBreakdown(allocItems), [allocItems]);
 
   return (
     <div className="space-y-4">
@@ -8499,7 +8495,7 @@ function AllocationTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) 
         </Card>
       ) : (
         <>
-          <AllocationChart categories={categories} total={total} currency={currency} />
+          <AllocationChart categories={categories} currency={currency} />
           <SectorAllocationCard items={allocItems} currency={currency} />
           <MarketCapCard items={allocItems} currency={currency} />
           {currencies.length > 1 && (
@@ -8516,11 +8512,9 @@ function AllocationTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) 
 
 function AllocationChart({
   categories,
-  total,
   currency,
 }: {
   categories: CategoryBreakdown[];
-  total: number;
   currency: string;
 }) {
   const sorted = [...categories].sort((a, b) => b.value - a.value);
@@ -8533,34 +8527,11 @@ function AllocationChart({
   return (
     <Card padding="lg" className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
       <div className="relative">
-        <ResponsiveContainer width="100%" height={260}>
-          <PieChart>
-            <Pie
-              data={slices}
-              dataKey="value"
-              nameKey="label"
-              innerRadius={68}
-              outerRadius={104}
-              paddingAngle={2}
-              stroke="none"
-              isAnimationActive={false}
-            >
-              {slices.map((entry) => (
-                <Cell key={entry.key} fill={entry.color} />
-              ))}
-            </Pie>
-            <Tooltip
-              formatter={(v) => formatPreciseCurrency(Number(v))}
-              contentStyle={chart.tooltip.contentStyle}
-              labelStyle={chart.tooltip.labelStyle}
-              itemStyle={chart.tooltip.itemStyle}
-            />
-          </PieChart>
-        </ResponsiveContainer>
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-xs text-muted">Total</span>
-          <span className="font-numeric text-base font-semibold text-ink">{formatPreciseCurrency(total)}</span>
-        </div>
+        <ConcentricRings
+          items={slices}
+          size={260}
+          centerExtra={(r) => formatPreciseCurrency(r.value)}
+        />
       </div>
       <div className="min-w-0">
         <CategoryBreakdownList categories={sorted} currency={currency} defaultOpen={['equity']} />

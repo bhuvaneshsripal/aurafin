@@ -89,7 +89,7 @@ export function SegmentedControl<T extends string>({
   return (
     <div
       role="group"
-      className={cn('inline-flex rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5', className)}
+      className={cn('inline-flex rounded-full bg-slate-100 dark:bg-slate-800 p-0.5', className)}
     >
       {items.map((it) => {
         const active = it.key === value;
@@ -100,10 +100,10 @@ export function SegmentedControl<T extends string>({
             aria-pressed={active}
             onClick={() => onChange(it.key)}
             className={cn(
-              'rounded-md font-medium transition-colors duration-150',
-              size === 'sm' ? 'h-6 px-2 text-xs' : 'h-7 px-2.5 text-[13px]',
+              'keep-round font-medium transition-colors duration-150',
+              size === 'sm' ? 'h-6 px-2.5 text-xs' : 'h-7 px-3 text-[13px]',
               active
-                ? 'bg-surface text-ink shadow-xs'
+                ? 'bg-surface text-primary-ink shadow-sm dark:bg-slate-700'
                 : 'text-muted hover:text-ink'
             )}
           >

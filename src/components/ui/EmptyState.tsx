@@ -22,7 +22,7 @@ export default function EmptyState({ icon, title, description, action, compact, 
       )}
     >
       {icon && (
-        <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 text-muted">
+        <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-soft text-primary-ink">
           {icon}
         </span>
       )}

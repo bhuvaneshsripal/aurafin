@@ -1,22 +1,27 @@
-import { useLayoutEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLayoutEffect, useRef } from 'react';
+import { useLocation, useNavigationType } from 'react-router-dom';
 
 /**
- * Remembers how far down each page you'd scrolled, so switching to another
- * page (sidebar, bottom nav, a link) and coming back lands you exactly
- * where you left off instead of snapping back to the top.
+ * Route-aware scroll handling, keyed by HISTORY ENTRY (location.key), not by URL:
  *
- * Deliberately an in-memory Map, not sessionStorage/localStorage — a real
- * page refresh clears it, so reloading the page always starts fresh at the
- * top, while navigating around inside the running app preserves position.
- * Keyed by pathname + search so e.g. Wealth's own tabs (?tab=assets vs
- * ?tab=liabilities) each keep their own separate scroll position.
+ *  - Back / Forward (POP)  -> the page lands exactly where that entry was left.
+ *    Never reset to the top, and each entry (Settings, Settings > Preferences,
+ *    ...) keeps its own position independently.
+ *  - New navigation (PUSH) -> the new page starts at the top. This covers the
+ *    bottom-nav / sidebar tabs, links, and opening a sub page.
+ *  - REPLACE on the same page (URL sync like ?tab=, a redirect inside a page)
+ *    -> left alone, so nothing jumps. A REPLACE to a different page starts at top.
+ *
+ * It is an in-memory Map: a real refresh clears it. A refresh instead restores
+ * the last position once, through sessionStorage (see `reloadRestore`).
+ *
+ * Restoring is done before paint (useLayoutEffect) so there is no flash at the
+ * top. If the page isn't tall enough yet (lazy chunk / data still loading) the
+ * restore is retried for a moment, and stops the instant the user touches or
+ * scrolls, so it never fights them.
  */
-const scrollMemory = new Map<string, number>();
+const positions = new Map<string, number>();
 
-// A browser refresh does wipe the Map above, so the last position is also
-// mirrored into sessionStorage (per tab) and used once — only when the page
-// was actually reloaded — so a refresh keeps you where you were.
 const SESSION_KEY = 'aurafin-scroll-reload';
 let reloadRestore: { key: string; top: number } | null = null;
 try {
@@ -29,55 +34,89 @@ try {
 
 export function useScrollRestoration() {
   const location = useLocation();
-  const key = location.pathname + location.search;
+  const navType = useNavigationType();
+  const entryKey = location.key;
+  const urlKey = location.pathname + location.search;
+  const prev = useRef<{ pathname: string; urlKey: string } | null>(null);
 
-  // Runs before paint on every route change, so there's no flash of the
-  // new page at the top before jumping to the remembered spot.
   useLayoutEffect(() => {
-    let saved = scrollMemory.get(key);
-    let raf = 0;
-    if (saved === undefined && reloadRestore && reloadRestore.key === key) {
-      // The page content (lazy chunk, data) usually isn't tall enough yet on
-      // first paint, so keep retrying briefly until the target is reachable.
-      const target = reloadRestore.top;
+    const before = prev.current;
+    prev.current = { pathname: location.pathname, urlKey };
+
+    // Where to land. null = leave the scroll position exactly as it is.
+    let target: number | null;
+    if (!before) {
+      // First render of the app: a refresh restores once, anything else starts at the top.
+      if (reloadRestore && reloadRestore.key === urlKey) target = reloadRestore.top;
+      else target = 0;
       reloadRestore = null;
-      saved = target;
+    } else if (navType === 'POP') {
+      target = positions.get(entryKey) ?? 0;
+    } else if (navType === 'PUSH') {
+      target = urlKey !== before.urlKey ? 0 : null;
+    } else {
+      // REPLACE
+      target = location.pathname !== before.pathname ? 0 : null;
+    }
+
+    let raf = 0;
+    let restoring = false;
+    let stopListening = () => {};
+
+    if (target === null) {
+      positions.set(entryKey, window.scrollY);
+    } else if (target === 0) {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      positions.set(entryKey, 0);
+    } else {
+      const goal = target;
+      positions.set(entryKey, goal);
+      restoring = true;
       const start = performance.now();
-      const stop = () => cancelAnimationFrame(raf);
-      window.addEventListener('touchstart', stop, { once: true, passive: true });
-      window.addEventListener('wheel', stop, { once: true, passive: true });
+      const finish = () => {
+        restoring = false;
+        cancelAnimationFrame(raf);
+        stopListening();
+      };
+      const onUser = () => {
+        positions.set(entryKey, window.scrollY);
+        finish();
+      };
+      window.addEventListener('touchstart', onUser, { once: true, passive: true });
+      window.addEventListener('wheel', onUser, { once: true, passive: true });
+      window.addEventListener('keydown', onUser, { once: true });
+      stopListening = () => {
+        window.removeEventListener('touchstart', onUser);
+        window.removeEventListener('wheel', onUser);
+        window.removeEventListener('keydown', onUser);
+      };
+      // The page may not be tall enough on the first frame, so keep trying
+      // until the spot is reachable (or ~3s pass).
       const tick = () => {
-        window.scrollTo({ top: target, behavior: 'instant' });
-        const reached = Math.abs(window.scrollY - target) < 2;
-        if (!reached && performance.now() - start < 3000) raf = requestAnimationFrame(tick);
+        window.scrollTo({ top: goal, behavior: 'instant' });
+        if (Math.abs(window.scrollY - goal) < 2 || performance.now() - start > 3000) finish();
+        else raf = requestAnimationFrame(tick);
       };
       tick();
     }
-    window.scrollTo({ top: saved ?? 0, behavior: 'instant' });
 
-    // Keep recording this page's position as the user scrolls it, rather
-    // than trying to capture it once on the way out — by the time an
-    // effect for the *next* route would run, this route's DOM (and its
-    // scroll position) is already gone.
-    //
-    // The in-memory Map is updated on every event (it's free), but the
-    // sessionStorage copy used for "restore after a refresh" is written only
-    // once scrolling settles. sessionStorage is synchronous: writing it on
-    // every scroll event (dozens per second) was stealing time from the main
-    // thread mid-scroll, which shows up as stutter on phones. It is also saved
-    // right away when the page is hidden/unloaded so a refresh still lands
-    // exactly where you were.
+    // Record this entry's position as it is scrolled (the next route's DOM is
+    // already in place by the time a cleanup could capture it). While a restore
+    // is still settling, scroll events are ours and must not overwrite the goal.
+    // The sessionStorage copy (refresh restore) is written only once scrolling
+    // settles, since it is synchronous and would stutter mid-scroll on phones.
     let saveTimer: number | undefined;
     const save = () => {
       window.clearTimeout(saveTimer);
       try {
-        sessionStorage.setItem(SESSION_KEY, JSON.stringify({ key, top: window.scrollY }));
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify({ key: urlKey, top: window.scrollY }));
       } catch {
         /* best-effort */
       }
     };
     const onScroll = () => {
-      scrollMemory.set(key, window.scrollY);
+      if (restoring) return;
+      positions.set(entryKey, window.scrollY);
       window.clearTimeout(saveTimer);
       saveTimer = window.setTimeout(save, 200);
     };
@@ -85,11 +124,12 @@ export function useScrollRestoration() {
     window.addEventListener('pagehide', save);
     return () => {
       cancelAnimationFrame(raf);
-      // Drop a pending save instead of running it: by now the next page may
-      // already be on screen, and saving then would record the wrong position.
+      stopListening();
+      // A pending save would record the NEXT page's position under this one.
       window.clearTimeout(saveTimer);
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('pagehide', save);
     };
-  }, [key]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entryKey]);
 }

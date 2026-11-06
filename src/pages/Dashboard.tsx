@@ -16,9 +16,6 @@ import {
   Tooltip,
   ReferenceLine,
   ReferenceDot,
-  PieChart,
-  Pie,
-  Cell,
   usePlotArea,
 } from 'recharts';
 import { useAssetsStore } from '../store/assetsStore';
@@ -49,8 +46,12 @@ import {
   THead,
   Tr,
   Skeleton,
+  ProgressRing,
+  ConcentricRings,
+  TrendArrow,
   chart,
 } from '../components/ui';
+import { PriceStaleBanner, PriceUpdatedLine } from '../components/PriceStatus';
 import { ASSET_CLASS_LABELS, maskAmount } from '../utils/currency';
 import { formatAxisAmount, formatPercentMagnitude, formatSignedCurrency, formatPreciseCurrency, hideNumber } from '../utils/privateFormat';
 import { ASSET_CLASS_TO_CATEGORY } from '../utils/taxonomy';
@@ -287,9 +288,9 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        title="Overview"
-      />
+      <PageHeader title="Overview" />
+
+      <PriceStaleBanner />
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
@@ -336,7 +337,6 @@ export default function Dashboard() {
         </div>
         <AllocationCard
           data={allocation}
-          total={totalAssets}
           loading={!ready}
           hasWealth={hasWealth}
           privacyMode={privacyMode}
@@ -374,6 +374,8 @@ export default function Dashboard() {
       </div>
 
       <GoldPriceCard />
+
+      <PriceUpdatedLine />
 
       {/* PDF Export Modal — renders its own live preview of the report internally */}
     </div>
@@ -482,6 +484,39 @@ function PlotAreaProbe({ areaRef }: { areaRef: { current: { x: number; width: nu
   return null;
 }
 
+/**
+ * Removes saved snapshots that are clearly bad readings: a short run (up to 3
+ * days) that jumps far away from the line and then comes straight back, e.g.
+ * a day saved from a wrong price (₹1.7L between two days at ~₹1.2L). Real
+ * changes that stick (a new asset, a sale, a market move that stays) are kept,
+ * because the points on either side of them do NOT agree with each other.
+ * The newest point is the live value and is never removed.
+ */
+function dropSpikes(points: Snapshot[]): Snapshot[] {
+  const TOL = 0.2; // a point is "off the line" when it differs by more than 20%
+  const rel = (a: number, b: number) => Math.abs(a - b) / Math.max(Math.abs(b), 1);
+  const out = [...points];
+  const bad = new Set<number>();
+  let prev = 0; // index of the last point kept, the baseline for what follows
+  for (let i = 1; i < out.length; i++) {
+    let dropped = 0;
+    for (let len = 1; len <= 3 && i + len < out.length; len++) {
+      const before = out[prev].netWorth;
+      if (rel(out[i + len].netWorth, before) > TOL) continue; // the line did not come back: a real move
+      let allOff = true;
+      for (let k = i; k < i + len; k++) if (rel(out[k].netWorth, before) <= TOL) allOff = false;
+      if (allOff) {
+        for (let k = i; k < i + len; k++) bad.add(k);
+        dropped = len;
+        break;
+      }
+    }
+    if (dropped) i += dropped - 1;
+    else prev = i;
+  }
+  return bad.size ? out.filter((_, i) => !bad.has(i)) : out;
+}
+
 function NetWorthOverTimeCard({
   privacyMode,
   ready,
@@ -502,7 +537,7 @@ function NetWorthOverTimeCard({
   // liabilities change. Never computed/faked here: this card only ever
   // renders points that actually exist in Firestore for this user.
   const snapshots = useSnapshotsStore((s) => s.snapshots);
-  const [range, setRange] = useState<Range>('ALL');
+  const [range, setRange] = useState<Range>('3M');
   const pin = usePinnedTooltip();
   const plotAreaRef = useRef<{ x: number; width: number } | null>(null);
 
@@ -520,7 +555,7 @@ function NetWorthOverTimeCard({
     const todaySaved = byDate.get(today);
     if (!ready) byDate.delete(today);
     else if (todaySaved && Number.isFinite(liveNetWorth)) byDate.set(today, { ...todaySaved, netWorth: liveNetWorth });
-    return [...byDate.values()];
+    return dropSpikes([...byDate.values()]);
   }, [snapshots, ready, liveNetWorth]);
 
   const data = useMemo(() => {
@@ -824,18 +859,24 @@ function NetWorthOverTimeCard({
 
 function AllocationCard({
   data,
-  total,
   loading,
   hasWealth,
   privacyMode,
 }: {
   data: { key: string; label: string; color: string; value: number }[];
-  total: number;
   loading: boolean;
   hasWealth: boolean;
   privacyMode: boolean;
 }) {
   const sum = data.reduce((s, d) => s + d.value, 0);
+  const [active, setActive] = useState<string | null>(null);
+  // Mirror the rings: biggest first, and anything past the 5th folds into one "Other" row (matches maxRings=6).
+  const legend = (() => {
+    const sorted = [...data].filter((d) => d.value > 0).sort((a, b) => b.value - a.value);
+    if (sorted.length <= 6) return sorted;
+    const rest = sorted.slice(5).reduce((s, d) => s + d.value, 0);
+    return [...sorted.slice(0, 5), { key: '__other', label: 'Other', color: '#94a3b8', value: rest }];
+  })();
   return (
     <Card padding="lg" className="h-full">
       <CardHeader
@@ -867,36 +908,23 @@ function AllocationCard({
         />
       ) : (
         <div>
-          <div className="relative h-[168px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={data}
-                  dataKey="value"
-                  nameKey="label"
-                  innerRadius={54}
-                  outerRadius={78}
-                  paddingAngle={2}
-                  stroke="none"
-                  isAnimationActive={false}
-                >
-                  {data.map((d) => (
-                    <Cell key={d.key} fill={d.color} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-xs text-muted">Total</span>
-              <span className="font-numeric text-[15px] font-semibold text-ink">
-                {maskAmount(total, 'INR', privacyMode, { fractionDigits: 0 })}
-              </span>
-            </div>
-          </div>
-          <ul className="mt-3 space-y-2">
-            {data.slice(0, 6).map((d) => (
-              <li key={d.key} className="flex items-center gap-2.5 text-sm">
-                <span className="h-2.5 w-2.5 rounded-sm shrink-0" style={{ background: d.color }} />
+          <ConcentricRings
+            items={data}
+            size={176}
+            maxRings={6}
+            activeKey={active}
+            onActiveChange={setActive}
+            centerExtra={(r) => maskAmount(r.value, 'INR', privacyMode, { fractionDigits: 0 })}
+            formatPercent={(p) => hideNumber(`${p >= 10 ? p.toFixed(0) : p.toFixed(1)}%`)}
+          />
+          <ul className="mt-4 space-y-2" onMouseLeave={() => setActive(null)}>
+            {legend.map((d) => (
+              <li
+                key={d.key}
+                onMouseEnter={() => setActive(d.key)}
+                className={`flex items-center gap-2.5 text-sm transition-opacity ${active && active !== d.key ? 'opacity-40' : ''}`}
+              >
+                <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: d.color }} />
                 <span className="text-ink-2 truncate flex-1">{d.label}</span>
                 <span className="font-numeric font-medium text-ink">{hideNumber(`${sum > 0 ? ((d.value / sum) * 100).toFixed(1) : '0.0'}%`)}</span>
               </li>
@@ -1074,18 +1102,17 @@ function GoalsCard({
             const current = Math.max(0, netWorth);
             const pct = g.targetAmount > 0 ? Math.min(100, Math.max(0, Math.round((current / g.targetAmount) * 100))) : 0;
             return (
-              <li key={g.id}>
-                <div className="flex items-baseline justify-between gap-3 text-sm mb-1.5">
-                  <span className="font-medium text-ink truncate">{g.name}</span>
-                  <span className="font-numeric text-xs font-medium text-muted shrink-0">{hideNumber(`${pct}%`)}</span>
+              <li key={g.id} className="flex items-center gap-3">
+                <ProgressRing percent={pct} size={56} stroke={7}>
+                  {privacyMode ? '•••' : `${pct}%`}
+                </ProgressRing>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-ink truncate">{g.name}</p>
+                  <p className="text-xs text-muted mt-0.5 font-numeric font-normal">
+                    {maskAmount(current, g.currency, privacyMode, { fractionDigits: 0 })} of{' '}
+                    {maskAmount(g.targetAmount, g.currency, privacyMode, { fractionDigits: 0 })}
+                  </p>
                 </div>
-                <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                  <div className="h-full rounded-full bg-brand-600" style={{ width: `${pct}%` }} />
-                </div>
-                <p className="text-xs text-muted mt-1.5 font-numeric font-normal">
-                  {maskAmount(current, g.currency, privacyMode, { fractionDigits: 0 })} of{' '}
-                  {maskAmount(g.targetAmount, g.currency, privacyMode, { fractionDigits: 0 })}
-                </p>
               </li>
             );
           })}
@@ -1203,7 +1230,7 @@ function TopHoldingsCard({
                 </p>
                 {pnlPercent !== undefined && !privacyMode ? (
                   <p className={`font-numeric text-xs font-medium ${pnlPercent >= 0 ? 'text-positive' : 'text-negative'}`}>
-                    {pnlPercent >= 0 ? '+' : '−'}
+                    <TrendArrow up={pnlPercent >= 0} className="mr-1" />
                     {formatPercentMagnitude(pnlPercent, 1)}
                   </p>
                 ) : (

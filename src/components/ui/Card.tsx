@@ -8,11 +8,17 @@ export interface CardProps extends HTMLAttributes<HTMLDivElement> {
   padding?: Padding;
 }
 
-/** The one surface: white, 1px hairline border, barely-there shadow, 12px radius. */
+/** The one surface: white, no outline, a soft shadow and generous corners.
+ *  In dark mode it is a raised charcoal card with a thin light border instead. */
 export default function Card({ padding = 'md', className, children, ...rest }: CardProps) {
   return (
     <div
-      className={cn('bg-surface border border-line rounded-2xl shadow-xs min-w-0', pad[padding], className)}
+      className={cn(
+        'bg-surface rounded-[20px] shadow-card min-w-0',
+        'dark:bg-surface-muted dark:border dark:border-white/10 dark:shadow-none',
+        pad[padding],
+        className
+      )}
       {...rest}
     >
       {children}

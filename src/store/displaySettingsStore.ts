@@ -67,6 +67,8 @@ interface DisplaySettingsState {
   /** Where the floating eye was left; null = default corner. */
   eyePos: EyePos | null;
   setFloatingEye: (on: boolean) => void;
+  /** Apply the on/off choice that arrived from the account (another device). Saved locally only; never written back. */
+  syncFloatingEyeFromRemote: (on: boolean) => void;
   setEyePos: (pos: EyePos | null) => void;
   /** Apply a position that arrived from the account (another device/browser). Saved locally only; never written back. */
   syncEyePosFromRemote: (pos: EyePos | null) => void;
@@ -85,6 +87,10 @@ export const useDisplaySettingsStore = create<DisplaySettingsState>((set, get) =
   floatingEye: localStorage.getItem(EYE_SHOW_KEY) !== 'false',
   eyePos: readEyePos(),
   setFloatingEye: (on) => {
+    try { localStorage.setItem(EYE_SHOW_KEY, String(on)); } catch { /* best-effort */ }
+    set({ floatingEye: on });
+  },
+  syncFloatingEyeFromRemote: (on) => {
     try { localStorage.setItem(EYE_SHOW_KEY, String(on)); } catch { /* best-effort */ }
     set({ floatingEye: on });
   },

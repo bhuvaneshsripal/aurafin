@@ -24,6 +24,28 @@ import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { useModalBackClose } from '../hooks/useModalBackClose';
 import { useExitPresence } from '../hooks/useExitPresence';
 
+/** Soft inner tint painted behind the active tab's outlined icon (lucide 24x24 grid).
+ *  Filling the icon itself made it a flat blob (facets / gear hole vanished), so only
+ *  the closed silhouettes get a light wash and the stroke lines stay crisp on top. */
+const tints: Record<string, React.ReactNode> = {
+  '/': (
+    <>
+      <rect width="7" height="9" x="3" y="3" rx="1" />
+      <rect width="7" height="5" x="14" y="3" rx="1" />
+      <rect width="7" height="9" x="14" y="12" rx="1" />
+      <rect width="7" height="5" x="3" y="16" rx="1" />
+    </>
+  ),
+  '/wealth': <path d="M6 3h12l4 6-10 13L2 9Z" />,
+  '/valuation': (
+    <>
+      <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" />
+      <path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" />
+    </>
+  ),
+  '/settings': <circle cx="12" cy="12" r="3" />,
+};
+
 const primaryLinks = [
   { to: '/', label: 'Overview', icon: LayoutDashboard },
   { to: '/wealth', label: 'Wealth', icon: Gem },
@@ -394,6 +416,12 @@ export default function BottomNav() {
       void hardRefresh({ showBar: true, keepPage: true }).then((ok) => {
         if (!ok) window.scrollTo({ top: 0, behavior: 'smooth' });
       });
+    } else {
+      // Picking a tab always shows that page from its top. A normal tab change is
+      // a new navigation, which the router-level scroll handling already starts
+      // at the top; this also covers tapping the tab you are already inside
+      // (a sub-view that never reaches the router).
+      window.scrollTo({ top: 0, behavior: 'instant' });
     }
   };
 
@@ -462,7 +490,7 @@ export default function BottomNav() {
                 } as React.CSSProperties
               }
             >
-              <span className="h-[var(--nb)] w-[var(--nb)] rounded-full bg-primary-soft shadow-[inset_0_0_0_1.5px_var(--color-primary)]" />
+              <span className="h-[var(--nb)] w-[var(--nb)] rounded-full bg-primary-soft shadow-[0_3px_10px_-2px_color-mix(in_srgb,var(--color-primary)_45%,transparent)]" />
             </span>
             {primaryLinks.map(({ to, label, icon: Icon }, i) => (
               <Fragment key={to}>
@@ -481,10 +509,27 @@ export default function BottomNav() {
                 title={label}
                 className={({ isActive }) => navBtn(tapIdx !== null ? i === tapIdx : isActive)}
               >
-                <span className="relative inline-flex">
-                  <Icon size={23} strokeWidth={1.75} />
-                  {to === '/settings' && <UpdateDot />}
-                </span>
+                {({ isActive }) => {
+                  // The current tab's icon gets a bolder stroke and a soft tint; the others stay thin outlines.
+                  const filled = tapIdx !== null ? i === tapIdx : isActive;
+                  return (
+                    <span className="relative inline-flex">
+                      {filled && (
+                        <svg
+                          aria-hidden
+                          viewBox="0 0 24 24"
+                          width={23}
+                          height={23}
+                          className="absolute inset-0 fill-current opacity-[0.22]"
+                        >
+                          {tints[to]}
+                        </svg>
+                      )}
+                      <Icon size={23} strokeWidth={filled ? 2.1 : 1.75} />
+                      {to === '/settings' && <UpdateDot />}
+                    </span>
+                  );
+                }}
               </NavLink>
               </Fragment>
             ))}

@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import IndicesTable, { type IndicesVariant } from '../components/IndicesTable';
 import { MAP_BORDERS, MAP_COUNTRIES, MAP_GLOBE, MAP_LAND, MAP_VIEWBOX } from '../utils/worldMapPaths';
 import { cn } from '../components/ui/cn';
@@ -58,6 +59,10 @@ function useGlobalMarketColors(enabled: boolean) {
 
 /** All Indices — world-map header (India highlighted), then Indian / Global tabs. */
 export default function Indices() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  // Go back to wherever the person came from; if they opened this page directly, fall back to the dashboard.
+  const goBack = () => (location.key !== 'default' ? navigate(-1) : navigate('/'));
   const [params, setParams] = useSearchParams();
   const tab: IndicesVariant = params.get('tab') === 'global' ? 'global' : 'indian';
   const clipId = useId();
@@ -88,7 +93,17 @@ export default function Indices() {
           </g>
         </svg>
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[var(--color-page,transparent)] pointer-events-none" />
-        <h1 className="relative px-4 sm:px-6 md:px-8 pt-7 text-2xl sm:text-[28px] font-semibold text-ink tracking-tight">
+        <div className="relative px-4 sm:px-6 md:px-8 pt-4">
+          <button
+            type="button"
+            onClick={goBack}
+            aria-label="Go back"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface/90 text-ink shadow-sm backdrop-blur hover:bg-surface-hover tap-scale"
+          >
+            <ArrowLeft size={18} />
+          </button>
+        </div>
+        <h1 className="relative px-4 sm:px-6 md:px-8 pt-3 text-2xl sm:text-[28px] font-semibold text-ink tracking-tight">
           All Indices
         </h1>
       </div>

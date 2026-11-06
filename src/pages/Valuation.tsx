@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, Loader2, ChevronDown, History, X } from 'lucide-react';
-import { Card, CardHeader, PageHeader, Button, Input, cn } from '../components/ui';
+import { Search, Loader2, ChevronDown, X } from 'lucide-react';
+import { Card, CardHeader, PageHeader, Button, Input, CardSkeleton, Badge, cn } from '../components/ui';
+import ValuationBar from '../components/ValuationBar';
+import InfoTip from '../components/ui/InfoTip';
 import { searchStockSymbols, type StockSearchResult } from '../utils/marketPrices';
 import { useAuthStore } from '../store/authStore';
 import { subscribeValuationHistory, saveValuationHistory } from '../hooks/useFirestoreSync';
@@ -14,6 +16,9 @@ type Src = 'auto' | 'you';
 const GROWTH_CAP = 25;
 const HISTORY_KEY = 'aurafin.valuation.history';
 const HISTORY_MAX = 5;
+/** Recent-search chips shown before "+ N more". */
+const CHIPS_SHOWN = 3;
+const EMPTY_FORM = { price: '', eps: '', growth: '', pe: '', years: '5', lookback: '10', exc: '0', dil: '0', req: '15', fy: '' };
 type HistoryItem = { symbol: string; name: string; exchange: 'NSE' | 'BSE' };
 function readHistory(): HistoryItem[] {
   try {
@@ -88,7 +93,8 @@ export default function Valuation() {
       writeHistory(clean);
     });
   }, [user]);
-  const [f, setF] = useState({ price: '', eps: '', growth: '', pe: '', years: '5', lookback: '10', exc: '0', dil: '0', req: '15', fy: '' });
+  const [f, setF] = useState(EMPTY_FORM);
+  const [chipsExpanded, setChipsExpanded] = useState(false);
   const [src, setSrc] = useState<Record<string, Src>>({});
   const [cyclical, setCyclical] = useState(false);
   const [weakPe, setWeakPe] = useState(false);
@@ -150,6 +156,15 @@ export default function Valuation() {
     // Picking a match only fills the box. The valuation loads when "Get valuation" is pressed.
     setListOpen(false);
     inputRef.current?.blur();
+  }
+
+  /** Clear the search, the loaded stock and every assumption. */
+  function reset() {
+    reqId.current++;
+    pickedRef.current = null;
+    setQuery(''); setSuggestions([]); setLastSearch(null); setListOpen(false);
+    setLoading(false); setError(null); setData(null); setEarnings(null);
+    setF(EMPTY_FORM); setSrc({}); setCyclical(false); setWeakPe(false); setRoundEps(false); setGrowthNote('');
   }
 
   async function load(symbol: string, ex: 'NSE' | 'BSE' = exchange) {
@@ -233,8 +248,7 @@ export default function Valuation() {
 
   // --- What the dropdown shows for the text in the box -------------------------------
   // Typing: matches for that text, or a plain "searching / no matches / couldn't search"
-  // line. Recent searches only appear when the box is empty (or holds a stock already
-  // picked), or — while typing — when they actually match what was typed.
+  // line. 
   const q = query.trim();
   const typing = q.length > 0 && q !== pickedRef.current; // searching, not a settled pick
   const longEnough = q.length >= 3;
@@ -249,13 +263,8 @@ export default function Valuation() {
     : lastSearch?.q !== q ? 'searching'
     : lastSearch.failed ? 'failed'
     : 'empty';
-  const needle = q.toLowerCase();
-  const recents = typing
-    ? history.filter((h) => h.symbol.toLowerCase().includes(needle) || h.name.toLowerCase().includes(needle))
-    : history;
-  const showRecents = listOpen && !showSuggestions && recents.length > 0;
   // Until a stock is searched (or a lookup is running / failed), show nothing but the search box.
-  const searchActive = showSuggestions || notice !== null || showRecents;
+  const searchActive = showSuggestions || notice !== null;
   const started = loading || data !== null || error !== null;
   const years = Math.round(num(f.years)) || 5;
   const maxBar = Math.max(num(f.price) || 0, result.levels.find((l) => l.key === 'X/2')?.target || 0);
@@ -263,7 +272,7 @@ export default function Valuation() {
 
   return (
     <div>
-      <PageHeader title="X/2 · X/3 valuation" />
+      <PageHeader title="X/2 · X/3 valuation" description={`Price today vs what ${years} years of growth could justify`} />
 
       {searchActive && createPortal(
         <div
@@ -285,7 +294,7 @@ export default function Valuation() {
               onChange={(e) => { pickedRef.current = null; setListOpen(true); setQuery(e.target.value.toUpperCase()); }}
               onFocus={() => setListOpen(true)}
               onClick={() => setListOpen(true)}
-              className="uppercase placeholder:normal-case pr-10"
+              className="uppercase placeholder:normal-case pr-10 !rounded-full shadow-sm"
               autoCapitalize="characters"
               spellCheck={false}
               onKeyDown={(e) => {
@@ -358,33 +367,38 @@ export default function Valuation() {
                     )}
                   </div>
                 )}
-                {showRecents && (
-                  <div className={notice ? 'border-t border-line-soft' : undefined}>
-                    <div className="flex items-center justify-between px-3 pt-2 pb-1 text-xs text-muted">
-                      <span className="flex items-center gap-1"><History size={13} />Recent searches</span>
-                      <button type="button" onClick={() => { setHistory([]); persistHistory([]); setListOpen(false); }} className="px-1 py-1 hover:text-ink">Clear all</button>
-                    </div>
-                    <ul>
-                      {recents.map((h) => (
-                        <li key={`${h.symbol}-${h.exchange}`}>
-                          <button
-                            type="button"
-                            onClick={() => { pickedRef.current = h.symbol; setQuery(h.symbol); setExchange(h.exchange); setListOpen(false); inputRef.current?.blur(); }}
-                            className="w-full text-left px-3 py-2.5 hover:bg-surface-hover text-sm break-words"
-                          >
-                            <span className="font-semibold">{h.symbol}</span>
-                            <span className="text-muted"> · {h.name} · {h.exchange}</span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
               </div>
             )}
           </div>
-          <Button onClick={() => query.trim() && load(query.trim())} loading={loading} className="w-full sm:w-auto shrink-0">Get valuation</Button>
+          <div className="flex gap-2 shrink-0">
+            <Button onClick={() => query.trim() && load(query.trim())} loading={loading} className="flex-1 sm:flex-none">Get valuation</Button>
+            {started && <Button variant="secondary" onClick={reset} className="flex-1 sm:flex-none">Reset</Button>}
+          </div>
         </div>
+        {/* Recent stocks: tap one to reload it, no list to open. */}
+        {history.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-2" aria-label="Recent searches">
+            {(chipsExpanded ? history : history.slice(0, CHIPS_SHOWN)).map((h) => (
+              <button
+                key={`${h.symbol}-${h.exchange}`}
+                type="button"
+                onClick={() => { setExchange(h.exchange); void load(h.symbol, h.exchange); }}
+                className="keep-round inline-flex h-8 items-center rounded-full border border-line bg-surface px-3 text-[13px] font-medium text-ink-2 transition-colors hover:bg-surface-hover tap-scale"
+              >
+                {h.symbol}
+              </button>
+            ))}
+            {!chipsExpanded && history.length > CHIPS_SHOWN && (
+              <button
+                type="button"
+                onClick={() => setChipsExpanded(true)}
+                className="keep-round inline-flex h-8 items-center rounded-full border border-line bg-surface px-3 text-[13px] font-medium text-muted transition-colors hover:bg-surface-hover"
+              >
+                + {history.length - CHIPS_SHOWN} more
+              </button>
+            )}
+          </div>
+        )}
         {error && <p className="mt-3 text-sm text-red-600">Couldn’t load data: {error}. You can still enter the figures below by hand.</p>}
         {data && (
           <p className="mt-3 text-xs text-muted">
@@ -427,7 +441,7 @@ export default function Valuation() {
         </div>
 
         <div className="space-y-4 min-w-0 order-1">
-          {loading && <Card><div className="flex items-center gap-2 text-sm text-muted"><Loader2 size={16} className="animate-spin" />Loading fundamentals…</div></Card>}
+          {loading && <Card><CardSkeleton /></Card>}
 
           {result.errors.length > 0 && !data && !edited ? (
             // Nothing searched or typed yet: no red errors, just a calm prompt.
@@ -444,11 +458,37 @@ export default function Valuation() {
             </Card>
           ) : (
             <>
+              {!loading && result.levels.length > 0 && (
+                <Card>
+                  <ValuationBar
+                    name={data?.name ?? (query.trim() || 'This stock')}
+                    price={num(f.price)}
+                    x2={result.levels.find((l) => l.key === 'X/2')?.target ?? NaN}
+                    x3={result.levels.find((l) => l.key === 'X/3')?.target ?? NaN}
+                    unreliable={result.lowConfidence}
+                  />
+                </Card>
+              )}
               {result.adequate && (
                 <Card>
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
                     <div className="min-w-0">
-                      <div className="text-sm font-semibold text-muted">Current market price (CMP)</div>
+                      <div className="flex items-center gap-1.5 text-sm font-semibold text-muted">
+                        Current market price (CMP)
+                        {(result.reasons.length > 0 || result.warnings.length > 0) && (
+                          <InfoTip
+                            size={16}
+                            label={result.reasons.length > 0 ? 'Why these numbers may be unreliable' : 'Things to check'}
+                            className={result.reasons.length > 0 ? '!text-amber-600' : ''}
+                          >
+                            <p className="font-semibold text-ink mb-1.5">{result.reasons.length > 0 ? 'Why these numbers may be unreliable' : 'Things to check'}</p>
+                            <ul className="space-y-1.5">
+                              {result.reasons.map((m) => <li key={m} className="text-amber-700">{m}</li>)}
+                              {result.warnings.map((m) => <li key={m} className="text-muted">{m}</li>)}
+                            </ul>
+                          </InfoTip>
+                        )}
+                      </div>
                       <div className="text-2xl font-bold tabular-nums">
                         {num(f.price) > 0 ? inr(num(f.price)) : '—'}
                         {Number.isFinite(result.adequate.discountPct) && (
@@ -465,23 +505,26 @@ export default function Valuation() {
                   </div>
                 </Card>
               )}
-              {(result.reasons.length > 0 || result.warnings.length > 0) && (
-                <Card>
-                  <p className="text-sm font-semibold mb-2">{result.reasons.length > 0 ? 'Why these numbers may be unreliable' : 'Things to check'}</p>
-                  <ul className="space-y-1.5 text-sm">
-                    {result.reasons.map((m) => <li key={m} className="text-amber-700">{m}</li>)}
-                    {result.warnings.map((m) => <li key={m} className="text-muted">{m}</li>)}
-                  </ul>
-                </Card>
-              )}
+              <Card>
+                <div className="text-sm font-semibold" style={{ color: LEVEL_COLOR.X }}>X</div>
+                <div className="text-2xl font-bold tabular-nums my-1">{inr(result.x)}</div>
+                <div className="text-xs text-muted">
+                  Year-{years} EPS × lowest P/E = {result.projected[years - 1].toFixed(2)} × {num(f.pe).toFixed(2)}.
+                  Adequate buying price = X ÷ (1 + {num(f.req)}%)^{years} = X ÷ {result.adequate?.factor.toFixed(2)}.
+                </div>
+              </Card>
               <div className="grid gap-3 sm:grid-cols-2">
                 {result.levels.filter((l) => l.key !== 'X').map((l) => (
                   <Card key={l.key}>
-                    <div className="text-sm font-semibold" style={{ color: LEVEL_COLOR[l.key] }}>{l.key} reference price</div>
+                    <div className="text-sm font-semibold" style={{ color: LEVEL_COLOR[l.key] }}>{l.key}{l.key === 'X/2' ? ' (Target)' : ''}</div>
                     <div className="text-2xl font-bold tabular-nums my-1">{inr(l.target)}</div>
                     <div className={cn('text-sm font-medium', l.upsidePct >= 0 ? 'text-emerald-600' : 'text-red-600')}>{signedPct(l.upsidePct)} vs price</div>
-                    <div className={cn('text-sm', l.discountPct >= 0 ? 'text-emerald-600' : 'text-red-600')}>
-                      {Number.isFinite(l.discountPct) ? `${Math.abs(l.discountPct).toFixed(1)}% ${l.discountPct >= 0 ? 'discount' : 'premium'} at CMP` : '—'}
+                    <div className="my-1">
+                      {Number.isFinite(l.discountPct) ? (
+                        <Badge variant={l.discountPct >= 0 ? 'success' : 'warning'} className="!rounded-full px-2.5">
+                          {Math.abs(l.discountPct).toFixed(0)}% {l.discountPct >= 0 ? 'below' : 'above'}
+                        </Badge>
+                      ) : '—'}
                     </div>
                     <div className="text-xs text-muted">Difference: {Number.isFinite(l.diff) ? `${l.diff >= 0 ? '+' : '−'}${inr(Math.abs(l.diff))}` : '—'}</div>
                   </Card>

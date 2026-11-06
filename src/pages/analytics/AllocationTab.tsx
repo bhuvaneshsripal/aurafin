@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from 'recharts';
 import { Check, Download, RotateCcw } from 'lucide-react';
-import { Badge, Button, Card, CardHeader, Input, SegmentedControl, Table, TableContainer, TBody, Td, Th, THead, Tr, chart } from '../../components/ui';
+import { Badge, Button, Card, CardHeader, Input, SegmentedControl, ConcentricRings, Table, TableContainer, TBody, Td, Th, THead, Tr, chart } from '../../components/ui';
 import Amount from '../../components/Amount';
 import { hideNumber } from '../../utils/privateFormat';
 import { useAnalyticsSettingsStore } from '../../store/analyticsSettingsStore';
@@ -81,18 +81,11 @@ export default function AllocationTab({ data }: { data: AnalyticsData }) {
       <div className="grid gap-5 lg:grid-cols-5">
         <Card className="lg:col-span-2">
           <CardHeader title="Current allocation" description="By asset class — tap Equity to see Direct Stock, ETF and SIP" />
-          <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={categories} isAnimationActive={false} dataKey="value" nameKey="label" innerRadius={55} outerRadius={85} paddingAngle={2} stroke="none">
-                  {categories.map((s) => (
-                    <Cell key={s.key} fill={s.color} />
-                  ))}
-                </Pie>
-                <Tooltip {...chart.tooltip} formatter={(v) => [hideNumber(`${((Number(v) / total) * 100).toFixed(1)}%`), '']} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+          <ConcentricRings
+            items={categories}
+            size={224}
+            formatPercent={(p) => hideNumber(`${p >= 10 ? p.toFixed(0) : p.toFixed(1)}%`)}
+          />
           <div className="mt-2">
             <CategoryBreakdownList categories={categories} currency={currency} />
           </div>

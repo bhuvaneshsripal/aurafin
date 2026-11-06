@@ -9,6 +9,8 @@ export interface Toast {
   message: string;
   tone: ToastTone;
   placement: ToastPlacement;
+  /** Optional button on the right of the toast, e.g. { label: 'Undo', onClick }. */
+  action?: { label: string; onClick: () => void };
 }
 
 const TOAST_LIFETIME_MS = 4500;
@@ -16,7 +18,7 @@ const MAX_VISIBLE = 3;
 
 interface ToastState {
   toasts: Toast[];
-  push: (message: string, tone: ToastTone, placement?: ToastPlacement, lifetimeMs?: number) => void;
+  push: (message: string, tone: ToastTone, placement?: ToastPlacement, lifetimeMs?: number, action?: Toast['action']) => void;
   dismiss: (id: number) => void;
 }
 
@@ -24,11 +26,11 @@ let nextId = 1;
 
 export const useToastStore = create<ToastState>((set, get) => ({
   toasts: [],
-  push: (message, tone, placement = 'top', lifetimeMs = TOAST_LIFETIME_MS) => {
+  push: (message, tone, placement = 'top', lifetimeMs = TOAST_LIFETIME_MS, action) => {
     // Don't stack identical notices (e.g. several saves in a row).
     if (get().toasts.some((t) => t.message === message && t.placement === placement)) return;
     const id = nextId++;
-    set((s) => ({ toasts: [...s.toasts, { id, message, tone, placement }].slice(-MAX_VISIBLE) }));
+    set((s) => ({ toasts: [...s.toasts, { id, message, tone, placement, action }].slice(-MAX_VISIBLE) }));
     window.setTimeout(() => {
       if (get().toasts.some((t) => t.id === id)) get().dismiss(id);
     }, lifetimeMs);
@@ -47,4 +49,7 @@ export const toast = {
     success: (message: string, ms?: number) => useToastStore.getState().push(message, 'success', 'bottom', ms),
     info: (message: string, ms?: number) => useToastStore.getState().push(message, 'info', 'bottom', ms),
   },
+  /** "Holding deleted · UNDO" — replaces a confirm dialog. Sits above the nav bar and stays a bit longer. */
+  undo: (message: string, onUndo: () => void, ms = 6000) =>
+    useToastStore.getState().push(message, 'info', 'bottom', ms, { label: 'Undo', onClick: onUndo }),
 };

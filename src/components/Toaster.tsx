@@ -1,23 +1,43 @@
-import { useToastStore, type ToastTone } from '../store/toastStore';
+import { useToastStore, type Toast, type ToastTone } from '../store/toastStore';
 import { useNetworkStore } from '../store/networkStore';
 import { useSwipeDismiss } from '../hooks/useSwipeDismiss';
 
 const TONE_CLASSES: Record<ToastTone, string> = {
   error: 'bg-red-600',
   success: 'bg-emerald-700',
-  info: 'bg-slate-900',
+  info: 'bg-[#171717] dark:bg-[#232321] dark:border dark:border-white/10',
 };
 
-function SwipeToast({ id, tone, message, edge }: { id: number; tone: ToastTone; message: string; edge: 'up' | 'down' }) {
+function SwipeToast({ id, tone, message, edge, action }: { id: number; tone: ToastTone; message: string; edge: 'up' | 'down'; action?: Toast['action'] }) {
   const dismiss = useToastStore((s) => s.dismiss);
   const swipe = useSwipeDismiss(() => dismiss(id), edge);
+  const base = `${swipe.flung ? '' : 'animate-backdrop-in'} select-none pointer-events-auto max-w-md w-full text-left text-sm font-medium text-white rounded-xl shadow-lg px-4 py-3 ${TONE_CLASSES[tone]}`;
+  if (action) {
+    // Message + action button side by side; the whole bar still swipes away.
+    return (
+      <div {...swipe.bind} style={swipe.style} className={`${base} flex items-center justify-between gap-4`}>
+        <span className="min-w-0">{message}</span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            action.onClick();
+            dismiss(id);
+          }}
+          className="shrink-0 rounded-md px-1 py-0.5 text-[13px] font-semibold uppercase tracking-wide text-[#7fd9a8] hover:text-white"
+        >
+          {action.label}
+        </button>
+      </div>
+    );
+  }
   return (
     <button
       type="button"
       {...swipe.bind}
       style={swipe.style}
       onClick={() => { if (!swipe.wasDragged()) dismiss(id); }}
-      className={`${swipe.flung ? '' : 'animate-backdrop-in'} select-none pointer-events-auto max-w-md w-full text-left text-sm font-medium text-white rounded-xl shadow-lg px-4 py-3 ${TONE_CLASSES[tone]}`}
+      className={base}
     >
       {message}
     </button>
@@ -47,7 +67,7 @@ export default function Toaster() {
           style={{ top: 'calc(env(safe-area-inset-top) + 12px)' }}
         >
           {top.map((t) => (
-            <SwipeToast key={t.id} id={t.id} tone={t.tone} message={t.message} edge="up" />
+            <SwipeToast key={t.id} id={t.id} tone={t.tone} message={t.message} edge="up" action={t.action} />
           ))}
         </div>
       )}
@@ -59,7 +79,7 @@ export default function Toaster() {
           style={{ ['--lift' as string]: `${lift}px` }}
         >
           {bottom.map((t) => (
-            <SwipeToast key={t.id} id={t.id} tone={t.tone} message={t.message} edge="down" />
+            <SwipeToast key={t.id} id={t.id} tone={t.tone} message={t.message} edge="down" action={t.action} />
           ))}
         </div>
       )}

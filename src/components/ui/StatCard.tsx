@@ -3,13 +3,14 @@ import { ChevronDown } from 'lucide-react';
 import Card from './Card';
 import LoadingDots from '../LoadingDots';
 import { cn } from './cn';
+import DeltaChip from './DeltaChip';
 
 export interface StatCardProps {
   label: ReactNode;
   value: ReactNode;
   /** Colours the value: profit/loss figures use positive/negative. */
   tone?: 'default' | 'positive' | 'negative';
-  /** Change chip next to the value, e.g. { value: '13.2%', positive: true }. */
+  /** Change chip next to the value, e.g. { value: '13.2%', positive: true } → "▲ 13.2%". Pass the magnitude only. */
   delta?: { value: string; positive: boolean };
   /** Show the change chip at the top right of the card instead of under the value. */
   deltaInCorner?: boolean;
@@ -33,20 +34,6 @@ export interface StatCardProps {
 const tones = { default: 'text-ink', positive: 'text-positive', negative: 'text-negative' };
 
 /** KPI tile. Values are never truncated — long ₹ figures wrap instead of being cut off. */
-function DeltaChip({ delta }: { delta: { value: string; positive: boolean } }) {
-  return (
-    <span
-      className={cn(
-        'font-medium px-1.5 py-0.5 rounded-md font-numeric text-xs',
-        delta.positive ? 'bg-positive-soft text-positive' : 'bg-negative-soft text-negative'
-      )}
-    >
-      {delta.positive ? '+' : '−'}
-      {delta.value}
-    </span>
-  );
-}
-
 export default function StatCard({ label, value, tone = 'default', delta, deltaInCorner, cornerLabel, sublabel, icon, loading, dense, hero, onToggle, toggled, className }: StatCardProps) {
   return (
     <Card padding="md" className={cn(dense && (hero ? '!p-5 sm:!p-5' : '!p-3 sm:!p-5'), className)}>
@@ -71,7 +58,7 @@ export default function StatCard({ label, value, tone = 'default', delta, deltaI
         )}
         {deltaInCorner && !loading && delta && (
           <span className="ml-auto shrink-0">
-            <DeltaChip delta={delta} />
+            <DeltaChip value={delta.value} positive={delta.positive} />
           </span>
         )}
       </div>
@@ -94,7 +81,7 @@ export default function StatCard({ label, value, tone = 'default', delta, deltaI
       </div>
       {(sublabel || (!loading && delta && !deltaInCorner)) && (
         <div className={cn('mt-1.5 flex items-center gap-2 text-xs text-muted', dense ? 'sm:min-h-[20px]' : 'min-h-[20px]')}>
-          {!loading && delta && !deltaInCorner && <DeltaChip delta={delta} />}
+          {!loading && delta && !deltaInCorner && <DeltaChip value={delta.value} positive={delta.positive} />}
           {sublabel && <span className="min-w-0">{sublabel}</span>}
         </div>
       )}

@@ -97,7 +97,7 @@ export default function GlobalIndicesModal({ open, onClose }: { open: boolean; o
         <table className="w-full text-sm min-w-[780px]">
           <thead>
             <tr className="border-b border-line-soft">
-              <th className={cn(th, 'text-left')}>Index name</th>
+              <th className={th.replace('text-right', 'text-left')}>Index name</th>
               <th className={th}>Last traded</th>
               <th className={th}>Day change</th>
               <th className={th}>High</th>

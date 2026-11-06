@@ -5,7 +5,8 @@ import { detectGraphicsTier, type GraphicsTier } from './deviceTier';
 import './growth.css';
 
 // The 3D engine (three.js + R3F) only downloads when this section nears the viewport.
-const GrowthScene = lazy(() => import('./GrowthScene'));
+const loadScene = () => import('./GrowthScene');
+const GrowthScene = lazy(loadScene);
 
 /** Scroll ranges for each caption: [fadeInStart, fadeInEnd, fadeOutStart, fadeOutEnd]. */
 type BandKey = 'hero' | 'middle' | 'growth' | 'final';
@@ -117,6 +118,20 @@ export default function GrowthJourney() {
 
   const useScene = !reduced && tier !== 'none' && !sceneBroken;
 
+  // Start fetching the 3D engine as soon as the browser is idle, so it is already
+  // downloaded by the time the section scrolls into view.
+  useEffect(() => {
+    if (!useScene) return;
+    const idle = typeof window.requestIdleCallback === 'function';
+    const id = idle
+      ? window.requestIdleCallback(() => void loadScene(), { timeout: 1500 })
+      : window.setTimeout(() => void loadScene(), 400);
+    return () => {
+      if (idle) window.cancelIdleCallback(id);
+      else window.clearTimeout(id);
+    };
+  }, [useScene]);
+
   // Mount the 3D scene only when close to the viewport, and pause its loop when off-screen.
   useEffect(() => {
     const el = wrapRef.current;
@@ -131,7 +146,7 @@ export default function GrowthJourney() {
         if (entry.isIntersecting) setNearView(true);
         setInView(entry.isIntersecting);
       },
-      { rootMargin: '300px 0px' },
+      { rootMargin: '1200px 0px' },
     );
     io.observe(el);
     return () => io.disconnect();
@@ -181,7 +196,7 @@ export default function GrowthJourney() {
       // ---- Autoplay ------------------------------------------------------------------------
       // The journey plays by itself, on a timer, while the section is on screen. Scrolling only
       // moves the page: it never speeds up, skips, pauses or reverses the animation.
-      const DURATION = 14; // seconds for the whole journey
+      const DURATION = 8; // seconds for the whole journey
       let current = 0;
       let visible = false;
 
@@ -189,7 +204,7 @@ export default function GrowthJourney() {
         ([entry]) => {
           visible = entry.isIntersecting;
         },
-        { threshold: 0.5 },
+        { threshold: 0.15 },
       );
       io.observe(wrap);
 

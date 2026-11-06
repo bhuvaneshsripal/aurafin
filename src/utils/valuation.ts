@@ -169,8 +169,12 @@ export function computeValuation(i: ValuationInput): ValuationResult {
     return { key, target, diff: target - i.price, upsidePct: i.price > 0 ? ((target - i.price) / i.price) * 100 : NaN, discountPct: i.price > 0 ? ((target - i.price) / target) * 100 : NaN };
   });
   // Adequate buying price = X ÷ (1 + required return)^years: the price today that would
-  // grow to X in N years at the required return. At 15% over 5 years the factor is 2.01, i.e. ≈ X/2.
-  const factor = Math.pow(1 + i.requiredReturnPct / 100, years);
+  // grow to X in N years at the required return. The video's example (15% over 5 years)
+  // gives a factor of 2.011 and treats it as X/2 (Target), so when the factor is within
+  // 0.05 of 2 it is used as exactly 2. That keeps this number identical to the X/2 level
+  // instead of showing two slightly different figures for the same thing.
+  const rawFactor = Math.pow(1 + i.requiredReturnPct / 100, years);
+  const factor = Math.abs(rawFactor - 2) < 0.05 ? 2 : rawFactor;
   const at = x / factor;
   const adequate: Adequate = { target: at, factor, diff: at - i.price, upsidePct: i.price > 0 ? ((at - i.price) / i.price) * 100 : NaN, discountPct: i.price > 0 ? ((at - i.price) / at) * 100 : NaN };
   const currentPe = i.price > 0 ? i.price / i.eps : null;

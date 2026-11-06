@@ -47,6 +47,8 @@ export default function PageHeader({
         <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-ink">{title}</h1>
         {description && <p className="text-sm text-muted mt-1">{description}</p>}
         {meta && <div className="mt-1.5">{meta}</div>}
+        {/* Short green accent under the title block. */}
+        <span aria-hidden className="mt-2.5 block h-[3px] w-8 rounded-full bg-brand-600 dark:bg-brand-400" />
       </div>
       {actions && <div className="flex items-center gap-2 flex-wrap sm:shrink-0">{actions}</div>}
     </div>
