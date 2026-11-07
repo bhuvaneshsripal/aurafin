@@ -7,6 +7,7 @@ import ValuationWatchlist, { readWatchlist, writeWatchlist, cleanWatchlist, type
 import InfoTip from '../components/ui/InfoTip';
 import { searchStockSymbols, type StockSearchResult } from '../utils/marketPrices';
 import { useAuthStore } from '../store/authStore';
+import { useModalBackClose } from '../hooks/useModalBackClose';
 import { subscribeValuationHistory, saveValuationHistory, subscribeValuationWatchlist, saveValuationWatchlist } from '../hooks/useFirestoreSync';
 import {
   analyseEps, computeValuation, epsCagr, fetchFundamentals, inr, signedPct,
@@ -183,6 +184,10 @@ export default function Valuation() {
     inputRef.current?.blur();
   }
 
+  // Phone/PWA Back button while a stock's valuation is showing: return to the main Valuation page
+  // (empty search + saved watchlist) instead of leaving the page.
+  useModalBackClose(!!data || loading, () => reset());
+
   /** Clear the search, the loaded stock and every assumption. */
   function reset() {
     reqId.current++;
@@ -354,7 +359,7 @@ export default function Valuation() {
 
   return (
     <div>
-      <PageHeader title="X/2 · X/3 valuation" description={`Price today vs what ${years} years of growth could justify`} />
+      <PageHeader title="X/2 · X/3 valuation" />
 
       {searchActive && createPortal(
         <div

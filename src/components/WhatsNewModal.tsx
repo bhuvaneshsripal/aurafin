@@ -71,6 +71,9 @@ export default function WhatsNewModal({
       hideHeader
       fullScreenOnMobile
       footer={
+        // Only the "update available" state needs a pinned action bar. The other
+        // states are plain pages with an inline Close button (see below).
+        !available ? undefined : (
         <div className="flex items-center justify-between gap-2">
           <button
             type="button"
@@ -81,6 +84,7 @@ export default function WhatsNewModal({
           </button>
           {available && <UpdateButton updating={updating} onUpdate={onUpdate} />}
         </div>
+        )
       }
     >
       {status === 'checking' && (
@@ -89,6 +93,13 @@ export default function WhatsNewModal({
           <div className="flex flex-col items-center justify-center gap-3 text-muted md:-mt-6">
             <RefreshCw size={28} className="animate-spin text-brand-600" />
             <p className="text-sm">Checking for updates…</p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="tap-scale md:hidden mt-6 mb-28 w-full min-w-[200px] rounded-xl border border-line bg-surface px-5 py-2.5 text-sm font-semibold text-ink-2"
+            >
+              Close
+            </button>
           </div>
           <DesktopXClose onClose={onClose} />
         </div>
@@ -137,7 +148,15 @@ export default function WhatsNewModal({
                 Check again
               </button>
             )}
-            <p className="mt-3 pb-2 text-[12.5px] text-muted">Updates are installed only from Settings.</p>
+            <p className="mt-3 text-[12.5px] text-muted">Updates are installed only from Settings.</p>
+            {/* Phones: Close sits in the page itself, clear of the bottom nav. */}
+            <button
+              type="button"
+              onClick={onClose}
+              className="tap-scale md:hidden mt-6 mb-28 w-full rounded-xl border border-line bg-surface px-5 py-2.5 text-sm font-semibold text-ink-2"
+            >
+              Close
+            </button>
           </div>
           {/* Desktop's full-screen view has no footer slot, so pin Close to the
               bottom-left here. On phones the pinned footer carries it. */}

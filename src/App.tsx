@@ -28,6 +28,7 @@ import {
   assignOrphanDataToProfile,
   ALL_USER_COLLECTIONS,
 } from './hooks/useFirestoreSync';
+import { useWatchlistSync } from './hooks/useWatchlistSync';
 import { useLivePrices } from './hooks/useLivePrices';
 import { useBackgroundDataCache } from './hooks/useBackgroundDataCache';
 import { useLiveSipValues } from './hooks/useLiveSipValues';
@@ -267,6 +268,7 @@ function DataSync() {
   useAvatarSync();
   useAppLockSync();
   useWealthFilterSync();
+  useWatchlistSync();
   useBasicDetailsSync();
   useFloatingEyeSync();
   // Pushes saves made while the network was weak/offline once it returns.

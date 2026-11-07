@@ -96,6 +96,25 @@ async function fetchImage(url, minBytes = 300, headers = {}) {
   } catch { return null; }
 }
 
+// Brand icon for a list of website domains (used for broker logos). Fetched
+// server-side so the browser never makes a cross-origin image request (no CORS).
+// Earlier domains win; per domain: Google favicon service, then the site's own icons.
+export async function resolveDomainLogo(domains) {
+  const clean = domains
+    .map((d) => String(d).trim().toLowerCase())
+    .filter((d) => /^(?=.{4,100}$)([a-z0-9-]+\.)+[a-z]{2,}$/.test(d))
+    .slice(0, 6);
+  for (const d of clean) {
+    const hit = await firstByPriority([
+      () => fetchImage(`https://www.google.com/s2/favicons?domain=${d}&sz=128`, 500),
+      () => fetchImage(`https://${d}/apple-touch-icon.png`),
+      () => fetchImage(`https://${d}/favicon.ico`),
+    ]);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 // Try every source at once and keep the best-ranked hit (earlier in the list
 // wins), so one slow or dead source never delays or blocks the others.
 async function firstByPriority(tasks) {

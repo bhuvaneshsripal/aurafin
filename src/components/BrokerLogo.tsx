@@ -25,7 +25,7 @@ const BROKER_DOMAINS: Record<string, string | string[]> = {
 /**
  * The broker's real logo, never an invented one. Order:
  *   1. /broker-logos/<key>.png  (drop the official file there to override — see the README in that folder)
- *   2. the broker's own website icon
+ *   2. the broker's own website icon (via /api/market/logo?domain=)
  *   3. the coloured initial badge, so a card is never empty or broken.
  */
 export default function BrokerLogo({
@@ -43,11 +43,8 @@ export default function BrokerLogo({
   const sources = [
     `/broker-logos/${brokerKey}.png`,
     `/broker-logos/${brokerKey}.svg`,
-    ...domains.flatMap((d) => [
-      `https://www.google.com/s2/favicons?domain=${d}&sz=128`,
-      `https://${d}/apple-touch-icon.png`,
-      `https://${d}/favicon.ico`,
-    ]),
+    // Fetched through our own API: the browser never calls third-party icon hosts directly (no CORS errors).
+    ...(domains.length ? [`/api/market/logo?domain=${encodeURIComponent(domains.join(','))}`] : []),
   ];
   const [stage, setStage] = useState(0);
   const src = sources[stage];
@@ -78,10 +75,6 @@ export default function BrokerLogo({
         loading="lazy"
         decoding="async"
         onError={() => setStage((s) => s + 1)}
-        onLoad={(e) => {
-          // The icon service answers unknown sites with a tiny generic globe; treat that as "not found".
-          if (stage > 0 && e.currentTarget.naturalWidth <= 16 && e.currentTarget.src.includes('google.com/s2/favicons')) setStage((s) => s + 1);
-        }}
         className={`${fit ? 'object-cover' : 'object-contain p-0.5'} w-full h-full`}
         style={{ width: size, height: size }}
       />

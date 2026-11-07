@@ -1,7 +1,18 @@
 // GET /api/market/logo?symbol=TCS&market=IN  ->  the company's logo image.
-import { resolveLogo } from '../_lib/logo.js';
+import { resolveLogo, resolveDomainLogo } from '../_lib/logo.js';
 
 export default async function handler(req, res) {
+  // GET /api/market/logo?domain=zerodha.com,www.zerodha.com -> brand icon of the first domain that has one.
+  if (req.query.domain) {
+    try {
+      const logo = await resolveDomainLogo(String(req.query.domain).split(','));
+      if (!logo) { res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=3600'); res.status(404).end(); return; }
+      res.setHeader('Content-Type', logo.contentType);
+      res.setHeader('Cache-Control', 'public, max-age=2592000, s-maxage=2592000, immutable');
+      res.status(200).send(logo.buffer);
+    } catch { res.status(502).end(); }
+    return;
+  }
   const rawSymbol = String(req.query.symbol ?? '').trim();
   const rawName = String(req.query.name ?? '').trim();
   // Tickers are short and made of letters, digits and a few separators; anything

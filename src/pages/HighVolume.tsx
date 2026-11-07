@@ -88,7 +88,6 @@ export default function HighVolume() {
     <div className="space-y-4">
       <PageHeader
         title="High volume"
-        description="NSE stocks with the most shares traded today"
         meta={updatedAt ? `Updated ${timeAgo(updatedAt)}${failed ? ' · offline, showing last data' : ''}` : undefined}
         actionsInline
         actions={

@@ -11,6 +11,8 @@ export interface Toast {
   placement: ToastPlacement;
   /** Optional button on the right of the toast, e.g. { label: 'Undo', onClick }. */
   action?: { label: string; onClick: () => void };
+  /** How long the toast stays up (ms); the Undo countdown ring runs for exactly this long. */
+  lifetimeMs: number;
 }
 
 const TOAST_LIFETIME_MS = 4500;
@@ -30,7 +32,7 @@ export const useToastStore = create<ToastState>((set, get) => ({
     // Don't stack identical notices (e.g. several saves in a row).
     if (get().toasts.some((t) => t.message === message && t.placement === placement)) return;
     const id = nextId++;
-    set((s) => ({ toasts: [...s.toasts, { id, message, tone, placement, action }].slice(-MAX_VISIBLE) }));
+    set((s) => ({ toasts: [...s.toasts, { id, message, tone, placement, action, lifetimeMs }].slice(-MAX_VISIBLE) }));
     window.setTimeout(() => {
       if (get().toasts.some((t) => t.id === id)) get().dismiss(id);
     }, lifetimeMs);
@@ -49,7 +51,7 @@ export const toast = {
     success: (message: string, ms?: number) => useToastStore.getState().push(message, 'success', 'bottom', ms),
     info: (message: string, ms?: number) => useToastStore.getState().push(message, 'info', 'bottom', ms),
   },
-  /** "Holding deleted · UNDO" — replaces a confirm dialog. Sits above the nav bar and stays a bit longer. */
-  undo: (message: string, onUndo: () => void, ms = 6000) =>
+  /** "Holding deleted · UNDO" — 4 seconds, with a circular seconds countdown. Sits above the nav bar. */
+  undo: (message: string, onUndo: () => void, ms = 4000) =>
     useToastStore.getState().push(message, 'info', 'bottom', ms, { label: 'Undo', onClick: onUndo }),
 };

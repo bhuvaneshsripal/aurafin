@@ -21,6 +21,7 @@ import { useAuthStore } from '../../store/authStore';
 import { useHouseholdProfilesStore } from '../../store/householdProfilesStore';
 import { useSyncStatusStore } from '../../store/syncStatusStore';
 import { upsertDoc, removeDoc } from '../../hooks/useFirestoreSync';
+import { toast } from '../../store/toastStore';
 import { exportToCsv, exportToXlsx } from '../../utils/exportCsv';
 import { formatDate, formatLocaleDate, toIsoDate } from '../../utils/date';
 import Modal from '../../components/Modal';
@@ -344,7 +345,13 @@ export default function TransactionsTab() {
 
   const confirmDelete = async () => {
     if (!pendingDeleteIds || !user) return;
+    const removed = allTransactions.filter((t) => pendingDeleteIds.includes(t.id));
     for (const id of pendingDeleteIds) await removeDoc(user, 'transactions', id);
+    if (removed.length) {
+      toast.undo(removed.length === 1 ? 'Transaction deleted' : `${removed.length} transactions deleted`, () => {
+        for (const t of removed) void upsertDoc(user, 'transactions', t);
+      });
+    }
     setSelected((s) => {
       const n = new Set(s);
       pendingDeleteIds.forEach((id) => n.delete(id));

@@ -6,6 +6,7 @@ import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useLivePricesStore } from '../store/livePricesStore';
 import { upsertDoc, removeDoc } from '../hooks/useFirestoreSync';
+import { toast } from '../store/toastStore';
 import Modal from '../components/Modal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import type { Goal } from '../types';
@@ -46,7 +47,11 @@ export default function Goals() {
     if (!pendingDelete) return;
     setDeleting(true);
     try {
-      await handleDelete(pendingDelete.id);
+      const removed = pendingDelete;
+      await handleDelete(removed.id);
+      toast.undo('Goal deleted', () => {
+        if (user) void upsertDoc(user, 'goals', removed);
+      });
       setPendingDelete(null);
     } finally {
       setDeleting(false);

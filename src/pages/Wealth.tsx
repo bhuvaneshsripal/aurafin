@@ -1247,7 +1247,13 @@ function AssetsTab({
       return;
     }
     try {
+      const original = allAssets.find((a) => a.id === id);
       await removeDoc(user, 'assets', id);
+      if (original) {
+        toast.undo('Asset deleted', () => {
+          void upsertDoc(user, 'assets', original).catch(() => toast.error('Could not restore the asset.'));
+        });
+      }
     } catch (err) {
       console.error('Failed to delete asset', err);
       toast.error('Could not delete this asset. Please check your connection and try again.');
@@ -1314,6 +1320,12 @@ function AssetsTab({
         await upsertDoc(user, 'assets', { ...acct, value: (acct.value ?? 0) - t.amount, updatedAt: Date.now() });
       }
       await removeDoc(user, 'transactions', t.id);
+      toast.undo('Dividend deleted', () => {
+        void (async () => {
+          if (acct) await upsertDoc(user, 'assets', { ...acct, updatedAt: Date.now() });
+          await upsertDoc(user, 'transactions', t);
+        })().catch(() => toast.error('Could not restore the dividend.'));
+      });
     } catch (err) {
       console.error('Failed to delete dividend', err);
       toast.error('Could not delete this dividend. Please check your connection and try again.');
@@ -6119,12 +6131,14 @@ function AssetDetailsForm({
     .sort()[0];
 
   const nameMissing = !name.trim();
+  // A stock / ETF needs its ticker: the name, price and live value all come from it.
+  const symbolMissing = isUnitTracked && !symbol.trim();
   // SIP's Current Value is auto-calculated, so it's never a required
   // hand-typed field — everything else still needs a value to save.
   const valueMissing = !isSip && !value.trim();
   // A deposit can't mature on or before the day it starts.
   const maturityBeforeStart = isDepositLike && !!startDate && !!maturityDate && maturityDate <= startDate;
-  const errorCount = [nameMissing, valueMissing, maturityBeforeStart].filter(Boolean).length;
+  const errorCount = [nameMissing, symbolMissing, valueMissing, maturityBeforeStart].filter(Boolean).length;
   const hasErrors = errorCount > 0;
 
   const submit = () => {
@@ -6299,6 +6313,82 @@ function AssetDetailsForm({
           >
             <ArrowLeft size={16} /> Back to asset type
           </button>
+      )}
+      {isUnitTracked && (
+    <Field label={<>Ticker <span className="text-red-500">*</span></>}>
+      <div className="relative">
+        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input
+          value={symbol}
+          onChange={(e) => {
+            symbolTouched.current = true;
+            setSymbol(e.target.value.toUpperCase());
+          }}
+          onFocus={() => symbolSuggestions.length > 0 && setSymbolSearchOpen(true)}
+          onBlur={() => setTimeout(() => setSymbolSearchOpen(false), 150)}
+          className={`${inputClass} uppercase pl-9 ${symbolSearchLoading ? 'pr-9' : ''} ${attemptedSubmit && symbolMissing ? errorInputClass : ''}`}
+          placeholder="Search stock ticker..."
+          autoComplete="off"
+        autoFocus={!initial}
+        />
+        {symbolSearchLoading && (
+          <Loader2
+            size={16}
+            className="animate-spin text-slate-600 absolute right-3 top-1/2 -translate-y-1/2"
+          />
+        )}
+        {symbolSearchOpen && symbolSuggestions.length > 0 && (
+          <div className="absolute z-10 mt-1 w-full max-h-64 overflow-auto bg-surface border border-line rounded-lg shadow-lg">
+            {symbolSuggestions.map((s) => (
+              <button
+                key={s.symbol}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => selectSymbol(s)}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-brand-50 border-b border-line-soft last:border-0 flex items-center justify-between gap-3"
+              >
+                <span className="truncate">
+                  <span className="font-semibold">{s.symbol}</span>
+                  {s.name && s.name !== s.symbol && (
+                    <span className="text-slate-500"> — {s.name}</span>
+                  )}
+                </span>
+                {s.exchDisp && (
+                  <span className="text-xs text-slate-600 shrink-0">{s.exchDisp}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+        {symbolSearchOpen &&
+          !symbolSearchLoading &&
+          symbolSuggestions.length === 0 &&
+          symbol.trim() === symbolSearchedQuery &&
+          symbol.trim().length >= 3 && (
+            <div className="absolute z-10 mt-1 w-full bg-surface border border-line rounded-lg shadow-lg px-3 py-2 text-sm space-y-2">
+              {symbolSearchFailed ? (
+                <span className="text-red-500 block">
+                  Couldn't reach symbol search — check your connection, or enter the ticker directly.
+                </span>
+              ) : (
+                <span className="text-slate-600 block">
+                  No matches for "{symbolSearchedQuery}". Try just the company name (e.g. "Google"), or it
+                  may be a very recent listing that hasn't been indexed yet.
+                </span>
+              )}
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={useSymbolAsTyped}
+                className="text-brand-600 hover:text-brand-700 font-medium"
+              >
+                Use "{symbol.trim().toUpperCase()}" anyway
+              </button>
+            </div>
+          )}
+      </div>
+    {attemptedSubmit && symbolMissing && <p className={errorTextClass}>Ticker is required.</p>}
+    </Field>
       )}
       {isUnitTracked && nameCurrencyField}
       {!initial && <DuplicateWarning assetClass={assetClass} symbol={isUnitTracked ? symbol : ''} name={name} />}
@@ -6555,78 +6645,6 @@ function AssetDetailsForm({
       )}
       {isUnitTracked && (
         <>
-          <Field label="Ticker">
-            <div className="relative">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                value={symbol}
-                onChange={(e) => {
-                  symbolTouched.current = true;
-                  setSymbol(e.target.value.toUpperCase());
-                }}
-                onFocus={() => symbolSuggestions.length > 0 && setSymbolSearchOpen(true)}
-                onBlur={() => setTimeout(() => setSymbolSearchOpen(false), 150)}
-                className={`${inputClass} uppercase pl-9 ${symbolSearchLoading ? 'pr-9' : ''}`}
-                placeholder="Search stock ticker..."
-                autoComplete="off"
-              />
-              {symbolSearchLoading && (
-                <Loader2
-                  size={16}
-                  className="animate-spin text-slate-600 absolute right-3 top-1/2 -translate-y-1/2"
-                />
-              )}
-              {symbolSearchOpen && symbolSuggestions.length > 0 && (
-                <div className="absolute z-10 mt-1 w-full max-h-64 overflow-auto bg-surface border border-line rounded-lg shadow-lg">
-                  {symbolSuggestions.map((s) => (
-                    <button
-                      key={s.symbol}
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => selectSymbol(s)}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-brand-50 border-b border-line-soft last:border-0 flex items-center justify-between gap-3"
-                    >
-                      <span className="truncate">
-                        <span className="font-semibold">{s.symbol}</span>
-                        {s.name && s.name !== s.symbol && (
-                          <span className="text-slate-500"> — {s.name}</span>
-                        )}
-                      </span>
-                      {s.exchDisp && (
-                        <span className="text-xs text-slate-600 shrink-0">{s.exchDisp}</span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {symbolSearchOpen &&
-                !symbolSearchLoading &&
-                symbolSuggestions.length === 0 &&
-                symbol.trim() === symbolSearchedQuery &&
-                symbol.trim().length >= 3 && (
-                  <div className="absolute z-10 mt-1 w-full bg-surface border border-line rounded-lg shadow-lg px-3 py-2 text-sm space-y-2">
-                    {symbolSearchFailed ? (
-                      <span className="text-red-500 block">
-                        Couldn't reach symbol search — check your connection, or enter the ticker directly.
-                      </span>
-                    ) : (
-                      <span className="text-slate-600 block">
-                        No matches for "{symbolSearchedQuery}". Try just the company name (e.g. "Google"), or it
-                        may be a very recent listing that hasn't been indexed yet.
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={useSymbolAsTyped}
-                      className="text-brand-600 hover:text-brand-700 font-medium"
-                    >
-                      Use "{symbol.trim().toUpperCase()}" anyway
-                    </button>
-                  </div>
-                )}
-            </div>
-          </Field>
           {shareLots.length === 1 && (lotInputMode[shareLots[0].id] ?? 'qty') === 'qty' ? (
             // The common case — one purchase, no other-currency entry — gets
             // the plain "No. of Shares / Avg. Purchase Price" layout instead
@@ -7634,7 +7652,13 @@ function LiabilitiesTab({
   const handleDelete = async (id: string) => {
     if (!user) return;
     try {
+      const original = allLiabilities.find((l) => l.id === id);
       await removeDoc(user, 'liabilities', id);
+      if (original) {
+        toast.undo('Liability deleted', () => {
+          void upsertDoc(user, 'liabilities', original).catch(() => toast.error('Could not restore the liability.'));
+        });
+      }
     } catch (err) {
       console.error('Failed to delete liability', err);
       toast.error('Could not delete this liability. Please check your connection and try again.');

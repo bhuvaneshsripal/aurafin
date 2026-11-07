@@ -3,6 +3,7 @@ import { Plus, Trash2, Pencil } from 'lucide-react';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
 import { useAuthStore } from '../store/authStore';
 import { upsertDoc, removeDoc } from '../hooks/useFirestoreSync';
+import { toast } from '../store/toastStore';
 import Modal from '../components/Modal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import type { Liability } from '../types';
@@ -27,7 +28,11 @@ export default function Liabilities() {
     if (!pendingDelete) return;
     setDeleting(true);
     try {
-      await handleDelete(pendingDelete.id);
+      const removed = pendingDelete;
+      await handleDelete(removed.id);
+      toast.undo('Liability deleted', () => {
+        if (user) void upsertDoc(user, 'liabilities', removed);
+      });
       setPendingDelete(null);
     } finally {
       setDeleting(false);

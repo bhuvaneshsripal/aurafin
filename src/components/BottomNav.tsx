@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
+import ValuationIcon from './icons/ValuationIcon';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -11,7 +12,6 @@ import {
   LineChart,
   Gem,
   Wallet,
-  Scale,
   Activity,
   TrendingUp,
   Bookmark,
@@ -20,7 +20,6 @@ import { hardRefresh } from '../utils/hardRefresh';
 import { APP_VERSION } from '../config/version';
 import UpdateDot from './UpdateDot';
 import QuickAddMenu from './QuickAddMenu';
-import { useUiStore } from '../store/uiStore';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { useModalBackClose } from '../hooks/useModalBackClose';
 import { useExitPresence } from '../hooks/useExitPresence';
@@ -50,7 +49,7 @@ const tints: Record<string, React.ReactNode> = {
 const primaryLinks = [
   { to: '/', label: 'Overview', icon: LayoutDashboard },
   { to: '/wealth', label: 'Wealth', icon: Gem },
-  { to: '/valuation', label: 'Valuation', icon: Scale },
+  { to: '/valuation', label: 'Valuation', icon: ValuationIcon as unknown as typeof LayoutDashboard },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -128,10 +127,9 @@ export default function BottomNav() {
   const barRef = useRef<HTMLDivElement | null>(null); // the visible pill
   const shrinkTarget = useRef(0);
   const shrinkNow = useRef(0);
-  const notificationsOpen = useUiStore((s) => s.notificationsOpen);
-  // The bottom nav stays visible on the notifications page; only the "+" button hides.
-  // The bar and "+" hide while typing (keyboard open), including inside the search.
-  const hideFab = useUiStore((s) => s.hideFab) || typing || notificationsOpen;
+  // The "+" never hides on its own: it follows the bar, and the bar hides only
+  // while typing (keyboard open), including inside the search.
+  const hideFab = typing;
   const { mounted: moreMounted, closing: moreClosing } = useExitPresence(moreOpen, 180);
   useBodyScrollLock(moreOpen);
   useModalBackClose(moreOpen, () => setMoreOpen(false));
@@ -533,11 +531,12 @@ export default function BottomNav() {
                 className={({ isActive }) => navBtn(tapIdx !== null ? i === tapIdx : isActive)}
               >
                 {({ isActive }) => {
-                  // The current tab's icon gets a bolder stroke and a soft tint; the others stay thin outlines.
+                  // The current tab's icon gets a bolder stroke; the others stay thin outlines.
                   const filled = tapIdx !== null ? i === tapIdx : isActive;
                   return (
                     <span className="relative inline-flex">
-                      {filled && (
+                      {/* Inner tint removed: the active icon is just a bolder outline. */}
+                      {false && filled && (
                         <svg
                           aria-hidden
                           viewBox="0 0 24 24"

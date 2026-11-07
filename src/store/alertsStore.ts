@@ -42,6 +42,10 @@ interface AlertsState {
   /** Clears every alert and the past days' history (today's snapshots are kept). */
   clear: (todayKey?: string) => void;
   remove: (id: string) => void;
+  /** Puts back alerts that were deleted (Undo), in their original time order. */
+  restore: (items: AlertItem[], hiddenCards?: string[]) => void;
+  /** Un-dismisses market-summary cards (Undo of Clear all). */
+  unhideCards: (keys: string[]) => void;
   setEnabled: (enabled: boolean) => void;
   markFired: (key: string, dayKey: string) => void;
 }
@@ -78,6 +82,13 @@ export const useAlertsStore = create<AlertsState>()(
           sessions: todayKey && s.sessions[todayKey] ? { [todayKey]: s.sessions[todayKey] } : {},
         })),
       remove: (id) => set((s) => ({ items: s.items.filter((i) => i.id !== id) })),
+      restore: (back) =>
+        set((s) => {
+          const have = new Set(s.items.map((i) => i.id));
+          const merged = [...s.items, ...back.filter((i) => !have.has(i.id))].sort((a, b) => b.at - a.at);
+          return { items: merged.slice(0, MAX_ITEMS) };
+        }),
+      unhideCards: (keys) => set((s) => ({ hiddenCards: s.hiddenCards.filter((k) => !keys.includes(k)) })),
       setEnabled: (enabled) => set({ enabled }),
       markFired: (key, dayKey) =>
         set((s) => {

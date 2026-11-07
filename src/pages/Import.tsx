@@ -393,7 +393,7 @@ export default function Import() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Import" description="Bulk import assets, income & expenses" />
+      <PageHeader title="Import" />
 
       {status === 'idle' && (
         <SegmentedControl<'broker' | 'standard'>

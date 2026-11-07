@@ -197,10 +197,11 @@ export default function Dashboard() {
   const investedShown = portfolioPnl.totalInvested + cashBasis + (includeSold ? realizedCost : 0);
   const netWorthShown = includeSold ? netWorth + realizedPnl : netWorth;
   const netWorthPnl = includeSold ? realizedPnl : portfolioPnl.unrealizedPnl;
-  // Percent comes straight from the Performance page's engine so both screens
-  // show the same figure. It's only shown for the normal (current) view; the
-  // realized-only view shows just the amount.
-  const netWorthPnlPercent = portfolioPnl.unrealizedPnlPercent ?? 0;
+  // Percent = the Profit / loss shown ÷ the Total invested shown on the same
+  // strip, so the three cards always agree with each other (Total invested
+  // includes Cash & Savings at face value). Only shown for the normal (current)
+  // view; the realized-only view shows just the amount.
+  const netWorthPnlPercent = investedShown > 0 ? (netWorthPnl / investedShown) * 100 : 0;
 
   const thisMonth = toIsoMonth();
   const { monthIncome, monthExpense } = useMemo(() => {

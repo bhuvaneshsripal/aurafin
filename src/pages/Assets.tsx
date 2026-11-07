@@ -3,6 +3,7 @@ import { Plus, Trash2, Pencil } from 'lucide-react';
 import { useAssetsStore } from '../store/assetsStore';
 import { useAuthStore } from '../store/authStore';
 import { upsertDoc, removeDoc } from '../hooks/useFirestoreSync';
+import { toast } from '../store/toastStore';
 import Modal from '../components/Modal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import type { Asset, AssetClass } from '../types';
@@ -40,7 +41,11 @@ export default function Assets() {
     if (!pendingDelete) return;
     setDeleting(true);
     try {
-      await handleDelete(pendingDelete.id);
+      const removed = pendingDelete;
+      await handleDelete(removed.id);
+      toast.undo('Asset deleted', () => {
+        if (user) void upsertDoc(user, 'assets', removed);
+      });
       setPendingDelete(null);
     } finally {
       setDeleting(false);

@@ -41,7 +41,7 @@ export default function Essentials() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Essentials" description="Your financial health and the goals you are saving towards" />
+      <PageHeader title="Essentials" />
 
       <Tabs<Tab>
         value={tab}

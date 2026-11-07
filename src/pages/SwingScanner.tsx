@@ -113,7 +113,6 @@ export default function SwingScanner() {
     <div className="space-y-4">
       <PageHeader
         title="Swing scanner"
-        description="Nifty 200 stocks ranked by technical swing setups (daily chart)"
         meta={
           updatedAt
             ? `Scanned ${data?.scanned ?? 0} stocks · ${timeAgo(updatedAt)}${failed ? ' · offline, showing last scan' : ''}`

@@ -1,4 +1,4 @@
-import { stockKey } from './savedStocks';
+import { stockKey, WATCHLIST_CHANGED_EVENT } from './savedStocks';
 
 /** Playlist-style lists layered over the saved stocks ("All"), plus a private note per stock.
  *  A stock can sit in several lists. Lives on this device (localStorage), every access guarded. */
@@ -15,7 +15,8 @@ interface Store {
   notes: Record<string, string>;
 }
 
-const KEY = 'aurafin.watchlist.lists';
+export const LISTS_KEY = 'aurafin.watchlist.lists';
+const KEY = LISTS_KEY;
 export const MAX_LISTS = 12;
 export const LIST_EMOJIS = ['⭐', '🚀', '💰', '🏦', '💻', '🛢️', '🌱', '🔥', '🎯', '🧪', '🏭', '🌍'];
 
@@ -32,7 +33,10 @@ function load(): Store {
 }
 function save(s: Store) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(s));
+    const next = JSON.stringify(s);
+    if (localStorage.getItem(KEY) === next) return;
+    localStorage.setItem(KEY, next);
+    window.dispatchEvent(new Event(WATCHLIST_CHANGED_EVENT));
   } catch {
     /* storage unavailable — the change just won't persist */
   }
@@ -48,6 +52,13 @@ export function createList(name: string, emoji: string): WatchList | null {
   const list: WatchList = { id: `l${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, name: n, emoji, keys: [] };
   save({ ...s, lists: [...s.lists, list] });
   return list;
+}
+
+/** Puts back a list that was just deleted (same id, name and stocks). */
+export function restoreList(list: WatchList) {
+  const s = load();
+  if (s.lists.some((l) => l.id === list.id) || s.lists.length >= MAX_LISTS) return;
+  save({ ...s, lists: [...s.lists, list] });
 }
 
 export function updateList(id: string, patch: Partial<Pick<WatchList, 'name' | 'emoji'>>) {

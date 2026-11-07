@@ -97,9 +97,9 @@ export default function ValuationWatchlist({
   if (items.length === 0) return null;
 
   return (
-    <section aria-label="Watchlist" className="mb-4">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <h2 className="mr-1 text-sm font-semibold text-ink">Watchlist</h2>
+    <section aria-label="Watchlist" className="mb-4 mt-5">
+      <div className="mb-2 flex flex-nowrap items-center gap-2.5 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <h2 className="mr-1.5 shrink-0 text-[13px] font-semibold text-ink sm:text-sm">Watchlist</h2>
         {FILTERS.map((f) => (
           <button
             key={f.id}
@@ -107,7 +107,7 @@ export default function ValuationWatchlist({
             aria-pressed={filter === f.id}
             onClick={() => setFilter(f.id)}
             className={cn(
-              '!rounded-md inline-flex h-8 items-center border px-3.5 text-xs font-semibold transition-colors',
+              '!rounded-md inline-flex h-7 shrink-0 items-center border px-2 text-[11px] font-semibold transition-colors sm:h-8 sm:px-3.5 sm:text-xs',
               filter === f.id
                 ? 'border-transparent bg-brand-600 text-white dark:bg-brand-500'
                 : 'border-line bg-surface text-muted hover:bg-surface-hover',

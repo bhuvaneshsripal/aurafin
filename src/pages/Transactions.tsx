@@ -51,7 +51,6 @@ export default function Money() {
     <div className="space-y-5">
       <PageHeader
         title={active.title}
-        description={active.subtitle}
         actionsInline
         actions={
           <>

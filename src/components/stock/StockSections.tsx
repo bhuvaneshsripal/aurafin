@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, Check, ChevronRight } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '../ui';
 import InfoTip from '../ui/InfoTip';
 import { STOCK_DOWN, STOCK_UP } from './StockChart';
@@ -267,10 +267,25 @@ function GrowthTable({ revenue, profit }: { revenue: GrowthFigures; profit: Grow
       ))}
     </div>
   );
+  const [open, setOpen] = useState(true);
   return (
-    <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-0">
-      <div className="sm:border-r sm:border-line sm:pr-8">{col('REVENUE GROWTH', revenue)}</div>
-      <div className="sm:pl-8">{col('PROFIT GROWTH', profit)}</div>
+    <div className="mt-8">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label={open ? 'Collapse growth details' : 'Expand growth details'}
+        className="tap-scale flex w-full items-center justify-between rounded-lg py-1 text-[12px] font-medium tracking-[0.08em] text-muted hover:text-ink"
+      >
+        <span>GROWTH DETAILS</span>
+        <ChevronDown size={18} strokeWidth={2.25} className={cn('transition-transform duration-200', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="mt-3 grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-0">
+          <div className="sm:border-r sm:border-line sm:pr-8">{col('REVENUE GROWTH', revenue)}</div>
+          <div className="sm:pl-8">{col('PROFIT GROWTH', profit)}</div>
+        </div>
+      )}
     </div>
   );
 }
@@ -384,7 +399,7 @@ export function ShareholdingSection({ quarters }: { quarters: HoldingQuarter[] }
       </div>
       <div className="sm:rounded-[20px] sm:border sm:border-line sm:p-6">
         <div className="space-y-6">
-          {shown.map((r) => {
+          {[...shown].sort((a, b) => (active[b.key] ?? -1) - (active[a.key] ?? -1)).map((r) => {
             const v = active[r.key];
             return (
               <div key={r.key} className="flex items-center gap-4 text-[15px] sm:gap-5">

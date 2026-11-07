@@ -173,7 +173,7 @@ export default function Calculators() {
 
   return (
     <div className="space-y-6 max-w-4xl">
-      <PageHeader title="Calculators" description="Project how your investments could grow over time." />
+      <PageHeader title="Calculators" />
 
       {GROUPS.map((group) => (
         <div key={group.title} className="space-y-3">

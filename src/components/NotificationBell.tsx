@@ -8,6 +8,7 @@ import { IconButton } from './ui';
 import { getIstDateInfo } from '../utils/marketHours';
 import { useUiStore } from '../store/uiStore';
 import { useAlertsStore, LIST_KINDS, type AlertKind } from '../store/alertsStore';
+import { toast } from '../store/toastStore';
 import { showSystemNotification } from '../hooks/useMarketAlerts';
 
 const KIND_META: Record<AlertKind, { icon: LucideIcon; tint: string }> = {
@@ -188,7 +189,15 @@ export default function NotificationBell(_props: { align?: 'right' | 'left' } = 
   const setEnabled = useAlertsStore((s) => s.setEnabled);
   const markAllRead = useAlertsStore((s) => s.markAllRead);
   const clear = useAlertsStore((s) => s.clear);
-  const remove = useAlertsStore((s) => s.remove);
+  const removeRaw = useAlertsStore((s) => s.remove);
+  const restore = useAlertsStore((s) => s.restore);
+  const unhideCards = useAlertsStore((s) => s.unhideCards);
+  /** Delete one alert, with an Undo toast that puts it back. */
+  const remove = (id: string) => {
+    const gone = useAlertsStore.getState().items.find((i) => i.id === id);
+    removeRaw(id);
+    if (gone) toast.undo('Notification deleted', () => restore([gone]));
+  };
   const hideCard = useAlertsStore((s) => s.hideCard);
   const [open, setOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -310,8 +319,17 @@ export default function NotificationBell(_props: { align?: 'right' | 'left' } = 
 
   const clearAll = () => {
     const day = getIstDateInfo().dateKey;
+    const before = useAlertsStore.getState().items;
+    const cardKeys = ['nifty', 'sensex', 'banknifty'].map((k) => `${day}:${k}`);
+    const newlyHidden = cardKeys.filter((k) => !useAlertsStore.getState().hiddenCards.includes(k));
     clear(day);
-    ['nifty', 'sensex', 'banknifty'].forEach((k) => hideCard(`${day}:${k}`));
+    cardKeys.forEach((k) => hideCard(k));
+    if (before.length) {
+      toast.undo(`${before.length} notification${before.length === 1 ? '' : 's'} cleared`, () => {
+        restore(before);
+        unhideCards(newlyHidden);
+      });
+    }
     setNewIds(new Set());
     setMenuOpen(false);
   };

@@ -8,12 +8,14 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { fetchLiveQuotes, searchStockSymbols, type LiveQuoteDetail } from '../utils/marketPrices';
 import { MAX_SAVED, readSavedStocks, readStockAlerts, toggleSavedStock, type SavedStock } from '../utils/savedStocks';
 import { toast } from '../store/toastStore';
+import { WATCHLIST_REMOTE_EVENT } from '../utils/watchlistSync';
 import { csvCell, safeFilename, triggerDownload } from '../utils/exportCsv';
 import { fetchStockHistory, fmtNum, fmtPrice, type Exchange } from '../utils/stockDetail';
 import {
   MAX_LISTS,
   createList,
   deleteList,
+  restoreList,
   duplicateList,
   moveInList,
   pruneTo,
@@ -185,6 +187,14 @@ export default function Watchlist() {
     setNotes(readNotes());
   };
 
+  // Another device changed the watchlist: re-read it from this device's storage.
+  useEffect(() => {
+    const onRemote = () => refreshLocal();
+    window.addEventListener(WATCHLIST_REMOTE_EVENT, onRemote);
+    return () => window.removeEventListener(WATCHLIST_REMOTE_EVENT, onRemote);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     pruneTo(new Set(items.map(skey)));
     setLists(readLists());
@@ -282,9 +292,18 @@ export default function Watchlist() {
     );
 
   const removeEverywhere = (s: SavedStock) => {
+    const k = skey(s);
+    const inLists = readLists().filter((l) => l.keys.includes(k)).map((l) => l.id);
+    const note = readNotes()[k];
     toggleSavedStock(s);
     setItems(readSavedStocks());
     setMenuKey(null);
+    toast.undo(`${s.name} removed`, () => {
+      toggleSavedStock(s);
+      for (const id of inLists) if (readLists().some((l) => l.id === id)) toggleInList(id, k);
+      if (note) setNote(k, note);
+      refreshLocal();
+    });
   };
 
   /** Adds a searched stock to the open list (saving it to the watchlist first), or to the watchlist on the All tab. Tapping again undoes it. */
@@ -298,8 +317,12 @@ export default function Watchlist() {
     const isSaved = items.some((s) => skey(s) === k);
     if (activeList) {
       if (activeList.keys.includes(k)) {
-        removeFromList(activeList.id, k);
-        toast.info(`${h.name} removed from ${activeList.name}`);
+        const listId = activeList.id;
+        removeFromList(listId, k);
+        toast.undo(`${h.name} removed from ${activeList.name}`, () => {
+          toggleInList(listId, k);
+          refreshLocal();
+        });
       } else {
         if (!isSaved) {
           if (items.length >= MAX_SAVED) {
@@ -313,7 +336,10 @@ export default function Watchlist() {
       }
     } else if (isSaved) {
       toggleSavedStock(stock);
-      toast.info(`${h.name} removed from Watchlist`);
+      toast.undo(`${h.name} removed from Watchlist`, () => {
+        toggleSavedStock(stock);
+        refreshLocal();
+      });
     } else {
       if (items.length >= MAX_SAVED) {
         toast.error(`Watchlist is full (${MAX_SAVED} stocks). Remove one to add another.`);
@@ -453,9 +479,14 @@ export default function Watchlist() {
               <button
                 className={menuItem}
                 onClick={() => {
-                  removeFromList(activeList.id, k);
+                  const listId = activeList.id;
+                  removeFromList(listId, k);
                   setLists(readLists());
                   setMenuKey(null);
+                  toast.undo(`${s.name} removed from ${activeList.name}`, () => {
+                    toggleInList(listId, k);
+                    refreshLocal();
+                  });
                 }}
               >
                 <X size={14} /> Remove from this list
@@ -482,7 +513,7 @@ export default function Watchlist() {
         title="Watchlist"
         meta={
           items.length > 0 ? (
-            <span className="flex flex-nowrap items-center gap-1 sm:gap-1.5 whitespace-nowrap overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <span className="flex flex-wrap items-center gap-x-1 gap-y-1 sm:gap-x-1.5 whitespace-nowrap">
               <span className="inline-flex items-center shrink-0 rounded-md bg-surface-muted px-1.5 sm:px-2 py-0.5 text-xs font-medium text-ink-2 font-numeric">
                 {visible.length} {visible.length === 1 ? 'stock' : 'stocks'}
               </span>
@@ -878,7 +909,14 @@ export default function Watchlist() {
         open={confirmDelete}
         onClose={() => setConfirmDelete(false)}
         onConfirm={() => {
-          if (activeList) deleteList(activeList.id);
+          if (activeList) {
+            const gone = activeList;
+            deleteList(gone.id);
+            toast.undo(`${gone.name} list deleted`, () => {
+              restoreList(gone);
+              refreshLocal();
+            });
+          }
           setConfirmDelete(false);
           setActive(ALL);
           refreshLocal();

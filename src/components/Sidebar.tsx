@@ -1,4 +1,5 @@
 import { PAGE_SHORTCUT_BY_PATH } from '../config/shortcuts';
+import ValuationIcon from './icons/ValuationIcon';
 import { useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -11,7 +12,6 @@ import {
   LineChart,
   Gem,
   Wallet,
-  Scale,
   Bookmark,
   PanelLeftClose,
   PanelLeftOpen,
@@ -51,7 +51,7 @@ const groups: { label: string; links: NavLinkDef[] }[] = [
     links: [
       { to: '/import', label: 'Import', icon: FileUp },
       { to: '/watchlist', label: 'Watchlist', icon: Bookmark },
-      { to: '/valuation', label: 'Valuation', icon: Scale },
+      { to: '/valuation', label: 'Valuation', icon: ValuationIcon as unknown as typeof LayoutDashboard },
       { to: '/calculators', label: 'Calculators', icon: Calculator },
     ],
   },

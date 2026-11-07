@@ -6,6 +6,7 @@ import { useAuthStore } from '../../store/authStore';
 import { useSyncStatusStore } from '../../store/syncStatusStore';
 import { useHouseholdProfilesStore } from '../../store/householdProfilesStore';
 import { upsertDoc, removeDoc } from '../../hooks/useFirestoreSync';
+import { toast } from '../../store/toastStore';
 import Modal from '../../components/Modal';
 import ConfirmDeleteModal from '../../components/ConfirmDeleteModal';
 import Amount from '../../components/Amount';
@@ -113,7 +114,16 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
 
   const handleDelete = async (row: AccountRow) => {
     if (!user) return;
+    const original =
+      row.kind === 'asset'
+        ? useAssetsStore.getState().assets.find((a) => a.id === row.id)
+        : useLiabilitiesStore.getState().liabilities.find((l) => l.id === row.id);
     await removeDoc(user, row.kind === 'asset' ? 'assets' : 'liabilities', row.id);
+    if (original) {
+      toast.undo('Account deleted', () => {
+        void upsertDoc(user, row.kind === 'asset' ? 'assets' : 'liabilities', original as never);
+      });
+    }
   };
 
   const confirmDelete = async () => {

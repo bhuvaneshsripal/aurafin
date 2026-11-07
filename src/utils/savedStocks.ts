@@ -18,8 +18,10 @@ export interface StockPriceAlert {
   dir: 'above' | 'below';
 }
 
-const SAVED_KEY = 'aurafin.stock.saved';
-const ALERTS_KEY = 'aurafin.stock.alerts';
+export const SAVED_KEY = 'aurafin.stock.saved';
+export const ALERTS_KEY = 'aurafin.stock.alerts';
+/** Fired (on window) whenever saved stocks / alerts / lists really change on this device; the cloud sync listens. */
+export const WATCHLIST_CHANGED_EVENT = 'aurafin:watchlist-changed';
 export const MAX_SAVED = 50;
 
 export const stockKey = (market: Market, symbol: string) => `${market}:${symbol.toUpperCase().replace(/\.(NS|BO)$/i, '')}`;
@@ -34,7 +36,10 @@ function read<T>(key: string): T[] {
 }
 function write(key: string, value: unknown) {
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    const next = JSON.stringify(value);
+    if (localStorage.getItem(key) === next) return;
+    localStorage.setItem(key, next);
+    window.dispatchEvent(new Event(WATCHLIST_CHANGED_EVENT));
   } catch {
     /* storage unavailable — the change just won't persist */
   }
