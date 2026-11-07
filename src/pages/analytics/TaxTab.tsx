@@ -8,18 +8,13 @@ import { computeHoldingPnl, isInvestmentHolding } from '../../utils/investmentPn
 import { resolveAssetValues } from '../../utils/assetValues';
 import { currentFinancialYear, fifoMatch, LTCG_EXEMPTION, summariseFy, TAX_RULES, unrealisedLots, type GainSlice } from '../../utils/capitalGains';
 import { toIsoDate, formatDate } from '../../utils/date';
+import { csvCell, triggerDownload } from '../../utils/exportCsv';
 import { ASSET_CLASS_LABELS } from '../../utils/currency';
 import type { AnalyticsData } from './useAnalyticsData';
 
 function downloadCsv(name: string, rows: (string | number)[][]) {
-  const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
-  const blob = new Blob([rows.map((r) => r.map(esc).join(',')).join('\n')], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(url);
+  const blob = new Blob(['\uFEFF', rows.map((r) => r.map(csvCell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+  triggerDownload(blob, name);
 }
 
 export default function TaxTab({ data }: { data: AnalyticsData }) {

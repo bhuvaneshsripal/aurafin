@@ -1,5 +1,5 @@
 
-function triggerDownload(blob: Blob, filename: string) {
+export function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -10,6 +10,21 @@ function triggerDownload(blob: Blob, filename: string) {
   // Revoking straight away can cancel the download in Safari/some mobile
   // browsers; give the browser a moment to start it first.
   window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+/** Makes a name safe to use as a download filename (no slashes, colons, etc.). */
+export function safeFilename(name: string, fallback = 'download'): string {
+  const printable = Array.from(name).filter((c) => c.charCodeAt(0) >= 32).join('');
+  const cleaned = printable.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim().slice(0, 80);
+  return cleaned || fallback;
+}
+
+/** One quoted CSV cell. Text starting with = + - @ is prefixed with ' so Excel/Sheets
+ *  can't run it as a formula; plain numbers (even "-500") are left alone. */
+export function csvCell(v: string | number | null | undefined): string {
+  const t = v === null || v === undefined ? '' : String(v);
+  const safe = typeof v === 'string' && /^[=+\-@\t\r]/.test(t) && !/^[-+]?\d+(\.\d+)?$/.test(t) ? `'${t}` : t;
+  return `"${safe.replace(/"/g, '""')}"`;
 }
 
 /** Spreadsheet apps treat a text cell starting with = + - @ (or a tab/CR) as

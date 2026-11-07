@@ -41,21 +41,66 @@
       @media (prefers-color-scheme:dark){html.dark,html.dark body{background:#020617}}
       /* Instant first paint for returning users: shown from plain HTML before any JS loads,
          removed by the app once the real Overview is ready (src/utils/bootShell.ts). */
-      #boot{display:none;position:fixed;inset:0;z-index:2147483000;background:#f7f5f0;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#0f172a;
-        padding-top:env(safe-area-inset-top,0px);overflow:hidden}
-      html.boot-on #boot{display:block}
-      html.dark #boot{background:#020617;color:#e2e8f0}
-      #boot .bar{display:flex;align-items:center;gap:10px;padding:16px 18px;background:#fff;border-bottom:1px solid #e7e5e0}
-      html.dark #boot .bar{background:#0b1220;border-color:#1e293b}
-      #boot .brand{font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:21px}
-      #boot .dotc{width:30px;height:30px;border-radius:50%;background:#d9a520}
-      #boot h1{font-size:24px;font-weight:600;margin:26px 18px 6px}
-      #boot .ul{width:44px;height:3px;background:#247a4d;margin:0 18px 18px;border-radius:2px}
-      #boot .card{background:#fff;border-radius:22px;margin:0 18px 14px;height:120px}
-      html.dark #boot .card{background:#0f172a}
-      #boot .row{display:flex;gap:14px;margin:0 18px 14px}
-      #boot .row .card{margin:0;flex:1;height:78px}
+      #boot{display:none;position:fixed;inset:0;z-index:2147483000;background:#f7f5f0;font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#0f172a;
+        overflow:hidden;opacity:1;transition:opacity .22s ease}
+      html.boot-on #boot{display:flex}
+      html.boot-out #boot{opacity:0;pointer-events:none}
+      html.dark #boot{background:#0d0d0c;color:#e2e8f0}
+      #boot *{box-sizing:border-box}
+      /* shimmering placeholder blocks */
+      #boot .sk{background:#ebe8e1;border-radius:10px;position:relative;overflow:hidden}
+      #boot .sk::after{content:"";position:absolute;inset:0;transform:translateX(-100%);
+        background:linear-gradient(90deg,transparent,rgba(255,255,255,.7),transparent);animation:bootshimmer 1.5s ease-in-out infinite}
+      html.dark #boot .sk{background:#1c1c1a}
+      html.dark #boot .sk::after{background:linear-gradient(90deg,transparent,rgba(255,255,255,.07),transparent)}
+      @keyframes bootshimmer{to{transform:translateX(100%)}}
+      #boot .logo{width:34px;height:34px;border-radius:50%;flex:none;background:#d9a520 center/cover no-repeat}
+      #boot .brand{font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:22px;letter-spacing:-.01em}
+      #boot .brand i{font-style:normal;color:#247a4d}
+      #boot .side{display:none;width:276px;flex:none;background:#fff;border-right:1px solid #e7e5e0;padding:20px 14px;flex-direction:column;gap:10px}
+      html.dark #boot .side,html.dark #boot .top{background:#151514;border-color:#262624}
+      #boot .side .brandrow{display:flex;align-items:center;gap:10px;padding:0 6px 14px}
+      #boot .chip{height:48px;border-radius:12px}
+      #boot .nav{height:36px;border-radius:9px;margin-top:6px}
+      #boot .main{flex:1;min-width:0;display:flex;flex-direction:column}
+      #boot .top{display:flex;align-items:center;gap:10px;height:56px;padding:0 18px;background:#fff;border-bottom:1px solid #e7e5e0;flex:none}
+      #boot .top .sp{flex:1}
+      #boot .top .tk{display:none;height:16px;width:150px}
+      #boot .brandm{display:flex;align-items:center;gap:10px}
+      #boot .ic{width:34px;height:34px;border-radius:10px;flex:none}
+      #boot .strip{height:34px;display:flex;align-items:center;gap:22px;padding:0 18px;background:#fff;border-bottom:1px solid #e7e5e0;flex:none}
+      html.dark #boot .strip{background:#151514;border-color:#262624}
+      #boot .strip .sk{height:12px;width:110px}
+      #boot .page{padding:22px 18px;max-width:1240px;width:100%;margin:0 auto}
+      #boot h1{font-size:24px;font-weight:600;margin:0 0 6px;letter-spacing:-.01em}
+      #boot .ul{width:44px;height:3px;background:#247a4d;margin:0 0 18px;border-radius:2px}
+      #boot .card{background:#fff;border-radius:22px;padding:18px;margin-bottom:14px;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+      html.dark #boot .card{background:#151514}
+      #boot .hero{height:132px;display:flex;flex-direction:column;justify-content:center;gap:12px}
+      #boot .hero .sk:nth-child(1){height:12px;width:120px}
+      #boot .hero .sk:nth-child(2){height:34px;width:210px;border-radius:12px}
+      #boot .hero .sk:nth-child(3){height:12px;width:150px}
+      #boot .row{display:flex;gap:14px}
+      #boot .row .card{flex:1;height:88px;display:flex;flex-direction:column;justify-content:center;gap:10px;margin-bottom:14px}
+      #boot .row .card .sk:nth-child(1){height:10px;width:60%}
+      #boot .row .card .sk:nth-child(2){height:20px;width:80%}
       #boot .tall{height:230px}
+      #boot .tall .sk{height:100%;border-radius:14px}
+      #boot .pill{position:absolute;left:50%;bottom:calc(14px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);height:62px;width:min(92%,380px);
+        border-radius:999px;background:rgba(255,255,255,.9);box-shadow:0 8px 28px rgba(15,23,42,.14);display:flex;align-items:center;justify-content:space-around;padding:0 14px}
+      html.dark #boot .pill{background:rgba(30,30,28,.92)}
+      #boot .pill .sk{width:42px;height:42px;border-radius:50%}
+      #boot .pill .sk.mid{width:50px;height:50px;background:#247a4d;opacity:.85}
+      #boot .pill .sk.mid::after{display:none}
+      @media (min-width:768px){
+        #boot .side{display:flex}
+        #boot .top{height:66px;padding:0 32px;gap:14px}
+        #boot .top .tk{display:block}
+        #boot .top .brandm,#boot .strip,#boot .pill{display:none}
+        #boot .page{padding:28px 32px}
+        #boot .hero{height:150px}
+      }
+      @media (prefers-reduced-motion:reduce){#boot .sk::after{animation:none}}
     </style>
     <script>
       try{
@@ -69,11 +114,29 @@
   </head>
   <body>
     <div id="boot" aria-hidden="true">
-      <div class="bar"><span class="dotc"></span><span class="brand">Aurafin.</span></div>
-      <h1>Overview</h1><div class="ul"></div>
-      <div class="card"></div>
-      <div class="row"><div class="card"></div><div class="card"></div></div>
-      <div class="card tall"></div>
+      <aside class="side">
+        <div class="brandrow"><span class="logo" style="background-image:url(/favicon-64.png)"></span><span class="brand">Aurafin<i>.</i></span></div>
+        <div class="sk chip"></div>
+        <div class="sk nav" style="width:70%"></div><div class="sk nav" style="width:55%"></div><div class="sk nav" style="width:75%"></div>
+        <div class="sk nav" style="width:60%;margin-top:22px"></div><div class="sk nav" style="width:68%"></div>
+        <div class="sk nav" style="width:50%;margin-top:22px"></div><div class="sk nav" style="width:64%"></div><div class="sk nav" style="width:72%"></div>
+      </aside>
+      <div class="main">
+        <div class="top">
+          <span class="brandm"><span class="logo" style="background-image:url(/favicon-64.png)"></span><span class="brand">Aurafin<i>.</i></span></span>
+          <span class="sk tk"></span><span class="sk tk"></span><span class="sk tk"></span>
+          <span class="sp"></span>
+          <span class="sk ic"></span><span class="sk ic"></span><span class="sk ic"></span>
+        </div>
+        <div class="strip"><span class="sk"></span><span class="sk"></span><span class="sk"></span></div>
+        <div class="page">
+          <h1>Overview</h1><div class="ul"></div>
+          <div class="card hero"><span class="sk"></span><span class="sk"></span><span class="sk"></span></div>
+          <div class="row"><div class="card"><span class="sk"></span><span class="sk"></span></div><div class="card"><span class="sk"></span><span class="sk"></span></div></div>
+          <div class="card tall"><div class="sk"></div></div>
+        </div>
+      </div>
+      <div class="pill"><span class="sk"></span><span class="sk"></span><span class="sk mid"></span><span class="sk"></span><span class="sk"></span></div>
     </div>
     <div id="root"></div>
     <noscript>

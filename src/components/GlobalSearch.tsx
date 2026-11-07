@@ -1,5 +1,6 @@
 import { SHORTCUT_HINT } from '../config/shortcuts';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Search, X, TrendingUp, Clock, LineChart, Star } from 'lucide-react';
 import CompanyLogo from './CompanyLogo';
@@ -72,7 +73,18 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
   const [stocks, setStocks] = useState<StockHit[]>([]);
   const [stocksState, setStocksState] = useState<'idle' | 'loading' | 'failed' | 'done'>('idle');
   const inputRef = useRef<HTMLInputElement>(null);
+  const measureRef = useRef<HTMLSpanElement>(null);
+  const [inputFocused, setInputFocused] = useState(false);
+  const [caretLeft, setCaretLeft] = useState(0);
+  useLayoutEffect(() => {
+    const w = measureRef.current?.offsetWidth ?? 0;
+    const max = (inputRef.current?.clientWidth ?? 9999) - 3;
+    setCaretLeft(Math.max(0, Math.min(w, max)));
+  }, [query, inputFocused, open]);
   const containerRef = useRef<HTMLDivElement>(null);
+  // Phones: the panel sits between the top bar + index strip and the bottom nav
+  // (which all stay visible) instead of covering the whole screen.
+  const [mobileTop, setMobileTop] = useState<number | null>(null);
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const uid = user?.uid;
@@ -97,10 +109,27 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
     if (user && !isGuest) void saveSearchHistory(user, next).catch(() => {});
   };
 
-  // Stocks bookmarked on the stock page (read fresh each time the panel opens).
+  // Which results are already on the Watchlist (for the star on each result).
   const [savedStocks, setSavedStocks] = useState<SavedStock[]>([]);
   useEffect(() => {
     if (open) setSavedStocks(readSavedStocks().slice(0, MAX_RECENT_SEARCHES));
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const measure = () => {
+      if (window.innerWidth >= 640) {
+        setMobileTop(null);
+        return;
+      }
+      const bar = document.getElementById('app-topbar')?.getBoundingClientRect();
+      const strip = document.getElementById('app-marquee')?.getBoundingClientRect();
+      const stripVisible = !!strip && strip.height > 0 && strip.width > 0;
+      setMobileTop(Math.max(bar?.bottom ?? 56, stripVisible ? strip!.bottom : 0));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
   }, [open]);
 
   useEffect(() => {
@@ -170,12 +199,11 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
 
   // Live price (CMP) + day change for the stocks found, shown on each row.
   const [quotes, setQuotes] = useState<Map<string, LiveQuoteDetail>>(new Map());
-  const savedHits: StockHit[] = savedStocks.map((h) => ({ symbol: h.symbol, name: h.name, market: h.market, exch: h.exchange }));
   const recentHits: { entry: string; hit: StockHit }[] = recentSearches
     .map((entry) => ({ entry, hit: decodeRecent(entry) }))
     .filter((r): r is { entry: string; hit: StockHit } => r.hit !== null);
   useEffect(() => {
-    const list = [...stocks, ...savedHits, ...recentHits.map((r) => r.hit)];
+    const list = [...stocks, ...recentHits.map((r) => r.hit)];
     if (!open || list.length === 0) return;
     let cancelled = false;
     const lookups = list.map((h) => ({ key: quoteKeyFor(h), market: h.market }));
@@ -187,7 +215,7 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
     return () => {
       cancelled = true;
     };
-  }, [stocks, savedStocks, recentSearches, open]);
+  }, [stocks, recentSearches, open]);
 
   const priceOf = (h: StockHit) => {
     const qd = quotes.get(quoteKeyFor(h));
@@ -224,6 +252,9 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
       if (e.key === 'Escape') setOpen(false);
     };
     const onClickOutside = (e: MouseEvent) => {
+      const t = e.target as Element | null;
+      if (t?.closest?.('[data-global-search-trigger]')) return; // the trigger toggles it itself
+      // On phones the top bar and bottom nav stay usable; tapping them leaves the search.
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener('keydown', onKeyDown);
@@ -236,7 +267,7 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
 
   useBodyScrollLock(open);
 
-  // Tell the layout the search is open so the mobile bottom nav / "+" button hide.
+  // Tell the layout the search is open (the bottom nav stays visible, but stays shown above the keyboard).
   const setSearchOpen = useUiStore((s) => s.setSearchOpen);
   useEffect(() => {
     setSearchOpen(open);
@@ -276,12 +307,13 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
   };
 
   // Keyboard: arrows move through the rows on screen, Enter opens the highlighted one.
-  const navList: StockHit[] = q ? stocks : [...savedHits, ...recentHits.map((r) => r.hit)];
-  const [activeIdx, setActiveIdx] = useState(0);
+  const navList: StockHit[] = q ? stocks : recentHits.map((r) => r.hit);
+  // -1 = nothing highlighted until the person hovers a row or uses the arrow keys.
+  const [activeIdx, setActiveIdx] = useState(-1);
   const navKey = `${open}|${q}|${navList.map(hitKey).join(',')}`;
-  useEffect(() => setActiveIdx(0), [navKey]);
+  useEffect(() => setActiveIdx(-1), [navKey]);
   useEffect(() => {
-    if (!open) return;
+    if (!open || activeIdx < 0) return;
     containerRef.current?.querySelector(`[data-nav-idx="${activeIdx}"]`)?.scrollIntoView({ block: 'nearest' });
   }, [activeIdx, open]);
   const onInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -291,10 +323,10 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
       setActiveIdx((i) => (i + 1) % navList.length);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setActiveIdx((i) => (i - 1 + navList.length) % navList.length);
+      setActiveIdx((i) => (i <= 0 ? navList.length - 1 : i - 1));
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      const hit = navList[Math.min(activeIdx, navList.length - 1)];
+      const hit = navList[Math.min(Math.max(activeIdx, 0), navList.length - 1)];
       if (hit) openStock(hit);
     }
   };
@@ -314,7 +346,8 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
       {variant === 'bar' ? (
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          data-global-search-trigger
+          onClick={() => setOpen((o) => !o)}
           aria-label="Search Aurafin"
           className="group flex items-center gap-2 h-9 w-full max-w-sm px-3 rounded-lg border border-line bg-surface-muted text-sm text-faint hover:bg-surface hover:border-slate-300 transition-colors"
         >
@@ -324,7 +357,8 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
       ) : (
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          data-global-search-trigger
+          onClick={() => setOpen((o) => !o)}
           title={`Search Aurafin (${SHORTCUT_HINT.search})`}
           aria-label="Search Aurafin"
           className="tap-scale h-9 w-9 flex items-center justify-center rounded-lg text-muted hover:bg-surface-hover hover:text-ink shrink-0 transition-colors"
@@ -333,26 +367,49 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
         </button>
       )}
 
-      {open && (
-        <div className="animate-backdrop-in fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-[2px] sm:px-4 sm:pt-24 flex justify-center">
+      {open && createPortal(
+        <div
+          className="animate-backdrop-in fixed inset-x-0 bottom-0 z-[35] sm:inset-0 sm:z-[100] sm:bg-slate-900/40 sm:backdrop-blur-[2px] sm:px-4 sm:pt-24 flex justify-center"
+          style={mobileTop !== null ? { top: mobileTop } : undefined}
+        >
           <div
             ref={containerRef}
             className="global-search-panel animate-menu-in w-full sm:max-w-xl bg-surface sm:rounded-3xl sm:shadow-2xl sm:border border-line overflow-hidden h-full sm:h-fit sm:max-h-[72vh] flex flex-col"
             style={{ transformOrigin: 'top center' }}
           >
-            <div className="px-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:pt-3 pb-2 shrink-0 flex items-center gap-2">
-              <div className="flex flex-1 min-w-0 items-center gap-2.5 h-[52px] px-3.5 rounded-2xl bg-surface-muted border border-line focus-within:border-brand-500 focus-within:bg-surface transition-colors">
-                <Search size={20} className="text-brand-500 shrink-0" />
-                <input
-                  ref={inputRef}
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  onKeyDown={onInputKeyDown}
-                  placeholder="Search stocks, e.g. ITC"
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="global-search-input flex-1 min-w-0 bg-transparent text-[17px] leading-6 text-ink placeholder:text-slate-400 caret-brand-500"
-                />
+            <div className="px-3 pt-3 pb-2 shrink-0 flex items-center gap-2">
+              <div className="flex flex-1 min-w-0 items-center gap-2.5 h-9 px-2.5 rounded-lg bg-surface-muted border border-line focus-within:border-brand-500 focus-within:bg-surface transition-colors">
+                <Search size={15} className="text-brand-500 shrink-0" />
+                <div className="relative flex-1 min-w-0 h-6 flex items-center">
+                  <input
+                    ref={inputRef}
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={onInputKeyDown}
+                    onFocus={() => setInputFocused(true)}
+                    onBlur={() => setInputFocused(false)}
+                    placeholder="Search stocks, e.g. ITC"
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="global-search-input w-full min-w-0 bg-transparent text-sm leading-6 text-ink placeholder:text-slate-400 caret-transparent"
+                  />
+                  {inputFocused && (
+                    <>
+                      <span
+                        ref={measureRef}
+                        aria-hidden
+                        className="global-search-input absolute invisible whitespace-pre text-sm pointer-events-none"
+                      >
+                        {query}
+                      </span>
+                      <span
+                        aria-hidden
+                        className="global-search-caret pointer-events-none absolute top-0.5 h-5 w-0.5 rounded-full bg-brand-500"
+                        style={{ left: Math.min(caretLeft, 9999) }}
+                      />
+                    </>
+                  )}
+                </div>
                 {query && (
                   <button
                     onClick={() => setQuery('')}
@@ -378,29 +435,10 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
               </button>
             </div>
 
-            <div className="overflow-y-auto pb-2 flex-1 min-h-0 sm:flex-none">
+            <div className="overflow-y-auto pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:pb-2 flex-1 min-h-0 sm:flex-none">
               {!q ? (
                 navList.length > 0 ? (
                   <div>
-                    {savedHits.length > 0 && (
-                      <ResultGroup label="Saved stocks" icon={Star} iconColor="text-amber-500">
-                        {savedHits.map((h, i) => {
-                          const pr = priceOf(h);
-                          return (
-                            <ResultRow
-                              key={`saved:${hitKey(h)}`}
-                              idx={i}
-                              active={activeIdx === i}
-                              hit={h}
-                              q=""
-                              price={pr}
-                              onHover={() => setActiveIdx(i)}
-                              onClick={() => openStock(h)}
-                            />
-                          );
-                        })}
-                      </ResultGroup>
-                    )}
                     {recentHits.length > 0 && (
                       <ResultGroup
                         label="Recently opened"
@@ -416,7 +454,7 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
                         }
                       >
                         {recentHits.map((r, j) => {
-                          const i = savedHits.length + j;
+                          const i = j;
                           const pr = priceOf(r.hit);
                           return (
                             <ResultRow
@@ -493,7 +531,8 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
             </div>
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

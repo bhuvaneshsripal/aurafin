@@ -72,7 +72,7 @@ export function downloadBackupJson(backup: AurafinBackup) {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
 /** Reads and validates a user-selected backup file. Throws a message

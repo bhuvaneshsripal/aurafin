@@ -118,3 +118,27 @@ portfolio P&L, cash basis and month income/expense.
 **Selectors.** LockScreen, TopHeader, Topbar, PrivacyFab and App no longer subscribe to whole stores.
 
 Deliberately NOT done: `content-visibility` on rows (would skew scroll restoration), changing CSS `zoom`.
+
+---
+
+# Third pass — whole-site bug sweep
+
+## Stock page (`StockQuote.tsx`)
+- A slow reply for the previous stock or chart range could overwrite the current one (open stock A, then B quickly, or tap 1D then 1Y: A's price/chart showed under B, or the 1D chart under the 1Y label). Every quote / chart / details load now takes a ticket and only the newest may update the page.
+- A background refresh that failed while the page was still loading left the chart or details spinning forever; it now shows the "Try again" state.
+- A price alert that fired cleared the alert of whichever stock page was open, not its own; it now clears the alert it belongs to.
+
+## Live prices (`marketPrices.ts`, Watchlist)
+- The ".BO" (BSE) suffix was stripped before asking the server for a price, so BSE stocks were priced from NSE (and "NSE.BO" matched the unrelated NSE symbol "NSE"), even though the server already has BSE-only routing. ".BO" is now kept; only ".NS" is dropped.
+- Stocks saved from the BSE stock page (saved as bare symbol + exchange "BSE") are now priced and charted as BSE in the Watchlist.
+
+## Watchlist page
+- Export CSV: formula-injection safe (a note like `=HYPERLINK(...)` no longer runs in Excel), UTF-8 BOM so ₹ and non-English names read correctly, list names with `/ : ? *` no longer break the filename, and the download is no longer cancelled in Safari / mobile (the link is added to the page and the URL is revoked after a delay).
+- A stock whose 52-week history failed to load stayed without a range bar for 30 minutes; failed loads are retried after 2 minutes.
+- Duplicating a list in the same millisecond as another could give two lists the same id.
+- Summary line restyled as chips (count, up, down, average).
+
+## Downloads
+- Analytics → Tax CSV: same fixes as the Watchlist export (BOM, formula-safe, delayed revoke).
+- Backup .json: the download URL was revoked immediately, which can cancel the download in Safari / some mobile browsers.
+- New shared helpers in `utils/exportCsv.ts`: `triggerDownload`, `csvCell`, `safeFilename`.

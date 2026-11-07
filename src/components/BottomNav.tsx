@@ -14,6 +14,7 @@ import {
   Scale,
   Activity,
   TrendingUp,
+  Bookmark,
 } from 'lucide-react';
 import { hardRefresh } from '../utils/hardRefresh';
 import { APP_VERSION } from '../config/version';
@@ -63,6 +64,7 @@ interface MoreLink {
 const COMING_SOON_LABEL = 'Coming soon';
 
 const moreLinks: MoreLink[] = [
+  { to: '/watchlist', label: 'Watchlist', icon: Bookmark },
   { to: '/wealth/performance', label: 'Performance', icon: LineChart },
   { to: '/transactions', label: 'Money', icon: Wallet },
   { to: '/essentials', label: 'Essentials', icon: Target },
@@ -129,7 +131,8 @@ export default function BottomNav() {
   const searchOpen = useUiStore((s) => s.searchOpen);
   const notificationsOpen = useUiStore((s) => s.notificationsOpen);
   // The bottom nav stays visible on the notifications page; only the "+" button hides.
-  const hideFab = useUiStore((s) => s.hideFab) || typing || searchOpen || notificationsOpen;
+  // While searching, the bar and "+" stay visible (above the keyboard) instead of hiding.
+  const hideFab = useUiStore((s) => s.hideFab) || (typing && !searchOpen) || notificationsOpen;
   const { mounted: moreMounted, closing: moreClosing } = useExitPresence(moreOpen, 180);
   useBodyScrollLock(moreOpen);
   useModalBackClose(moreOpen, () => setMoreOpen(false));
@@ -262,7 +265,7 @@ export default function BottomNav() {
   // Swipe up anywhere along the bottom bar area (the pill, the "+", or the strip
   // beside them) to open the More sheet, on every page. Listens on the document so it
   // does not depend on where inside the bar the finger lands.
-  const barHidden = searchOpen || typing;
+  const barHidden = typing && !searchOpen;
   useEffect(() => {
     if (barHidden || moreOpen) return;
     const PAD = 10; // forgiving margin around the visible bar
@@ -438,7 +441,7 @@ export default function BottomNav() {
 
   return (
     <>
-      {!searchOpen && !typing && (
+      {!barHidden && (
         // Floating glass pill with round icon buttons. The outer strip keeps the
         // 80px footprint (other layers are positioned above it),
         // is transparent and lets taps through everywhere except the pill.

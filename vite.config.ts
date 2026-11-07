@@ -106,7 +106,7 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
       return
     }
 
-    if (url.pathname === '/api/market/valuation' && ['history', 'detail'].includes(url.searchParams.get('mode') ?? '')) {
+    if (url.pathname === '/api/market/valuation' && ['history', 'detail', 'dividends'].includes(url.searchParams.get('mode') ?? '')) {
       const stock = await handleStockQuery(Object.fromEntries(url.searchParams))
       if (stock) send(stock.status, stock.body)
       return
@@ -394,7 +394,7 @@ export default defineConfig({
             // Stock page: the chart and today's high / low / volume are live
             // figures, so (like the quotes above) never serve them from the cache.
             urlPattern: ({ url }) =>
-              url.pathname === '/api/market/valuation' && ['history', 'detail'].includes(url.searchParams.get('mode') ?? ''),
+              url.pathname === '/api/market/valuation' && ['history', 'detail', 'dividends'].includes(url.searchParams.get('mode') ?? ''),
             handler: 'NetworkOnly',
           },
           {

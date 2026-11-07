@@ -86,6 +86,36 @@ export async function fetchHistory(rawSymbol, market, exchange, rangeKey) {
   return null;
 }
 
+// ---------------------------------------------------------------- dividends
+
+/** Past dividend payments (ex-date + amount per share), newest first, from Yahoo's chart events. */
+export async function fetchDividends(rawSymbol, market, exchange) {
+  for (const sym of yahooCandidates(rawSymbol, market, exchange)) {
+    let res;
+    try {
+      res = await fetch(
+        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1mo&range=10y&events=div`,
+        { headers: { 'User-Agent': UA } }
+      );
+    } catch {
+      continue;
+    }
+    if (!res.ok) continue;
+    const result = (await res.json().catch(() => null))?.chart?.result?.[0];
+    if (!result) continue;
+    const dividends = Object.values(result.events?.dividends ?? {})
+      .map((d) => ({ date: (num(d?.date) ?? 0) * 1000, amount: num(d?.amount) }))
+      .filter((d) => d.date > 0 && d.amount !== null && d.amount > 0)
+      .sort((x, y) => y.date - x.date);
+    return {
+      symbol: sym,
+      currency: result.meta?.currency ?? (market === 'US' ? 'USD' : 'INR'),
+      dividends,
+    };
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------- helpers
 
 /** Resolve with `fallback` if `promise` takes longer than `ms` (or fails). Slow optional
@@ -649,12 +679,17 @@ export async function fetchDetail(rawSymbol, market, exchange) {
  *  Returns null for any other mode, else { status, body, cache }. */
 export async function handleStockQuery(query) {
   const mode = query.mode;
-  if (mode !== 'history' && mode !== 'detail') return null;
+  if (mode !== 'history' && mode !== 'detail' && mode !== 'dividends') return null;
   const symbol = String(query.symbol ?? '').trim();
   if (!symbol) return { status: 400, body: { error: 'Missing symbol' } };
   const market = String(query.market ?? 'IN').toUpperCase() === 'US' ? 'US' : 'IN';
   const exchange = String(query.exchange ?? 'NSE').toUpperCase() === 'BSE' ? 'BSE' : 'NSE';
   try {
+    if (mode === 'dividends') {
+      const data = await fetchDividends(symbol, market, exchange);
+      if (!data) return { status: 404, body: { error: `No dividend data for ${symbol}` } };
+      return { status: 200, body: data, cache: 's-maxage=3600, stale-while-revalidate=86400' };
+    }
     if (mode === 'history') {
       const rangeKey = String(query.range ?? '1D').toUpperCase();
       const data = await fetchHistory(symbol, market, exchange, rangeKey in RANGES ? rangeKey : '1D');

@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Bell, BellRing, Bookmark, ChevronsUpDown, Link2, Maximize2, Scale, Search, X } from 'lucide-react';
 import { Button, Card, Skeleton, cn } from '../components/ui';
 import CompanyLogo from '../components/CompanyLogo';
+import DividendChip from '../components/stock/DividendChip';
 import StockChart, { STOCK_DOWN, STOCK_UP } from '../components/stock/StockChart';
 import {
   AboutSection,
@@ -91,6 +92,9 @@ export default function StockQuote() {
   const [alertOpen, setAlertOpen] = useState(false);
   const [alert, setAlert] = useState<StockPriceAlert | null>(() => alertFor(market, bare));
   const alive = useRef(true);
+  // Each load takes a ticket; only the newest ticket may update the page (stops a late answer for the
+  // previous stock / chart range from overwriting the current one).
+  const reqs = useRef({ quote: 0, history: 0, detail: 0 });
   const phone = useMediaQuery('(max-width: 639px)');
 
   useBodyScrollLock(terminal);
@@ -119,16 +123,17 @@ export default function StockQuote() {
   // ---- live price
   const loadQuote = useCallback(async () => {
     if (!bare) return;
+    const ticket = ++reqs.current.quote;
     try {
       const got = await fetchLiveQuotes([{ key: quoteKey, market }]);
-      if (!alive.current) return;
+      if (!alive.current || ticket !== reqs.current.quote) return;
       const q = got.get(quoteKey);
       if (q) {
         setQuote(q);
         setQuoteFailed(false);
       } else setQuoteFailed(true);
     } catch {
-      if (alive.current) setQuoteFailed(true);
+      if (alive.current && ticket === reqs.current.quote) setQuoteFailed(true);
     }
   }, [bare, quoteKey, market]);
 
@@ -146,14 +151,16 @@ export default function StockQuote() {
   const loadHistory = useCallback(
     async (quiet: boolean) => {
       if (!bare) return;
+      const ticket = ++reqs.current.history;
       if (!quiet) setHistoryState('loading');
       try {
         const h = await fetchStockHistory(bare, market, exchange, range);
-        if (!alive.current) return;
+        if (!alive.current || ticket !== reqs.current.history) return;
         setHistory(h);
         setHistoryState('ready');
       } catch {
-        if (alive.current && !quiet) setHistoryState('failed');
+        // A quiet background refresh that fails keeps the chart already on screen.
+        if (alive.current && ticket === reqs.current.history) setHistoryState((s) => (quiet && s === 'ready' ? s : 'failed'));
       }
     },
     [bare, market, exchange, range]
@@ -170,15 +177,16 @@ export default function StockQuote() {
   const loadDetail = useCallback(
     async (quiet: boolean) => {
       if (!bare) return;
+      const ticket = ++reqs.current.detail;
       if (!quiet && !getCachedStockDetail(bare, market, exchange)) setDetailState('loading');
       try {
         const d = await fetchStockDetail(bare, market, exchange);
-        if (!alive.current) return;
+        if (!alive.current || ticket !== reqs.current.detail) return;
         setDetail(d);
         setDetailState('ready');
       } catch {
         // Keep showing whatever we already have; only show the error when there is nothing to show.
-        if (alive.current && !quiet) setDetailState((s) => (s === 'ready' ? s : 'failed'));
+        if (alive.current && ticket === reqs.current.detail) setDetailState((s) => (s === 'ready' ? s : 'failed'));
       }
     },
     [bare, market, exchange]
@@ -209,12 +217,12 @@ export default function StockQuote() {
     if (!alert || price === null) return;
     const hit = alert.dir === 'above' ? price >= alert.target : price <= alert.target;
     if (!hit) return;
-    clearStockAlert(market, bare);
+    clearStockAlert(alert.market, alert.symbol);
     setAlert(null);
     const msg = `${name} is ${alert.dir === 'above' ? 'above' : 'below'} ${fmtPrice(alert.target, market)} — now ${fmtPrice(price, market)}`;
     useAlertsStore.getState().add({ kind: alert.dir === 'above' ? 'up' : 'down', title: 'Price alert', body: msg });
     toast(msg, 'info', 'top', 8000);
-  }, [price, alert, market, bare, name, toast]);
+  }, [price, alert, market, name, toast]);
 
   // Esc leaves the full-screen chart.
   useEffect(() => {
@@ -245,7 +253,7 @@ export default function StockQuote() {
   const toggleSave = () => {
     const now = toggleSavedStock({ symbol: bare, name, market, exchange: exchLabel });
     setSaved(now);
-    toast(now ? `${name} saved — find it in Search` : `${name} removed from saved`, 'success');
+    toast(now ? `${name} added to Watchlist` : `${name} removed from Watchlist`, 'success');
   };
 
   if (!symbolParam) {
@@ -328,7 +336,7 @@ export default function StockQuote() {
         <Card padding="lg" className="!rounded-none !bg-transparent !p-0 !shadow-none dark:!border-0 sm:!rounded-[20px] sm:!bg-surface sm:!p-8 sm:!shadow-card dark:sm:!border dark:sm:!bg-surface-muted">
           {/* ---------------------------------------------------------- header */}
           <header className="flex items-start justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+            <div className="flex min-w-0 flex-wrap items-center gap-3 sm:gap-4">
               <CompanyLogo symbol={bare} name={name} market={market} size={phone ? 48 : 60} />
               {market === 'IN' && !noPriceAtAll && (
                 <button
@@ -341,6 +349,7 @@ export default function StockQuote() {
                   Valuation
                 </button>
               )}
+              {!noPriceAtAll && <DividendChip symbol={bare} market={market} exchange={exchange} price={price} />}
             </div>
             <div className="relative hidden items-center gap-2 sm:flex sm:gap-3">
               <button type="button" onClick={copyLink} aria-label="Copy link" className={circleBtn}>

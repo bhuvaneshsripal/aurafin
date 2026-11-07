@@ -12,6 +12,7 @@ import {
   Gem,
   Wallet,
   Scale,
+  Bookmark,
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react';
@@ -49,6 +50,7 @@ const groups: { label: string; links: NavLinkDef[] }[] = [
     label: 'Tools',
     links: [
       { to: '/import', label: 'Import', icon: FileUp },
+      { to: '/watchlist', label: 'Watchlist', icon: Bookmark },
       { to: '/valuation', label: 'Valuation', icon: Scale },
       { to: '/calculators', label: 'Calculators', icon: Calculator },
     ],

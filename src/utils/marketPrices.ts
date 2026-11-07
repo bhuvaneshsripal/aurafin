@@ -43,12 +43,14 @@ export interface PriceLookup {
 }
 
 /**
- * Normalize a broker symbol to a bare uppercase ticker. NSE's API takes
- * plain symbols (no exchange suffix); the server adds .NS itself if it
- * needs to fall back to Yahoo, so the client doesn't need to guess it.
+ * Normalize a broker symbol to an uppercase ticker. NSE's API takes plain
+ * symbols, so a ".NS" suffix is dropped (the server adds it again if it needs
+ * Yahoo). A ".BO" suffix is KEPT: it tells the server this is a BSE listing and
+ * to skip NSE — dropping it priced BSE stocks from NSE (or matched an unrelated
+ * NSE symbol, e.g. "NSE.BO" -> "NSE").
  */
 export function toYahooSymbol(symbol: string): string {
-  return symbol.trim().toUpperCase().replace(/\s+/g, '').replace(/\.(NS|BO)$/i, '');
+  return symbol.trim().toUpperCase().replace(/\s+/g, '').replace(/\.NS$/i, '');
 }
 
 /**

@@ -2,6 +2,11 @@
 export function hideBootShell() {
   const root = document.documentElement;
   if (!root.classList.contains('boot-on')) return;
-  // Wait for the next paint so the real page is visible underneath before the shell goes.
-  requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove('boot-on')));
+  // Wait for the next paint so the real page is visible underneath, then fade the shell out.
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      root.classList.add('boot-out');
+      window.setTimeout(() => root.classList.remove('boot-on', 'boot-out'), 240);
+    })
+  );
 }
