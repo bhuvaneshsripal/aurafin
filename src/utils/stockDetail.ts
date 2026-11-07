@@ -106,8 +106,51 @@ const q = (symbol: string, market: Market, exchange: Exchange) =>
 export const fetchStockHistory = (symbol: string, market: Market, exchange: Exchange, range: RangeKey) =>
   getJson<StockHistory>(`${BASE}?mode=history&${q(symbol, market, exchange)}&range=${range}`, 12000);
 
-export const fetchStockDetail = (symbol: string, market: Market, exchange: Exchange) =>
-  getJson<StockDetail>(`${BASE}?mode=detail&${q(symbol, market, exchange)}`, 20000);
+// Company details barely change within minutes, so a copy is kept in memory and in
+// sessionStorage: reopening a stock shows it instantly while a fresh copy loads behind it.
+const DETAIL_KEY = (symbol: string, market: Market, exchange: Exchange) => `aurafin.detail.${market}.${exchange}.${symbol.toUpperCase()}`;
+const DETAIL_MAX_AGE_MS = 30 * 60 * 1000;
+const detailMem = new Map<string, { data: StockDetail; at: number }>();
+
+export function getCachedStockDetail(symbol: string, market: Market, exchange: Exchange): StockDetail | null {
+  const key = DETAIL_KEY(symbol, market, exchange);
+  const m = detailMem.get(key);
+  if (m && Date.now() - m.at < DETAIL_MAX_AGE_MS) return m.data;
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { data: StockDetail; at: number };
+    if (Date.now() - parsed.at > DETAIL_MAX_AGE_MS) return null;
+    detailMem.set(key, parsed);
+    return parsed.data;
+  } catch {
+    return null;
+  }
+}
+
+function saveStockDetail(symbol: string, market: Market, exchange: Exchange, data: StockDetail) {
+  const key = DETAIL_KEY(symbol, market, exchange);
+  const entry = { data, at: Date.now() };
+  detailMem.set(key, entry);
+  try { sessionStorage.setItem(key, JSON.stringify(entry)); } catch { /* storage full or blocked */ }
+}
+
+/** Loads the details; one fast automatic retry hides a one-off slow or failed answer from the source. */
+export async function fetchStockDetail(symbol: string, market: Market, exchange: Exchange): Promise<StockDetail> {
+  const url = `${BASE}?mode=detail&${q(symbol, market, exchange)}`;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const d = await getJson<StockDetail>(url, 15000);
+      saveStockDetail(symbol, market, exchange, d);
+      return d;
+    } catch (e) {
+      lastErr = e;
+      await new Promise((r) => setTimeout(r, 600));
+    }
+  }
+  throw lastErr;
+}
 
 // ------------------------------------------------------------------ formatting
 

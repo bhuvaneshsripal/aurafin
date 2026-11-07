@@ -1669,8 +1669,21 @@ function AssetsTab({
       return { asset: a, ...computed, alloc, previousClose, dayChangePerUnit, dayChangePercent };
     });
 
-    const totalInvested = rows.reduce((s, r) => s + (r.invested ?? r.value), 0);
-    const totalCurrentValue = rows.reduce((s, r) => s + r.value, 0);
+    // Only holdings whose figures can be trusted go into the headline totals:
+    //  - a market holding (symbol + quantity) with NO live price would be valued from the old
+    //    number saved when it was added, which made "Total returns" jump to a wrong figure;
+    //  - holdings in another currency (e.g. USD) cannot be added to a rupee total as-is.
+    // Both are left out of the three totals together, so value - invested = returns always
+    // holds, and the card says how many were left out.
+    const isCounted = (r: (typeof rows)[number]) => {
+      if (r.asset.currency !== 'INR') return false;
+      const marketHolding = !!r.asset.symbol && (r.asset.quantity ?? 0) > 0;
+      return !marketHolding || r.isLive;
+    };
+    const countedRows = rows.filter(isCounted);
+    const excludedCount = rows.length - countedRows.length;
+    const totalInvested = countedRows.reduce((s, r) => s + (r.invested ?? r.value), 0);
+    const totalCurrentValue = countedRows.reduce((s, r) => s + r.value, 0);
     const totalPnl = totalCurrentValue - totalInvested;
     const totalPnlPercent = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
 
@@ -1680,7 +1693,7 @@ function AssetsTab({
     // holding you bought today at a gain doesn't inflate "how much did my
     // *existing* portfolio move today". Only holdings with a known previous
     // close (i.e. actual live symbol quotes) contribute.
-    const rowsWithDayChange = rows.filter((r) => r.dayChangePerUnit !== undefined);
+    const rowsWithDayChange = countedRows.filter((r) => r.dayChangePerUnit !== undefined);
     const has1dData = rowsWithDayChange.length > 0;
     const total1dAbs = rowsWithDayChange.reduce(
       (s, r) => s + r.dayChangePerUnit! * (r.asset.quantity ?? 0),
@@ -1729,7 +1742,7 @@ function AssetsTab({
             return (av - bv) * dir;
           });
 
-    return { filtered, rows, sortedRows, totalInvested, totalCurrentValue, totalPnl, totalPnlPercent, has1dData, total1dAbs, total1dPercent };
+    return { filtered, rows, sortedRows, totalInvested, totalCurrentValue, totalPnl, totalPnlPercent, has1dData, total1dAbs, total1dPercent, excludedCount };
   }, [
     assets,
     search,
@@ -1745,7 +1758,7 @@ function AssetsTab({
     sortKey,
     sortDir,
   ]);
-  const { filtered, rows, sortedRows, totalInvested, totalCurrentValue, totalPnl, totalPnlPercent, has1dData, total1dAbs, total1dPercent } = book;
+  const { filtered, rows, sortedRows, totalInvested, totalCurrentValue, totalPnl, totalPnlPercent, has1dData, total1dAbs, total1dPercent, excludedCount } = book;
 
   const categoryOptions = ASSET_TAXONOMY.filter((cat) =>
     assets.some((a) => (ASSET_CLASS_TO_CATEGORY[a.assetClass] ?? cat).key === cat.key)
@@ -2259,6 +2272,11 @@ function AssetsTab({
                 )}
               </div>
             </div>
+            {totalsReady && excludedCount > 0 && (
+              <p className="mt-3 text-[11px] leading-snug text-muted">
+                Totals leave out {excludedCount} {excludedCount === 1 ? 'holding' : 'holdings'} with no live price or in another currency, so the returns shown are accurate.
+              </p>
+            )}
           </Card>
           )}
 

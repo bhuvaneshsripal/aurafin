@@ -49,5 +49,10 @@
         }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "api/market/valuation.js": {
+      "maxDuration": 30
+    }
+  }
 }

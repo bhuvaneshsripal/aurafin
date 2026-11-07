@@ -12,7 +12,7 @@
 // return is null and the page leaves that row out or shows "—".
 import { fetch } from './fetchTimeout.js';
 import { getSession } from './fundamentals.js';
-import { fetchNseJson } from './nse.js';
+import { fetchNseJson, fetchNseText } from './nse.js';
 import { applyOverrides, peerGroupFor } from './stockOverrides.js';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
@@ -85,6 +85,24 @@ export async function fetchHistory(rawSymbol, market, exchange, rangeKey) {
   }
   return null;
 }
+
+// ---------------------------------------------------------------- helpers
+
+/** Resolve with `fallback` if `promise` takes longer than `ms` (or fails). Slow optional
+ *  sources must never hold up the whole page. */
+function within(promise, ms, fallback = null) {
+  return new Promise((resolve) => {
+    const t = setTimeout(() => resolve(fallback), ms);
+    Promise.resolve(promise).then(
+      (v) => { clearTimeout(t); resolve(v); },
+      () => { clearTimeout(t); resolve(fallback); }
+    );
+  });
+}
+
+// Finished answers are kept per warm server instance so repeat opens are instant.
+const detailCache = new Map(); // key -> { data, at }
+const DETAIL_TTL_MS = 5 * 60 * 1000;
 
 // ---------------------------------------------------------------- yahoo summary
 
@@ -205,14 +223,122 @@ export function parseShareholding(rows) {
     .map(({ _sub, ...rest }) => rest);
 }
 
+// ---------------------------------------------------------------- FII / DII split
+
+// NSE's summary feed only has promoter vs public. The FII / DII split lives in the XBRL
+// filing each row links to, so read it from there. Everything here fails soft: if a file
+// is missing or laid out differently, that quarter simply keeps showing no FII / DII.
+
+/** quarter-end date -> XBRL url, from the same NSE rows parseShareholding reads. */
+export function holdingXbrlUrls(rows) {
+  const out = new Map();
+  if (!Array.isArray(rows)) return out;
+  for (const r of rows) {
+    const date = nseDate(r?.date);
+    const url = typeof r?.xbrl === 'string' ? r.xbrl.trim() : '';
+    if (date && /^https:\/\//i.test(url)) out.set(date, url);
+  }
+  return out;
+}
+
+const localName = (s) => String(s ?? '').replace(/^[^:]*:/, '');
+
+/** { dii, fii } as percent of all shares, or null when the file has neither. */
+export function parseHoldingXbrl(xml) {
+  if (typeof xml !== 'string' || xml.length < 200) return null;
+
+  // context id -> lower-cased dimension member names, e.g. ['foreignportfolioinvestorcategoryimember']
+  const ctx = new Map();
+  for (const m of xml.matchAll(/<(?:[\w-]+:)?context\b[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/(?:[\w-]+:)?context>/g)) {
+    const members = [...m[2].matchAll(/<(?:[\w-]+:)?explicitMember\b[^>]*>\s*([^<\s]+)\s*<\/(?:[\w-]+:)?explicitMember>/g)].map((x) => localName(x[1]).toLowerCase());
+    ctx.set(m[1], members);
+  }
+  if (!ctx.size) return null;
+
+  // "Shareholding as a % of total number of shares" facts, grouped by element name.
+  const byElement = new Map();
+  for (const m of xml.matchAll(/<(?:[\w-]+:)?(Shareholding[\w]*Percentage[\w]*)\b[^>]*\bcontextRef="([^"]+)"[^>]*>\s*([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)\s*<\//g)) {
+    const v = parseFloat(m[3]);
+    if (!Number.isFinite(v)) continue;
+    if (!byElement.has(m[1])) byElement.set(m[1], []);
+    byElement.get(m[1]).push({ ctx: m[2], v });
+  }
+  const facts = byElement.get('ShareholdingAsAPercentageOfTotalNumberOfShares') ?? [...byElement.values()].sort((a, b) => b.length - a.length)[0];
+  if (!facts?.length) return null;
+
+  // Values may be stored as 0.0465 (fraction) or 4.65 (percent): the 100% total tells which.
+  const scale = Math.max(...facts.map((f) => f.v)) <= 1.0001 ? 100 : 1;
+
+  let diiTotal = null, fiiTotal = null, diiSum = 0, fiiSum = 0, diiSeen = false, fiiSeen = false;
+  for (const f of facts) {
+    const names = ctx.get(f.ctx);
+    if (!names?.length) continue;
+    const key = names.join('|');
+    const v = f.v * scale;
+    if (/institutions?foreign|foreigninstitutions?/.test(key)) { fiiTotal = fiiTotal ?? v; continue; }
+    if (/institutions?domestic|domesticinstitutions?/.test(key)) { diiTotal = diiTotal ?? v; continue; }
+    if (/subtotal|^total|totalpublic|publicshareholding|promoter/.test(key)) continue;
+    if (/foreign|fpi|overseas/.test(key)) { fiiSum += v; fiiSeen = true; continue; }
+    if (/mutualfund|alternateinvestment|aif|bank|insurance|provident|pension|assetreconstruction|nbfc|financialinstitution|venturecapital|sovereignwealth/.test(key)) { diiSum += v; diiSeen = true; }
+  }
+
+  const dii = diiTotal ?? (diiSeen ? diiSum : null);
+  const fii = fiiTotal ?? (fiiSeen ? fiiSum : null);
+  if (dii === null && fii === null) return null;
+  const round = (x) => Math.round((x ?? 0) * 100) / 100;
+  const out = { dii: round(dii), fii: round(fii) };
+  return out.dii >= 0 && out.fii >= 0 && out.dii + out.fii <= 100.01 ? out : null;
+}
+
+const holdingXbrlCache = new Map(); // url -> { split, at }
+const HOLDING_TTL_MS = 30 * 24 * 60 * 60 * 1000; // a filed quarter never changes
+
+async function holdingSplit(url) {
+  const hit = holdingXbrlCache.get(url);
+  if (hit && Date.now() - hit.at < HOLDING_TTL_MS) return hit.split;
+  let split = null;
+  let failed = false;
+  try {
+    split = parseHoldingXbrl(await fetchNseText(url, 'https://www.nseindia.com/companies-listing/corporate-filings-shareholding-pattern'));
+  } catch {
+    failed = true;
+  }
+  // A network failure is retried soon; a file we could read but not understand is remembered.
+  holdingXbrlCache.set(url, { split, at: Date.now() - (failed ? HOLDING_TTL_MS - 5 * 60 * 1000 : 0) });
+  return split;
+}
+
+/** Adds FII / DII to every quarter that lacks them, and takes them out of "public"
+ *  so Promoters + FIIs + DIIs + Public adds up to 100%. */
+async function enrichShareholding(detail, nseRows) {
+  const urls = holdingXbrlUrls(nseRows);
+  const todo = (detail?.shareholding ?? []).filter((q) => (q.dii === null || q.fii === null) && urls.has(q.date));
+  if (!todo.length) return detail;
+  await within(
+    Promise.all(
+      todo.map(async (q) => {
+        const s = await holdingSplit(urls.get(q.date));
+        if (!s) return;
+        q.dii = s.dii;
+        q.fii = s.fii;
+        q.public = Math.max(0, Math.round((q.public - s.dii - s.fii) * 100) / 100);
+      })
+    ),
+    6000,
+    null
+  );
+  return detail;
+}
+
 // NSE often rejects the first call on a cold session (it drops the cookie and the
 // next call works), so try up to three times before giving up on it.
 async function nseSafe(path, referer) {
-  for (let attempt = 0; attempt < 3; attempt++) {
+  // Two quick tries, each capped, and the caller also time-boxes the pair.
+  for (let attempt = 0; attempt < 2; attempt++) {
     try {
       return await fetchNseJson(path, referer);
     } catch {
-      await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+      await new Promise((r) => setTimeout(r, 200));
     }
   }
   return null;
@@ -249,6 +375,72 @@ async function peerMedianPe(bare, industryText) {
   return Math.round(med * 100) / 100;
 }
 
+// ---------------------------------------------------------------- founded year
+
+// Neither Yahoo nor NSE give a founding year, so look it up on Wikidata (property P571,
+// "inception"). Hand-entered values in stockOverrides.js still win over this.
+const foundedCache = new Map(); // company name -> { year, at }
+const FOUNDED_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const WIKI_HEADERS = { 'User-Agent': 'Aurafin/1.0 (stock detail lookup)', Accept: 'application/json' };
+
+async function wikidataFoundedYear(name) {
+  const clean = String(name ?? '')
+    .replace(/\b(limited|ltd|incorporated|inc|corporation|corp|co|plc)\b\.?/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (clean.length < 2) return null;
+
+  const search = await fetch(
+    `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(clean)}&language=en&type=item&limit=6&format=json&origin=*`,
+    { headers: WIKI_HEADERS }
+  );
+  if (!search.ok) return null;
+  const ids = ((await search.json())?.search ?? []).map((r) => r.id).filter(Boolean);
+  if (!ids.length) return null;
+
+  const ents = await fetch(
+    `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${ids.join('|')}&props=claims|descriptions&languages=en&format=json&origin=*`,
+    { headers: WIKI_HEADERS }
+  );
+  if (!ents.ok) return null;
+  const entities = (await ents.json())?.entities ?? {};
+
+  const COMPANY = /compan|corporation|conglomerate|bank|enterprise|firm|manufactur|producer|retailer|brand|group/i;
+  let fallback = null;
+  for (const id of ids) {
+    const e = entities[id];
+    const time = e?.claims?.P571?.[0]?.mainsnak?.datavalue?.value?.time; // e.g. "+1910-08-24T00:00:00Z"
+    const year = time ? parseInt(String(time).replace(/^\+/, ''), 10) : NaN;
+    if (!Number.isFinite(year) || year < 1500 || year > new Date().getFullYear()) continue;
+    const listed = Boolean(e.claims?.P414 || e.claims?.P249); // has a stock exchange / ticker
+    if (listed) return year;
+    if (!fallback && COMPANY.test(e?.descriptions?.en?.value ?? '')) fallback = year;
+  }
+  return fallback;
+}
+
+async function foundedYearFor(name) {
+  if (!name) return null;
+  const hit = foundedCache.get(name);
+  if (hit && Date.now() - hit.at < FOUNDED_TTL_MS) return hit.year;
+  let year = null;
+  try {
+    year = await wikidataFoundedYear(name);
+  } catch {
+    /* lookup failed: leave blank */
+  }
+  foundedCache.set(name, { year, at: Date.now() - (year === null ? FOUNDED_TTL_MS - 10 * 60 * 1000 : 0) }); // retry misses after 10 min
+  return year;
+}
+
+/** Fill about.founded from Wikidata when nothing else provided it. Never slows the page by more than 2.5s. */
+async function fillFounded(detail) {
+  if (detail?.about && detail.about.founded == null && detail.name) {
+    detail.about.founded = await within(foundedYearFor(detail.name), 2500, null);
+  }
+  return detail;
+}
+
 // ---------------------------------------------------------------- detail
 
 function pickCeo(officers) {
@@ -262,12 +454,30 @@ function pickCeo(officers) {
 const asPercent = (v) => (v === null ? null : v > 1 ? v : v * 100);
 
 export async function fetchDetail(rawSymbol, market, exchange) {
+  const cacheKey = `${market}:${exchange}:${String(rawSymbol).toUpperCase()}`;
+  const hit = detailCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < DETAIL_TTL_MS) return hit.data;
+
   const candidates = yahooCandidates(rawSymbol, market, exchange);
+  const first = candidates[0];
+  const firstBare = first.replace(/\.(NS|BO)$/, '');
+  const useNseEarly = market === 'IN' && /^[A-Z0-9&-]+$/.test(firstBare) && !/^\d+$/.test(firstBare);
+
+  // Start every independent source at once. Previously NSE and the financials only began
+  // after Yahoo's summary had finished, so their waits were added together.
+  const tsP = within(timeseries(first, ['quarterlyTotalRevenue', 'quarterlyNetIncome', 'annualTotalRevenue', 'annualNetIncome']), 7000, {});
+  const nseQuoteP = useNseEarly
+    ? within(nseSafe(`quote-equity?symbol=${encodeURIComponent(firstBare)}`, `https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(firstBare)}`), 5000, null)
+    : Promise.resolve(null);
+  const nseHoldP = useNseEarly
+    ? within(nseSafe(`corporate-share-holdings-master?index=equities&symbol=${encodeURIComponent(firstBare)}`, 'https://www.nseindia.com/companies-listing/corporate-filings-shareholding-pattern'), 5000, null)
+    : Promise.resolve(null);
+
   let sym = null;
   let sum_ = null;
   for (const c of candidates) {
     try {
-      const s = await quoteSummary(c);
+      const s = await within(quoteSummary(c), 7000, null);
       if (s && (raw(s.price?.regularMarketPrice) !== null || raw(s.summaryDetail?.previousClose) !== null)) {
         sym = c;
         sum_ = s;
@@ -277,14 +487,66 @@ export async function fetchDetail(rawSymbol, market, exchange) {
       /* try next */
     }
   }
-  if (!sym) return null;
+
+  // Yahoo's summary is blocked or slow: still answer with whatever NSE + the chart gave,
+  // so the page shows real numbers instead of an error.
+  if (!sym) {
+    const [nseQ, nseH, tsF] = await Promise.all([nseQuoteP, nseHoldP, tsP]);
+    const nseOk = nseQ && String(nseQ?.info?.symbol ?? '').toUpperCase() === firstBare ? nseQ : null;
+    const hist = await within(fetchHistory(rawSymbol, market, exchange, '1Y'), 6000, null);
+    if (!nseOk && !hist) return null;
+    const pi = nseOk?.priceInfo ?? {};
+    const closes = hist ? hist.points.map((p) => p[4]) : [];
+    const quarterlyF = buildPeriods(tsF.quarterlyTotalRevenue, tsF.quarterlyNetIncome, 365, 5);
+    const yearlyF = buildPeriods(tsF.annualTotalRevenue, tsF.annualNetIncome, 365, 5);
+    const partial = {
+      symbol: firstBare,
+      yahooSymbol: hist?.symbol ?? first,
+      name: nseOk?.info?.companyName ?? null,
+      currency: hist?.currency ?? (market === 'US' ? 'USD' : 'INR'),
+      exchange: market === 'US' ? 'US' : exchange,
+      performance: {
+        open: pos(num(pi.open)),
+        previousClose: pos(num(pi.previousClose)) ?? hist?.previousClose ?? null,
+        dayLow: pos(num(pi.intraDayHighLow?.min)),
+        dayHigh: pos(num(pi.intraDayHighLow?.max)),
+        weekLow52: pos(num(pi.weekHighLow?.min)) ?? (closes.length ? Math.min(...closes) : null),
+        weekHigh52: pos(num(pi.weekHighLow?.max)) ?? (closes.length ? Math.max(...closes) : null),
+        volume: null,
+        lowerCircuit: pos(num(pi.lowerCP)),
+        upperCircuit: pos(num(pi.upperCP)),
+      },
+      fundamentals: {
+        marketCap: null, pe: pos(num(nseOk?.metadata?.pdSymbolPe)), pb: null,
+        industryPe: pos(num(nseOk?.metadata?.pdSectorPe)) ?? pos(num(nseOk?.metadata?.pdSectorPE)),
+        debtToEquity: null, roe: null, eps: null, dividendYield: null, bookValue: null,
+        faceValue: pos(num(nseOk?.securityInfo?.faceValue)) ?? pos(num(nseOk?.faceValue)),
+      },
+      financials: {
+        quarterly: quarterlyF,
+        yearly: yearlyF,
+        growth: {
+          revenue: { quarterly: buildGrowth(tsF.quarterlyTotalRevenue, tsF.annualTotalRevenue) },
+          profit: { quarterly: buildGrowth(tsF.quarterlyNetIncome, tsF.annualNetIncome) },
+        },
+      },
+      shareholding: parseShareholding(nseH),
+      about: { description: null, ceo: null, industry: nseOk?.industryInfo?.basicIndustry ?? nseOk?.industryInfo?.industry ?? null, sector: nseOk?.industryInfo?.sector ?? null, website: null, employees: null, founded: null },
+      asOf: new Date().toISOString(),
+      partial: true,
+    };
+    const out = applyOverrides(partial);
+    await Promise.all([fillFounded(out), enrichShareholding(out, nseH)]);
+    return out;
+  }
 
   const bare = sym.replace(/\.(NS|BO)$/, '');
-  const useNse = market === 'IN' && /^[A-Z0-9&-]+$/.test(bare) && !/^\d+$/.test(bare);
+  const useNse = useNseEarly && bare === firstBare;
+  // If the .BO fallback won, the early timeseries (for .NS) may be empty: refetch only then.
   const [nseQuote, nseHold, ts] = await Promise.all([
-    useNse ? nseSafe(`quote-equity?symbol=${encodeURIComponent(bare)}`, `https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(bare)}`) : null,
-    useNse ? nseSafe(`corporate-share-holdings-master?index=equities&symbol=${encodeURIComponent(bare)}`, 'https://www.nseindia.com/companies-listing/corporate-filings-shareholding-pattern') : null,
-    timeseries(sym, ['quarterlyTotalRevenue', 'quarterlyNetIncome', 'annualTotalRevenue', 'annualNetIncome']).catch(() => ({})),
+    useNse ? nseQuoteP : null,
+    useNse ? nseHoldP : null,
+    sym === first ? tsP : within(timeseries(sym, ['quarterlyTotalRevenue', 'quarterlyNetIncome', 'annualTotalRevenue', 'annualNetIncome']), 7000, {}),
   ]);
 
   // NSE's own answer for the symbol, never another company's.
@@ -366,13 +628,18 @@ export async function fetchDetail(rawSymbol, market, exchange) {
     asOf: new Date().toISOString(),
   });
 
+  await Promise.all([fillFounded(detail), enrichShareholding(detail, nseHold)]);
+
   // NSE did not give an Industry P/E: work one out from the peer group instead.
   if (market === 'IN' && detail.fundamentals.industryPe === null) {
-    detail.fundamentals.industryPe = await peerMedianPe(
-      bare,
-      `${detail.about.industry ?? ''} ${detail.about.sector ?? ''}`
-    ).catch(() => null);
+    // Optional extra: never let the peer lookups hold the page up for more than 2.5s.
+    detail.fundamentals.industryPe = await within(
+      peerMedianPe(bare, `${detail.about.industry ?? ''} ${detail.about.sector ?? ''}`),
+      2500,
+      null
+    );
   }
+  detailCache.set(cacheKey, { data: detail, at: Date.now() });
   return detail;
 }
 
@@ -396,7 +663,7 @@ export async function handleStockQuery(query) {
     }
     const data = await fetchDetail(symbol, market, exchange);
     if (!data) return { status: 404, body: { error: `No details found for ${symbol}` } };
-    return { status: 200, body: data, cache: 's-maxage=60, stale-while-revalidate=300' };
+    return { status: 200, body: data, cache: 's-maxage=120, stale-while-revalidate=900' };
   } catch {
     return { status: 502, body: { error: 'Could not reach the stock data source' } };
   }

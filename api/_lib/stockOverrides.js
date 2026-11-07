@@ -12,6 +12,9 @@
 //   shareholding  { 'YYYY-MM-DD quarter end': { public, dii, fii } } in percent;
 //                 promoters stays as fetched. Only add when you have all three.
 export const STOCK_OVERRIDES = {
+  ITC: {
+    founded: 1910, // Imperial Tobacco Company of India, 24 Aug 1910
+  },
   LALITHAA: {
     founded: 1985, // incorporated 26 Nov 1985
     ceo: 'Kiran Jain',

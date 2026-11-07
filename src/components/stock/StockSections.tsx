@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Check, ChevronRight } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, ChevronRight } from 'lucide-react';
 import { cn } from '../ui';
 import InfoTip from '../ui/InfoTip';
 import { STOCK_DOWN, STOCK_UP } from './StockChart';
@@ -259,7 +259,10 @@ function GrowthTable({ revenue, profit }: { revenue: GrowthFigures; profit: Grow
       {rows(g).map(([k, v]) => (
         <div key={k} className="flex items-center justify-between py-2.5 text-[15px]">
           <span className="text-ink-2">{k}</span>
-          <span className="font-medium font-numeric" style={{ color: colourFor(v) }}>{v === null ? '—' : fmtSigned(v, 0)}</span>
+          <span className="inline-flex items-center gap-1 font-medium font-numeric" style={{ color: colourFor(v) }}>
+            {v !== null && (v >= 0 ? <ArrowUp size={16} strokeWidth={2.5} aria-label="up" /> : <ArrowDown size={16} strokeWidth={2.5} aria-label="down" />)}
+            {v === null ? '—' : `${Math.abs(v).toFixed(0)}%`}
+          </span>
         </div>
       ))}
     </div>

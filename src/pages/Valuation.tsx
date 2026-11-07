@@ -3,11 +3,11 @@ import { createPortal } from 'react-dom';
 import { Search, Loader2, ChevronDown, X, Star } from 'lucide-react';
 import { Card, CardHeader, PageHeader, Button, Input, CardSkeleton, Badge, cn } from '../components/ui';
 import ValuationBar from '../components/ValuationBar';
-import ValuationWatchlist, { readWatchlist, writeWatchlist, type WatchItem } from '../components/ValuationWatchlist';
+import ValuationWatchlist, { readWatchlist, writeWatchlist, cleanWatchlist, type WatchItem } from '../components/ValuationWatchlist';
 import InfoTip from '../components/ui/InfoTip';
 import { searchStockSymbols, type StockSearchResult } from '../utils/marketPrices';
 import { useAuthStore } from '../store/authStore';
-import { subscribeValuationHistory, saveValuationHistory } from '../hooks/useFirestoreSync';
+import { subscribeValuationHistory, saveValuationHistory, subscribeValuationWatchlist, saveValuationWatchlist } from '../hooks/useFirestoreSync';
 import {
   analyseEps, computeValuation, epsCagr, fetchFundamentals, inr, signedPct,
   type EpsAnalysis, type FundamentalsResponse,
@@ -93,6 +93,29 @@ export default function Valuation() {
       const clean = remote.filter((h) => h && typeof h.symbol === 'string').slice(0, HISTORY_MAX);
       setHistory(clean);
       writeHistory(clean);
+    });
+  }, [user]);
+
+  // Watchlist: save locally and to the account, so it shows on every device.
+  const persistWatchlist = (w: WatchItem[]) => {
+    writeWatchlist(w);
+    const u = userRef.current;
+    if (u) saveValuationWatchlist(u, w).catch(() => { /* offline — local copy still saved */ });
+  };
+
+  // Pull the account's watchlist (saved on another device) and keep it live.
+  useEffect(() => {
+    if (!user) return;
+    return subscribeValuationWatchlist(user, (remote) => {
+      if (remote === null) {
+        // Nothing saved in the account yet: upload what this device has.
+        const local = readWatchlist();
+        if (local.length) saveValuationWatchlist(user, local).catch(() => {});
+        return;
+      }
+      const clean = cleanWatchlist(remote);
+      setWatchlist(clean);
+      writeWatchlist(clean);
     });
   }, [user]);
   const [f, setF] = useState(EMPTY_FORM);
@@ -305,7 +328,7 @@ export default function Valuation() {
   const x3v = lvl('X/3');
   const canSave = !!data && priceV > 0 && x2v > 0 && x3v > 0;
   const isSaved = !!data && watchlist.some((w) => w.symbol === data.symbol && w.exchange === exchange);
-  const updateWatchlist = (next: WatchItem[]) => { setWatchlist(next); writeWatchlist(next); };
+  const updateWatchlist = (next: WatchItem[]) => { setWatchlist(next); persistWatchlist(next); };
   const toggleSaved = () => {
     if (!data || !canSave) return;
     if (isSaved) {
@@ -324,7 +347,7 @@ export default function Valuation() {
       if (cur.price === priceV && cur.x2 === x2v && cur.x3 === x3v) return prev;
       const next = [...prev];
       next[i] = { ...cur, price: priceV, x2: x2v, x3: x3v, savedAt: Date.now() };
-      writeWatchlist(next);
+      persistWatchlist(next);
       return next;
     });
   }, [data, canSave, exchange, priceV, x2v, x3v]);

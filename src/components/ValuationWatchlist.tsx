@@ -16,18 +16,22 @@ export type WatchItem = {
 
 export const WATCHLIST_KEY = 'aurafin.valuation.watchlist';
 
+/** Keeps only well-formed items (used for both the local copy and what the account sends back). */
+export function cleanWatchlist(v: unknown): WatchItem[] {
+  return Array.isArray(v)
+    ? (v.filter(
+        (w) =>
+          w &&
+          typeof w.symbol === 'string' &&
+          (w.exchange === 'NSE' || w.exchange === 'BSE') &&
+          [w.price, w.x2, w.x3].every((n) => typeof n === 'number' && n > 0),
+      ) as WatchItem[])
+    : [];
+}
+
 export function readWatchlist(): WatchItem[] {
   try {
-    const v = JSON.parse(localStorage.getItem(WATCHLIST_KEY) || '[]');
-    return Array.isArray(v)
-      ? v.filter(
-          (w) =>
-            w &&
-            typeof w.symbol === 'string' &&
-            (w.exchange === 'NSE' || w.exchange === 'BSE') &&
-            [w.price, w.x2, w.x3].every((n) => typeof n === 'number' && n > 0),
-        )
-      : [];
+    return cleanWatchlist(JSON.parse(localStorage.getItem(WATCHLIST_KEY) || '[]'));
   } catch {
     return [];
   }

@@ -17,6 +17,7 @@ import {
   RANGE_KEYS,
   RANGE_LABEL,
   fetchStockDetail,
+  getCachedStockDetail,
   fetchStockHistory,
   fmtNum,
   fmtPrice,
@@ -106,8 +107,9 @@ export default function StockQuote() {
     setQuote(null);
     setHistory(null);
     setHistoryState('loading');
-    setDetail(null);
-    setDetailState('loading');
+    const cachedDetail = getCachedStockDetail(bare, market, exchange);
+    setDetail(cachedDetail);
+    setDetailState(cachedDetail ? 'ready' : 'loading');
     setQuoteFailed(false);
     setSaved(isStockSaved(market, bare));
     setAlert(alertFor(market, bare));
@@ -168,14 +170,15 @@ export default function StockQuote() {
   const loadDetail = useCallback(
     async (quiet: boolean) => {
       if (!bare) return;
-      if (!quiet) setDetailState('loading');
+      if (!quiet && !getCachedStockDetail(bare, market, exchange)) setDetailState('loading');
       try {
         const d = await fetchStockDetail(bare, market, exchange);
         if (!alive.current) return;
         setDetail(d);
         setDetailState('ready');
       } catch {
-        if (alive.current && !quiet) setDetailState('failed');
+        // Keep showing whatever we already have; only show the error when there is nothing to show.
+        if (alive.current && !quiet) setDetailState((s) => (s === 'ready' ? s : 'failed'));
       }
     },
     [bare, market, exchange]
@@ -183,7 +186,8 @@ export default function StockQuote() {
 
   useEffect(() => {
     void loadDetail(false);
-    const id = window.setInterval(() => void loadDetail(true), HISTORY_REFRESH_MS);
+    // Details change slowly: refresh every 5 minutes (was every minute) to save data and battery.
+    const id = window.setInterval(() => void loadDetail(true), 5 * 60_000);
     return () => window.clearInterval(id);
   }, [loadDetail]);
 

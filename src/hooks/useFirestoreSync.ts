@@ -1130,6 +1130,32 @@ export async function saveValuationHistory(
   await setDoc(doc(db, 'users', user.uid, 'meta', 'valuationHistory'), { items }, { merge: false });
 }
 
+/** Valuation page watchlist, stored per account (users/{uid}/meta/valuationWatchlist)
+ *  so a stock saved on the phone shows on the laptop too. Guests stay device-local.
+ *  Items are the plain WatchItem objects from ValuationWatchlist.tsx. */
+export function subscribeValuationWatchlist(
+  user: { uid: string; isAnonymous?: boolean },
+  onChange: (items: unknown[] | null) => void
+): () => void {
+  if (isAnonymousUser(user)) return () => {};
+  const ref = doc(db, 'users', user.uid, 'meta', 'valuationWatchlist');
+  return onSnapshot(
+    ref,
+    (snap) => {
+      // A cache-only "doesn't exist" answer isn't trustworthy: wait for the server.
+      if (!snap.exists() && snap.metadata.fromCache) return;
+      const items = snap.data()?.items;
+      onChange(Array.isArray(items) ? items : snap.exists() ? [] : null);
+    },
+    () => onChange(null)
+  );
+}
+
+export async function saveValuationWatchlist(user: { uid: string; isAnonymous?: boolean }, items: unknown[]) {
+  if (isAnonymousUser(user)) return;
+  await setDoc(doc(db, 'users', user.uid, 'meta', 'valuationWatchlist'), { items }, { merge: false });
+}
+
 /** Global search "Recent searches", stored per account (users/{uid}/meta/
  *  searchHistory) so a search made on the laptop shows up on the phone too.
  *  Guests stay device-local (localStorage handled by the caller). */

@@ -47,6 +47,7 @@ import Toaster from './components/Toaster';
 import NetworkBanner from './components/NetworkBanner';
 import UpdateBanner from './components/UpdateBanner';
 import LockScreen from './components/LockScreen';
+import { hideBootShell } from './utils/bootShell';
 import InstallPromptModal from './components/InstallPromptModal';
 import ErrorBoundary from './components/ErrorBoundary';
 import { lazyWithRetry } from './utils/lazyWithRetry';
@@ -361,7 +362,7 @@ function AppReady({ children }: { children: React.ReactNode }) {
   // Safety net (offline / very slow network): after 2.5s show whatever we
   // have rather than a loading screen for minutes.
   useEffect(() => {
-    const t = setTimeout(() => setTimedOut(true), 2500);
+    const t = setTimeout(() => setTimedOut(true), 1200);
     return () => clearTimeout(t);
   }, []);
 
@@ -370,10 +371,14 @@ function AppReady({ children }: { children: React.ReactNode }) {
   // until the server confirms (see Dashboard's *DataKnown flags), and live
   // prices fill in afterwards, so there is no reason to block the whole app.
   const dataReady = ALL_USER_COLLECTIONS.every((c) => loaded[c]);
+  const blocked = !needsOnboarding && !dataReady && !timedOut && location.pathname !== '/import';
 
-  if (!needsOnboarding && !dataReady && !timedOut && location.pathname !== '/import') {
-    return null;
-  }
+  // The instant HTML shell stays up while we wait, and goes once the real page renders.
+  useEffect(() => {
+    if (!blocked) hideBootShell();
+  }, [blocked]);
+
+  if (blocked) return null;
   return <>{children}</>;
 }
 
@@ -444,6 +449,11 @@ export default function App() {
     initDisplaySettings();
     initNotificationPrefs();
   }, [init, initTheme, initPrivacy, initSidebar, initLock, initDisplaySettings, initNotificationPrefs]);
+
+  useEffect(() => {
+    // Signed-out or legal pages have no Overview to wait for: drop the shell straight away.
+    if (legalKind || (!loading && !user)) hideBootShell();
+  }, [legalKind, loading, user]);
 
   if (legalKind) return <Suspense fallback={null}><LegalPage kind={legalKind} /></Suspense>;
 

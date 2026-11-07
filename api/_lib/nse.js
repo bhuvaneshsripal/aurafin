@@ -187,6 +187,18 @@ async function fetchNseJson(path, referer) {
   return res.json();
 }
 
+/** Plain-text download of a filing NSE links to (e.g. a shareholding XBRL). Only NSE's own hosts. */
+async function fetchNseText(url, referer = 'https://www.nseindia.com/') {
+  const host = new URL(url).hostname;
+  if (host !== 'nsearchives.nseindia.com' && host !== 'www.nseindia.com') throw new Error('Not an NSE host');
+  const cookie = await getNseCookie();
+  const res = await fetch(url, {
+    headers: { ...BROWSER_HEADERS, Accept: 'application/xml,text/xml,*/*', Referer: referer, Cookie: cookie },
+  });
+  if (!res.ok) throw new Error(`NSE file request failed: ${res.status}`);
+  return res.text();
+}
+
 async function fetchNseMostActiveByVolume() {
   const data = await fetchNseJson(
     'live-analysis-most-active-securities?index=volume',
@@ -212,4 +224,4 @@ async function fetchNseIndexConstituents(indexName) {
   return Array.isArray(data?.data) ? data.data : [];
 }
 
-export { fetchNseIndexConstituents, fetchNseMostActiveByVolume, fetchNseVolumeGainers, fetchNseIsin, fetchNseQuote, searchNseSymbol, invalidateNseCookie, fetchNseAllIndices, fetchNseJson };
+export { fetchNseIndexConstituents, fetchNseMostActiveByVolume, fetchNseVolumeGainers, fetchNseIsin, fetchNseQuote, searchNseSymbol, invalidateNseCookie, fetchNseAllIndices, fetchNseJson, fetchNseText };

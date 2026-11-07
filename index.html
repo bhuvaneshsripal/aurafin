@@ -39,9 +39,42 @@
     <style>
       html,body{background:#f7f7f5;margin:0}
       @media (prefers-color-scheme:dark){html.dark,html.dark body{background:#020617}}
+      /* Instant first paint for returning users: shown from plain HTML before any JS loads,
+         removed by the app once the real Overview is ready (src/utils/bootShell.ts). */
+      #boot{display:none;position:fixed;inset:0;z-index:2147483000;background:#f7f5f0;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#0f172a;
+        padding-top:env(safe-area-inset-top,0px);overflow:hidden}
+      html.boot-on #boot{display:block}
+      html.dark #boot{background:#020617;color:#e2e8f0}
+      #boot .bar{display:flex;align-items:center;gap:10px;padding:16px 18px;background:#fff;border-bottom:1px solid #e7e5e0}
+      html.dark #boot .bar{background:#0b1220;border-color:#1e293b}
+      #boot .brand{font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:21px}
+      #boot .dotc{width:30px;height:30px;border-radius:50%;background:#d9a520}
+      #boot h1{font-size:24px;font-weight:600;margin:26px 18px 6px}
+      #boot .ul{width:44px;height:3px;background:#247a4d;margin:0 18px 18px;border-radius:2px}
+      #boot .card{background:#fff;border-radius:22px;margin:0 18px 14px;height:120px}
+      html.dark #boot .card{background:#0f172a}
+      #boot .row{display:flex;gap:14px;margin:0 18px 14px}
+      #boot .row .card{margin:0;flex:1;height:78px}
+      #boot .tall{height:230px}
     </style>
+    <script>
+      try{
+        if(localStorage.getItem('aurafin-cached-user')&&location.pathname.replace(/\/+$/,'')===''){
+          if(localStorage.getItem('aurafin-theme')==='dark')document.documentElement.classList.add('dark');
+          document.documentElement.classList.add('boot-on');
+          setTimeout(function(){document.documentElement.classList.remove('boot-on')},6000); /* safety net */
+        }
+      }catch(e){}
+    </script>
   </head>
   <body>
+    <div id="boot" aria-hidden="true">
+      <div class="bar"><span class="dotc"></span><span class="brand">Aurafin.</span></div>
+      <h1>Overview</h1><div class="ul"></div>
+      <div class="card"></div>
+      <div class="row"><div class="card"></div><div class="card"></div></div>
+      <div class="card tall"></div>
+    </div>
     <div id="root"></div>
     <noscript>
       <p style="font-family:system-ui,sans-serif;text-align:center;padding:3rem 1.5rem;color:#475569">

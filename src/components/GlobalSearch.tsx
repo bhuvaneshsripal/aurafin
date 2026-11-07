@@ -1,14 +1,15 @@
 import { SHORTCUT_HINT } from '../config/shortcuts';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, X, TrendingUp, Clock, LineChart, Loader2 } from 'lucide-react';
+import { Search, X, TrendingUp, Clock, LineChart, Star } from 'lucide-react';
+import CompanyLogo from './CompanyLogo';
 import { useUiStore } from '../store/uiStore';
 import { useAuthStore } from '../store/authStore';
 import { subscribeSearchHistory, saveSearchHistory } from '../hooks/useFirestoreSync';
 import { fmtPrice, fmtNum } from '../utils/stockDetail';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { fetchLiveQuotes, searchStockSymbols, type LiveQuoteDetail } from '../utils/marketPrices';
-import { readSavedStocks, type SavedStock } from '../utils/savedStocks';
+import { readSavedStocks, toggleSavedStock, type SavedStock } from '../utils/savedStocks';
 
 const MAX_RECENT_SEARCHES = 5;
 const RECENT_SEARCHES_KEY = 'aurafin-recent-searches';
@@ -22,12 +23,26 @@ const bareSymbol = (s: string) => s.replace(/\.(NS|BO)$/i, '');
 const quoteKeyFor = (h: StockHit) =>
   h.market === 'IN' && /\.BO$/i.test(h.symbol) ? `${bareSymbol(h.symbol).toUpperCase()}.BO` : bareSymbol(h.symbol).toUpperCase();
 
+// A recent entry is a stock the person actually OPENED, never the text they typed.
+// Stored as one string ("stock|market|symbol|exch|name") so the synced list stays string[].
+const RECENT_PREFIX = 'stock|';
+const encodeRecent = (h: StockHit) => [RECENT_PREFIX.slice(0, -1), h.market, h.symbol, h.exch ?? '', h.name].join('|');
+function decodeRecent(entry: string): StockHit | null {
+  if (!entry.startsWith(RECENT_PREFIX)) return null; // old typed-text entries are ignored
+  const [, market, symbol, exch, ...rest] = entry.split('|');
+  const name = rest.join('|');
+  if ((market !== 'IN' && market !== 'US') || !symbol || !name) return null;
+  return { market, symbol, exch: exch || undefined, name };
+}
+/** Keep only real stock entries (drops legacy typed words). */
+const onlyStocks = (list: string[]) => list.filter((x) => decodeRecent(x) !== null);
+
 function loadRecentSearches(): string[] {
   try {
     const raw = localStorage.getItem(RECENT_SEARCHES_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string').slice(0, MAX_RECENT_SEARCHES) : [];
+    return Array.isArray(parsed) ? onlyStocks(parsed.filter((x) => typeof x === 'string')).slice(0, MAX_RECENT_SEARCHES) : [];
   } catch {
     return [];
   }
@@ -69,7 +84,7 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
     if (!user || isGuest) return;
     return subscribeSearchHistory(user, (items) => {
       if (!items) return;
-      const next = items.slice(0, MAX_RECENT_SEARCHES);
+      const next = onlyStocks(items).slice(0, MAX_RECENT_SEARCHES);
       setRecentSearches(next);
       saveRecentSearches(next);
     });
@@ -155,8 +170,12 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
 
   // Live price (CMP) + day change for the stocks found, shown on each row.
   const [quotes, setQuotes] = useState<Map<string, LiveQuoteDetail>>(new Map());
+  const savedHits: StockHit[] = savedStocks.map((h) => ({ symbol: h.symbol, name: h.name, market: h.market, exch: h.exchange }));
+  const recentHits: { entry: string; hit: StockHit }[] = recentSearches
+    .map((entry) => ({ entry, hit: decodeRecent(entry) }))
+    .filter((r): r is { entry: string; hit: StockHit } => r.hit !== null);
   useEffect(() => {
-    const list = [...stocks, ...savedStocks.map((h) => ({ symbol: h.symbol, name: h.name, market: h.market, exch: h.exchange }))];
+    const list = [...stocks, ...savedHits, ...recentHits.map((r) => r.hit)];
     if (!open || list.length === 0) return;
     let cancelled = false;
     const lookups = list.map((h) => ({ key: quoteKeyFor(h), market: h.market }));
@@ -168,18 +187,19 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
     return () => {
       cancelled = true;
     };
-  }, [stocks, savedStocks, open]);
+  }, [stocks, savedStocks, recentSearches, open]);
 
   const priceOf = (h: StockHit) => {
     const qd = quotes.get(quoteKeyFor(h));
-    if (!qd) return { trailing: '›', sub: undefined as string | undefined, subColor: undefined as string | undefined };
+    if (!qd) return { trailing: '', loading: true, sub: undefined as string | undefined, subColor: undefined as string | undefined };
     const prev = qd.previousClose;
     const diff = prev ? qd.price - prev : null;
     const pct = prev && diff !== null ? (diff / prev) * 100 : null;
     return {
+      loading: false,
       trailing: fmtPrice(qd.price, h.market),
       sub: diff !== null && pct !== null ? `${diff >= 0 ? '+' : '-'}${fmtNum(Math.abs(diff), h.market)} (${Math.abs(pct).toFixed(2)}%)` : undefined,
-      subColor: diff !== null && diff < 0 ? 'text-red-500' : 'text-emerald-600',
+      subColor: diff !== null && diff < 0 ? 'text-negative' : 'text-positive',
     };
   };
 
@@ -229,14 +249,14 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
   // or hit Enter), most-recent-first, deduped case-insensitively, capped to
   // MAX_RECENT_SEARCHES — shown as quick-repeat suggestions the next time
   // the search is opened with nothing typed yet.
-  const addRecentSearch = (term: string) => {
-    const trimmed = term.trim();
-    if (!trimmed) return;
+  const addRecentSearch = (hit: StockHit) => {
+    const entry = encodeRecent(hit);
+    const key = hitKey(hit);
     persistRecent(
-      [trimmed, ...recentSearches.filter((t) => t.toLowerCase() !== trimmed.toLowerCase())].slice(
-        0,
-        MAX_RECENT_SEARCHES
-      )
+      [entry, ...recentSearches.filter((t) => {
+        const d = decodeRecent(t);
+        return d !== null && hitKey(d) !== key;
+      })].slice(0, MAX_RECENT_SEARCHES)
     );
   };
 
@@ -247,13 +267,42 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
   /** A stock result opens its own full page with the CMP. */
   const openStock = (h: StockHit) => {
     // Remember the stock that was picked (its name), never the text that was typed.
-    addRecentSearch(h.name);
+    addRecentSearch(h);
     goTo(
       `/stock?symbol=${encodeURIComponent(h.symbol)}&market=${h.market}&name=${encodeURIComponent(h.name)}&ex=${encodeURIComponent(
         h.market === 'US' ? 'US market' : /\.BO$/i.test(h.symbol) ? 'BSE' : h.exch || 'NSE'
       )}`
     );
   };
+
+  // Keyboard: arrows move through the rows on screen, Enter opens the highlighted one.
+  const navList: StockHit[] = q ? stocks : [...savedHits, ...recentHits.map((r) => r.hit)];
+  const [activeIdx, setActiveIdx] = useState(0);
+  const navKey = `${open}|${q}|${navList.map(hitKey).join(',')}`;
+  useEffect(() => setActiveIdx(0), [navKey]);
+  useEffect(() => {
+    if (!open) return;
+    containerRef.current?.querySelector(`[data-nav-idx="${activeIdx}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [activeIdx, open]);
+  const onInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (navList.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIdx((i) => (i + 1) % navList.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIdx((i) => (i - 1 + navList.length) % navList.length);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const hit = navList[Math.min(activeIdx, navList.length - 1)];
+      if (hit) openStock(hit);
+    }
+  };
+  const toggleStar = (h: StockHit) => {
+    toggleSavedStock({ symbol: h.symbol, name: h.name, market: h.market, exchange: h.exch || 'NSE' });
+    setSavedStocks(readSavedStocks().slice(0, MAX_RECENT_SEARCHES));
+  };
+  const isSaved = (h: StockHit) => savedStocks.some((x) => x.market === h.market && x.symbol.toUpperCase() === h.symbol.toUpperCase());
 
   const goTo = (path: string) => {
     setOpen(false);
@@ -285,137 +334,164 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
       )}
 
       {open && (
-        <div className="animate-backdrop-in fixed inset-0 z-[100] bg-slate-900/40 px-4 pt-[10vh] sm:pt-24 flex justify-center">
+        <div className="animate-backdrop-in fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-[2px] sm:px-4 sm:pt-24 flex justify-center">
           <div
             ref={containerRef}
-            className="global-search-panel animate-menu-in uppercase w-full max-w-lg bg-surface rounded-2xl shadow-xl border border-line overflow-hidden h-fit max-h-[70vh] flex flex-col"
+            className="global-search-panel animate-menu-in w-full sm:max-w-xl bg-surface sm:rounded-3xl sm:shadow-2xl sm:border border-line overflow-hidden h-full sm:h-fit sm:max-h-[72vh] flex flex-col"
             style={{ transformOrigin: 'top center' }}
           >
-            <div className="flex items-center gap-3 px-4 py-4 border-b border-line-soft shrink-0">
-              <Search size={20} className="text-brand-500 shrink-0" />
-              <input
-                ref={inputRef}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search stocks..."
-                className="global-search-input flex-1 min-w-0 bg-transparent text-base text-ink placeholder:text-slate-400"
-              />
-              {query && (
+            <div className="px-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:pt-3 pb-2 shrink-0 flex items-center gap-2">
+              <div className="flex flex-1 min-w-0 items-center gap-2.5 h-[52px] px-3.5 rounded-2xl bg-surface-muted border border-line focus-within:border-brand-500 focus-within:bg-surface transition-colors">
+                <Search size={20} className="text-brand-500 shrink-0" />
+                <input
+                  ref={inputRef}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={onInputKeyDown}
+                  placeholder="Search stocks, e.g. ITC"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="global-search-input flex-1 min-w-0 bg-transparent text-[17px] leading-6 text-ink placeholder:text-slate-400 caret-brand-500"
+                />
+                {query && (
+                  <button
+                    onClick={() => setQuery('')}
+                    aria-label="Clear search"
+                    className="tap-scale h-6 w-6 flex items-center justify-center rounded-full bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-300 shrink-0"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
                 <button
-                  onClick={() => setQuery('')}
-                  className="tap-scale h-8 w-8 flex items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
+                  onClick={() => setOpen(false)}
+                  className="hidden sm:flex tap-scale h-6 items-center justify-center rounded-md border border-line bg-surface px-1.5 text-[11px] font-medium text-slate-500 shrink-0"
                 >
-                  <X size={16} />
+                  Esc
                 </button>
-              )}
+              </div>
               <button
+                type="button"
                 onClick={() => setOpen(false)}
-                className="hidden sm:flex tap-scale h-7 items-center justify-center rounded-md border border-line px-2 text-[11px] font-medium text-slate-600 shrink-0"
+                className="sm:hidden tap-scale shrink-0 px-1.5 py-2 text-sm font-semibold text-brand-600"
               >
-                Esc
+                Cancel
               </button>
             </div>
 
-            <div className="overflow-y-auto">
+            <div className="overflow-y-auto pb-2 flex-1 min-h-0 sm:flex-none">
               {!q ? (
-                recentSearches.length > 0 || savedStocks.length > 0 ? (
-                  <div className="py-2">
-                    {savedStocks.length > 0 && (
-                      <ResultGroup label="Saved stocks" icon={LineChart} iconColor="text-accent-600">
-                        {savedStocks.map((h) => (
-                          <ResultRow
-                            key={`${h.market}:${h.symbol}`}
-                            title={h.name}
-                            subtitle={`${bareSymbol(h.symbol)} · ${h.exchange}`}
-                            trailing={priceOf({ symbol: h.symbol, name: h.name, market: h.market, exch: h.exchange }).trailing}
-                            trailingColor={quotes.has(quoteKeyFor({ symbol: h.symbol, name: h.name, market: h.market })) ? 'text-ink' : 'text-slate-400'}
-                            onClick={() => openStock({ symbol: h.symbol, name: h.name, market: h.market, exch: h.exchange })}
-                          />
-                        ))}
+                navList.length > 0 ? (
+                  <div>
+                    {savedHits.length > 0 && (
+                      <ResultGroup label="Saved stocks" icon={Star} iconColor="text-amber-500">
+                        {savedHits.map((h, i) => {
+                          const pr = priceOf(h);
+                          return (
+                            <ResultRow
+                              key={`saved:${hitKey(h)}`}
+                              idx={i}
+                              active={activeIdx === i}
+                              hit={h}
+                              q=""
+                              price={pr}
+                              onHover={() => setActiveIdx(i)}
+                              onClick={() => openStock(h)}
+                            />
+                          );
+                        })}
                       </ResultGroup>
                     )}
-                    {recentSearches.length > 0 && (<>
-                    <div className="px-4 pb-1 flex items-center justify-between">
-                      <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-                        <Clock size={12} className="text-slate-600" />
-                        Recent searches
-                      </p>
-                      <button
-                        onClick={() => {
-                          persistRecent([]);
-                        }}
-                        className="text-[11px] font-medium text-slate-600 hover:text-slate-600 dark:hover:text-slate-300"
+                    {recentHits.length > 0 && (
+                      <ResultGroup
+                        label="Recently opened"
+                        icon={Clock}
+                        iconColor="text-slate-500"
+                        action={
+                          <button
+                            onClick={() => persistRecent([])}
+                            className="text-[11px] font-medium text-slate-500 hover:text-ink normal-case"
+                          >
+                            Clear all
+                          </button>
+                        }
                       >
-                        Clear
-                      </button>
+                        {recentHits.map((r, j) => {
+                          const i = savedHits.length + j;
+                          const pr = priceOf(r.hit);
+                          return (
+                            <ResultRow
+                              key={r.entry}
+                              idx={i}
+                              active={activeIdx === i}
+                              hit={r.hit}
+                              q=""
+                              price={pr}
+                              onHover={() => setActiveIdx(i)}
+                              onClick={() => openStock(r.hit)}
+                              onRemove={() => removeRecentSearch(r.entry)}
+                            />
+                          );
+                        })}
+                      </ResultGroup>
+                    )}
+                  </div>
+                ) : (
+                  <div className="px-6 py-10 text-center">
+                    <div className="mx-auto mb-3 h-11 w-11 rounded-full bg-surface-muted flex items-center justify-center">
+                      <Search size={20} className="text-slate-400" />
                     </div>
-                    <div className="px-2">
-                      {recentSearches.map((term) => (
-                        <div
-                          key={term}
-                          className="group w-full flex items-center gap-3 px-2.5 py-2.5 rounded-lg hover:bg-surface-hover"
-                        >
-                          <Clock size={15} className="text-slate-300 dark:text-slate-600 shrink-0" />
-                          <button
-                            onClick={() => setQuery(term)}
-                            className="flex-1 min-w-0 text-left text-sm font-medium text-ink-2 truncate"
-                          >
-                            {term}
-                          </button>
-                          <button
-                            onClick={() => removeRecentSearch(term)}
-                            className="tap-scale h-6 w-6 flex items-center justify-center rounded-full text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 shrink-0 opacity-0 group-hover:opacity-100"
-                          >
-                            <X size={12} />
-                          </button>
+                    <p className="text-sm font-medium text-ink">Search any stock</p>
+                    <p className="mt-1 text-xs text-slate-500">See its live price, chart, financials and more.</p>
+                  </div>
+                )
+              ) : rawQ.length < 3 ? (
+                <div className="px-6 py-10 text-center text-sm text-slate-500">Type at least 3 letters to search stocks.</div>
+              ) : stocks.length === 0 ? (
+                <div className="px-6 py-10 text-center text-sm text-slate-500">
+                  {stocksState === 'loading' ? (
+                    <div className="px-2 space-y-3 text-left" aria-label="Searching stocks">
+                      {[0, 1, 2].map((n) => (
+                        <div key={n} className="flex items-center gap-3 animate-pulse">
+                          <div className="h-9 w-9 rounded-full bg-slate-200 dark:bg-slate-700" />
+                          <div className="flex-1 space-y-2">
+                            <div className="h-3 w-2/3 rounded bg-slate-200 dark:bg-slate-700" />
+                            <div className="h-2.5 w-1/3 rounded bg-slate-100 dark:bg-slate-800" />
+                          </div>
+                          <div className="h-3 w-14 rounded bg-slate-200 dark:bg-slate-700" />
                         </div>
                       ))}
                     </div>
-                    </>)}
-                  </div>
-                ) : (
-                  <div className="px-4 py-10 text-center text-sm text-slate-600">
-                    Search any stock to see its price and details.
-                  </div>
-                )
-              ) : stocks.length === 0 ? (
-                <div className="px-4 py-10 text-center text-sm text-slate-600">
-                  {stocksState === 'loading' ? (
-                    <span className="inline-flex items-center gap-2">
-                      <Loader2 size={14} className="animate-spin" /> Searching stocks…
-                    </span>
                   ) : stocksState === 'failed' ? (
                     <>Couldn’t reach the stock search. Check your connection and try again.</>
                   ) : (
                     <>
-                      No results for <span className="font-medium text-slate-500 dark:text-slate-300">“{query}”</span>
+                      No stocks found for <span className="font-medium text-ink">“{rawQ}”</span>. Try the company name or its ticker.
                     </>
                   )}
                 </div>
               ) : (
-                <div className="py-2">
-                  {(stocks.length > 0 || stocksState === 'loading') && (
-                    <ResultGroup label="Stocks" icon={LineChart} iconColor="text-accent-600">
-                      {stocks.map((h) => (
-                        <ResultRow
-                          key={hitKey(h)}
-                          title={h.name}
-                          subtitle={`${bareSymbol(h.symbol)} · ${h.market === 'US' ? 'US' : h.exch || 'NSE'}`}
-                          trailing={priceOf(h).trailing}
-                          trailingColor={quotes.has(quoteKeyFor(h)) ? 'text-ink' : 'text-slate-400'}
-                          sub={priceOf(h).sub}
-                          subColor={priceOf(h).subColor}
-                          onClick={() => openStock(h)}
-                        />
-                      ))}
-                      {stocksState === 'loading' && stocks.length === 0 && (
-                        <p className="px-2.5 py-2 text-xs text-slate-500 normal-case">Searching stocks…</p>
-                      )}
-                    </ResultGroup>
-                  )}
-                </div>
+                <ResultGroup label="Stocks" icon={LineChart} iconColor="text-accent-600">
+                  {stocks.map((h, i) => {
+                    const pr = priceOf(h);
+                    return (
+                      <ResultRow
+                        key={hitKey(h)}
+                        idx={i}
+                        active={activeIdx === i}
+                        hit={h}
+                        q={rawQ}
+                        price={pr}
+                        saved={isSaved(h)}
+                        onToggleSave={() => toggleStar(h)}
+                        onHover={() => setActiveIdx(i)}
+                        onClick={() => openStock(h)}
+                      />
+                    );
+                  })}
+                </ResultGroup>
               )}
             </div>
+
           </div>
         </div>
       )}
@@ -427,57 +503,114 @@ function ResultGroup({
   label,
   icon: Icon,
   iconColor,
+  action,
   children,
 }: {
   label: string;
   icon: typeof TrendingUp;
   iconColor: string;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <div className="px-2 py-1.5">
-      <p className="px-2.5 pb-1 flex items-center gap-1.5 text-xs font-medium text-slate-500">
-        <Icon size={12} className={iconColor} />
-        {label}
-      </p>
+    <div className="px-2 pt-2 pb-1">
+      <div className="px-3 pb-1 flex items-center justify-between">
+        <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wider uppercase text-slate-500">
+          <Icon size={12} className={iconColor} />
+          {label}
+        </p>
+        {action}
+      </div>
       <div>{children}</div>
     </div>
   );
 }
 
+/** Wraps the part of `text` that matches what was typed. */
+function Highlight({ text, q }: { text: string; q: string }) {
+  const needle = q.trim();
+  if (!needle) return <>{text}</>;
+  const at = text.toLowerCase().indexOf(needle.toLowerCase());
+  if (at < 0) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, at)}
+      <mark className="rounded-sm bg-amber-200/70 dark:bg-amber-400/25 text-inherit px-0.5 -mx-0.5">{text.slice(at, at + needle.length)}</mark>
+      {text.slice(at + needle.length)}
+    </>
+  );
+}
+
 function ResultRow({
-  title,
-  subtitle,
-  trailing,
-  trailingColor = 'text-muted',
-  sub,
-  subColor = 'text-muted',
+  idx,
+  active,
+  hit,
+  q,
+  price,
+  saved,
+  onToggleSave,
+  onRemove,
+  onHover,
   onClick,
 }: {
-  title: string;
-  subtitle: string;
-  trailing: string;
-  trailingColor?: string;
-  /** Optional small line under the trailing value (e.g. day change). */
-  sub?: string;
-  subColor?: string;
+  idx: number;
+  active: boolean;
+  hit: StockHit;
+  q: string;
+  price: { trailing: string; loading: boolean; sub?: string; subColor?: string };
+  saved?: boolean;
+  onToggleSave?: () => void;
+  onRemove?: () => void;
+  onHover: () => void;
   onClick: () => void;
 }) {
+  const exch = hit.market === 'US' ? 'US' : /\.BO$/i.test(hit.symbol) ? 'BSE' : hit.exch || 'NSE';
   return (
-    <button
-      onClick={onClick}
-      className="w-full flex items-center justify-between gap-3 px-2.5 py-2 rounded-lg text-left hover:bg-surface-hover"
+    <div
+      data-nav-idx={idx}
+      onMouseEnter={onHover}
+      className={`group flex items-center gap-1 rounded-xl pr-1.5 transition-colors ${active ? 'bg-surface-hover' : ''}`}
     >
-      <span className="min-w-0">
-        <span className="block text-sm font-medium text-ink truncate">
-          {title}
+      <button onClick={onClick} className="flex-1 min-w-0 flex items-center gap-3 px-3 py-2.5 text-left">
+        <CompanyLogo symbol={bareSymbol(hit.symbol)} name={hit.name} market={hit.market} size={36} />
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium text-ink truncate">
+            <Highlight text={hit.name} q={q} />
+          </span>
+          <span className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500 min-w-0">
+            <span className="truncate">{bareSymbol(hit.symbol)}</span>
+            <span className="shrink-0 rounded px-1.5 py-px text-[10px] font-semibold bg-surface-muted border border-line text-slate-500">{exch}</span>
+          </span>
         </span>
-        <span className="block text-xs text-slate-600 truncate normal-case">{subtitle}</span>
-      </span>
-      <span className="shrink-0 text-right">
-        <span className={`block text-sm font-medium ${trailingColor}`}>{trailing}</span>
-        {sub && <span className={`block text-xs font-medium ${subColor}`}>{sub}</span>}
-      </span>
-    </button>
+        <span className="shrink-0 text-right">
+          {price.loading ? (
+            <span className="block h-3.5 w-14 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
+          ) : (
+            <>
+              <span className="block text-sm font-semibold text-ink font-numeric">{price.trailing}</span>
+              {price.sub && <span className={`block text-[11px] font-medium ${price.subColor}`}>{price.sub}</span>}
+            </>
+          )}
+        </span>
+      </button>
+      {onToggleSave && (
+        <button
+          onClick={onToggleSave}
+          aria-label={saved ? 'Remove from saved' : 'Save stock'}
+          className="tap-scale h-8 w-8 flex items-center justify-center rounded-full text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
+        >
+          <Star size={15} className={saved ? 'fill-amber-400 text-amber-500' : ''} />
+        </button>
+      )}
+      {onRemove && (
+        <button
+          onClick={onRemove}
+          aria-label="Remove from recent"
+          className="tap-scale h-7 w-7 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 shrink-0 sm:opacity-0 sm:group-hover:opacity-100"
+        >
+          <X size={13} />
+        </button>
+      )}
+    </div>
   );
 }
