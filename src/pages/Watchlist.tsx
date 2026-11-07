@@ -510,10 +510,26 @@ export default function Watchlist() {
   return (
     <div className="space-y-4">
       <PageHeader
+        className="!mb-0"
         title="Watchlist"
-        meta={
-          items.length > 0 ? (
-            <span className="flex flex-wrap items-center gap-x-1 gap-y-1 sm:gap-x-1.5 whitespace-nowrap">
+        actionsInline
+        actions={
+          <>
+            {items.length > 0 && (
+              <IconButton label="Export CSV" variant="secondary" onClick={exportCsv}>
+                <Download size={16} />
+              </IconButton>
+            )}
+            {lists.length < MAX_LISTS && (
+              <Button size="sm" leftIcon={<Plus size={15} />} onClick={startCreate}>
+                New list
+              </Button>
+            )}
+          </>
+        }
+      />
+      {items.length > 0 && (
+        <div className="flex flex-nowrap items-center gap-1.5 whitespace-nowrap overflow-hidden -mt-3">
               <span className="inline-flex items-center shrink-0 rounded-md bg-surface-muted px-1.5 sm:px-2 py-0.5 text-xs font-medium text-ink-2 font-numeric">
                 {visible.length} {visible.length === 1 ? 'stock' : 'stocks'}
               </span>
@@ -535,25 +551,8 @@ export default function Watchlist() {
                   />
                 </span>
               )}
-            </span>
-          ) : undefined
-        }
-        actionsInline
-        actions={
-          <>
-            {items.length > 0 && (
-              <IconButton label="Export CSV" variant="secondary" onClick={exportCsv}>
-                <Download size={16} />
-              </IconButton>
-            )}
-            {lists.length < MAX_LISTS && (
-              <Button size="sm" leftIcon={<Plus size={15} />} onClick={startCreate}>
-                New list
-              </Button>
-            )}
-          </>
-        }
-      />
+            </div>
+      )}
 
       {lists.length > 0 && <Tabs value={active} onChange={(k) => setActive(k)} items={tabItems} />}
 
