@@ -409,7 +409,7 @@ export default function Watchlist() {
   const menuItem = 'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-sm hover:bg-surface-hover';
 
   const rowMenu = (s: SavedStock, k: string, note: string | undefined) => (
-    <div className="relative inline-block" data-wl-menu>
+    <div className="relative inline-block mr-2.5" data-wl-menu>
       <button
         onClick={(e) => {
           e.stopPropagation();
@@ -529,7 +529,7 @@ export default function Watchlist() {
         }
       />
       {items.length > 0 && (
-        <div className="flex flex-nowrap items-center gap-1.5 whitespace-nowrap overflow-hidden -mt-3">
+        <div className="flex flex-nowrap items-center gap-1.5 whitespace-nowrap overflow-hidden pt-1">
               <span className="inline-flex items-center shrink-0 rounded-md bg-surface-muted px-1.5 sm:px-2 py-0.5 text-xs font-medium text-ink-2 font-numeric">
                 {visible.length} {visible.length === 1 ? 'stock' : 'stocks'}
               </span>

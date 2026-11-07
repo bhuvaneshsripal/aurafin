@@ -363,7 +363,7 @@ export default function NotificationBell(_props: { align?: 'right' | 'left' } = 
         <div
           ref={panelRef}
           onClick={(e) => e.stopPropagation()}
-          className="animate-notif-panel h-full w-full md:w-1/2 max-w-[640px] bg-page flex flex-col border-l border-line shadow-xl"
+          className="animate-notif-panel relative h-full w-full md:w-1/2 max-w-[640px] bg-page flex flex-col border-l border-line shadow-xl"
         >
           <div className="px-3 h-14 border-b border-line flex items-center justify-between shrink-0 bg-surface">
             <div className="flex items-center gap-1">
@@ -505,6 +505,8 @@ export default function NotificationBell(_props: { align?: 'right' | 'left' } = 
               </div>
             )}
           </div>
+          {/* Soft fade where the list meets the bottom navigation, instead of a hard cut. */}
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-14" style={{ background: 'linear-gradient(to top, var(--color-page), transparent)' }} />
         </div>
         </div>,
         document.body
