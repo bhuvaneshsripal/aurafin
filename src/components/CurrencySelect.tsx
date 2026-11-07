@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 import { CURRENCIES, CURRENCY_SYMBOLS } from '../utils/currency';
+import { inToast } from '../utils/toastGuard';
 
 interface CurrencySelectProps {
   value: string;
@@ -77,6 +78,7 @@ export default function CurrencySelect({ value, onChange, className = '', disabl
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (e: PointerEvent) => {
+      if (inToast(e.target)) return;
       const target = e.target as Node;
       if (triggerRef.current?.contains(target)) return;
       if (menuRef.current?.contains(target)) return;

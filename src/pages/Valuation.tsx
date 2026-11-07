@@ -13,6 +13,7 @@ import {
   analyseEps, computeValuation, epsCagr, fetchFundamentals, inr, signedPct,
   type EpsAnalysis, type FundamentalsResponse,
 } from '../utils/valuation';
+import { inToast } from '../utils/toastGuard';
 
 type Src = 'auto' | 'you';
 const GROWTH_CAP = 25;
@@ -164,6 +165,7 @@ export default function Valuation() {
   // Close the list when clicking anywhere outside the search box.
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
+      if (inToast(e.target)) return;
       if (boxRef.current && !boxRef.current.contains(e.target as Node)) setListOpen(false);
     };
     document.addEventListener('mousedown', onDown);

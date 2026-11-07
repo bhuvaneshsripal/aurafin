@@ -1,5 +1,6 @@
 // Live equity price endpoint. All routing logic (NSE / BSE / Yahoo / US)
 // lives in api/_lib/quote.js, shared with the Vite dev middleware.
+import '../../_lib/quietDeprecations.js';
 import { resolveQuote } from '../../_lib/quote.js';
 import { parseSymbols, resolveQuotes } from '../../_lib/batchQuotes.js';
 

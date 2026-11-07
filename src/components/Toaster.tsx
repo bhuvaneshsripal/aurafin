@@ -98,6 +98,7 @@ export default function Toaster() {
         <div
           role="status"
           aria-live="polite"
+          data-toast-root
           className="fixed left-0 right-0 z-[60] flex flex-col items-center gap-2 px-4 pointer-events-none"
           style={{ top: 'calc(env(safe-area-inset-top) + 12px)' }}
         >
@@ -110,6 +111,7 @@ export default function Toaster() {
         <div
           role="status"
           aria-live="polite"
+          data-toast-root
           className="fixed left-0 right-0 z-[71] flex flex-col items-center gap-2 px-4 pointer-events-none bottom-[calc(80px_+_env(safe-area-inset-bottom)_+_12px_+_var(--lift))] md:bottom-[calc(16px_+_var(--lift))]"
           style={{ ['--lift' as string]: `${lift}px` }}
         >

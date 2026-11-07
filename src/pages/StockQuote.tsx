@@ -40,6 +40,7 @@ import { useToastStore } from '../store/toastStore';
 import { useAlertsStore } from '../store/alertsStore';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { inToast } from '../utils/toastGuard';
 
 const QUOTE_REFRESH_MS = 15_000;
 const HISTORY_REFRESH_MS = 60_000;
@@ -542,6 +543,7 @@ function AlertPopover({
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
+      if (inToast(e.target)) return;
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();

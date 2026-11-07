@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Call the push sender
         run: |
-          curl --fail --silent --show-error --max-time 60 \
+          code=$(curl --silent --show-error --max-time 60 -o body.txt -w '%{http_code}' \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "${{ secrets.APP_URL }}/api/push/send"
+            "${{ secrets.APP_URL }}/api/push/send")
+          cat body.txt; echo
+          [ "$code" = "200" ] || { echo "Push sender returned HTTP $code"; exit 1; }

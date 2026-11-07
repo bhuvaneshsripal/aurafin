@@ -1626,3 +1626,4 @@ input.global-search-input:focus,
 /* Global search: big custom blinking caret */
 @keyframes global-caret-blink { 0%,49% { opacity: 1 } 50%,100% { opacity: 0 } }
 .global-search-caret { animation: global-caret-blink 1s steps(1) infinite; }
+body[data-hide-eye] [data-privacy-fab] { display: none !important; }

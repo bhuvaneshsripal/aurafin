@@ -4,20 +4,12 @@
 // instead of silence.
 //
 //   POST /api/push/test     Authorization: Bearer <Firebase ID token>
+import '../_lib/quietDeprecations.js';
 import webpush from 'web-push';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { configureWebPush, initFirebaseAdmin } from '../_lib/pushEnv.js';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 
-function init() {
-  if (!getApps().length) {
-    const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
-    if (!raw) throw new Error('FIREBASE_SERVICE_ACCOUNT is not set');
-    const account = JSON.parse(raw);
-    if (typeof account.private_key === 'string') account.private_key = account.private_key.replace(/\\n/g, '\n');
-    initializeApp({ credential: cert(account) });
-  }
-}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
@@ -29,16 +21,12 @@ export default async function handler(req, res) {
   if (!server.vapid || !server.serviceAccount) return res.status(200).json({ ok: false, server, devices: 0, sent: 0 });
 
   try {
-    init();
+    initFirebaseAdmin();
     const token = String(req.headers.authorization ?? '').replace(/^Bearer /, '');
     if (!token) return res.status(401).json({ error: 'Sign in first' });
     const { uid } = await getAuth().verifyIdToken(token);
 
-    webpush.setVapidDetails(
-      process.env.VAPID_SUBJECT || 'mailto:admin@example.com',
-      process.env.VAPID_PUBLIC_KEY,
-      process.env.VAPID_PRIVATE_KEY
-    );
+    configureWebPush();
     const snap = await getFirestore().collection('users').doc(uid).collection('pushSubscriptions').get();
     let sent = 0;
     let failed = 0;

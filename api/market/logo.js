@@ -1,4 +1,5 @@
 // GET /api/market/logo?symbol=TCS&market=IN  ->  the company's logo image.
+import '../_lib/quietDeprecations.js';
 import { resolveLogo, resolveDomainLogo } from '../_lib/logo.js';
 
 export default async function handler(req, res) {

@@ -3,6 +3,7 @@ import { Coins } from 'lucide-react';
 import { cn } from '../ui';
 import { fetchDividends, summarizeDividends, type DividendData } from '../../utils/dividends';
 import { currencySymbol, fmtNum, type Exchange, type Market } from '../../utils/stockDetail';
+import { inToast } from '../../utils/toastGuard';
 
 const fmtDate = (ms: number, market: Market) =>
   new Date(ms).toLocaleDateString(market === 'US' ? 'en-US' : 'en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -45,6 +46,7 @@ export default function DividendChip({
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
+      if (inToast(e.target)) return;
       if (!wrap.current?.contains(e.target as Node)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);

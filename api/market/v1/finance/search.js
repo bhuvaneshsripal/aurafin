@@ -10,6 +10,7 @@
 // For the US market: NSE has no US listings at all, so we skip it
 // entirely and go straight to Yahoo, which is what actually knows
 // "Google" -> GOOGL/GOOG.
+import '../../../_lib/quietDeprecations.js';
 import { searchIndia } from '../../../_lib/indiaSearch.js';
 
 import { fetch } from '../../../_lib/fetchTimeout.js';

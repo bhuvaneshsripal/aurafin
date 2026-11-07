@@ -16,6 +16,7 @@ import NotificationBell from './NotificationBell';
 import MarketTicker, { MarketTickerMarquee } from './MarketTicker';
 import { IconButton } from './ui';
 import UpdateDot from './UpdateDot';
+import { inToast } from '../utils/toastGuard';
 
 const menuPanel =
   'animate-menu-in absolute right-0 mt-2 bg-surface border border-line rounded-xl shadow-lg overflow-hidden z-30';
@@ -88,6 +89,7 @@ export default function TopHeader() {
 
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
+      if (inToast(e.target)) return;
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) setProfileOpen(false);
       if (mobileMenuRef.current && !mobileMenuRef.current.contains(e.target as Node)) setMobileMenuOpen(false);
     };

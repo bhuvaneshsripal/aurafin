@@ -3,6 +3,7 @@ import { WifiLow, X } from 'lucide-react';
 import { useNetworkQuality, type NetworkQuality } from '../hooks/useNetworkQuality';
 import { useExitPresence } from '../hooks/useExitPresence';
 import { useSwipeDismiss } from '../hooks/useSwipeDismiss';
+import { inToast } from '../utils/toastGuard';
 
 const COPY: Record<Exclude<NetworkQuality, 'good'>, { title: string; body: string }> = {
   low: { title: 'Low network connection', body: 'Some features may work slowly or not at all.' },
@@ -50,6 +51,7 @@ export default function NetworkBanner() {
   useEffect(() => {
     if (!show) return;
     const onDown = (e: Event) => {
+      if (inToast(e.target)) return;
       if (bannerRef.current?.contains(e.target as Node)) return;
       setDismissedFor(quality);
     };

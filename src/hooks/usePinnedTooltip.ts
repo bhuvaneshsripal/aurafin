@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { inToast } from '../utils/toastGuard';
 
 /**
  * Tap-to-pin tooltips for charts on touch screens (and mouse clicks on desktop).
@@ -40,6 +41,7 @@ export function usePinnedTooltip() {
   useEffect(() => {
     if (!isPinned) return;
     const onPointerDown = (e: PointerEvent) => {
+      if (inToast(e.target)) return;
       if (containerRef.current?.contains(e.target as Node)) return;
       setPinned(null);
     };

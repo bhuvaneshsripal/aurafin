@@ -28,6 +28,7 @@ import {
   updateList,
   type WatchList,
 } from '../utils/watchlistLists';
+import { inToast } from '../utils/toastGuard';
 
 const bare = (s: string) => s.replace(/\.(NS|BO)$/i, '');
 // The stock page saves BSE stocks as the bare symbol + exchange "BSE", so check both (otherwise they were priced from NSE).
@@ -386,6 +387,7 @@ export default function Watchlist() {
   useEffect(() => {
     if (menuKey === null && !listMenu) return;
     const onClick = (e: MouseEvent) => {
+      if (inToast(e.target)) return;
       if ((e.target as Element | null)?.closest?.('[data-wl-menu]')) return;
       e.stopPropagation();
       e.preventDefault();

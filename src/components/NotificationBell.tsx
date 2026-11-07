@@ -10,6 +10,7 @@ import { useUiStore } from '../store/uiStore';
 import { useAlertsStore, LIST_KINDS, type AlertKind } from '../store/alertsStore';
 import { toast } from '../store/toastStore';
 import { showSystemNotification } from '../hooks/useMarketAlerts';
+import { inToast } from '../utils/toastGuard';
 
 const KIND_META: Record<AlertKind, { icon: LucideIcon; tint: string }> = {
   'pre-open': { icon: Sunrise, tint: 'bg-amber-500/15 text-amber-600' },
@@ -260,6 +261,7 @@ export default function NotificationBell(_props: { align?: 'right' | 'left' } = 
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent) => {
+      if (inToast(e.target)) return;
       const t = e.target as Node | null;
       if (!t) return;
       if (panelRef.current?.contains(t) || ref.current?.contains(t)) return;
@@ -311,6 +313,7 @@ export default function NotificationBell(_props: { align?: 'right' | 'left' } = 
   useEffect(() => {
     if (!menuOpen) return;
     const onDown = (e: PointerEvent) => {
+      if (inToast(e.target)) return;
       if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
     };
     document.addEventListener('pointerdown', onDown, true);

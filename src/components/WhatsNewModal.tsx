@@ -59,6 +59,12 @@ export default function WhatsNewModal({
   onRecheck?: () => void;
 }) {
   const available = status === 'available';
+  // Hide the floating eye button while this page is open.
+  useEffect(() => {
+    if (!open) return;
+    document.body.setAttribute('data-hide-eye', '1');
+    return () => document.body.removeAttribute('data-hide-eye');
+  }, [open]);
   const heading = available ? notes?.title ?? "What's new" : "What's new";
   return (
     // Every state fills the working area (sidebar + top bar stay visible), so

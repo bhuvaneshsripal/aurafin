@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Check, ChevronDown, ChevronsUpDown, Layers, Settings } from 'lucide-react';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import { useAvatarUrl } from '../hooks/useAvatarUrl';
+import { inToast } from '../utils/toastGuard';
 
 /**
  * Household profile selector. `compact` is the small mobile-header trigger;
@@ -21,6 +22,7 @@ export default function ProfileSwitcher({ compact = false }: { compact?: boolean
 
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
+      if (inToast(e.target)) return;
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener('mousedown', onClickOutside);

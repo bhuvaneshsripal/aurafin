@@ -9,6 +9,7 @@ import QuickAddMenu from './QuickAddMenu';
 import ProfileSwitcher from './ProfileSwitcher';
 import AppLogo from './AppLogo';
 import GlobalSearch from './GlobalSearch';
+import { inToast } from '../utils/toastGuard';
 
 export default function Topbar() {
   const user = useAuthStore((s) => s.user);
@@ -42,6 +43,7 @@ export default function Topbar() {
 
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
+      if (inToast(e.target)) return;
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) setProfileOpen(false);
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false);
       if (mobileMenuRef.current && !mobileMenuRef.current.contains(e.target as Node)) setMobileMenuOpen(false);

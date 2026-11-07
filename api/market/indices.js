@@ -1,3 +1,4 @@
+import '../_lib/quietDeprecations.js';
 import { fetchIndices } from '../_lib/indices.js';
 import { fetchGlobalIndices } from '../_lib/globalIndices.js';
 import { fetchIndianIndices } from '../_lib/indianIndices.js';

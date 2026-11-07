@@ -1,6 +1,7 @@
 // Live 24K gold price per gram (INR) — see api/_lib/gold.js for the
 // upstream sources (with fallbacks) and important caveats (this is a
 // GLOBAL SPOT estimate, not an exact local jeweller rate).
+import '../_lib/quietDeprecations.js';
 import { fetchLiveGoldPricePerGram24k } from '../_lib/gold.js';
 
 export default async function handler(req, res) {

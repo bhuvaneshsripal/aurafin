@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Info } from 'lucide-react';
+import { inToast } from '../../utils/toastGuard';
 
 /**
  * Small "i" button that reveals longer explanatory text.
@@ -51,6 +52,7 @@ export default function InfoTip({
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent | TouchEvent) => {
+      if (inToast(e.target)) return;
       const t = e.target as Node;
       if (btnRef.current?.contains(t)) return; // the button toggles itself
       setOpen(false);

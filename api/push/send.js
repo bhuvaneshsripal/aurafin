@@ -11,10 +11,11 @@
 // Needs these environment variables (see PUSH_SETUP.md):
 //   FIREBASE_SERVICE_ACCOUNT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY,
 //   VAPID_SUBJECT, CRON_SECRET
+import '../_lib/quietDeprecations.js';
 import { createHash } from 'node:crypto';
 import webpush from 'web-push';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { configureWebPush, initFirebaseAdmin } from '../_lib/pushEnv.js';
 import { fetchIndices } from '../_lib/indices.js';
 import { resolveQuote } from '../_lib/quote.js';
 
@@ -56,13 +57,7 @@ function istNow() {
 }
 
 function getDb() {
-  if (!getApps().length) {
-    const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
-    if (!raw) throw new Error('FIREBASE_SERVICE_ACCOUNT is not set');
-    const account = JSON.parse(raw);
-    if (typeof account.private_key === 'string') account.private_key = account.private_key.replace(/\\n/g, '\n');
-    initializeApp({ credential: cert(account) });
-  }
+  initFirebaseAdmin();
   return getFirestore();
 }
 
@@ -116,17 +111,13 @@ async function pushParts(subs, parts, baseTag) {
 export default async function handler(req, res) {
   const secret = process.env.CRON_SECRET;
   if (!secret) return res.status(500).json({ error: 'CRON_SECRET is not set' });
-  if (req.headers.authorization !== `Bearer ${secret}`) return res.status(401).json({ error: 'Unauthorized' });
+  if (req.headers.authorization?.trim() !== `Bearer ${secret.trim()}`) return res.status(401).json({ error: 'Unauthorized' });
   if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
     return res.status(500).json({ error: 'VAPID keys are not set' });
   }
 
   try {
-    webpush.setVapidDetails(
-      process.env.VAPID_SUBJECT || 'mailto:admin@example.com',
-      process.env.VAPID_PUBLIC_KEY,
-      process.env.VAPID_PRIVATE_KEY
-    );
+    configureWebPush();
     const db = getDb();
 
     const snap = await db.collectionGroup('pushSubscriptions').get();

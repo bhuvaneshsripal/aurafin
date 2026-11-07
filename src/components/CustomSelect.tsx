@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
+import { inToast } from '../utils/toastGuard';
 
 export interface CustomSelectOption {
   value: string;
@@ -110,6 +111,7 @@ export default function CustomSelect({
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (e: PointerEvent) => {
+      if (inToast(e.target)) return;
       const target = e.target as Node;
       if (triggerRef.current?.contains(target)) return;
       if (menuRef.current?.contains(target)) return;

@@ -12,6 +12,7 @@ import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { useModalBackClose } from '../hooks/useModalBackClose';
 import { fetchLiveQuotes, searchStockSymbols, type LiveQuoteDetail } from '../utils/marketPrices';
 import { readSavedStocks, toggleSavedStock, type SavedStock } from '../utils/savedStocks';
+import { inToast } from '../utils/toastGuard';
 
 const MAX_RECENT_SEARCHES = 5;
 const RECENT_SEARCHES_KEY = 'aurafin-recent-searches';
@@ -253,6 +254,7 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
       if (e.key === 'Escape') setOpen(false);
     };
     const onClickOutside = (e: MouseEvent) => {
+      if (inToast(e.target)) return;
       const t = e.target as Element | null;
       if (t?.closest?.('[data-global-search-trigger]')) return; // the trigger toggles it itself
       // On phones the top bar and bottom nav stay usable; tapping them leaves the search.

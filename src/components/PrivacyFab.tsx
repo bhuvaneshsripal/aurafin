@@ -167,6 +167,7 @@ export default function PrivacyFab() {
   return (
     <button
       type="button"
+      data-privacy-fab
       onPointerDown={onPointerDown}
       onClick={isDesktop ? togglePrivacy : undefined}
       onPointerMove={onPointerMove}

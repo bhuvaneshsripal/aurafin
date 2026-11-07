@@ -1,4 +1,5 @@
 // Fundamentals for the X/2 · X/3 valuation page. See api/_lib/fundamentals.js.
+import '../_lib/quietDeprecations.js';
 import { fetchFundamentals } from '../_lib/fundamentals.js';
 import { fetchSectors } from '../_lib/sector.js';
 import { handleStockQuery } from '../_lib/stockDetail.js';

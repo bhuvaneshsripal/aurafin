@@ -166,6 +166,7 @@ import PpfSection from '../components/assetForm/PpfSection';
 import PropertySection from '../components/assetForm/PropertySection';
 import { propertyCost, rateBasedValue, summarizeProperty } from '../utils/property';
 import { computePpfNow, migrateLegacyPpf, ppfMaturityDate, ppfRate, ppfStatus, yearAdvice } from '../utils/ppf';
+import { inToast } from '../utils/toastGuard';
 
 type Tab = 'assets' | 'liabilities' | 'performs' | 'networth' | 'allocation' | 'analytics';
 type SortKey = 'manual' | 'name' | 'qty' | 'avgCost' | 'perUnit' | 'invested' | 'value' | 'pnl' | 'alloc' | 'dayChange';
@@ -775,6 +776,7 @@ function useOutsideClose(onClose: () => void) {
     // Taps inside the menu itself, or on any "..." trigger button
     // (data-menu-trigger, which toggles the menu on its own), are ignored.
     const handler = (e: Event) => {
+      if (inToast(e.target)) return;
       const el = ref.current;
       if (!el) return; // menu not open
       const target = e.target as Element | null;

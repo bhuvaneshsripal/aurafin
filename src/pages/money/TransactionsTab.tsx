@@ -41,6 +41,7 @@ import {
   inputClasses,
   DateInput,
 } from '../../components/ui';
+import { inToast } from '../../utils/toastGuard';
 
 // ---------------------------------------------------------------- periods --
 
@@ -208,6 +209,7 @@ export default function TransactionsTab() {
 
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
+      if (inToast(e.target)) return;
       if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) setAddMenuOpen(false);
       if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) setExportMenuOpen(false);
     };

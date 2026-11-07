@@ -26,6 +26,7 @@ import type { Asset, Snapshot, Transaction, TransactionType } from '../types';
 import CurrencySelect from './CurrencySelect';
 import CustomSelect from './CustomSelect';
 import { toIsoDate } from '../utils/date';
+import { inToast } from '../utils/toastGuard';
 
 /** Actions shown in the fan, left to right along the arc. */
 /** Half-width and (max) height of the arc, which is an ellipse so it spreads across the screen. */
@@ -50,6 +51,7 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
 
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
+      if (inToast(e.target)) return;
       if (ref.current && !ref.current.contains(e.target as Node)) setMenuOpen(false);
     };
     document.addEventListener('mousedown', onClickOutside);
