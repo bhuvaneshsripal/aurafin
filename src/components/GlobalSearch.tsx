@@ -9,6 +9,7 @@ import { useAuthStore } from '../store/authStore';
 import { subscribeSearchHistory, saveSearchHistory } from '../hooks/useFirestoreSync';
 import { fmtPrice, fmtNum } from '../utils/stockDetail';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
+import { useModalBackClose } from '../hooks/useModalBackClose';
 import { fetchLiveQuotes, searchStockSymbols, type LiveQuoteDetail } from '../utils/marketPrices';
 import { readSavedStocks, toggleSavedStock, type SavedStock } from '../utils/savedStocks';
 
@@ -266,6 +267,12 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
   }, [open]);
 
   useBodyScrollLock(open);
+
+  // Phone/PWA Back button while the search is open: close it and land on the Overview (main) page.
+  useModalBackClose(open, () => {
+    setOpen(false);
+    navigate('/');
+  });
 
   // Tell the layout the search is open (the bottom nav stays visible, but stays shown above the keyboard).
   const setSearchOpen = useUiStore((s) => s.setSearchOpen);

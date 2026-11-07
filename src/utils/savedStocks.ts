@@ -20,7 +20,7 @@ export interface StockPriceAlert {
 
 const SAVED_KEY = 'aurafin.stock.saved';
 const ALERTS_KEY = 'aurafin.stock.alerts';
-const MAX_SAVED = 50;
+export const MAX_SAVED = 50;
 
 export const stockKey = (market: Market, symbol: string) => `${market}:${symbol.toUpperCase().replace(/\.(NS|BO)$/i, '')}`;
 

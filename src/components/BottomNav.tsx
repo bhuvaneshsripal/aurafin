@@ -128,11 +128,10 @@ export default function BottomNav() {
   const barRef = useRef<HTMLDivElement | null>(null); // the visible pill
   const shrinkTarget = useRef(0);
   const shrinkNow = useRef(0);
-  const searchOpen = useUiStore((s) => s.searchOpen);
   const notificationsOpen = useUiStore((s) => s.notificationsOpen);
   // The bottom nav stays visible on the notifications page; only the "+" button hides.
-  // While searching, the bar and "+" stay visible (above the keyboard) instead of hiding.
-  const hideFab = useUiStore((s) => s.hideFab) || (typing && !searchOpen) || notificationsOpen;
+  // The bar and "+" hide while typing (keyboard open), including inside the search.
+  const hideFab = useUiStore((s) => s.hideFab) || typing || notificationsOpen;
   const { mounted: moreMounted, closing: moreClosing } = useExitPresence(moreOpen, 180);
   useBodyScrollLock(moreOpen);
   useModalBackClose(moreOpen, () => setMoreOpen(false));
@@ -265,7 +264,7 @@ export default function BottomNav() {
   // Swipe up anywhere along the bottom bar area (the pill, the "+", or the strip
   // beside them) to open the More sheet, on every page. Listens on the document so it
   // does not depend on where inside the bar the finger lands.
-  const barHidden = typing && !searchOpen;
+  const barHidden = typing;
   useEffect(() => {
     if (barHidden || moreOpen) return;
     const PAD = 10; // forgiving margin around the visible bar

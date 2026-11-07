@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowDown, ArrowUp, Bell, Bookmark, Copy, Download, ListPlus, MoreHorizontal, Pencil, Plus, Search, StickyNote, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Bell, Bookmark, Check, Copy, Download, ListPlus, MoreHorizontal, Pencil, Plus, Search, StickyNote, Trash2, X } from 'lucide-react';
 import CompanyLogo from '../components/CompanyLogo';
 import { Button, Card, DeltaChip, EmptyState, Field, IconButton, Input, PageHeader, Table, TBody, Td, Textarea, Th, THead, Tr, Tabs } from '../components/ui';
 import Modal from '../components/Modal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
-import { fetchLiveQuotes, type LiveQuoteDetail } from '../utils/marketPrices';
-import { readSavedStocks, readStockAlerts, toggleSavedStock, type SavedStock } from '../utils/savedStocks';
+import { fetchLiveQuotes, searchStockSymbols, type LiveQuoteDetail } from '../utils/marketPrices';
+import { MAX_SAVED, readSavedStocks, readStockAlerts, toggleSavedStock, type SavedStock } from '../utils/savedStocks';
+import { toast } from '../store/toastStore';
 import { csvCell, safeFilename, triggerDownload } from '../utils/exportCsv';
 import { fetchStockHistory, fmtNum, fmtPrice, type Exchange } from '../utils/stockDetail';
 import {
@@ -35,6 +36,15 @@ const exchangeOf = (s: SavedStock): Exchange => (isBse(s) ? 'BSE' : 'NSE');
 
 type SortKey = 'manual' | 'name' | 'price' | 'change' | 'range';
 const ALL = 'all';
+
+/** A stock found on the whole market (not necessarily one already in the watchlist). */
+interface MarketHit {
+  symbol: string; // bare symbol, e.g. RELIANCE
+  name: string;
+  market: 'IN' | 'US';
+  exchange: string; // 'NSE' | 'BSE' | 'US'
+}
+const hitQuoteKey = (h: MarketHit) => (h.market === 'IN' && h.exchange === 'BSE' ? `${h.symbol.toUpperCase()}.BO` : h.symbol.toUpperCase());
 
 /** Trend + 52-week range per stock, fetched a few at a time and kept for the session. */
 interface Shape {
@@ -108,6 +118,63 @@ export default function Watchlist() {
   const [listModal, setListModal] = useState<null | 'new' | 'rename'>(null);
   const [nameDraft, setNameDraft] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Whole-market search: anything typed (3+ letters) is also looked up across all NSE/BSE/US stocks.
+  const rawQ = query.trim();
+  const [hits, setHits] = useState<MarketHit[]>([]);
+  const [hitState, setHitState] = useState<'idle' | 'loading' | 'failed' | 'done'>('idle');
+  const [hitQuotes, setHitQuotes] = useState<Map<string, LiveQuoteDetail>>(new Map());
+
+  useEffect(() => {
+    if (rawQ.length < 3) {
+      setHits([]);
+      setHitState('idle');
+      return;
+    }
+    let cancelled = false;
+    setHitState('loading');
+    const t = window.setTimeout(async () => {
+      const [inRes, usRes] = await Promise.all([searchStockSymbols(rawQ, 'IN'), searchStockSymbols(rawQ, 'US')]);
+      if (cancelled) return;
+      if (inRes === null && usRes === null) {
+        setHits([]);
+        setHitState('failed');
+        return;
+      }
+      const seen = new Set<string>();
+      const indian = new Set((inRes ?? []).map((r) => bare(r.symbol).toUpperCase()));
+      const found: MarketHit[] = [
+        ...(inRes ?? []).slice(0, 6).map((r) => ({
+          symbol: bare(r.symbol),
+          name: r.name,
+          market: 'IN' as const,
+          exchange: /\.BO$/i.test(r.symbol) || /bse|bombay/i.test(r.exchDisp ?? '') ? 'BSE' : 'NSE',
+        })),
+        ...(usRes ?? [])
+          .filter((r) => !/\.(NS|BO)$/i.test(r.symbol) && !indian.has(r.symbol.toUpperCase()))
+          .slice(0, 4)
+          .map((r) => ({ symbol: r.symbol, name: r.name, market: 'US' as const, exchange: 'US' })),
+      ].filter((h) => {
+        const k = stockKey(h.market, h.symbol);
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+      setHits(found);
+      setHitState('done');
+      if (found.length) {
+        fetchLiveQuotes(found.map((h) => ({ key: hitQuoteKey(h), market: h.market })))
+          .then((got) => {
+            if (!cancelled) setHitQuotes((prev) => new Map([...prev, ...got]));
+          })
+          .catch(() => {});
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [rawQ]);
 
   const alerts = useMemo(() => new Map(readStockAlerts().map((a) => [stockKey(a.market, a.symbol), a])), []);
   const shapes = useShapes(items);
@@ -218,6 +285,44 @@ export default function Watchlist() {
     toggleSavedStock(s);
     setItems(readSavedStocks());
     setMenuKey(null);
+  };
+
+  /** Adds a searched stock to the open list (saving it to the watchlist first), or to the watchlist on the All tab. Tapping again undoes it. */
+  const hitInView = (h: MarketHit) => {
+    const k = stockKey(h.market, h.symbol);
+    return activeList ? activeList.keys.includes(k) : items.some((s) => skey(s) === k);
+  };
+  const toggleHit = (h: MarketHit) => {
+    const k = stockKey(h.market, h.symbol);
+    const stock: SavedStock = { symbol: h.symbol, name: h.name, market: h.market, exchange: h.exchange };
+    const isSaved = items.some((s) => skey(s) === k);
+    if (activeList) {
+      if (activeList.keys.includes(k)) {
+        removeFromList(activeList.id, k);
+        toast.info(`${h.name} removed from ${activeList.name}`);
+      } else {
+        if (!isSaved) {
+          if (items.length >= MAX_SAVED) {
+            toast.error(`Watchlist is full (${MAX_SAVED} stocks). Remove one to add another.`);
+            return;
+          }
+          toggleSavedStock(stock);
+        }
+        toggleInList(activeList.id, k);
+        toast.success(`${h.name} added to ${activeList.name}`);
+      }
+    } else if (isSaved) {
+      toggleSavedStock(stock);
+      toast.info(`${h.name} removed from Watchlist`);
+    } else {
+      if (items.length >= MAX_SAVED) {
+        toast.error(`Watchlist is full (${MAX_SAVED} stocks). Remove one to add another.`);
+        return;
+      }
+      toggleSavedStock(stock);
+      toast.success(`${h.name} added to Watchlist`);
+    }
+    refreshLocal();
   };
 
   const startCreate = () => {
@@ -377,20 +482,20 @@ export default function Watchlist() {
         title="Watchlist"
         meta={
           items.length > 0 ? (
-            <span className="inline-flex flex-wrap items-center gap-1.5">
-              <span className="inline-flex items-center rounded-md bg-surface-muted px-2 py-0.5 text-xs font-medium text-ink-2 font-numeric">
+            <span className="flex flex-nowrap items-center gap-1 sm:gap-1.5 whitespace-nowrap overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <span className="inline-flex items-center shrink-0 rounded-md bg-surface-muted px-1.5 sm:px-2 py-0.5 text-xs font-medium text-ink-2 font-numeric">
                 {visible.length} {visible.length === 1 ? 'stock' : 'stocks'}
               </span>
-              <span className="inline-flex items-center gap-1 rounded-md bg-positive-soft px-2 py-0.5 text-xs font-medium text-positive font-numeric">
+              <span className="inline-flex items-center gap-1 shrink-0 rounded-md bg-positive-soft px-1.5 sm:px-2 py-0.5 text-xs font-medium text-positive font-numeric">
                 <span aria-hidden className="text-[0.7em] leading-none">▲</span>
                 {summary.up} up
               </span>
-              <span className="inline-flex items-center gap-1 rounded-md bg-negative-soft px-2 py-0.5 text-xs font-medium text-negative font-numeric">
+              <span className="inline-flex items-center gap-1 shrink-0 rounded-md bg-negative-soft px-1.5 sm:px-2 py-0.5 text-xs font-medium text-negative font-numeric">
                 <span aria-hidden className="text-[0.7em] leading-none">▼</span>
                 {summary.down} down
               </span>
               {summary.avg !== null && (
-                <span className="inline-flex items-center gap-1.5 rounded-md border border-line px-2 py-0.5 text-xs font-medium text-muted font-numeric">
+                <span className="inline-flex items-center gap-1.5 shrink-0 rounded-md border border-line px-1.5 sm:px-2 py-0.5 text-xs font-medium text-muted font-numeric">
                   Avg
                   <DeltaChip
                     positive={summary.avg >= 0}
@@ -421,25 +526,29 @@ export default function Watchlist() {
 
       {lists.length > 0 && <Tabs value={active} onChange={(k) => setActive(k)} items={tabItems} />}
 
-      {items.length === 0 ? (
-        <Card>
-          <EmptyState
-            icon={<Bookmark size={20} />}
-            title="Your watchlist is empty"
-            description="Open any stock and tap the bookmark to add it here."
-          />
-        </Card>
-      ) : (
-        <>
+      <>
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative min-w-[160px] flex-1 sm:max-w-sm">
               <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search stocks"
-                className="h-10 w-full rounded-lg border border-line bg-surface pl-9 pr-3 text-sm text-ink outline-none focus:border-primary"
+                placeholder="Search any stock to add"
+                aria-label="Search any stock to add to your watchlist"
+                autoComplete="off"
+                spellCheck={false}
+                className="h-10 w-full rounded-lg border border-line bg-surface pl-9 pr-9 text-sm text-ink outline-none focus:border-primary"
               />
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => setQuery('')}
+                  aria-label="Clear search"
+                  className="tap-scale absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 inline-flex items-center justify-center rounded-full bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+                >
+                  <X size={13} />
+                </button>
+              )}
             </div>
             {activeList && (
               <div className="relative ml-auto" data-wl-menu>
@@ -484,12 +593,113 @@ export default function Watchlist() {
             )}
           </div>
 
-          {activeList && activeList.keys.length === 0 ? (
+          {rawQ.length >= 3 && (
+            <Card padding="none">
+              <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-faint">
+                {activeList ? `Add to ${activeList.name}` : 'Add to Watchlist'}
+              </p>
+              {hits.length === 0 ? (
+                <div className="px-4 pb-4 pt-1 text-sm text-muted">
+                  {hitState === 'loading' ? (
+                    <div className="space-y-3 pt-1" aria-label="Searching stocks">
+                      {[0, 1, 2].map((n) => (
+                        <div key={n} className="flex items-center gap-3 animate-pulse">
+                          <div className="h-9 w-9 rounded-full bg-slate-200 dark:bg-slate-700" />
+                          <div className="flex-1 space-y-2">
+                            <div className="h-3 w-2/3 rounded bg-slate-200 dark:bg-slate-700" />
+                            <div className="h-2.5 w-1/3 rounded bg-slate-100 dark:bg-slate-800" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : hitState === 'failed' ? (
+                    <>Couldn’t reach the stock search. Check your connection and try again.</>
+                  ) : (
+                    <>
+                      No stocks found for <span className="font-medium text-ink">“{rawQ}”</span>. Try the company name or its ticker.
+                    </>
+                  )}
+                </div>
+              ) : (
+                <ul className="px-2 pb-2">
+                  {hits.map((h) => {
+                    const added = hitInView(h);
+                    const qd = hitQuotes.get(hitQuoteKey(h));
+                    const diff = qd?.previousClose ? qd.price - qd.previousClose : null;
+                    const pct = qd?.previousClose && diff !== null ? (diff / qd.previousClose) * 100 : null;
+                    return (
+                      <li key={stockKey(h.market, h.symbol)} className="flex items-center gap-2 rounded-xl px-2 py-2 hover:bg-surface-hover">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            navigate(
+                              `/stock?symbol=${encodeURIComponent(h.symbol)}&market=${h.market}&name=${encodeURIComponent(h.name)}&ex=${encodeURIComponent(
+                                h.market === 'US' ? 'US market' : h.exchange
+                              )}`
+                            )
+                          }
+                          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                        >
+                          <CompanyLogo symbol={h.symbol} name={h.name} market={h.market} size={36} />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium text-ink">{h.name}</span>
+                            <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted">
+                              <span className="truncate">{h.symbol}</span>
+                              <span className="shrink-0 rounded px-1.5 py-px text-[10px] font-semibold bg-surface-muted border border-line text-muted">
+                                {h.market === 'US' ? 'US' : h.exchange}
+                              </span>
+                            </span>
+                          </span>
+                          <span className="shrink-0 text-right">
+                            {qd ? (
+                              <>
+                                <span className="block text-sm font-semibold text-ink font-numeric">{fmtPrice(qd.price, h.market)}</span>
+                                {pct !== null && (
+                                  <span className={`block text-[11px] font-medium font-numeric ${pct < 0 ? 'text-negative' : 'text-positive'}`}>
+                                    {pct >= 0 ? '+' : '−'}
+                                    {Math.abs(pct).toFixed(2)}%
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              <span className="block h-3.5 w-14 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
+                            )}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleHit(h)}
+                          aria-label={added ? `Remove ${h.name}` : `Add ${h.name}${activeList ? ` to ${activeList.name}` : ' to Watchlist'}`}
+                          aria-pressed={added}
+                          className={`tap-scale inline-flex h-8 shrink-0 items-center gap-1 rounded-full px-3 text-xs font-semibold ${
+                            added ? 'bg-positive-soft text-positive' : 'bg-brand-500 text-white hover:opacity-90'
+                          }`}
+                        >
+                          {added ? <Check size={14} /> : <Plus size={14} />}
+                          {added ? 'Added' : 'Add'}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </Card>
+          )}
+
+          {rawQ.length >= 3 && visible.length === 0 ? null : activeList && activeList.keys.length === 0 ? (
             <Card>
               <EmptyState
                 compact
                 title={`${activeList.name} is empty`}
-                description="In the All tab, open a stock's ⋯ menu and choose “Add to lists”."
+                description="Use the search box above to find any stock and add it to this list."
+              />
+            </Card>
+          ) : items.length === 0 ? (
+            <Card>
+              <EmptyState
+                icon={<Bookmark size={20} />}
+                title="Your watchlist is empty"
+                description="Search any stock above and tap Add, or open a stock and tap its bookmark."
               />
             </Card>
           ) : visible.length === 0 ? (
@@ -499,11 +709,11 @@ export default function Watchlist() {
               <Table className="table-fixed">
                 <colgroup>
                   <col />
-                  <col className="w-[104px] sm:w-[130px]" />
-                  <col className="w-[128px] sm:w-[190px]" />
+                  <col className="w-[88px] sm:w-[130px]" />
+                  <col className="w-[84px] sm:w-[190px]" />
                   <col className="hidden lg:table-column w-[230px]" />
                   <col className="hidden md:table-column w-[190px]" />
-                  <col className="w-14" />
+                  <col className="w-11 sm:w-14" />
                 </colgroup>
                 <THead className="rounded-t-[20px]">
                   <tr>
@@ -540,9 +750,9 @@ export default function Watchlist() {
                             <CompanyLogo symbol={bare(s.symbol)} name={s.name} market={s.market} size={36} />
                             <div className="min-w-0">
                               <p className="text-sm font-medium text-ink truncate">{s.name}</p>
-                              <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted">
-                                <span>{bare(s.symbol)}</span>
-                                <span className="rounded px-1.5 py-px text-[10px] font-semibold bg-surface-muted border border-line text-muted">
+                              <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted">
+                                <span className="truncate min-w-0">{bare(s.symbol)}</span>
+                                <span className="shrink-0 rounded px-1.5 py-px text-[10px] font-semibold bg-surface-muted border border-line text-muted">
                                   {s.market === 'US' ? 'US' : s.exchange || 'NSE'}
                                 </span>
                               </p>
@@ -555,7 +765,7 @@ export default function Watchlist() {
                         <Td align="right">
                           {pct !== null && diff !== null ? (
                             <div className="inline-flex items-center gap-2 justify-end">
-                              <span className={`font-numeric text-sm font-medium ${diff < 0 ? 'text-negative' : 'text-positive'}`}>
+                              <span className={`hidden sm:inline font-numeric text-sm font-medium ${diff < 0 ? 'text-negative' : 'text-positive'}`}>
                                 {diff >= 0 ? '+' : '−'}
                                 {fmtNum(Math.abs(diff), s.market)}
                               </span>
@@ -600,8 +810,7 @@ export default function Watchlist() {
               </Table>
             </Card>
           )}
-        </>
-      )}
+      </>
 
       <Modal
         open={listModal !== null}
