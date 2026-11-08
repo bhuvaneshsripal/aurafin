@@ -411,7 +411,7 @@ export default function Watchlist() {
   const menuItem = 'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-sm hover:bg-surface-hover';
 
   const rowMenu = (s: SavedStock, k: string, note: string | undefined) => (
-    <div className="relative inline-block mr-2.5" data-wl-menu>
+    <div className="relative inline-block mr-5" data-wl-menu>
       <button
         onClick={(e) => {
           e.stopPropagation();

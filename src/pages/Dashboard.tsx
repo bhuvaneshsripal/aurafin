@@ -103,11 +103,18 @@ export default function Dashboard() {
     (a) => a.assetClass === 'sip' && a.symbol && /^\d+$/.test(a.symbol)
   );
   const hasSipLinked = sipLinkedAssets.length > 0;
+  // Gold holdings are priced off the live per-gram rate too. Without waiting for it,
+  // Net worth first showed the old saved gold value and jumped when the rate arrived.
+  const hasLiveGold = allAssets.some((a) => a.assetClass === 'gold' && a.quantity && a.quantity > 0);
+  const goldAttempted = useLivePricesStore((s) => s.goldAttempted);
+  const goldPriceError = useLivePricesStore((s) => s.goldPriceError);
+  const goldReady = !hasLiveGold || liveGoldPricePerGram !== null || goldAttempted || goldPriceError;
   const netWorthReady =
     assetsServerConfirmed &&
     liabilitiesServerConfirmed &&
     (!hasLivePriced || pricesAttempted) &&
-    (!hasSipLinked || sipValuesAttempted);
+    (!hasSipLinked || sipValuesAttempted) &&
+    goldReady;
 
   const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
 
@@ -177,20 +184,22 @@ export default function Dashboard() {
     () => computePortfolioPnl(profileAssets, 'INR', livePrices, sipValues, liveGoldPricePerGram),
     [profileAssets, livePrices, sipValues, liveGoldPricePerGram]
   );
-  // Cash & Savings is part of Net worth but the P&L engine (rightly) gives it
-  // no cost basis. Count it at face value (cost = value, zero P&L) so Total
-  // invested reconciles with Net worth. Same scoping as above: ₹ only.
-  const cashBasis = useMemo(
-    () =>
-      profileAssets.reduce(
-        (s, a) =>
-          a.assetClass === 'cash' && a.currency === 'INR'
-            ? s + resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).value
-            : s,
-        0
-      ),
-    [profileAssets, livePrices, sipValues, liveGoldPricePerGram]
-  );
+  // Anything that is part of Net worth but that the P&L engine does not cost —
+  // Cash & Savings (rightly no cost basis), and holdings with no buy history on
+  // record — is counted at face value (cost = value, zero P&L). That keeps
+  // Total invested reconciled with Net worth (Net worth − Total invested = P&L)
+  // instead of silently dropping those holdings from "invested". Same scoping
+  // as above: ₹ only, and fully-sold holdings are not part of Net worth.
+  const cashBasis = useMemo(() => {
+    const costed = new Set(portfolioPnl.active.map((h) => h.asset.id));
+    return profileAssets.reduce(
+      (s, a) =>
+        a.currency === 'INR' && !isFullySold(a) && !costed.has(a.id)
+          ? s + resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).value
+          : s,
+      0
+    );
+  }, [profileAssets, portfolioPnl, livePrices, sipValues, liveGoldPricePerGram]);
   const realizedPnl = portfolioPnl.realizedPnl;
   // Cost basis of everything already sold (the "realised investment").
   const realizedCost = portfolioPnl.holdings.reduce((s, h) => s + h.totalCostOfSold, 0);
@@ -312,7 +321,7 @@ export default function Dashboard() {
         <StatCard
           dense
           label="Total invested"
-          loading={!wealthDataKnown}
+          loading={!ready}
           value={money(hasWealth ? investedShown : 0)}
         />
         <StatCard

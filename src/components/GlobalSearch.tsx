@@ -2,7 +2,7 @@ import { SHORTCUT_HINT } from '../config/shortcuts';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Search, X, TrendingUp, Clock, LineChart, Star } from 'lucide-react';
+import { ArrowLeft, Search, X, TrendingUp, Clock, LineChart, Star } from 'lucide-react';
 import CompanyLogo from './CompanyLogo';
 import { useUiStore } from '../store/uiStore';
 import { useAuthStore } from '../store/authStore';
@@ -276,6 +276,18 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
     navigate('/');
   });
 
+  // Tapping the current tab while the search is open just closes the search (back to the
+  // page's main view) instead of refreshing the page underneath it.
+  useEffect(() => {
+    if (!open) return;
+    const onTabHome = (e: Event) => {
+      e.preventDefault();
+      setOpen(false);
+    };
+    window.addEventListener('aurafin:tab-home', onTabHome);
+    return () => window.removeEventListener('aurafin:tab-home', onTabHome);
+  }, [open]);
+
   // Tell the layout the search is open (the bottom nav stays visible, but stays shown above the keyboard).
   const setSearchOpen = useUiStore((s) => s.setSearchOpen);
   useEffect(() => {
@@ -387,6 +399,14 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
             style={{ transformOrigin: 'top center' }}
           >
             <div className="px-3 pt-3 pb-2 shrink-0 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Back"
+                className="sm:hidden tap-scale h-9 w-9 flex items-center justify-center rounded-lg text-ink hover:bg-surface-hover shrink-0"
+              >
+                <ArrowLeft size={20} />
+              </button>
               <div className="flex flex-1 min-w-0 items-center gap-2.5 h-9 px-2.5 rounded-lg bg-surface-muted border border-line focus-within:border-brand-500 focus-within:bg-surface transition-colors">
                 <Search size={15} className="text-brand-500 shrink-0" />
                 <div className="relative flex-1 min-w-0 h-6 flex items-center">
@@ -438,9 +458,10 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="sm:hidden tap-scale shrink-0 px-1.5 py-2 text-sm font-semibold text-brand-600"
+                aria-label="Close search"
+                className="sm:hidden tap-scale h-9 w-9 flex items-center justify-center rounded-lg text-brand-600 hover:bg-surface-hover shrink-0"
               >
-                Cancel
+                <X size={20} />
               </button>
             </div>
 

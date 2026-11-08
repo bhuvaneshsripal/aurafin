@@ -141,7 +141,11 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
 
     if (url.pathname === '/api/market/swing') {
       try {
-        const result = await runSwingScan()
+        const result = await runSwingScan({
+          index: url.searchParams.get('index') ?? 'NIFTY 200',
+          offset: Number(url.searchParams.get('offset') ?? 0),
+          limit: Number(url.searchParams.get('limit') ?? 60),
+        })
         if (!result) { send(502, { error: 'Could not build the swing scan' }); return }
         send(200, { ...result, asOf: Date.now() })
       } catch (err) {

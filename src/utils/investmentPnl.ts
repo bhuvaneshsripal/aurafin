@@ -325,7 +325,10 @@ export function computeGenericHoldingPnl(
   value: number,
   isLive: boolean
 ): HoldingPnl {
-  const investedValue = invested ?? 0;
+  // No recorded cost (e.g. a property / EPF / bond saved with only a current value):
+  // count it at face value (cost = value, zero P&L). Using 0 here made the portfolio
+  // total treat the asset's ENTIRE value as profit, inflating Profit / loss.
+  const investedValue = invested !== undefined && invested > 0 ? invested : Math.max(0, value);
   const unrealizedPnl = investedValue > 0 ? value - investedValue : undefined;
   const unrealizedPnlPercent = unrealizedPnl !== undefined && investedValue > 0 ? (unrealizedPnl / investedValue) * 100 : undefined;
 

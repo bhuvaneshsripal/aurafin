@@ -110,9 +110,13 @@ async function pushParts(subs, parts, baseTag) {
 
 export default async function handler(req, res) {
   const secret = process.env.CRON_SECRET;
-  if (!secret) return res.status(500).json({ error: 'CRON_SECRET is not set' });
+  if (!secret) {
+    console.error('push send: CRON_SECRET is not set on Vercel (Settings > Environment Variables), then redeploy');
+    return res.status(500).json({ error: 'CRON_SECRET is not set' });
+  }
   if (req.headers.authorization?.trim() !== `Bearer ${secret.trim()}`) return res.status(401).json({ error: 'Unauthorized' });
   if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
+    console.error('push send: VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY are not set on Vercel (Settings > Environment Variables), then redeploy');
     return res.status(500).json({ error: 'VAPID keys are not set' });
   }
 

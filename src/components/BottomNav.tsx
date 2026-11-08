@@ -423,7 +423,10 @@ export default function BottomNav() {
         return;
       }
     }
-    if (location.pathname === to && !window.location.search && !location.search) {
+    // Any other open overlay (a modal / sheet that locks page scroll) also means we are
+    // not on the main view, so don't refresh the page underneath it.
+    const overlayOpen = document.documentElement.style.overflow === 'hidden';
+    if (location.pathname === to && !window.location.search && !location.search && !overlayOpen) {
       void hardRefresh({ showBar: true, keepPage: true }).then((ok) => {
         if (!ok) window.scrollTo({ top: 0, behavior: 'smooth' });
       });

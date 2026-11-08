@@ -26,7 +26,11 @@ export default async function handler(req, res) {
       return;
     }
     if (mode === 'swing') {
-      const result = await runSwingScan();
+      const result = await runSwingScan({
+        index: String(req.query.index ?? 'NIFTY 200'),
+        offset: Number(req.query.offset ?? 0),
+        limit: Number(req.query.limit ?? 60),
+      });
       if (!result) { res.status(502).json({ error: 'Could not build the swing scan' }); return; }
       res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=3600');
       res.status(200).json({ ...result, asOf: Date.now() });

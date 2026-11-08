@@ -566,6 +566,8 @@ export function useAutoNetWorthHistory() {
   const goldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
   const pricesAttempted = useLivePricesStore((s) => s.pricesAttempted);
   const pricesUpdatedAt = useLivePricesStore((s) => s.pricesUpdatedAt);
+  const goldAttempted = useLivePricesStore((s) => s.goldAttempted);
+  const sipValuesAttempted = useLivePricesStore((s) => s.sipValuesAttempted);
   const lastWriteRef = useRef(0);
 
   useEffect(() => {
@@ -581,6 +583,12 @@ export function useAutoNetWorthHistory() {
     // price. Recording a number built from old saved values would put a wrong
     // point on the chart, so wait until a real, recent price has arrived.
     if (hasLivePriced && !isPriceCacheFresh(pricesUpdatedAt)) return;
+    // Same for gold (priced off the live per-gram rate) and linked SIPs (latest NAV):
+    // until those arrive the totals use old saved values and would record a wrong point.
+    const hasLiveGold = assets.some((a) => a.assetClass === 'gold' && a.quantity && a.quantity > 0);
+    if (hasLiveGold && goldPricePerGram === null && !goldAttempted) return;
+    const hasSipLinked = assets.some((a) => a.assetClass === 'sip' && a.symbol && /^\d+$/.test(a.symbol));
+    if (hasSipLinked && !sipValuesAttempted) return;
 
     const totalAssets = assets
       .filter((a) => !isFullySold(a))
@@ -633,6 +641,8 @@ export function useAutoNetWorthHistory() {
     goldPricePerGram,
     pricesAttempted,
     pricesUpdatedAt,
+    goldAttempted,
+    sipValuesAttempted,
   ]);
 }
 
