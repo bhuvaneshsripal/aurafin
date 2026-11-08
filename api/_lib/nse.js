@@ -88,8 +88,16 @@ async function fetchNseQuote(symbol) {
     throw new Error('NSE quote response missing lastPrice');
   }
   const previousClose = data?.priceInfo?.previousClose;
+  // "08-Nov-2026 15:20:00" (IST): when NSE last updated this quote.
+  const stamp = String(data?.metadata?.lastUpdateTime ?? data?.priceInfo?.lastUpdateTime ?? '');
+  const m = stamp.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})\s+(\d{1,2}):(\d{2}):?(\d{2})?/);
+  const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  const asOf = m
+    ? Date.UTC(+m[3], MONTHS.indexOf(m[2].toLowerCase()), +m[1], +m[4], +m[5], +(m[6] ?? 0)) - 5.5 * 3600 * 1000
+    : undefined;
   return {
     price,
+    asOf: Number.isFinite(asOf) ? asOf : undefined,
     currency: 'INR',
     previousClose: typeof previousClose === 'number' && Number.isFinite(previousClose) ? previousClose : undefined,
   };

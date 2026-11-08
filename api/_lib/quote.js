@@ -39,6 +39,7 @@ async function fetchYahooQuote(yahooSymbol) {
     price,
     previousClose: toNumber(meta?.previousClose ?? meta?.chartPreviousClose),
     currency: meta?.currency ?? 'INR',
+    asOf: toNumber(meta?.regularMarketTime) ? meta.regularMarketTime * 1000 : undefined,
   };
 }
 
@@ -61,6 +62,40 @@ async function fetchBseQuote(scripCode) {
   const price = toNumber(data?.CurrRate?.LTP ?? data?.Header?.LTP);
   if (price === undefined) return null;
   return { price, previousClose: toNumber(data?.Header?.PrevClose), currency: 'INR' };
+}
+
+// Groww's public price feed: it kept ticking through the Sunday Muhurat session when NSE's equity quote
+// and Yahoo both stayed on Friday's close. Only used when those two are stale during trading hours.
+const growwRecent = new Map(); // symbol -> { at, q }
+async function growwQuote(symbol) {
+  const hit = growwRecent.get(symbol);
+  if (hit && Date.now() - hit.at < 4000) return hit.q;
+  let q = null;
+  try {
+    const res = await fetch(
+      `https://groww.in/v1/api/stocks_data/v1/accord_points/exchange/NSE/segment/CASH/latest_prices_ohlc/${encodeURIComponent(symbol)}`,
+      { headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' } }
+    );
+    if (res.ok) {
+      const j = await res.json();
+      const price = toNumber(j?.ltp);
+      const ts = toNumber(j?.tsInMillis);
+      if (price !== undefined) q = { price, asOf: ts, previousClose: toNumber(j?.close) };
+    }
+  } catch {
+    /* no Groww price */
+  }
+  growwRecent.set(symbol, { at: Date.now(), q });
+  return q;
+}
+
+const yahooRecent = new Map(); // symbol -> { at, q }
+async function freshYahoo(sym) {
+  const hit = yahooRecent.get(sym);
+  if (hit && Date.now() - hit.at < 4000) return hit.q;
+  const q = await fetchYahooQuote(sym).catch(() => null);
+  yahooRecent.set(sym, { at: Date.now(), q });
+  return q;
 }
 
 // --- Previous close -------------------------------------------------------------------------
@@ -135,8 +170,25 @@ export async function resolveQuote(rawSymbol, market = 'IN') {
 
   const bare = raw.replace(/\.NS$/, '');
   try {
-    const q = await fetchNseQuote(bare);
-    return withPrevClose(`${bare}.NS`, { ...q, source: 'nse' });
+    let q = { ...(await fetchNseQuote(bare)), source: 'nse' };
+    // NSE's equity quote can lag (it did not tick during the Sunday Muhurat session while Yahoo did).
+    // In trading hours, if NSE's quote is older than 5 minutes, take Yahoo's price when it is newer.
+    const ist = new Date(Date.now() + 5.5 * 3600 * 1000);
+    const mins = ist.getUTCHours() * 60 + ist.getUTCMinutes();
+    const stale = q.asOf === undefined || Date.now() - q.asOf > 5 * 60 * 1000;
+    if (stale && mins >= 9 * 60 && mins <= 16 * 60) {
+      const y = await freshYahoo(`${bare}.NS`);
+      if (y && y.asOf !== undefined && Date.now() - y.asOf < 5 * 60 * 1000 && (q.asOf === undefined || y.asOf > q.asOf)) {
+        q = { ...q, price: y.price, asOf: y.asOf, source: 'yahoo' };
+      } else {
+        const g = await growwQuote(bare);
+        // Groww's timestamp must prove the price is live (within 5 min) before it replaces NSE's.
+        if (g && g.asOf !== undefined && Date.now() - g.asOf < 5 * 60 * 1000 && (q.asOf === undefined || g.asOf > q.asOf)) {
+          q = { ...q, price: g.price, asOf: g.asOf, source: 'groww' };
+        }
+      }
+    }
+    return withPrevClose(`${bare}.NS`, q);
   } catch {
     // fall through to Yahoo
   }

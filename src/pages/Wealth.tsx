@@ -1672,7 +1672,7 @@ function AssetsTab({
       const dayChangePerUnit = hasDayChangeData
         ? dayChangeResetActive
           ? 0
-          : computed.currentPrice! - previousClose!
+          : Math.round((computed.currentPrice! - previousClose!) * 100) / 100 // paise: no float-noise arrows
         : undefined;
       const dayChangePercent =
         dayChangePerUnit !== undefined && previousClose
@@ -3515,7 +3515,7 @@ function HoldingDetailView({
   const dayChangePerUnit = hasDayChangeData
     ? dayChangeResetActive
       ? 0
-      : currentPrice! - previousClose!
+      : Math.round((currentPrice! - previousClose!) * 100) / 100
     : undefined;
   const dayChangePercent =
     dayChangePerUnit !== undefined && previousClose
