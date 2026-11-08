@@ -120,14 +120,14 @@ const gap = <div className="h-4" />;
 const pictures: Record<string, ReactNode> = {
   account: (
     <Frame title="Account menu">
-      <div className="mx-auto w-60 rounded-xl border border-line bg-surface shadow-lg overflow-hidden">
-        <div className="p-3 border-b border-line-soft">
+      <div className="mx-auto w-60 rounded-xl border border-line bg-surface shadow-lg">
+        <div className="p-3 pl-5 border-b border-line-soft">
           <Mark n={1} className="flex items-center gap-2 p-1.5">
             <CircleUserRound size={26} className="text-muted" />
             <span className="text-sm font-semibold text-ink">Your name</span>
           </Mark>
         </div>
-        <div className="p-2 space-y-2">
+        <div className="p-2 pl-4 pr-3 space-y-3">
           <Mark n={2} className="flex items-center gap-2.5 px-2.5 py-2 text-sm font-medium text-ink-2"><BookOpen size={16} className="text-muted" />Tutorial</Mark>
           <Mark n={3} className="flex items-center gap-2.5 px-2.5 py-2 text-sm font-medium text-ink-2"><Moon size={16} className="text-muted" />Dark mode</Mark>
           <Mark n={4} className="flex items-center gap-2.5 px-2.5 py-2 text-sm font-medium text-red-600 dark:text-red-400"><LogOut size={16} />Log out</Mark>

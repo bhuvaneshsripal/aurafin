@@ -65,6 +65,13 @@ export default function WhatsNewModal({
     document.body.setAttribute('data-hide-eye', '1');
     return () => document.body.removeAttribute('data-hide-eye');
   }, [open]);
+  // Phones: also drop the soft fade above the bottom nav while this page is
+  // open (the fade is marked data-bottom-fade in BottomNav; rule in index.css).
+  useEffect(() => {
+    if (!open) return;
+    document.body.setAttribute('data-no-bottom-fade', '1');
+    return () => document.body.removeAttribute('data-no-bottom-fade');
+  }, [open]);
   const heading = available ? notes?.title ?? "What's new" : "What's new";
   return (
     // Every state fills the working area (sidebar + top bar stay visible), so

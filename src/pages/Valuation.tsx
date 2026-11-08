@@ -413,7 +413,7 @@ export default function Valuation() {
             <Input
               leftIcon={searching ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
               ref={inputRef}
-              placeholder={isUS ? 'Search US stock, e.g. Apple or AAPL' : 'Search'}
+              placeholder="Search"
               value={query}
               onChange={(e) => { pickedRef.current = null; setListOpen(true); setQuery(e.target.value.toUpperCase()); }}
               onFocus={() => setListOpen(true)}
