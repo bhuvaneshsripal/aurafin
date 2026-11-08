@@ -1,7 +1,14 @@
 /** X/2 · X/3 valuation: pure calculation + fundamentals fetch. */
 
+/** NSE / BSE are Indian listings (₹); US is any US-listed share ($). */
+export type Exchange = 'NSE' | 'BSE' | 'US';
+
 export interface FundamentalsResponse {
   symbol: string;
+  market?: 'IN' | 'US';
+  /** Currency the price is quoted in, and the one the company reports EPS in (they can differ for ADRs). */
+  currency?: string;
+  financialCurrency?: string | null;
   name: string | null;
   price: number | null;
   ttmEps: number | null;
@@ -14,7 +21,7 @@ export interface FundamentalsResponse {
   asOf: string;
 }
 
-export async function fetchFundamentals(symbol: string, exchange: 'NSE' | 'BSE'): Promise<FundamentalsResponse> {
+export async function fetchFundamentals(symbol: string, exchange: Exchange): Promise<FundamentalsResponse> {
   const res = await fetch(`/api/market/valuation?symbol=${encodeURIComponent(symbol)}&exchange=${exchange}`);
   if (!res.ok) {
     let msg = `Request failed (${res.status})`;
@@ -98,6 +105,10 @@ export interface ValuationInput {
   peReadings?: number;
   peSpanYears?: number;
   growthNote?: string;
+  /** Symbol used in messages; ₹ unless the stock is US-listed. */
+  currencySymbol?: string;
+  /** Extra "do not trust the numbers" reasons found outside the maths (e.g. a currency mismatch). */
+  extraReasons?: string[];
   /** Result of analyseEps(); only used to make the cyclical message specific. */
   earnings?: EpsAnalysis | null;
 }
@@ -189,12 +200,14 @@ export function computeValuation(i: ValuationInput): ValuationResult {
   } else if (i.lookbackYears < 5) warnings.push('The P/E history covers under 5 years, so a full cycle may be missing. 5–10 years is preferred.');
   if (i.cyclical) {
     const e = i.earnings;
-    const rs = (v: number) => `${v < 0 ? '−' : ''}₹${Math.abs(v).toFixed(2)}`;
+    const cs = i.currencySymbol ?? '₹';
+    const rs = (v: number) => `${v < 0 ? '−' : ''}${cs}${Math.abs(v).toFixed(2)}`;
     reasons.push(e
       ? `Earnings are cyclical or volatile (${e.years} reported years: best ${rs(e.peak)}, worst ${rs(e.low)}${e.lossYears ? `, ${e.lossYears} loss year${e.lossYears === 1 ? '' : 's'}` : ''}). The lowest P/E usually falls at a crash or at peak earnings, so X/2 and X/3 come out far below the price. Read them as a very conservative floor, not a fair value. Average EPS over those years (a rough mid-cycle EPS): ${rs(e.midCycleEps)}.`
       : 'Cyclical business: current EPS may be at a peak or trough, and the lowest P/E usually falls at a crash or at peak earnings. Read X/2 and X/3 as a very conservative floor, not a fair value.');
   }
   if (i.weakPe) reasons.push('The lowest P/E is flagged as based on unusually weak earnings, so X may be unreliable.');
+  if (i.extraReasons) reasons.push(...i.extraReasons);
   const lowConfidence = reasons.length > 0;
   if (i.exceptional !== 0) warnings.push('Base EPS excludes exceptional items you entered.');
   if (i.dilutionPct > 0) warnings.push(`Share dilution of ${i.dilutionPct}% a year is applied to EPS growth.`);
@@ -206,4 +219,11 @@ export const inr = (n: number) =>
   Number.isFinite(n)
     ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
     : '—';
+export const usd = (n: number) =>
+  Number.isFinite(n)
+    ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
+    : '—';
+/** Formats an amount in the currency of the exchange: $ for US, ₹ otherwise. */
+export const money = (n: number, exchange: Exchange = 'NSE') => (exchange === 'US' ? usd(n) : inr(n));
+export const currencySymbol = (exchange: Exchange = 'NSE') => (exchange === 'US' ? '$' : '₹');
 export const signedPct = (n: number) => (Number.isFinite(n) ? `${n >= 0 ? '+' : ''}${n.toFixed(1)}%` : '—');

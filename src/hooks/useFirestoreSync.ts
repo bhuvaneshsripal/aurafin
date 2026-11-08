@@ -1113,7 +1113,7 @@ export async function deleteAllUserData(uidOrUser: string | { uid: string; isAno
 export interface ValuationHistoryItem {
   symbol: string;
   name: string;
-  exchange: 'NSE' | 'BSE';
+  exchange: 'NSE' | 'BSE' | 'US';
 }
 
 export function subscribeValuationHistory(

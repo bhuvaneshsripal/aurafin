@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { Badge, Card, cn } from './ui';
-import { inr } from '../utils/valuation';
+import { money, type Exchange } from '../utils/valuation';
 
 /** A saved stock with the numbers from the last time it was valued. */
 export type WatchItem = {
   symbol: string;
   name: string;
-  exchange: 'NSE' | 'BSE';
+  exchange: Exchange;
   price: number;
   x2: number;
   x3: number;
@@ -23,7 +23,7 @@ export function cleanWatchlist(v: unknown): WatchItem[] {
         (w) =>
           w &&
           typeof w.symbol === 'string' &&
-          (w.exchange === 'NSE' || w.exchange === 'BSE') &&
+          (w.exchange === 'NSE' || w.exchange === 'BSE' || w.exchange === 'US') &&
           [w.price, w.x2, w.x3].every((n) => typeof n === 'number' && n > 0),
       ) as WatchItem[])
     : [];
@@ -143,15 +143,18 @@ export default function ValuationWatchlist({
                   className="tap-scale h-full w-full rounded-2xl border border-line bg-surface p-4 pr-10 text-left shadow-card transition-colors hover:bg-surface-hover"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="min-w-0 truncate text-sm font-semibold text-ink">{w.name || w.symbol}</span>
+                    <span className="min-w-0 truncate text-sm font-semibold text-ink">
+                      {w.name || w.symbol}
+                      {w.exchange === 'US' && <span className="ml-1.5 rounded border border-line px-1 py-px align-middle text-[10px] font-semibold text-muted">US</span>}
+                    </span>
                     <Badge className={cn('!rounded-full px-2.5 shrink-0', st.badge)}>{st.label}</Badge>
                   </div>
                   <div className="mt-2 flex items-end justify-between gap-2">
-                    <span className="text-lg font-semibold text-ink font-numeric">{inr(w.price)}</span>
+                    <span className="text-lg font-semibold text-ink font-numeric">{money(w.price, w.exchange)}</span>
                     <span className={cn('text-xs font-semibold', st.text)}>{note}</span>
                   </div>
                   <div className="mt-1 text-[11px] text-muted font-numeric">
-                    X/3 {inr(w.x3)} · X/2 {inr(w.x2)} · as of {new Date(w.savedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                    X/3 {money(w.x3, w.exchange)} · X/2 {money(w.x2, w.exchange)} · as of {new Date(w.savedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                   </div>
                 </button>
                 <button

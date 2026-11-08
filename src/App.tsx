@@ -91,6 +91,7 @@ const HighVolume = lazyWithRetry(() => import('./pages/HighVolume'));
 const Watchlist = lazyWithRetry(() => import('./pages/Watchlist'));
 const SwingScanner = lazyWithRetry(() => import('./pages/SwingScanner'));
 const WhatsNew = lazyWithRetry(() => import('./pages/WhatsNew'));
+const Tutorial = lazyWithRetry(() => import('./pages/Tutorial'));
 const InstallApp = lazyWithRetry(() => import('./pages/InstallApp'));
 const Feedback = lazyWithRetry(() => import('./pages/Feedback'));
 const Onboarding = lazyWithRetry(() => import('./pages/Onboarding'));
@@ -184,6 +185,7 @@ function AppShell() {
                   <Route path="/swing" element={<SwingScanner />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/whats-new" element={<WhatsNew />} />
+                  <Route path="/tutorial" element={<Tutorial />} />
                   <Route path="/install" element={<InstallApp />} />
                   <Route path="/feedback" element={<Feedback />} />
                   <Route path="/onboarding" element={<Navigate to="/" replace />} />

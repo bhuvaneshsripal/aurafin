@@ -2,7 +2,7 @@ import RefreshBar from './RefreshBar';
 import { SHORTCUT_HINT } from '../config/shortcuts';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Moon, Sun, Globe, Eye, EyeOff, ChevronDown, MoreVertical, LogOut } from 'lucide-react';
+import { Moon, Sun, Globe, Eye, EyeOff, ChevronDown, MoreVertical, LogOut, BookOpen } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarUrl } from '../hooks/useAvatarUrl';
 import { useDisplayName } from '../hooks/useDisplayName';
@@ -198,6 +198,16 @@ export default function TopHeader() {
                 </div>
                 <button
                   onClick={() => {
+                    setProfileOpen(false);
+                    navigate('/tutorial');
+                  }}
+                  className={menuItem}
+                >
+                  <BookOpen size={16} className="text-muted" />
+                  Tutorial
+                </button>
+                <button
+                  onClick={() => {
                     toggleTheme();
                     setProfileOpen(false);
                   }}
@@ -245,6 +255,17 @@ export default function TopHeader() {
                     <p className="text-sm font-semibold text-ink truncate">{displayName || 'Your account'}</p>
                   </div>
                 </div>
+
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    navigate('/tutorial');
+                  }}
+                  className={menuItem}
+                >
+                  <BookOpen size={17} className="text-muted" />
+                  Tutorial
+                </button>
 
                 <button
                   onClick={() => {

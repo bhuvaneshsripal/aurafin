@@ -27,7 +27,9 @@ export default async function handler(req, res) {
   }
   const symbol = String(req.query.symbol ?? '').trim();
   if (!symbol) { res.status(400).json({ error: 'Missing symbol' }); return; }
-  const exchange = String(req.query.exchange ?? 'NSE').toUpperCase() === 'BSE' ? 'BSE' : 'NSE';
+  // exchange=US (or market=US) selects US-listed shares; otherwise NSE (default) or BSE.
+  const ex = String(req.query.exchange ?? 'NSE').toUpperCase();
+  const exchange = ex === 'US' || String(req.query.market ?? '').toUpperCase() === 'US' ? 'US' : ex === 'BSE' ? 'BSE' : 'NSE';
   try {
     const data = await fetchFundamentals(symbol, exchange, 10);
     if (!data) { res.status(404).json({ error: `No fundamentals found for ${symbol}` }); return; }

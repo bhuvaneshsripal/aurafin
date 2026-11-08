@@ -1,3 +1,4 @@
+import CustomSelect from '../../components/CustomSelect';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronLeft,
@@ -513,27 +514,18 @@ export default function BudgetTab() {
             <div className="flex flex-wrap gap-x-4 gap-y-3">
               <label className="text-xs text-muted flex flex-col gap-1">
                 Based on
-                <select className={selectCls} value={basis} onChange={(e) => setBasis(e.target.value as Basis)}>
-                  {(Object.keys(BASIS_LABEL) as Basis[]).map((b) => (
-                    <option key={b} value={b}>{BASIS_LABEL[b]}</option>
-                  ))}
-                </select>
+                <CustomSelect className={selectCls} value={basis} onChange={(v) => setBasis(v as Basis)}
+                  options={(Object.keys(BASIS_LABEL) as Basis[]).map((b) => ({ value: b, label: BASIS_LABEL[b] }))} />
               </label>
               <label className="text-xs text-muted flex flex-col gap-1">
                 Safety buffer
-                <select className={selectCls} value={buffer} onChange={(e) => setBuffer(Number(e.target.value))}>
-                  {BUFFERS.map((b) => (
-                    <option key={b} value={b}>{b === 0 ? 'None' : `+${b}%`}</option>
-                  ))}
-                </select>
+                <CustomSelect className={selectCls} value={String(buffer)} onChange={(v) => setBuffer(Number(v))}
+                  options={BUFFERS.map((b) => ({ value: String(b), label: b === 0 ? 'None' : `+${b}%` }))} />
               </label>
               <label className="text-xs text-muted flex flex-col gap-1">
                 Round to
-                <select className={selectCls} value={roundTo} onChange={(e) => setRoundTo(Number(e.target.value))}>
-                  {ROUND_STEPS.map((r) => (
-                    <option key={r} value={r}>{r === 0 ? 'Exact' : `₹${r}`}</option>
-                  ))}
-                </select>
+                <CustomSelect className={selectCls} value={String(roundTo)} onChange={(v) => setRoundTo(Number(v))}
+                  options={ROUND_STEPS.map((r) => ({ value: String(r), label: r === 0 ? 'Exact' : `₹${r}` }))} />
               </label>
             </div>
             <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-ink-2">

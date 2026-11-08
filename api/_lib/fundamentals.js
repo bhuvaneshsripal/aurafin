@@ -23,7 +23,7 @@ export async function getSession(force = false) {
 
 async function quoteSummary(sym, retry = true) {
   const s = await getSession();
-  const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(sym)}?modules=price,defaultKeyStatistics,earningsTrend&crumb=${encodeURIComponent(s.crumb)}`;
+  const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(sym)}?modules=price,defaultKeyStatistics,earningsTrend,financialData&crumb=${encodeURIComponent(s.crumb)}`;
   const res = await fetch(url, { headers: { 'User-Agent': UA, Cookie: s.cookie } });
   if ((res.status === 401 || res.status === 403) && retry) { await getSession(true); return quoteSummary(sym, false); }
   if (!res.ok) return null;
@@ -118,9 +118,15 @@ export function chooseLowestPe(a, b) {
 
 const raw = (o) => (typeof o?.raw === 'number' && Number.isFinite(o.raw) ? o.raw : null);
 
+// `exchange` is 'NSE' | 'BSE' for Indian shares, or 'US' for US-listed shares (Yahoo uses the
+// bare ticker there, e.g. AAPL, BRK-B). The X/2 · X/3 maths is identical; only the symbol form,
+// the live-price source and the currency differ.
 export async function fetchFundamentals(rawSymbol, exchange = 'NSE', lookbackYears = 10) {
+  const isUS = String(exchange).toUpperCase() === 'US';
   const base = String(rawSymbol).trim().toUpperCase();
-  const candidates = /\.(NS|BO)$/.test(base) ? [base] : exchange === 'BSE' ? [`${base}.BO`, `${base}.NS`] : [`${base}.NS`, `${base}.BO`];
+  const candidates = isUS
+    ? [base.replace(/\.(NS|BO)$/, '').replace(/\./g, '-')] // Yahoo writes share classes with a dash: BRK.B -> BRK-B
+    : /\.(NS|BO)$/.test(base) ? [base] : exchange === 'BSE' ? [`${base}.BO`, `${base}.NS`] : [`${base}.NS`, `${base}.BO`];
   for (const sym of candidates) {
     let sum = null;
     try { sum = await quoteSummary(sym); } catch { /* try next */ }
@@ -142,11 +148,16 @@ export async function fetchFundamentals(rawSymbol, exchange = 'NSE', lookbackYea
 
     let price = raw(sum.price?.regularMarketPrice);
     let source = 'Yahoo Finance';
-    try { const q = await resolveQuote(base.replace(/\.(NS|BO)$/, ''), 'IN'); if (q?.price) { price = q.price; source = `Yahoo Finance (EPS/P/E) + ${q.source ?? 'live'} (price)`; } } catch { /* keep Yahoo price */ }
+    try { const q = await resolveQuote(isUS ? sym : base.replace(/\.(NS|BO)$/, ''), isUS ? 'US' : 'IN'); if (q?.price) { price = q.price; source = `Yahoo Finance (EPS/P/E) + ${q.source ?? 'live'} (price)`; } } catch { /* keep Yahoo price */ }
 
     return {
-      symbol: base.replace(/\.(NS|BO)$/, ''),
+      symbol: isUS ? sym : base.replace(/\.(NS|BO)$/, ''),
       yahooSymbol: sym,
+      market: isUS ? 'US' : 'IN',
+      // Price currency vs the currency the company reports EPS in. They differ for some
+      // ADRs (e.g. a US-listed foreign company), which would make price ÷ EPS meaningless.
+      currency: sum.price?.currency ?? (isUS ? 'USD' : 'INR'),
+      financialCurrency: sum.financialData?.financialCurrency ?? null,
       name: sum.price?.longName ?? sum.price?.shortName ?? null,
       price,
       ttmEps,

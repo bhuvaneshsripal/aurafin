@@ -10,8 +10,8 @@ import { useAuthStore } from '../store/authStore';
 import { useModalBackClose } from '../hooks/useModalBackClose';
 import { subscribeValuationHistory, saveValuationHistory, subscribeValuationWatchlist, saveValuationWatchlist } from '../hooks/useFirestoreSync';
 import {
-  analyseEps, computeValuation, epsCagr, fetchFundamentals, inr, signedPct,
-  type EpsAnalysis, type FundamentalsResponse,
+  analyseEps, computeValuation, currencySymbol, epsCagr, fetchFundamentals, money, signedPct,
+  type EpsAnalysis, type Exchange, type FundamentalsResponse,
 } from '../utils/valuation';
 import { inToast } from '../utils/toastGuard';
 
@@ -22,7 +22,7 @@ const HISTORY_MAX = 5;
 /** Recent-search chips shown before "+ N more". */
 const CHIPS_SHOWN = 3;
 const EMPTY_FORM = { price: '', eps: '', growth: '', pe: '', years: '5', lookback: '10', exc: '0', dil: '0', req: '15', fy: '' };
-type HistoryItem = { symbol: string; name: string; exchange: 'NSE' | 'BSE' };
+type HistoryItem = { symbol: string; name: string; exchange: Exchange };
 function readHistory(): HistoryItem[] {
   try {
     const v = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
@@ -58,7 +58,10 @@ const LEVEL_COLOR = { X: '#2b5fd9', 'X/2': '#0b8a6a', 'X/3': '#a8571c' } as cons
 
 export default function Valuation() {
   const [query, setQuery] = useState('');
-  const [exchange, setExchange] = useState<'NSE' | 'BSE'>('NSE');
+  const [exchange, setExchange] = useState<Exchange>('NSE');
+  const isUS = exchange === 'US';
+  const cur = currencySymbol(exchange);
+  const fmt = (n: number) => money(n, exchange);
   const [suggestions, setSuggestions] = useState<StockSearchResult[]>([]);
   // What the last symbol lookup was for, and whether it failed. Lets the list say
   // "searching", "no matches" or "couldn't search" for the text in the box instead of
@@ -151,7 +154,7 @@ export default function Valuation() {
     const t = setTimeout(() => {
       // A stalled connection must not leave "Searching…" on screen forever.
       const timeout = new Promise<null>((resolve) => { giveUp = setTimeout(() => resolve(null), SEARCH_TIMEOUT_MS); });
-      Promise.race([searchStockSymbols(q, 'IN'), timeout]).then((r) => {
+      Promise.race([searchStockSymbols(q, isUS ? 'US' : 'IN'), timeout]).then((r) => {
         clearTimeout(giveUp);
         if (cancelled) return; // a newer keystroke or a pick made this result stale
         // null = the lookup itself failed (offline, upstream down); [] = it worked but found nothing.
@@ -160,7 +163,7 @@ export default function Valuation() {
       });
     }, 350);
     return () => { cancelled = true; clearTimeout(t); clearTimeout(giveUp); };
-  }, [query, retryTick]);
+  }, [query, retryTick, isUS]);
 
   // Close the list when clicking anywhere outside the search box.
   useEffect(() => {
@@ -175,7 +178,7 @@ export default function Valuation() {
 
   function pick(symbol: string) {
     const bare = symbol.replace(/\.(NS|BO)$/i, '');
-    const ex: 'NSE' | 'BSE' = /\.BO$/i.test(symbol) ? 'BSE' : 'NSE';
+    const ex: Exchange = isUS ? 'US' : /\.BO$/i.test(symbol) ? 'BSE' : 'NSE';
     pickedRef.current = bare;
     setSuggestions([]);
     setLastSearch(null);
@@ -199,7 +202,7 @@ export default function Valuation() {
     setF(EMPTY_FORM); setSrc({}); setCyclical(false); setWeakPe(false); setRoundEps(false); setGrowthNote('');
   }
 
-  async function load(symbol: string, ex: 'NSE' | 'BSE' = exchange) {
+  async function load(symbol: string, ex: Exchange = exchange) {
     const id = ++reqId.current;
     pickedRef.current = symbol.replace(/\.(NS|BO)$/i, '');
     setSuggestions([]);
@@ -268,7 +271,8 @@ export default function Valuation() {
     const sp = new URLSearchParams(window.location.search);
     const sym = sp.get('symbol')?.trim();
     if (!sym) return;
-    const ex: 'NSE' | 'BSE' = sp.get('ex') === 'BSE' ? 'BSE' : 'NSE';
+    const exParam = (sp.get('ex') ?? '').toUpperCase();
+    const ex: Exchange = exParam === 'US' || (sp.get('market') ?? '').toUpperCase() === 'US' ? 'US' : exParam === 'BSE' ? 'BSE' : 'NSE';
     setExchange(ex);
     void load(sym, ex);
     // Only on arrival; the address bar is left as is.
@@ -276,6 +280,15 @@ export default function Valuation() {
   }, []);
 
   const edited = Object.values(src).includes('you');
+  // Some US-listed foreign companies (ADRs) report EPS in their home currency while the share is
+  // priced in dollars. Price ÷ EPS is then meaningless, so say so rather than show a wrong X/2.
+  const currencyReasons = useMemo(() => {
+    const pc = data?.currency?.toUpperCase();
+    const fc = data?.financialCurrency?.toUpperCase();
+    return pc && fc && pc !== fc && src.eps === 'auto'
+      ? [`The share is priced in ${pc} but the company reports earnings in ${fc}. EPS and P/E may not be comparable with the price, so treat X/2 and X/3 as unreliable and check the figures by hand.`]
+      : [];
+  }, [data, src.eps]);
   const result = useMemo(
     () => computeValuation({
       price: num(f.price), eps: num(f.eps), exceptional: num(f.exc) || 0, growthPct: num(f.growth),
@@ -285,8 +298,10 @@ export default function Valuation() {
       peSpanYears: data?.lowestPe && src.pe === 'auto' ? data.lowestPe.spanYears : undefined,
       growthNote: src.growth === 'auto' ? growthNote : undefined,
       earnings,
+      currencySymbol: cur,
+      extraReasons: currencyReasons,
     }),
-    [f, roundEps, cyclical, weakPe, data, edited, src, growthNote, earnings]
+    [f, roundEps, cyclical, weakPe, data, edited, src, growthNote, earnings, cur, currencyReasons]
   );
   const peInfo = data?.lowestPe && src.pe === 'auto' ? data.lowestPe : null;
 
@@ -373,12 +388,32 @@ export default function Valuation() {
       )}
 
       <Card className={cn('mb-4 relative overflow-visible', searchActive && 'z-[46]')}>
+        {/* Market switch: Indian (NSE/BSE, ₹) or US-listed ($) shares. Switching clears the page. */}
+        <div role="group" aria-label="Market" className="mb-3 inline-flex rounded-full border border-line bg-surface-muted p-0.5">
+          {([['India', 'NSE'], ['US', 'US']] as const).map(([label, ex]) => {
+            const on = (ex === 'US') === isUS;
+            return (
+              <button
+                key={label}
+                type="button"
+                aria-pressed={on}
+                onClick={() => { if (on) return; reset(); setExchange(ex); }}
+                className={cn(
+                  'keep-round h-7 rounded-full px-3.5 text-xs font-semibold transition-colors',
+                  on ? 'bg-brand-600 text-white dark:bg-brand-500' : 'text-muted hover:text-ink',
+                )}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
         <div className="flex flex-col sm:flex-row gap-2">
           <div ref={boxRef} className="relative flex-1 min-w-0">
             <Input
               leftIcon={searching ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
               ref={inputRef}
-              placeholder="Search"
+              placeholder={isUS ? 'Search US stock, e.g. Apple or AAPL' : 'Search'}
               value={query}
               onChange={(e) => { pickedRef.current = null; setListOpen(true); setQuery(e.target.value.toUpperCase()); }}
               onFocus={() => setListOpen(true)}
@@ -509,8 +544,8 @@ export default function Valuation() {
           <Card>
             <CardHeader title="Assumptions" description="Every field is editable and the results update instantly." />
             <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-3">
-              <Field label="Price (₹)" src={src.price}><Input type="number" inputMode="decimal" value={f.price} onChange={set('price')} /></Field>
-              <Field label="Current EPS, TTM (₹)" src={src.eps}><Input type="number" inputMode="decimal" value={f.eps} onChange={set('eps')} /></Field>
+              <Field label={`Price (${cur})`} src={src.price}><Input type="number" inputMode="decimal" value={f.price} onChange={set('price')} /></Field>
+              <Field label={`Current EPS, TTM (${cur})`} src={src.eps}><Input type="number" inputMode="decimal" value={f.eps} onChange={set('eps')} /></Field>
               <Field label="EPS growth / year (%)" src={src.growth} hint={src.growth === 'auto' ? growthNote : undefined}><Input type="number" inputMode="decimal" value={f.growth} onChange={set('growth')} /></Field>
               <Field
                 label="Lowest historical P/E"
@@ -519,9 +554,9 @@ export default function Valuation() {
               ><Input type="number" inputMode="decimal" value={f.pe} onChange={set('pe')} /></Field>
               <Field label="Projection years"><Input type="number" min={1} max={10} value={f.years} onChange={set('years')} /></Field>
               <Field label="P/E lookback (years)" src={src.lookback}><Input type="number" min={1} value={f.lookback} onChange={set('lookback')} /></Field>
-              <Field label="Exceptional items in EPS (₹)"><Input type="number" inputMode="decimal" value={f.exc} onChange={set('exc')} /></Field>
+              <Field label={`Exceptional items in EPS (${cur})`}><Input type="number" inputMode="decimal" value={f.exc} onChange={set('exc')} /></Field>
               <div className="min-[400px]:col-span-2">
-                <Field label={`Year-${Math.round(num(f.years)) || 5} EPS override (₹, optional)`}>
+                <Field label={`Year-${Math.round(num(f.years)) || 5} EPS override (${cur}, optional)`}>
                   <Input type="number" inputMode="decimal" placeholder="e.g. analyst estimate; replaces growth %" value={f.fy} onChange={set('fy')} />
                 </Field>
               </div>
@@ -530,7 +565,7 @@ export default function Valuation() {
             </div>
             {data && !hasPeData && <p className="mt-2 text-xs text-amber-700">Historical P/E isn’t available for this stock. Enter the lowest positive P/E from your own research.</p>}
             <div className="mt-3 space-y-2 text-sm">
-              {([['Cyclical business', cyclical, setCyclical], ['Lowest P/E came from unusually weak earnings', weakPe, setWeakPe], ['Round EPS to ₹0.01 each year', roundEps, setRoundEps]] as const).map(([l, v, fn]) => (
+              {([['Cyclical business', cyclical, setCyclical], ['Lowest P/E came from unusually weak earnings', weakPe, setWeakPe], [`Round EPS to ${cur}0.01 each year`, roundEps, setRoundEps]] as const).map(([l, v, fn]) => (
                 <label key={l} className="flex items-start gap-2.5 py-1 cursor-pointer"><input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0" checked={v} onChange={(e) => fn(e.target.checked)} /><span className="min-w-0">{l}</span></label>
               ))}
             </div>
@@ -563,6 +598,7 @@ export default function Valuation() {
                     x2={result.levels.find((l) => l.key === 'X/2')?.target ?? NaN}
                     x3={result.levels.find((l) => l.key === 'X/3')?.target ?? NaN}
                     unreliable={result.lowConfidence}
+                    exchange={exchange}
                   />
                   {canSave && (
                     <button
@@ -601,7 +637,7 @@ export default function Valuation() {
                         )}
                       </div>
                       <div className="text-2xl font-bold tabular-nums">
-                        {num(f.price) > 0 ? inr(num(f.price)) : '—'}
+                        {num(f.price) > 0 ? fmt(num(f.price)) : '—'}
                         {Number.isFinite(result.adequate.discountPct) && (
                           <span className={cn('block sm:inline sm:ml-2 text-sm sm:text-base font-semibold', result.lowConfidence ? 'text-amber-600' : result.adequate.discountPct >= 0 ? 'text-emerald-600' : 'text-red-600')}>
                             ({Math.abs(result.adequate.discountPct).toFixed(1)}% {result.adequate.discountPct >= 0 ? 'discount' : 'premium'}{result.lowConfidence ? ', unreliable' : ''})
@@ -611,14 +647,14 @@ export default function Valuation() {
                     </div>
                     <div className="sm:text-right border-t border-line pt-3 sm:border-0 sm:pt-0">
                       <div className="text-sm font-semibold" style={{ color: '#0b8a6a' }}>Adequate buying price</div>
-                      <div className="text-2xl font-bold tabular-nums">{inr(result.adequate.target)}</div>
+                      <div className="text-2xl font-bold tabular-nums">{fmt(result.adequate.target)}</div>
                     </div>
                   </div>
                 </Card>
               )}
               <Card>
                 <div className="text-sm font-semibold" style={{ color: LEVEL_COLOR.X }}>X</div>
-                <div className="text-2xl font-bold tabular-nums my-1">{inr(result.x)}</div>
+                <div className="text-2xl font-bold tabular-nums my-1">{fmt(result.x)}</div>
                 <div className="text-xs text-muted">
                   Year-{years} EPS × lowest P/E = {result.projected[years - 1].toFixed(2)} × {num(f.pe).toFixed(2)}.
                   Adequate buying price = X ÷ (1 + {num(f.req)}%)^{years} = X ÷ {result.adequate?.factor.toFixed(2)}.
@@ -628,7 +664,7 @@ export default function Valuation() {
                 {result.levels.filter((l) => l.key !== 'X').map((l) => (
                   <Card key={l.key}>
                     <div className="text-sm font-semibold" style={{ color: LEVEL_COLOR[l.key] }}>{l.key}{l.key === 'X/2' ? ' (Target)' : ''}</div>
-                    <div className="text-2xl font-bold tabular-nums my-1">{inr(l.target)}</div>
+                    <div className="text-2xl font-bold tabular-nums my-1">{fmt(l.target)}</div>
                     <div className={cn('text-sm font-medium', l.upsidePct >= 0 ? 'text-emerald-600' : 'text-red-600')}>{signedPct(l.upsidePct)} vs price</div>
                     <div className="my-1">
                       {Number.isFinite(l.discountPct) ? (
@@ -637,7 +673,7 @@ export default function Valuation() {
                         </Badge>
                       ) : '—'}
                     </div>
-                    <div className="text-xs text-muted">Difference: {Number.isFinite(l.diff) ? `${l.diff >= 0 ? '+' : '−'}${inr(Math.abs(l.diff))}` : '—'}</div>
+                    <div className="text-xs text-muted">Difference: {Number.isFinite(l.diff) ? `${l.diff >= 0 ? '+' : '−'}${fmt(Math.abs(l.diff))}` : '—'}</div>
                   </Card>
                 ))}
               </div>
@@ -649,14 +685,14 @@ export default function Valuation() {
                     <div key={r.k} className="flex items-center gap-2 sm:gap-3 text-sm">
                       <span className="w-10 sm:w-12 shrink-0 text-muted">{r.k}</span>
                       <div className="flex-1 min-w-0 h-4 sm:h-5 rounded bg-surface-muted overflow-hidden"><div className="h-full rounded" style={{ width: `${(r.v / maxBar) * 100}%`, background: r.c }} /></div>
-                      <span className="w-[5.5rem] sm:w-28 shrink-0 text-right tabular-nums text-[13px] sm:text-sm">{inr(r.v)}</span>
+                      <span className="w-[5.5rem] sm:w-28 shrink-0 text-right tabular-nums text-[13px] sm:text-sm">{fmt(r.v)}</span>
                     </div>
                   ))}
                 </div>
                 <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm [&>div:last-child]:col-span-2 sm:[&>div:last-child]:col-span-1">
                   <div><div className="text-xs text-muted">Current P/E (price ÷ TTM EPS)</div><b>{result.currentPe ? result.currentPe.toFixed(1) : '—'}</b></div>
                   <div><div className="text-xs text-muted">Lowest historical P/E ({f.lookback || '?'} yr)</div><b>{num(f.pe) ? num(f.pe).toFixed(2) : '—'}</b></div>
-                  <div><div className="text-xs text-muted">Year-{years} EPS</div><b>{inr(result.projected[years - 1])}</b></div>
+                  <div><div className="text-xs text-muted">Year-{years} EPS</div><b>{fmt(result.projected[years - 1])}</b></div>
                 </div>
               </Card>
 
@@ -678,16 +714,16 @@ export default function Valuation() {
                   <table className="w-full text-[13px] sm:text-sm whitespace-nowrap">
                     <thead><tr className="text-muted text-left"><th className="py-1.5">Year</th><th>Type</th><th className="text-right">EPS</th><th className="text-right">YoY</th></tr></thead>
                     <tbody>
-                      <tr className="border-t border-line"><td className="py-1.5">Year 0 (TTM)</td><td>Actual</td><td className="text-right tabular-nums">{inr(result.baseEps)}</td><td className="text-right">—</td></tr>
+                      <tr className="border-t border-line"><td className="py-1.5">Year 0 (TTM)</td><td>Actual</td><td className="text-right tabular-nums">{fmt(result.baseEps)}</td><td className="text-right">—</td></tr>
                       {result.projected.map((v, i) => {
                         const p = i ? result.projected[i - 1] : result.baseEps;
-                        return <tr key={i} className="border-t border-line"><td className="py-1.5">Year {i + 1}</td><td className="text-muted">Forecast</td><td className="text-right tabular-nums">{inr(v)}</td><td className="text-right tabular-nums">{signedPct((v / p - 1) * 100)}</td></tr>;
+                        return <tr key={i} className="border-t border-line"><td className="py-1.5">Year {i + 1}</td><td className="text-muted">Forecast</td><td className="text-right tabular-nums">{fmt(v)}</td><td className="text-right tabular-nums">{signedPct((v / p - 1) * 100)}</td></tr>;
                       })}
                     </tbody>
                   </table>
                 </div>
                 {data && data.epsHistory.length > 0 && (
-                  <p className="mt-3 text-xs text-muted break-words">Reported annual diluted EPS: {data.epsHistory.map((h) => `${h.date.slice(0, 4)}: ${inr(h.eps)}`).join(' · ')}</p>
+                  <p className="mt-3 text-xs text-muted break-words">Reported annual diluted EPS: {data.epsHistory.map((h) => `${h.date.slice(0, 4)}: ${fmt(h.eps)}`).join(' · ')}</p>
                 )}
                   </div>
                 )}

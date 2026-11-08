@@ -145,7 +145,7 @@ export default function Sidebar() {
       <div className="mb-5">{hasProfiles ? <ProfileSwitcher /> : <AccountChip />}</div>
 
       {/* Navigation */}
-      <div className="flex-1 overflow-y-auto no-scrollbar -mx-1 px-1 space-y-4">
+      <div className="flex-1 overflow-y-auto slim-scroll -mx-1 px-1 space-y-4">
         {groups.map((g) => (
           <nav key={g.label} aria-label={g.label}>
             <p className="sb-label px-2.5 mb-1 text-xs font-medium text-faint">{g.label}</p>

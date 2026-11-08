@@ -437,6 +437,34 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   display: none;
 }
 
+/* Tiny scrollbar (4px) for the sidebar menu: invisible until the pointer is over the
+   list, so it appears as a thin line on the right edge while you scroll it. The
+   `scrollbar-width: auto` resets the global "thin" so the WebKit/Blink sizing below applies. */
+.slim-scroll {
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+}
+.slim-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.slim-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.slim-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+.slim-scroll:hover::-webkit-scrollbar-thumb {
+  background: var(--color-slate-300);
+}
+.dark .slim-scroll:hover::-webkit-scrollbar-thumb {
+  background: var(--color-slate-600);
+}
+@supports not selector(::-webkit-scrollbar) {
+  /* Firefox: no width control, so keep its thin bar. */
+  .slim-scroll { scrollbar-width: thin; }
+}
+
 ::selection {
   background: rgb(36 122 77 / 0.2);
 }

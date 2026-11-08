@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowDown, ArrowUp, Bookmark, RefreshCw, Search, X } from 'lucide-react';
+import CustomSelect from '../components/CustomSelect';
 import { Card, EmptyState, LoadingState, PageHeader, cn } from '../components/ui';
 import { useStockLookup } from '../hooks/useStockLookup';
 import { readCache, writeCache } from '../utils/fetchCache';
@@ -271,18 +272,13 @@ export default function HighVolume() {
             {f.label}
           </button>
         ))}
-        <select
+        <CustomSelect
           value={band}
-          onChange={(e) => setBand(e.target.value as PriceBand)}
-          aria-label="Price range"
-          className={cn(chip(band !== 'any'), 'appearance-none pr-3 outline-none')}
-        >
-          {BANDS.map((b) => (
-            <option key={b.key} value={b.key}>
-              {b.label}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => setBand(v as PriceBand)}
+          options={BANDS.map((b) => ({ value: b.key, label: b.label }))}
+          menuWidth={190}
+          className={cn(chip(band !== 'any'), '!pr-2.5')}
+        />
       </div>
 
       {/* Sort: tap the active one again to flip the direction */}

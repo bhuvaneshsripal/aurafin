@@ -114,7 +114,8 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
 
     if (url.pathname === '/api/market/valuation') {
       const symbol = (url.searchParams.get('symbol') ?? '').trim()
-      const exchange = (url.searchParams.get('exchange') ?? 'NSE').toUpperCase() === 'BSE' ? 'BSE' : 'NSE'
+      const ex = (url.searchParams.get('exchange') ?? 'NSE').toUpperCase()
+      const exchange = ex === 'US' || (url.searchParams.get('market') ?? '').toUpperCase() === 'US' ? 'US' : ex === 'BSE' ? 'BSE' : 'NSE'
       if (!symbol) { send(400, { error: 'Missing symbol' }); return }
       try {
         const data = await fetchFundamentals(symbol, exchange, 10)

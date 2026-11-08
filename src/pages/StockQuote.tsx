@@ -339,10 +339,10 @@ export default function StockQuote() {
           <header className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 flex-wrap items-center gap-3 sm:gap-4">
               <CompanyLogo symbol={bare} name={name} market={market} size={phone ? 48 : 60} />
-              {market === 'IN' && !noPriceAtAll && (
+              {!noPriceAtAll && (
                 <button
                   type="button"
-                  onClick={() => navigate(`/valuation?symbol=${encodeURIComponent(bare)}&ex=${exchange}`)}
+                  onClick={() => navigate(`/valuation?symbol=${encodeURIComponent(bare)}&ex=${market === 'US' ? 'US' : exchange}`)}
                   title="Is it cheap or expensive? See X, X/2 and X/3 against today’s price"
                   className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg border border-line bg-surface px-4 text-[14px] font-semibold text-ink-2 transition-colors hover:bg-surface-hover"
                 >

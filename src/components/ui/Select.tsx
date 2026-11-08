@@ -1,27 +1,45 @@
-import type { Ref, SelectHTMLAttributes } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { Children, Fragment, isValidElement, type ChangeEvent, type ReactElement, type ReactNode, type Ref, type SelectHTMLAttributes } from 'react';
 import { cn } from './cn';
 import { inputClasses } from './Input';
+import CustomSelect, { type CustomSelectOption } from '../CustomSelect';
 
 export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   invalid?: boolean;
+  /** Kept so existing call sites compile; the dropdown is a custom button, not a native <select>. */
   ref?: Ref<HTMLSelectElement>;
 }
 
-/** Native <select> dressed to match Input. (For searchable/custom dropdowns
- *  the app also has CustomSelect, which shares the same visual language.) */
-export default function Select({ invalid, className, children, ref, ...rest }: SelectProps) {
+/** Turns `<option value="x">Label</option>` children (also inside fragments / arrays) into options. */
+function optionsFrom(children: ReactNode): CustomSelectOption[] {
+  const out: CustomSelectOption[] = [];
+  Children.forEach(children, (child) => {
+    if (!isValidElement(child)) return;
+    const el = child as ReactElement<{ value?: string | number; disabled?: boolean; children?: ReactNode }>;
+    if (el.type === Fragment) { out.push(...optionsFrom(el.props.children)); return; }
+    if (el.type !== 'option') return;
+    const label = el.props.children;
+    out.push({
+      value: String(el.props.value ?? (typeof label === 'string' || typeof label === 'number' ? label : '')),
+      label,
+      disabled: el.props.disabled,
+    });
+  });
+  return out;
+}
+
+/** Dropdown that looks the same everywhere (matches Input, with an arrow and the app's own menu).
+ *  Same props as a native <select> with <option> children, so call sites didn't change. */
+export default function Select({ invalid, className, children, value, disabled, onChange, id }: SelectProps) {
   return (
     <div className="relative w-full">
-      <select
-        ref={ref}
-        aria-invalid={invalid || undefined}
-        className={cn(inputClasses, 'appearance-none pr-9 cursor-pointer', invalid && 'border-red-400', className)}
-        {...rest}
-      >
-        {children}
-      </select>
-      <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" />
+      <CustomSelect
+        id={id}
+        value={String(value ?? '')}
+        options={optionsFrom(children)}
+        disabled={disabled}
+        onChange={(v) => onChange?.({ target: { value: v }, currentTarget: { value: v } } as unknown as ChangeEvent<HTMLSelectElement>)}
+        className={cn(inputClasses, invalid && 'border-red-400', className)}
+      />
     </div>
   );
 }

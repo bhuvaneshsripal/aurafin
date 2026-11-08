@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Badge, cn } from './ui';
-import { inr } from '../utils/valuation';
+import { money, type Exchange } from '../utils/valuation';
 
 /**
  * The headline of a valuation: a status chip plus a visual showing where the
@@ -35,7 +35,9 @@ export default function ValuationBar({
   x2,
   x3,
   unreliable,
+  exchange = 'NSE',
 }: {
+  exchange?: Exchange;
   name: string;
   price: number;
   x2: number;
@@ -43,6 +45,7 @@ export default function ValuationBar({
   unreliable?: boolean;
 }) {
   const [view, setView] = useState<View>(loadView);
+  const fmt = (n: number) => money(n, exchange);
 
   if (!(price > 0) || !(x2 > 0) || !(x3 > 0)) return null;
 
@@ -93,9 +96,9 @@ export default function ValuationBar({
         </div>
       </div>
 
-      {view === 'gauge' && <Gauge price={price} x2={x2} x3={x3} status={status} summary={summary} />}
-      {view === 'ladder' && <Ladder price={price} x2={x2} x3={x3} status={status} summary={summary} />}
-      {view === 'zones' && <Zones price={price} x2={x2} x3={x3} status={status} summary={summary} />}
+      {view === 'gauge' && <Gauge price={price} x2={x2} x3={x3} status={status} summary={summary} fmt={fmt} />}
+      {view === 'ladder' && <Ladder price={price} x2={x2} x3={x3} status={status} summary={summary} fmt={fmt} />}
+      {view === 'zones' && <Zones price={price} x2={x2} x3={x3} status={status} summary={summary} fmt={fmt} />}
     </div>
   );
 }
@@ -106,6 +109,7 @@ type ViewProps = {
   x3: number;
   status: { label: string; good: boolean };
   summary: string;
+  fmt: (n: number) => string;
 };
 
 /* ── Style A: gauge ─────────────────────────────────────────────────────── */
@@ -126,7 +130,7 @@ function arc(t1: number, t2: number) {
   return `M ${a.x.toFixed(2)} ${a.y.toFixed(2)} A ${R} ${R} 0 0 1 ${b.x.toFixed(2)} ${b.y.toFixed(2)}`;
 }
 
-function Gauge({ price, x2, x3, status, summary }: ViewProps) {
+function Gauge({ price, x2, x3, status, summary, fmt }: ViewProps) {
   // Dial runs from 0 to 1.5 × X/2, so the expensive zone gets a third of it.
   const max = x2 * 1.5;
   const t3 = x3 / max;
@@ -150,13 +154,13 @@ function Gauge({ price, x2, x3, status, summary }: ViewProps) {
         </svg>
       </div>
       <div className="-mt-1 text-center">
-        <div className="text-2xl font-semibold text-ink font-numeric">{inr(price)}</div>
+        <div className="text-2xl font-semibold text-ink font-numeric">{fmt(price)}</div>
         <p className={cn('mt-0.5 text-sm font-semibold', status.good ? 'text-positive' : 'text-warning')}>
           {summary}
           {offScale && ' · off the scale'}
         </p>
         <p className="mt-1 text-xs text-muted font-numeric">
-          X/3 {inr(x3)} · X/2 {inr(x2)} · X {inr(x2 * 2)}
+          X/3 {fmt(x3)} · X/2 {fmt(x2)} · X {fmt(x2 * 2)}
         </p>
       </div>
     </div>
@@ -165,7 +169,7 @@ function Gauge({ price, x2, x3, status, summary }: ViewProps) {
 
 /* ── Style B: price ladder ──────────────────────────────────────────────── */
 
-function Ladder({ price, x2, x3, status, summary }: ViewProps) {
+function Ladder({ price, x2, x3, status, summary, fmt }: ViewProps) {
   const x = x2 * 2;
   const max = Math.max(price, x);
   const width = (v: number) => `${Math.max(2.5, (v / max) * 100)}%`;
@@ -185,7 +189,7 @@ function Ladder({ price, x2, x3, status, summary }: ViewProps) {
             <div className="min-w-0 flex-1">
               <div className={cn('h-3 rounded-full', r.bar)} style={{ width: width(r.value) }} />
             </div>
-            <span className="w-[4.75rem] shrink-0 text-right text-xs font-semibold text-ink font-numeric sm:w-24">{inr(r.value)}</span>
+            <span className="w-[4.75rem] shrink-0 text-right text-xs font-semibold text-ink font-numeric sm:w-24">{fmt(r.value)}</span>
           </div>
         ))}
       </div>
@@ -197,7 +201,7 @@ function Ladder({ price, x2, x3, status, summary }: ViewProps) {
 
 /* ── Zones: the original bar ────────────────────────────────────────────── */
 
-function Zones({ price, x2, x3, status, summary }: ViewProps) {
+function Zones({ price, x2, x3, status, summary, fmt }: ViewProps) {
   // Scale: leave room above X/2 for the "expensive" zone and for a CMP beyond it.
   const max = Math.max(x2 * 1.5, price * 1.12);
   const pos = (v: number) => `${Math.min(100, Math.max(0, (v / max) * 100))}%`;
@@ -207,7 +211,7 @@ function Zones({ price, x2, x3, status, summary }: ViewProps) {
   return (
     <div>
       <p className="mt-1 text-sm text-muted font-numeric font-normal">
-        CMP {inr(price)} · X {inr(x2 * 2)}
+        CMP {fmt(price)} · X {fmt(x2 * 2)}
       </p>
 
       <div className="mt-5" />
@@ -242,9 +246,9 @@ function Zones({ price, x2, x3, status, summary }: ViewProps) {
       {/* Zone key: prices live here (not on the bar) so labels never collide. */}
       <div className="mt-3 grid grid-cols-3 gap-2 text-center">
         {[
-          { swatch: 'bg-brand-600 dark:bg-brand-500', title: 'Deep value', sub: `below ${inr(x3)}` },
-          { swatch: 'bg-emerald-300 dark:bg-emerald-400/60', title: 'Target', sub: `${inr(x3)} – ${inr(x2)}` },
-          { swatch: 'bg-amber-200 dark:bg-amber-400/40', title: 'Expensive', sub: `above ${inr(x2)}` },
+          { swatch: 'bg-brand-600 dark:bg-brand-500', title: 'Deep value', sub: `below ${fmt(x3)}` },
+          { swatch: 'bg-emerald-300 dark:bg-emerald-400/60', title: 'Target', sub: `${fmt(x3)} – ${fmt(x2)}` },
+          { swatch: 'bg-amber-200 dark:bg-amber-400/40', title: 'Expensive', sub: `above ${fmt(x2)}` },
         ].map((z) => (
           <div key={z.title} className="min-w-0 rounded-xl bg-surface-muted px-1.5 py-2">
             <span aria-hidden className={cn('mx-auto mb-1 block h-1.5 w-8 rounded-full', z.swatch)} />

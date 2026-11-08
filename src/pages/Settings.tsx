@@ -778,12 +778,13 @@ function SharedAccessCard() {
           placeholder="their.email@example.com"
           className="flex-1 border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm placeholder:text-slate-600"
         />
-        <select
+        <CustomSelect
           disabled
+          value="view"
+          onChange={() => {}}
+          options={[{ value: 'view', label: 'View Only' }]}
           className="border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm"
-        >
-          <option>View Only</option>
-        </select>
+        />
         <button
           disabled
           className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap"

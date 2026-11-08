@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowDown, ArrowUp, Bookmark, RefreshCw, Search, X } from 'lucide-react';
+import CustomSelect from '../components/CustomSelect';
 import { Card, EmptyState, LoadingState, PageHeader, cn } from '../components/ui';
 import Modal from '../components/Modal';
 import { useStockLookup } from '../hooks/useStockLookup';
@@ -332,16 +333,17 @@ export default function SwingScanner() {
 
       {/* Extra filters */}
       <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-0.5 no-scrollbar">
-        <select
-          value={minScore}
-          onChange={(e) => setMinScore(Number(e.target.value) as MinScore)}
-          aria-label="Minimum score"
-          className={cn(chip(minScore !== 0), 'appearance-none outline-none')}
-        >
-          <option value={0}>Any score</option>
-          <option value={50}>Score 50+</option>
-          <option value={70}>Score 70+</option>
-        </select>
+        <CustomSelect
+          value={String(minScore)}
+          onChange={(v) => setMinScore(Number(v) as MinScore)}
+          options={[
+            { value: '0', label: 'Any score' },
+            { value: '50', label: 'Score 50+' },
+            { value: '70', label: 'Score 70+' },
+          ]}
+          menuWidth={160}
+          className={cn(chip(minScore !== 0), '!pr-2.5')}
+        />
         <button type="button" onClick={() => setAbove200((v) => !v)} className={chip(above200)}>
           Above 200-day
         </button>
