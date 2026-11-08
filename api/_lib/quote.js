@@ -63,6 +63,50 @@ async function fetchBseQuote(scripCode) {
   return { price, previousClose: toNumber(data?.Header?.PrevClose), currency: 'INR' };
 }
 
+// --- Previous close -------------------------------------------------------------------------
+// The "previous close" that NSE / Yahoo's live quote carries can lag on days with an unusual session
+// (e.g. the Sunday Diwali Muhurat session): it still holds the close from two sessions back, so every
+// stock showed the previous day's whole move as "today's" change while the index (a different feed)
+// was right. The close of the last session that finished BEFORE today comes straight from the daily
+// candles, and is the same for the whole day, so it is looked up once per symbol per day.
+const istDate = (ms) => new Date(ms + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+const prevCloseCache = new Map(); // yahooSymbol -> { day, value, at }
+
+async function lastCompletedClose(yahooSymbol) {
+  const today = istDate(Date.now());
+  const hit = prevCloseCache.get(yahooSymbol);
+  if (hit && hit.day === today && (hit.value !== undefined || Date.now() - hit.at < 60_000)) return hit.value;
+  let value;
+  try {
+    const res = await fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=7d`,
+      { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(4000) }
+    );
+    if (res.ok) {
+      const r = (await res.json())?.chart?.result?.[0];
+      const ts = r?.timestamp ?? [];
+      const closes = r?.indicators?.quote?.[0]?.close ?? [];
+      for (let i = ts.length - 1; i >= 0; i--) {
+        if (istDate(ts[i] * 1000) < today && toNumber(closes[i]) !== undefined) {
+          value = toNumber(closes[i]);
+          break;
+        }
+      }
+    }
+  } catch {
+    /* keep the quote's own previous close */
+  }
+  prevCloseCache.set(yahooSymbol, { day: today, value, at: Date.now() });
+  return value;
+}
+
+async function withPrevClose(yahooSymbol, quote) {
+  const prev = await lastCompletedClose(yahooSymbol);
+  // Only accept a sane value (a bad candle must not create a fake 40% move).
+  if (prev !== undefined && Math.abs(quote.price / prev - 1) < 0.5) return { ...quote, previousClose: prev };
+  return quote;
+}
+
 /** Returns { price, previousClose, currency, source } or null. */
 export async function resolveQuote(rawSymbol, market = 'IN') {
   const raw = String(rawSymbol).trim().toUpperCase();
@@ -92,13 +136,13 @@ export async function resolveQuote(rawSymbol, market = 'IN') {
   const bare = raw.replace(/\.NS$/, '');
   try {
     const q = await fetchNseQuote(bare);
-    return { ...q, source: 'nse' };
+    return withPrevClose(`${bare}.NS`, { ...q, source: 'nse' });
   } catch {
     // fall through to Yahoo
   }
   for (const c of [`${bare}.NS`, `${bare}.BO`]) {
     const q = await fetchYahooQuote(c).catch(() => null);
-    if (q) return { ...q, source: 'yahoo' };
+    if (q) return withPrevClose(c, { ...q, source: 'yahoo' });
   }
   return null;
 }
