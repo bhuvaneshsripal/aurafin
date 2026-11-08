@@ -51,15 +51,15 @@ export function useStockLookup<T extends { symbol: string }>(
           picks.push({ symbol, name: r.name ?? symbol });
           if (picks.length >= 5) break;
         }
-        const found = await Promise.all(
-          picks.map(async ({ symbol, name }) => {
+        const found: (T | null)[] = await Promise.all(
+          picks.map(async ({ symbol, name }): Promise<T | null> => {
             const key = `${scope}:${symbol}`;
-            if (cache.has(key)) return cache.get(key) as T | null;
+            if (cache.has(key)) return (cache.get(key) ?? null) as T | null;
             try {
               const r = await fetch(urlRef.current(symbol, name), { signal: ctrl.signal });
               if (!r.ok) return null; // not cached: it may work next time
               const stock = (await r.json())?.stock as T | undefined;
-              const val = stock && stock.symbol ? stock : null;
+              const val: T | null = stock && stock.symbol ? stock : null;
               if (val) cache.set(key, val);
               return val;
             } catch {
@@ -67,7 +67,7 @@ export function useStockLookup<T extends { symbol: string }>(
             }
           })
         );
-        if (!ctrl.signal.aborted) setExtras(found.filter((x): x is T => !!x));
+        if (!ctrl.signal.aborted) setExtras(found.filter((x) => x !== null) as T[]);
       } catch {
         if (!ctrl.signal.aborted) setExtras([]);
       } finally {
