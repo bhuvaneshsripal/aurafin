@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowDown, ArrowUp, Bookmark, RefreshCw, Search, X } from 'lucide-react';
 import { Card, EmptyState, LoadingState, PageHeader, cn } from '../components/ui';
 import Modal from '../components/Modal';
+import { useStockLookup } from '../hooks/useStockLookup';
 import { readCache, writeCache } from '../utils/fetchCache';
 import { WATCHLIST_CHANGED_EVENT, readSavedStocks, stockKey, toggleSavedStock } from '../utils/savedStocks';
 
@@ -198,8 +199,18 @@ export default function SwingScanner() {
   }, [data]);
   const setupCount = counts.breakout + counts.pullback + counts.bounce;
 
+  // Search reaches past the chosen index: any NSE stock that matches is scanned on demand and added.
+  const knownSymbols = useMemo(() => new Set((data?.stocks ?? []).map((s) => s.symbol)), [data]);
+  const { extras, searching } = useStockLookup<SwingStock>(
+    query,
+    knownSymbols,
+    (symbol, name) => `/api/market/swing?symbol=${encodeURIComponent(symbol)}&name=${encodeURIComponent(name)}`,
+    'swing'
+  );
+
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const extraSet = new Set(extras.map((e) => e.symbol));
     const by: Record<SortKey, (s: SwingStock) => number> = {
       score: (s) => s.score,
       change: (s) => s.changePct,
@@ -209,9 +220,9 @@ export default function SwingScanner() {
       price: (s) => s.close,
     };
     const dir = asc ? 1 : -1;
-    return (data?.stocks ?? [])
+    return [...(data?.stocks ?? []), ...extras]
       .filter((s) => {
-        if (q && !s.symbol.toLowerCase().includes(q) && !s.name.toLowerCase().includes(q)) return false;
+        if (q && !extraSet.has(s.symbol) && !s.symbol.toLowerCase().includes(q) && !s.name.toLowerCase().includes(q)) return false;
         if (filter === 'setups' && s.setup === 'none') return false;
         if (filter !== 'every' && filter !== 'setups' && s.setup !== filter) return false;
         if (s.score < minScore) return false;
@@ -222,7 +233,7 @@ export default function SwingScanner() {
         return true;
       })
       .sort((a, b) => dir * (by[sort](a) - by[sort](b)) || b.score - a.score);
-  }, [data, query, filter, sort, asc, minScore, above200, nearHigh, volSpike, onlySaved, savedKeys]);
+  }, [data, extras, query, filter, sort, asc, minScore, above200, nearHigh, volSpike, onlySaved, savedKeys]);
 
   const visible = rows.slice(0, limit);
   const filtersActive = filter !== 'every' || minScore !== 0 || above200 || nearHigh || volSpike || onlySaved || query.trim() !== '';
@@ -295,7 +306,7 @@ export default function SwingScanner() {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search any stock in the scan"
+          placeholder="Search any NSE stock"
           className="h-10 w-full rounded-lg border border-line bg-surface pl-9 pr-9 text-sm text-ink outline-none focus:border-primary"
         />
         {query && (
@@ -371,7 +382,7 @@ export default function SwingScanner() {
       ) : rows.length === 0 ? (
         <EmptyState
           compact
-          title={loading ? 'Nothing yet, still scanning' : 'No stocks match'}
+          title={searching ? 'Searching all NSE stocks…' : loading ? 'Nothing yet, still scanning' : 'No stocks match'}
           description={loading ? undefined : 'Try another setup or clear the filters.'}
           action={
             filtersActive ? (

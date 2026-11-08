@@ -25,9 +25,9 @@ import { fetchGlobalIndices } from './api/_lib/globalIndices.js'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
 import { fetchIndianIndices } from './api/_lib/indianIndices.js'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
-import { fetchVolumeLeaders } from './api/_lib/volumeLeaders.js'
+import { fetchVolumeLeaders, fetchVolumeFor } from './api/_lib/volumeLeaders.js'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
-import { runSwingScan } from './api/_lib/swingScan.js'
+import { runSwingScan, scanSymbol } from './api/_lib/swingScan.js'
 
 // Local-dev/preview stand-in for the api/market/* serverless functions.
 // A plain URL-rewrite proxy (like /api/mf below) can't work for NSE,
@@ -124,6 +124,20 @@ function marketApiDevMiddleware(): Connect.NextHandleFunction {
         console.error(`[dev/valuation] ${symbol} failed:`, err instanceof Error ? err.message : err)
         send(502, { error: 'Could not reach the fundamentals source' })
       }
+      return
+    }
+
+    if (url.pathname === '/api/market/volume' && url.searchParams.get('symbol')) {
+      const stock = await fetchVolumeFor(url.searchParams.get('symbol')).catch(() => null)
+      if (!stock) { send(404, { error: 'No volume data for that stock' }); return }
+      send(200, { stock })
+      return
+    }
+
+    if (url.pathname === '/api/market/swing' && url.searchParams.get('symbol')) {
+      const stock = await scanSymbol(url.searchParams.get('symbol'), url.searchParams.get('name') ?? '').catch(() => null)
+      if (!stock) { send(404, { error: 'Could not scan that stock' }); return }
+      send(200, { stock })
       return
     }
 

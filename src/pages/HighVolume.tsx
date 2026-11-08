@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowDown, ArrowUp, Bookmark, RefreshCw, Search, X } from 'lucide-react';
 import { Card, EmptyState, LoadingState, PageHeader, cn } from '../components/ui';
+import { useStockLookup } from '../hooks/useStockLookup';
 import { readCache, writeCache } from '../utils/fetchCache';
 import { WATCHLIST_CHANGED_EVENT, readSavedStocks, stockKey, toggleSavedStock } from '../utils/savedStocks';
 
@@ -149,11 +150,21 @@ export default function HighVolume() {
     };
   }, [stocks]);
 
+  // Search reaches past the list: any NSE stock that matches is looked up and added.
+  const knownSymbols = useMemo(() => new Set((stocks ?? []).map((s) => s.symbol)), [stocks]);
+  const { extras, searching } = useStockLookup<VolumeStock>(
+    query,
+    knownSymbols,
+    (symbol) => `/api/market/volume?symbol=${encodeURIComponent(symbol)}`,
+    'volume'
+  );
+
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     const inBand = BANDS.find((b) => b.key === band)!.test;
-    const list = (stocks ?? []).filter((s) => {
-      if (q && !s.symbol.toLowerCase().includes(q) && !s.name.toLowerCase().includes(q)) return false;
+    const extraSet = new Set(extras.map((e) => e.symbol));
+    const list = [...(stocks ?? []), ...extras].filter((s) => {
+      if (q && !extraSet.has(s.symbol) && !s.symbol.toLowerCase().includes(q) && !s.name.toLowerCase().includes(q)) return false;
       if (!inBand(s.price)) return false;
       if (filter === 'gainers') return s.changePct > 0;
       if (filter === 'losers') return s.changePct < 0;
@@ -170,7 +181,7 @@ export default function HighVolume() {
     };
     const dir = asc ? 1 : -1;
     return [...list].sort((a, b) => dir * (by[sort](a) - by[sort](b)));
-  }, [stocks, query, sort, asc, filter, band, savedKeys]);
+  }, [stocks, extras, query, sort, asc, filter, band, savedKeys]);
 
   const visible = rows.slice(0, limit);
 
@@ -300,7 +311,7 @@ export default function HighVolume() {
       ) : rows.length === 0 ? (
         <EmptyState
           compact
-          title={filter === 'saved' && !query ? 'No saved stocks here yet' : 'No stocks match'}
+          title={searching ? 'Searching all NSE stocks…' : filter === 'saved' && !query ? 'No saved stocks here yet' : 'No stocks match'}
           description={filter === 'saved' && !query ? 'Tap the bookmark on any stock to save it.' : undefined}
           action={
             filtersActive ? (

@@ -13,6 +13,8 @@ import {
   Gem,
   Wallet,
   Bookmark,
+  Activity,
+  TrendingUp,
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react';
@@ -52,6 +54,8 @@ const groups: { label: string; links: NavLinkDef[] }[] = [
       { to: '/import', label: 'Import', icon: FileUp },
       { to: '/watchlist', label: 'Watchlist', icon: Bookmark },
       { to: '/valuation', label: 'Valuation', icon: ValuationIcon as unknown as typeof LayoutDashboard },
+      { to: '/volume', label: 'High volume', icon: Activity },
+      { to: '/swing', label: 'Swing scan', icon: TrendingUp },
       { to: '/calculators', label: 'Calculators', icon: Calculator },
     ],
   },

@@ -2,8 +2,8 @@ import '../_lib/quietDeprecations.js';
 import { fetchIndices } from '../_lib/indices.js';
 import { fetchGlobalIndices } from '../_lib/globalIndices.js';
 import { fetchIndianIndices } from '../_lib/indianIndices.js';
-import { fetchVolumeLeaders } from '../_lib/volumeLeaders.js';
-import { runSwingScan } from '../_lib/swingScan.js';
+import { fetchVolumeLeaders, fetchVolumeFor } from '../_lib/volumeLeaders.js';
+import { runSwingScan, scanSymbol } from '../_lib/swingScan.js';
 
 // The swing scan fetches ~200 stocks' history on a cold start.
 export const config = { maxDuration: 30 };
@@ -25,6 +25,13 @@ export default async function handler(req, res) {
       res.status(200).json({ indices, asOf: Date.now() });
       return;
     }
+    if (mode === 'swing' && req.query.symbol) {
+      const stock = await scanSymbol(String(req.query.symbol), String(req.query.name ?? ''));
+      if (!stock) { res.status(404).json({ error: 'Could not scan that stock' }); return; }
+      res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=900');
+      res.status(200).json({ stock });
+      return;
+    }
     if (mode === 'swing') {
       const result = await runSwingScan({
         index: String(req.query.index ?? 'NIFTY 200'),
@@ -34,6 +41,13 @@ export default async function handler(req, res) {
       if (!result) { res.status(502).json({ error: 'Could not build the swing scan' }); return; }
       res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=3600');
       res.status(200).json({ ...result, asOf: Date.now() });
+      return;
+    }
+    if (mode === 'volume' && req.query.symbol) {
+      const stock = await fetchVolumeFor(String(req.query.symbol));
+      if (!stock) { res.status(404).json({ error: 'No volume data for that stock' }); return; }
+      res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60');
+      res.status(200).json({ stock });
       return;
     }
     if (mode === 'volume') {

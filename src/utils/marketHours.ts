@@ -35,6 +35,26 @@ export const MARKET_HOLIDAYS = new Set<string>([
   '2026-12-25', // Christmas
 ]);
 
+/** Special trading sessions on days that are normally closed (IST date -> minutes since midnight).
+ *  Diwali Muhurat trading is held on a weekend this year: Sun 8-Nov-2026, 2:20-3:30 PM IST
+ *  (pre-open 2:05-2:20 PM, per NSE/BSE). Add the new dates from NSE's circular each year. */
+export const SPECIAL_SESSIONS: Record<string, { open: number; close: number }> = {
+  '2026-11-08': { open: 14 * 60 + 20, close: 15 * 60 + 30 },
+};
+
+const REGULAR_SESSION = {
+  open: MARKET_OPEN_HOUR * 60 + MARKET_OPEN_MINUTE,
+  close: MARKET_CLOSE_HOUR * 60 + MARKET_CLOSE_MINUTE,
+};
+
+/** Today's trading session in minutes since midnight IST, or null when nothing trades today. */
+function sessionFor(dateKey: string, isoWeekday: number): { open: number; close: number } | null {
+  const special = SPECIAL_SESSIONS[dateKey];
+  if (special) return special;
+  if (isoWeekday > 5 || MARKET_HOLIDAYS.has(dateKey)) return null;
+  return REGULAR_SESSION;
+}
+
 // Intl.DateTimeFormat construction is slow (tens of microseconds on a desktop,
 // a millisecond or more on a low-end phone, and timeZone makes it slower
 // still). These helpers run on every poll tick and every render of the live
@@ -94,6 +114,8 @@ export function isDayChangeResetWindow(now: Date = new Date()): boolean {
   // No session today (weekend or listed exchange holiday): nothing has
   // traded, so "1D returns" is flat all day instead of replaying the last
   // session's change.
+  const special = SPECIAL_SESSIONS[dateKey];
+  if (special) return minutesSinceMidnight < special.open; // special session: live once it opens
   if (isoWeekday > 5 || MARKET_HOLIDAYS.has(dateKey)) return true;
   // Monday before the open: the last session was Friday, which is stale.
   if (isoWeekday === 1 && minutesSinceMidnight < marketOpen) return true;
@@ -137,8 +159,10 @@ export function isIndexResetWindow(now: Date = new Date()): boolean {
 export function isIndexPollingWindow(now: Date = new Date()): boolean {
   const { hour, minute } = getIstTimeOfDay(now);
   const { dateKey, isoWeekday } = getIstDateInfo(now);
-  if (isoWeekday > 5 || MARKET_HOLIDAYS.has(dateKey)) return false;
+  const session = sessionFor(dateKey, isoWeekday);
+  if (!session) return false;
   const mins = hour * 60 + minute;
+  if (session !== REGULAR_SESSION) return mins >= session.open - 20 && mins < session.close + 15;
   return mins >= 8 * 60 + 55 && mins < 15 * 60 + 45;
 }
 
@@ -162,11 +186,10 @@ export function useIndexResetWindow(): boolean {
 export function isMarketOpen(now: Date = new Date()): boolean {
   const { hour, minute } = getIstTimeOfDay(now);
   const { dateKey, isoWeekday } = getIstDateInfo(now);
-  if (isoWeekday > 5 || MARKET_HOLIDAYS.has(dateKey)) return false; // weekend or listed holiday
+  const session = sessionFor(dateKey, isoWeekday); // null on weekends / listed holidays
+  if (!session) return false;
   const minutesSinceMidnight = hour * 60 + minute;
-  const marketOpen = MARKET_OPEN_HOUR * 60 + MARKET_OPEN_MINUTE;
-  const marketClose = MARKET_CLOSE_HOUR * 60 + MARKET_CLOSE_MINUTE;
-  return minutesSinceMidnight >= marketOpen && minutesSinceMidnight < marketClose;
+  return minutesSinceMidnight >= session.open && minutesSinceMidnight < session.close;
 }
 
 /** Date of the most recent NSE/BSE session that has started, formatted like
@@ -176,17 +199,19 @@ export function isMarketOpen(now: Date = new Date()): boolean {
 export function getLastSessionLabel(now: Date = new Date()): string {
   const { hour, minute } = getIstTimeOfDay(now);
   const { dateKey, isoWeekday } = getIstDateInfo(now);
-  const tradingToday = isoWeekday <= 5 && !MARKET_HOLIDAYS.has(dateKey);
-  const started = hour * 60 + minute >= MARKET_OPEN_HOUR * 60 + MARKET_OPEN_MINUTE;
+  const session = sessionFor(dateKey, isoWeekday);
+  const tradingToday = session !== null;
+  const started = session !== null && hour * 60 + minute >= session.open;
   const [y, m, d] = dateKey.split('-').map(Number);
   const day = new Date(Date.UTC(y, m - 1, d, 12));
   if (!(tradingToday && started)) {
     do {
       day.setUTCDate(day.getUTCDate() - 1);
     } while (
-      day.getUTCDay() === 0 ||
-      day.getUTCDay() === 6 ||
-      MARKET_HOLIDAYS.has(day.toISOString().slice(0, 10))
+      !SPECIAL_SESSIONS[day.toISOString().slice(0, 10)] &&
+      (day.getUTCDay() === 0 ||
+        day.getUTCDay() === 6 ||
+        MARKET_HOLIDAYS.has(day.toISOString().slice(0, 10)))
     );
   }
   if (!sessionLabelFormatter) {
@@ -222,8 +247,8 @@ export function useIsMarketOpen(): boolean {
 export function getMarketSessionProgress(now: Date = new Date()): number {
   const { hour, minute } = getIstTimeOfDay(now);
   const minutesSinceMidnight = hour * 60 + minute;
-  const marketOpen = MARKET_OPEN_HOUR * 60 + MARKET_OPEN_MINUTE;
-  const marketClose = MARKET_CLOSE_HOUR * 60 + MARKET_CLOSE_MINUTE;
+  const { dateKey } = getIstDateInfo(now);
+  const { open: marketOpen, close: marketClose } = SPECIAL_SESSIONS[dateKey] ?? REGULAR_SESSION;
   if (minutesSinceMidnight <= marketOpen) return 0;
   if (minutesSinceMidnight >= marketClose) return 1;
   return (minutesSinceMidnight - marketOpen) / (marketClose - marketOpen);

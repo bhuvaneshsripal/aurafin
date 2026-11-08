@@ -175,10 +175,12 @@ async function fetchNseAllIndices() {
 }
 
 /** NSE's live "most active by volume" and "volume gainers" tables (unofficial JSON). */
-async function fetchNseJson(path, referer) {
+async function fetchNseJson(path, referer, timeoutMs) {
   const cookie = await getNseCookie();
   const res = await fetch(`https://www.nseindia.com/api/${path}`, {
     headers: { ...BROWSER_HEADERS, Accept: 'application/json', Referer: referer, Cookie: cookie },
+    // Big tables (a whole index) need longer than the default 8 s on a cold session.
+    ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
   });
   if (!res.ok) {
     invalidateNseCookie();
@@ -219,7 +221,8 @@ async function fetchNseVolumeGainers() {
 async function fetchNseIndexConstituents(indexName) {
   const data = await fetchNseJson(
     `equity-stockIndices?index=${encodeURIComponent(indexName)}`,
-    'https://www.nseindia.com/market-data/live-equity-market'
+    'https://www.nseindia.com/market-data/live-equity-market',
+    10_000
   );
   return Array.isArray(data?.data) ? data.data : [];
 }
