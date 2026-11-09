@@ -136,7 +136,7 @@ export function maskAmount(
   options?: FormatCurrencyOptions
 ) {
   if (privacyMode && !isZeroAmount(value, options?.fractionDigits ?? 0)) {
-    return '••••••';
+    return '';
   }
   return formatCurrency(value, currency, options);
 }

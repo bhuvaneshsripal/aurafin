@@ -119,7 +119,7 @@ export default function Indices() {
                 aria-selected={active}
                 onClick={() => setParams(t.key === 'indian' ? {} : { tab: t.key }, { replace: true })}
                 className={cn(
-                  'keep-square relative -mb-px px-3 sm:px-4 py-3.5 text-[15px] font-medium border-b-2 transition-colors',
+                  'keep-square relative px-3 sm:px-4 py-3 text-[15px] font-medium border-b-[3px] transition-colors',
                   active
                     ? 'text-brand-700 dark:text-brand-300 border-brand-600'
                     : 'text-muted border-transparent hover:text-ink'

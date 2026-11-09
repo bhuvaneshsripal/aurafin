@@ -63,7 +63,7 @@
   /* Status colours. */
   --color-success-500: #22935a;
   --color-warning-500: #b7791f;
-  --color-danger-500: #d1382f;
+  --color-danger-500: #dc3545;
 
   /* Existing code reaches for Tailwind's emerald/red directly for P&L.
      Re-pointing those two scales here gives every profit/loss figure in the
@@ -77,15 +77,15 @@
   --color-emerald-600: #1b7f4b;
   --color-emerald-700: #17663c;
   --color-emerald-900: #0f3d25;
-  --color-red-50: #fdf2f1;
-  --color-red-100: #fbe0de;
-  --color-red-200: #f6c2be;
-  --color-red-300: #ef9a94;
-  --color-red-400: #e26a62;
-  --color-red-500: #d1382f;
-  --color-red-600: #b82f27;
-  --color-red-700: #96261f;
-  --color-red-900: #5c1a16;
+  --color-red-50: #fdf0f1;
+  --color-red-100: #fbdadd;
+  --color-red-200: #f6b8be;
+  --color-red-300: #ee8f98;
+  --color-red-400: #e8606c;
+  --color-red-500: #dc3545;
+  --color-red-600: #c52a39;
+  --color-red-700: #a41f2d;
+  --color-red-900: #5c1620;
 
   /* Warning / caution tones: muted, not neon. */
   --color-amber-50: #fdf6e7;
@@ -93,14 +93,14 @@
   --color-amber-200: #f1d38f;
   --color-amber-300: #e6b95a;
   --color-amber-400: #d9a23a;
-  --color-amber-500: #c48a1c;
-  --color-amber-600: #a56f10;
+  --color-amber-500: #d99a0b;
+  --color-amber-600: #b87d09;
   --color-amber-700: #85570f;
   --color-orange-50: #fdf3ea;
   --color-orange-100: #fae0c8;
   --color-orange-400: #e08a4a;
-  --color-orange-500: #cf7431;
-  --color-orange-600: #b25f24;
+  --color-orange-500: #e8751a;
+  --color-orange-600: #c9620f;
   --color-orange-700: #8f4b1d;
 
   /* Gold — reserved for the Aurafin Pro experience only. */
@@ -166,8 +166,8 @@
   --color-primary-soft: #eef6f1;
   --color-positive: #1b7f4b;
   --color-positive-soft: #edf7f1;
-  --color-negative: #c93a32;
-  --color-negative-soft: #fdf2f1;
+  --color-negative: #d62f3f;
+  --color-negative-soft: #fdf0f1;
   --color-warning: #a8690f;
   --color-warning-soft: #fdf6e7;
 
@@ -232,45 +232,52 @@
 }
 
 /* ---- Dark theme --------------------------------------------------------------
-   Warm charcoal rather than pure black: page < surface < raised. The slate
-   scale is re-pointed too, so existing `dark:bg-slate-900` cards,
+   True black (OLED style) with neutral greys: page < surface < raised. The
+   slate scale is re-pointed too, so existing `dark:bg-slate-900` cards,
    `dark:border-slate-800` borders and `dark:bg-slate-800` hover fills all
    pick up the new neutrals. `slate-500/600` (used for secondary text that
-   has no explicit dark variant) are lifted so helper text stays legible. */
+   has no explicit dark variant) are lifted so helper text stays legible.
+   Greens and reds are vivid so gains / losses pop on black. */
 .dark {
-  --color-page: #0d0d0c;
-  --color-sandal: #1a1814;
-  --color-surface: #151514;
-  --color-surface-muted: #1a1a18;
-  --color-surface-hover: #1f1f1d;
-  --color-line: #2a2a27;
-  --color-line-soft: #21211f;
-  --color-ink: #f4f4f1;
-  --color-ink-2: #d6d6d0;
-  --color-muted: #a1a19a;
-  --color-faint: #74746e;
-  --color-primary: #2f8f5b;
-  --color-primary-hover: #37a168;
-  --color-primary-ink: #7fcea0;
-  --color-primary-soft: rgb(47 143 91 / 0.16);
-  --color-positive: #4cc286;
-  --color-positive-soft: rgb(76 194 134 / 0.14);
-  --color-negative: #f0817a;
-  --color-negative-soft: rgb(240 129 122 / 0.14);
-  --color-warning: #e3ac52;
-  --color-warning-soft: rgb(227 172 82 / 0.14);
+  --color-page: #000000;
+  --color-sandal: #0a0a0a;
+  --color-surface: #0a0a0a;
+  --color-surface-muted: #111111;
+  --color-surface-hover: #161616;
+  --color-line: #262626;
+  --color-line-soft: #1a1a1a;
+  --color-ink: #f5f5f5;
+  --color-ink-2: #d4d4d4;
+  --color-muted: #a3a3a3;
+  --color-faint: #737373;
+  --color-primary: #16a34a;
+  --color-primary-hover: #22c55e;
+  --color-primary-ink: #4ade80;
+  --color-primary-soft: rgb(34 197 94 / 0.16);
+  --color-positive: #22e07a;
+  --color-positive-soft: rgb(34 224 122 / 0.14);
+  --color-negative: #ff4d4d;
+  --color-negative-soft: rgb(255 77 77 / 0.14);
+  --color-warning: #fbbf24;
+  --color-warning-soft: rgb(251 191 36 / 0.14);
 
-  --color-slate-950: #0d0d0c;
-  --color-slate-900: #151514;
-  --color-slate-800: #232321;
-  --color-slate-700: #34342f;
-  --color-slate-600: #a1a19a;
-  --color-slate-500: #a1a19a;
-  --color-slate-400: #74746e;
-  --color-emerald-600: #4cc286;
-  --color-emerald-500: #4cc286;
-  --color-red-500: #f0817a;
-  --color-red-600: #f0817a;
+  --color-slate-950: #000000;
+  --color-slate-900: #0a0a0a;
+  --color-slate-800: #171717;
+  --color-slate-700: #2a2a2a;
+  --color-slate-600: #a3a3a3;
+  --color-slate-500: #a3a3a3;
+  --color-slate-400: #737373;
+  --color-emerald-600: #22e07a;
+  --color-emerald-500: #22e07a;
+  --color-red-500: #ff4d4d;
+  --color-red-600: #ff4d4d;
+  --color-red-400: #ff6b6b;
+  --color-red-700: #ff4d4d;
+  --color-amber-500: #fbbf24;
+  --color-amber-600: #fbbf24;
+  --color-orange-500: #ff9640;
+  --color-orange-600: #ff9640;
 }
 
 /* ==========================================================================
@@ -1660,3 +1667,40 @@ body[data-hide-eye] [data-privacy-fab] { display: none !important; }
 body[data-no-bottom-fade] [data-bottom-fade] {
   display: none;
 }
+
+/* ---- "Open the eye" prompt (RevealEyePrompt) ---------------------------- */
+@keyframes eye-prompt-in {
+  from { opacity: 0; transform: translate3d(0, -14px, 0) scale(0.97); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes eye-prompt-out {
+  from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  to { opacity: 0; transform: translate3d(0, -10px, 0) scale(0.97); }
+}
+.eye-prompt-in { animation: eye-prompt-in 320ms var(--ease-out) both; }
+.eye-prompt-out { animation: eye-prompt-out 180ms ease-in both; }
+/* The icon blinks open, and a ring pulses outward to draw the eye. */
+@keyframes eye-prompt-ring {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(1.55); opacity: 0; }
+}
+@keyframes eye-prompt-off { 0%, 45% { opacity: 1; } 55%, 100% { opacity: 0; } }
+@keyframes eye-prompt-on { 0%, 45% { opacity: 0; } 55%, 100% { opacity: 1; } }
+.eye-prompt-ring { animation: eye-prompt-ring 1.8s ease-out infinite; }
+.eye-prompt-off { animation: eye-prompt-off 2.4s ease-in-out infinite; }
+.eye-prompt-on { animation: eye-prompt-on 2.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .eye-prompt-ring { animation: none; opacity: 0; }
+  .eye-prompt-off, .eye-prompt-on { animation: none; }
+  .eye-prompt-on { opacity: 0; }
+}
+
+/* ---- Eye closed: show nothing rather than dots ------------------------------
+   Figures keep their real text in the DOM but are made invisible, so every
+   box keeps exactly the width and height it has with the eye open — nothing
+   collapses or shifts. Anything marked .pv-hide (labels, dividers, totals)
+   goes invisible with them, and tables marked .pv-cols keep only their first
+   (name) column and the trailing actions column visible. */
+.privacy-hidden .pv-hide { visibility: hidden !important; }
+.privacy-hidden .pv-cols th:not(:first-child):not(:last-child),
+.privacy-hidden .pv-cols td:not(:first-child):not(:last-child) { visibility: hidden; }

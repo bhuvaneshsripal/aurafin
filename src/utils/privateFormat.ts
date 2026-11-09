@@ -20,8 +20,8 @@ useUiStore.subscribe((s) => {
   hidden = s.privacyMode;
 });
 
-export const DOTS = '••••••';
-const PCT_DOTS = '•••';
+export const DOTS = '';
+const PCT_DOTS = '';
 
 export function formatCurrency(value: number, currency: string = 'INR', options?: base.FormatCurrencyOptions) {
   if (hidden && !base.isZeroAmount(value, options?.fractionDigits ?? 0)) return DOTS;

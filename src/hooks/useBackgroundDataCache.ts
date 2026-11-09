@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { writeCache, CACHE_NAMES } from '../utils/fetchCache';
 import { getNetworkQuality } from '../store/networkStore';
+import { visibleInterval } from '../utils/visibleInterval';
 
 const EVERY_MS = 60_000;
 
@@ -36,10 +37,10 @@ export function useBackgroundDataCache() {
       );
     };
     void run();
-    const id = window.setInterval(() => void run(), EVERY_MS);
+    const stopPoll = visibleInterval(() => void run(), EVERY_MS);
     return () => {
       stopped = true;
-      window.clearInterval(id);
+      stopPoll();
     };
   }, []);
 }

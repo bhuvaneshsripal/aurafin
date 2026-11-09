@@ -54,7 +54,7 @@ export function Tabs<T extends string>({
               type="button"
               onClick={() => onChange(t.key)}
               className={cn(
-                'keep-square relative -mb-px h-10 px-3 text-sm font-medium transition-colors duration-150 border-b-2',
+                'keep-square relative h-10 px-3 text-sm font-medium transition-colors duration-150 border-b-[3px]',
                 active
                   ? 'text-primary-ink border-brand-600 dark:border-brand-400'
                   : 'text-muted border-transparent hover:text-ink'

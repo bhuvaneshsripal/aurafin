@@ -384,7 +384,20 @@ export async function upsertDoc<T extends { id: string }>(
     announceQueued();
     return;
   }
-  await send;
+  // Connection looks fine, but the server can still stall (flaky mobile data).
+  // Wait a few seconds for the confirmation; if it hasn't come, the edit is
+  // already journaled and queued, so finish the save instead of leaving the
+  // Save button hanging. The write keeps going in the background.
+  const SLOW_MS = 4000;
+  const outcome = await Promise.race([
+    send.then(() => 'sent' as const),
+    new Promise<'slow'>((resolve) => setTimeout(() => resolve('slow'), SLOW_MS)),
+  ]);
+  if (outcome === 'slow') {
+    sendInBackground(send, () => confirmPending(uid, collectionName, item.id, token));
+    announceQueued();
+    return;
+  }
   confirmPending(uid, collectionName, item.id, token);
 }
 

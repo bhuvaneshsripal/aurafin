@@ -40,28 +40,25 @@ function applySidebar(collapsed: boolean) {
   document.documentElement.dataset.sidebar = collapsed ? 'collapsed' : 'expanded';
 }
 
-// Auto re-hide amounts 15 minutes after opening the eye.
-const REVEAL_TTL_MS = 15 * 60_000;
-
+// The eye never closes by itself — there is no timer. Whatever the person
+// last chose stays until they change it, or until the app is really closed.
+//
 // sessionStorage survives a refresh within the same tab, but is wiped the
 // moment the tab/window/installed app is actually closed — exactly the
-// "stay revealed across a refresh, but re-hide once really closed" behavior
-// this needs (same pattern as appLockStore's session-unlock key).
+// "stay as it was across a refresh, but come back hidden once really closed"
+// behavior this needs (same pattern as appLockStore's session-unlock key).
 const REVEALED_KEY = 'aurafin-privacy-revealed';
-const REVEALED_AT_KEY = 'aurafin-privacy-revealed-at';
+// Older versions also stored a timestamp for a 15-minute auto-hide; clean it up.
+const LEGACY_REVEALED_AT_KEY = 'aurafin-privacy-revealed-at';
 
-let autoHideTimer: ReturnType<typeof setTimeout> | null = null;
-
-function clearAutoHideTimer() {
-  if (autoHideTimer) {
-    clearTimeout(autoHideTimer);
-    autoHideTimer = null;
+function setRevealedSession(revealed: boolean) {
+  try {
+    if (revealed) sessionStorage.setItem(REVEALED_KEY, 'true');
+    else sessionStorage.removeItem(REVEALED_KEY);
+    sessionStorage.removeItem(LEGACY_REVEALED_AT_KEY);
+  } catch {
+    // storage unavailable — the eye just won't survive a refresh
   }
-}
-
-function clearRevealedSession() {
-  sessionStorage.removeItem(REVEALED_KEY);
-  sessionStorage.removeItem(REVEALED_AT_KEY);
 }
 
 export const useUiStore = create<UiState>((set, get) => ({
@@ -107,51 +104,33 @@ export const useUiStore = create<UiState>((set, get) => ({
     set({ theme: next });
   },
   // Called once on app start, including a plain page refresh. A refresh
-  // keeps the same sessionStorage, so if the eye was open and it's been
-  // under 15 minutes, it stays open (with a fresh timer for the remaining
-  // time). A genuinely fresh open (new tab, or the installed app relaunched
-  // after being fully closed) gets a blank sessionStorage, so it always
-  // comes back hidden.
+  // keeps the same sessionStorage, so an eye that was open stays open — with
+  // no time limit. A genuinely fresh open (new tab, or the installed app
+  // relaunched after being fully closed) gets a blank sessionStorage, so it
+  // always comes back hidden (and RevealEyePrompt then offers to open it).
   initPrivacy: () => {
-    clearAutoHideTimer();
-    const revealed = sessionStorage.getItem(REVEALED_KEY) === 'true';
-    if (!revealed) {
-      set({ privacyMode: true });
-      return;
+    let revealed = false;
+    try {
+      revealed = sessionStorage.getItem(REVEALED_KEY) === 'true';
+    } catch {
+      // storage unavailable — start hidden
     }
-    const revealedAt = parseInt(sessionStorage.getItem(REVEALED_AT_KEY) ?? '0', 10);
-    const remaining = REVEAL_TTL_MS - (Date.now() - revealedAt);
-    if (!revealedAt || remaining <= 0) {
-      clearRevealedSession();
-      set({ privacyMode: true });
-      return;
-    }
-    autoHideTimer = setTimeout(() => {
-      clearRevealedSession();
-      set({ privacyMode: true });
-    }, remaining);
-    set({ privacyMode: false });
+    set({ privacyMode: !revealed });
   },
   togglePrivacy: () =>
     set((s) => {
       const next = !s.privacyMode;
-      clearAutoHideTimer();
-
-      if (next === false) {
-        // Opening the eye — remember it in sessionStorage (so a refresh
-        // keeps it open) and auto re-hide after 15 minutes for safety.
-        sessionStorage.setItem(REVEALED_KEY, 'true');
-        sessionStorage.setItem(REVEALED_AT_KEY, String(Date.now()));
-        autoHideTimer = setTimeout(() => {
-          clearRevealedSession();
-          set({ privacyMode: true });
-        }, REVEAL_TTL_MS);
-      } else {
-        // Manually closing the eye — clear the session flag too, so a
-        // refresh right after doesn't reopen it.
-        clearRevealedSession();
-      }
-
+      // Remember the choice for this session only (survives a refresh, not a
+      // full close). Closing the eye clears it, so a refresh keeps it closed.
+      setRevealedSession(!next);
       return { privacyMode: next };
     }),
 }));
+
+// Mirror the eye onto <html> so CSS can also hide labels / columns that would
+// sit next to an empty value (see `.privacy-hidden` in index.css).
+if (typeof document !== 'undefined') {
+  const sync = (hidden: boolean) => document.documentElement.classList.toggle('privacy-hidden', hidden);
+  sync(useUiStore.getState().privacyMode);
+  useUiStore.subscribe((s) => sync(s.privacyMode));
+}

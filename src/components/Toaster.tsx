@@ -6,7 +6,7 @@ import { useSwipeDismiss } from '../hooks/useSwipeDismiss';
 const TONE_CLASSES: Record<ToastTone, string> = {
   error: 'bg-red-600',
   success: 'bg-emerald-700',
-  info: 'bg-[#171717] dark:bg-[#232321] dark:border dark:border-white/10',
+  info: 'bg-[#171717] dark:bg-[#171717] dark:border dark:border-white/10',
 };
 
 const RING_R = 13;

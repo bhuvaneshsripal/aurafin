@@ -41,6 +41,7 @@ import { useAlertsStore } from '../store/alertsStore';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { inToast } from '../utils/toastGuard';
+import { visibleInterval } from '../utils/visibleInterval';
 
 const QUOTE_REFRESH_MS = 15_000;
 const HISTORY_REFRESH_MS = 60_000;
@@ -141,10 +142,10 @@ export default function StockQuote() {
   useEffect(() => {
     alive.current = true;
     void loadQuote();
-    const id = window.setInterval(() => void loadQuote(), QUOTE_REFRESH_MS);
+    const stopPoll = visibleInterval(() => void loadQuote(), QUOTE_REFRESH_MS);
     return () => {
       alive.current = false;
-      window.clearInterval(id);
+      stopPoll();
     };
   }, [loadQuote]);
 
@@ -170,8 +171,7 @@ export default function StockQuote() {
   useEffect(() => {
     void loadHistory(false);
     if (range !== '1D' && range !== '1W') return;
-    const id = window.setInterval(() => void loadHistory(true), HISTORY_REFRESH_MS);
-    return () => window.clearInterval(id);
+    return visibleInterval(() => void loadHistory(true), HISTORY_REFRESH_MS);
   }, [loadHistory, range]);
 
   // ---- company details (performance, fundamentals, financials, shareholding, about)
@@ -196,8 +196,7 @@ export default function StockQuote() {
   useEffect(() => {
     void loadDetail(false);
     // Details change slowly: refresh every 5 minutes (was every minute) to save data and battery.
-    const id = window.setInterval(() => void loadDetail(true), 5 * 60_000);
-    return () => window.clearInterval(id);
+    return visibleInterval(() => void loadDetail(true), 5 * 60_000);
   }, [loadDetail]);
 
   // ---- numbers shown in the header

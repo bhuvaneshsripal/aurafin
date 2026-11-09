@@ -359,14 +359,14 @@ export default function NotificationBell(_props: { align?: 'right' | 'left' } = 
 
       {open && createPortal(
         <div
-          className="animate-backdrop-in fixed right-0 bottom-[calc(80px+env(safe-area-inset-bottom))] md:bottom-0 z-[25] bg-slate-900/40 flex justify-end"
+          className="animate-backdrop-in fixed right-0 bottom-0 z-[25] bg-slate-900/40 flex justify-end"
           style={{ top: box.top, left: box.left }}
           onClick={() => setOpen(false)}
         >
         <div
           ref={panelRef}
           onClick={(e) => e.stopPropagation()}
-          className="animate-notif-panel relative h-full w-full md:w-1/2 max-w-[640px] bg-page flex flex-col border-l border-line shadow-xl"
+          className="animate-notif-panel relative h-full w-full md:w-1/2 max-w-[640px] bg-page flex flex-col border-l border-line shadow-xl pb-[calc(80px+env(safe-area-inset-bottom))] md:pb-0"
         >
           <div className="px-3 h-14 border-b border-line flex items-center justify-between shrink-0 bg-surface">
             <div className="flex items-center gap-1">
@@ -475,7 +475,7 @@ export default function NotificationBell(_props: { align?: 'right' | 'left' } = 
                           <SwipeRow key={i.id} onDelete={() => remove(i.id)}>
                             <div
                               style={{ animationDelay: `${Math.min(gi * 3 + ri, 10) * 35}ms` }}
-                              className={`animate-notif-row group relative flex gap-3 px-4 py-3 ${unreadRow ? 'bg-primary-soft' : 'bg-surface'}`}
+                              className={`animate-notif-row group relative flex gap-3 px-4 py-3 bg-surface`}
                             >
                               <span className={`h-11 w-11 shrink-0 rounded-full flex items-center justify-center ${tint}`}>
                                 <Icon size={20} />
@@ -509,7 +509,7 @@ export default function NotificationBell(_props: { align?: 'right' | 'left' } = 
             )}
           </div>
           {/* Soft fade where the list meets the bottom navigation, instead of a hard cut. */}
-          <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-14" style={{ background: 'linear-gradient(to top, var(--color-page), transparent)' }} />
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-[calc(80px+env(safe-area-inset-bottom))] md:bottom-0 h-14" style={{ background: 'linear-gradient(to top, var(--color-page), transparent)' }} />
         </div>
         </div>,
         document.body

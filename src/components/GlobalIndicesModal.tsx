@@ -4,6 +4,7 @@ import { RefreshCw } from 'lucide-react';
 import Modal from './Modal';
 import CountryFlag from './CountryFlag';
 import { cn } from './ui/cn';
+import { visibleInterval } from '../utils/visibleInterval';
 
 interface Row {
   key: string;
@@ -74,8 +75,7 @@ export default function GlobalIndicesModal({ open, onClose }: { open: boolean; o
   useEffect(() => {
     if (!open) return;
     load();
-    const id = window.setInterval(load, POLL_MS);
-    return () => window.clearInterval(id);
+    return visibleInterval(load, POLL_MS);
   }, [open, load]);
 
   return (

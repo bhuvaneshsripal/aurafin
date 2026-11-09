@@ -29,6 +29,7 @@ import {
   type WatchList,
 } from '../utils/watchlistLists';
 import { inToast } from '../utils/toastGuard';
+import { visibleInterval } from '../utils/visibleInterval';
 
 const bare = (s: string) => s.replace(/\.(NS|BO)$/i, '');
 // The stock page saves BSE stocks as the bare symbol + exchange "BSE", so check both (otherwise they were priced from NSE).
@@ -217,13 +218,13 @@ export default function Watchlist() {
   }, [lookups]);
   useEffect(() => {
     let stop = load();
-    const id = window.setInterval(() => {
+    const stopPoll = visibleInterval(() => {
       stop();
       stop = load();
     }, 60_000);
     return () => {
       stop();
-      window.clearInterval(id);
+      stopPoll();
     };
   }, [load]);
 

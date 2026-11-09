@@ -414,7 +414,7 @@ function PortfolioPerformanceChart({
                       <div style={chartTheme.tooltip.labelStyle}>{formatShortDate(String(label))}</div>
                       <div style={{ color, fontWeight: 600 }}>
                         {mode === 'value' ? 'Value' : 'P&L'}:{' '}
-                        {privacy ? '••••••' : mode === 'pnl' && v > 0 ? `+${formatCurrency(v, currency)}` : formatCurrency(v, currency)}
+                        {privacy ? '' : mode === 'pnl' && v > 0 ? `+${formatCurrency(v, currency)}` : formatCurrency(v, currency)}
                       </div>
                     </div>
                   );

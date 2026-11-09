@@ -81,7 +81,7 @@ export const useHouseholdProfilesStore = create<HouseholdProfilesState>((set) =>
  *  creating a new household profile. */
 export const PROFILE_COLOURS = [
   '#2c6e49', // brand green
-  '#8a3b2e', // rust
+  '#e2603f', // coral
   '#5b6ee1', // indigo
   '#c9932a', // gold
   '#0f766e', // teal

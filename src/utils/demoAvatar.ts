@@ -47,7 +47,7 @@ const FEMALE = svg(
   [
     // long hair sits behind the shoulders and neck
     `<path d="M38 56C34 30 48 18 64 18C80 18 94 30 90 56C92 80 90 96 84 106L44 106C38 96 36 80 38 56Z" fill="#3a2a22"/>`,
-    shirt('#8a3b2e'),
+    shirt('#d6455d'),
     NECK,
     EARS,
     HEAD,

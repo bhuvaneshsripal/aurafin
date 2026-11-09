@@ -23,7 +23,6 @@ import {
   useFloatingEyeSync,
   useWealthFilterSync,
   useBasicDetailsSync,
-  useAutoNetWorthHistory,
   usePendingFlush,
   assignOrphanDataToProfile,
   ALL_USER_COLLECTIONS,
@@ -44,6 +43,7 @@ import TopHeader from './components/TopHeader';
 import { useVisualViewportOffset } from './hooks/useVisualViewportOffset';
 import BottomNav from './components/BottomNav';
 import PrivacyFab from './components/PrivacyFab';
+import RevealEyePrompt from './components/RevealEyePrompt';
 import Toaster from './components/Toaster';
 import NetworkBanner from './components/NetworkBanner';
 import UpdateBanner from './components/UpdateBanner';
@@ -200,6 +200,7 @@ function AppShell() {
       <Toaster />
       <NetworkBanner />
       <PrivacyFab />
+      <RevealEyePrompt />
       <InstallPromptModal />
     </div>
   );
@@ -277,10 +278,8 @@ function DataSync() {
   usePendingFlush();
   // Keeps the saved market tables fresh (once a minute) for offline viewing.
   useBackgroundDataCache();
-  // Auto-records today's net worth as real history whenever assets/
-  // liabilities change — see useAutoNetWorthHistory for why this needs to
-  // be mounted after the sync-status flags it waits on are wired up above.
-  useAutoNetWorthHistory();
+  // Net worth history is no longer recorded automatically: a snapshot is saved
+  // only when the person taps "Take Snapshot" (Wealth > Net worth, or Quick add).
 
   // One-time backfill: data created before household profiles existed has
   // no profileId. While there's exactly one profile, "whose data is this"

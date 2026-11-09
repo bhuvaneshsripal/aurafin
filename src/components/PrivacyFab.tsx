@@ -177,7 +177,7 @@ export default function PrivacyFab() {
       aria-label={privacyMode ? 'Show amounts' : 'Hide amounts'}
       title={isDesktop ? (privacyMode ? 'Show amounts' : 'Hide amounts') : privacyMode ? 'Show amounts (hold and drag to move)' : 'Hide amounts (hold and drag to move)'}
       style={{ ...style, color: 'var(--color-brand-600)', touchAction: 'none', WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
-      className={`icon-outline-green mini-fab !border-2 !border-brand-300 dark:!border-transparent fixed z-[45] flex items-center justify-center rounded-full shadow-md ${
+      className={`icon-outline-green mini-fab !border-0 hover:!border-0 fixed z-[45] flex items-center justify-center rounded-full shadow-md ${
         shown ? '' : 'md:!left-auto md:!right-4 md:!bottom-4'
       } ${
         dragging ? 'scale-110 shadow-xl opacity-90' : 'tap-scale'

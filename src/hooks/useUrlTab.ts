@@ -6,12 +6,11 @@ import { useSearchParams } from 'react-router-dom';
  * search param so that:
  *  - Refreshing the page keeps you on the same tab/step instead of resetting
  *    to the default.
- *  - The browser Back button steps back one tab/step change at a time
- *    instead of leaving the whole page.
  *
- * The very first sync (writing the starting value into the URL on load)
- * replaces the history entry rather than pushing one, so it doesn't add an
- * extra Back stop before the page had even finished loading.
+ * Tab changes REPLACE the current history entry instead of pushing a new
+ * one. Otherwise a back/forward swipe (or the Back button) would just hop
+ * between tabs (Assets -> Liabilities -> ...) instead of navigating away
+ * from the page like a normal screen change.
  */
 export function useUrlTab<T extends string>(
   validValues: readonly T[],
@@ -29,7 +28,7 @@ export function useUrlTab<T extends string>(
     if (searchParams.get(paramKey) !== value) {
       const next = new URLSearchParams(searchParams);
       next.set(paramKey, value);
-      setSearchParams(next, { replace: !didMountRef.current });
+      setSearchParams(next, { replace: true });
     }
     didMountRef.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps

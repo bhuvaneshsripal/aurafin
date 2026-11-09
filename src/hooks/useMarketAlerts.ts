@@ -141,10 +141,23 @@ export function useMarketAlerts() {
   // person's first interaction (once) instead of hiding it inside the bell.
   useEffect(() => {
     if (!user || !enabled || typeof Notification === 'undefined' || Notification.permission !== 'default') return;
+    // Closed-app alerts need this permission, so keep offering it, but not on
+    // every visit: after the prompt was shown, wait 3 days before asking again.
+    try {
+      const last = Number(localStorage.getItem('aurafin:notifPromptAskedAt') ?? 0);
+      if (last && Date.now() - last < 3 * 24 * 3600 * 1000) return;
+    } catch {
+      /* storage unavailable */
+    }
     const events = ['pointerup', 'click', 'touchend'] as const;
     const stop = () => events.forEach((e) => document.removeEventListener(e, ask));
     function ask() {
       stop();
+      try {
+        localStorage.setItem('aurafin:notifPromptAskedAt', String(Date.now()));
+      } catch {
+        /* storage unavailable */
+      }
       void Notification.requestPermission();
     }
     events.forEach((e) => document.addEventListener(e, ask));

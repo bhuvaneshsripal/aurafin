@@ -46,6 +46,9 @@ import {
   CartesianGrid,
   XAxis,
   YAxis,
+  BarChart,
+  Bar,
+  Cell,
 } from 'recharts';
 import { useAssetsStore } from '../store/assetsStore';
 import { useSnapshotsStore } from '../store/snapshotsStore';
@@ -107,7 +110,7 @@ import { useMediaQuery } from '../hooks/useMediaQuery';
 import { ACCOUNT_TYPES, resolveAccountIcon, type AccountType } from '../utils/accountVisuals';
 import type { Asset, AssetClass, EpfDetails, PpfDetails, PropertyDetails, EsopDetails, FundDetails, DividendKind, Liability, LiabilityClass, Snapshot, Transaction } from '../types';
 import { useTransactionsStore } from '../store/transactionsStore';
-import { maskPreciseAmount, maskAmount, formatLocaleNumber } from '../utils/currency';
+import { maskPreciseAmount, maskAmount, formatLocaleNumber, formatSignedCurrency as rawSignedCurrency, formatPercentMagnitude as rawPercentMagnitude } from '../utils/currency';
 import { formatPreciseCurrency, formatAxisAmount, formatPercentMagnitude, formatSignedCurrency, hideNumber } from '../utils/privateFormat';
 import {
   ASSET_TAXONOMY,
@@ -1397,7 +1400,7 @@ function AssetsTab({
   // the Move up/down menu items already use.
   const LONG_PRESS_MS = 350;
   const DRAG_MOVE_CANCEL_PX = 6;
-  const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
+  const rowRefs = useRef<Record<string, HTMLElement | null>>({});
   const dragRef = useRef<{
     id: string;
     startY: number;
@@ -1416,7 +1419,7 @@ function AssetsTab({
   };
   const suppressRowClickRef = useRef(false);
 
-  const handleRowPointerDown = (e: ReactPointerEvent<HTMLTableRowElement>, id: string) => {
+  const handleRowPointerDown = (e: ReactPointerEvent<HTMLElement>, id: string) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     const startY = e.clientY;
     const timer = setTimeout(() => {
@@ -1436,7 +1439,7 @@ function AssetsTab({
   // Before the long-press fires: moving more than a few pixels means scroll/tap, so cancel it.
   // Once dragging, the window-level listeners below take over (the row itself is re-ordered in
   // the DOM while dragging, which makes row-level pointer events unreliable).
-  const handleRowPointerMove = (e: ReactPointerEvent<HTMLTableRowElement>, id: string) => {
+  const handleRowPointerMove = (e: ReactPointerEvent<HTMLElement>, id: string) => {
     const info = dragRef.current;
     if (!info || info.id !== id || info.dragging) return;
     if (Math.abs(e.clientY - info.startY) > DRAG_MOVE_CANCEL_PX && info.timer) {
@@ -1837,7 +1840,7 @@ function AssetsTab({
     sortKey,
     sortDir,
   ]);
-  const { filtered, rows, sortedRows, totalInvested, totalCurrentValue, totalPnl, totalPnlPercent, has1dData, total1dAbs, total1dPercent, excludedCount } = book;
+  const { filtered, rows, sortedRows, totalInvested, totalCurrentValue, totalPnl, totalPnlPercent, has1dData, total1dAbs, total1dPercent } = book;
 
   const categoryOptions = ASSET_TAXONOMY.filter((cat) =>
     assets.some((a) => (ASSET_CLASS_TO_CATEGORY[a.assetClass] ?? cat).key === cat.key)
@@ -1993,7 +1996,7 @@ function AssetsTab({
     <div className={`space-y-4${listReturning ? ' animate-list-return' : ''}`}>
       <PageHeader
         title="Assets"
-        description={`${activeAssetCount} ${activeAssetCount === 1 ? 'asset' : 'assets'} · unlimited`}
+        description={`${activeAssetCount} ${activeAssetCount === 1 ? 'asset' : 'assets'}`}
         actions={
           <>
             <div className="relative flex-1 min-w-[140px] sm:flex-none sm:w-56">
@@ -2175,7 +2178,7 @@ function AssetsTab({
               Performance page (chart icon, right). Hidden while a search
               query is active, same as the tabs and filter row above. */}
           {!isSearching && (
-          <Card padding="none" className="rounded-[26px] p-5 sm:p-6 border-line/70 dark:!border-[#2f8f5b]/45 dark:!shadow-[0_0_30px_-2px_rgba(47,143,91,0.50),0_0_0_1px_rgba(47,143,91,0.18)]">
+          <Card padding="none" className="rounded-[26px] p-5 sm:p-6 border-line/70">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold tracking-wider text-muted uppercase">
@@ -2186,8 +2189,8 @@ function AssetsTab({
                   {!totalsReady ? (
                     <LoadingDots />
                   ) : (
-                    <span className="font-numeric text-[28px] sm:text-[32px] font-bold tracking-tight text-ink break-words animate-value-in">
-                      <SplitAmount text={maskAmount(totalCurrentValue, 'INR', privacyMode, { fractionDigits: 2 })} />
+                    <span className="font-numeric text-[28px] sm:text-[32px] font-bold tracking-tight text-ink break-words animate-value-in pv-hide">
+                      <SplitAmount text={maskAmount(totalCurrentValue, 'INR', false, { fractionDigits: 2 })} />
                     </span>
                   )}
                 </div>
@@ -2249,10 +2252,10 @@ function AssetsTab({
               </div>
             </div>
 
-            <div className="my-4 sm:my-5 border-t border-dashed border-line" />
+            <div className="my-4 sm:my-5 border-t border-dashed border-line pv-hide" />
 
             {/* Below lg: stacked rows, label left / value right. */}
-            <div className="lg:hidden space-y-3">
+            <div className="lg:hidden space-y-3 pv-hide">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[13px] sm:text-sm text-muted">1D returns</span>
                 {!totalsReady ? (
@@ -2266,9 +2269,7 @@ function AssetsTab({
                   >
                     {!has1dData
                       ? '—'
-                      : privacyMode
-                        ? '••••••'
-                        : `${formatSignedCurrency(total1dAbs, 'INR', 2)} (${formatPercentMagnitude(total1dPercent)})`}
+                      : `${rawSignedCurrency(total1dAbs, 'INR', 2)} (${rawPercentMagnitude(total1dPercent)})`}
                   </span>
                 )}
               </div>
@@ -2283,9 +2284,7 @@ function AssetsTab({
                       totalPnl >= 0 ? 'text-positive' : 'text-negative'
                     )}
                   >
-                    {privacyMode
-                      ? '••••••'
-                      : `${formatSignedCurrency(totalPnl, 'INR', 2)} (${formatPercentMagnitude(totalPnlPercent)})`}
+                    {`${rawSignedCurrency(totalPnl, 'INR', 2)} (${rawPercentMagnitude(totalPnlPercent)})`}
                   </span>
                 )}
               </div>
@@ -2295,7 +2294,7 @@ function AssetsTab({
                   <LoadingDots />
                 ) : (
                   <span className="font-numeric text-sm sm:text-base font-semibold text-ink text-right">
-                    {maskAmount(totalInvested, 'INR', privacyMode, { fractionDigits: 2 })}
+                    {maskAmount(totalInvested, 'INR', false, { fractionDigits: 2 })}
                   </span>
                 )}
               </div>
@@ -2303,14 +2302,14 @@ function AssetsTab({
 
             {/* lg and up: three columns — Invested value (left), 1D returns
                 (centre), Total returns (right) — label above value. */}
-            <div className="hidden lg:grid lg:grid-cols-3 lg:gap-6">
+            <div className="hidden lg:grid lg:grid-cols-3 lg:gap-6 pv-hide">
               <div className="text-left">
                 <p className="text-sm text-muted">Invested value</p>
                 {!totalsReady ? (
                   <LoadingDots className="mt-1.5" />
                 ) : (
                   <p className="mt-1.5 font-numeric text-sm font-semibold text-ink">
-                    {maskAmount(totalInvested, 'INR', privacyMode, { fractionDigits: 2 })}
+                    {maskAmount(totalInvested, 'INR', false, { fractionDigits: 2 })}
                   </p>
                 )}
               </div>
@@ -2327,9 +2326,7 @@ function AssetsTab({
                   >
                     {!has1dData
                       ? '—'
-                      : privacyMode
-                        ? '••••••'
-                        : `${formatSignedCurrency(total1dAbs, 'INR', 2)} (${formatPercentMagnitude(total1dPercent)})`}
+                      : `${rawSignedCurrency(total1dAbs, 'INR', 2)} (${rawPercentMagnitude(total1dPercent)})`}
                   </p>
                 )}
               </div>
@@ -2344,18 +2341,11 @@ function AssetsTab({
                       totalPnl >= 0 ? 'text-positive' : 'text-negative'
                     )}
                   >
-                    {privacyMode
-                      ? '••••••'
-                      : `${formatSignedCurrency(totalPnl, 'INR', 2)} (${formatPercentMagnitude(totalPnlPercent)})`}
+                    {`${rawSignedCurrency(totalPnl, 'INR', 2)} (${rawPercentMagnitude(totalPnlPercent)})`}
                   </p>
                 )}
               </div>
             </div>
-            {totalsReady && excludedCount > 0 && (
-              <p className="mt-3 text-[11px] leading-snug text-muted">
-                Totals leave out {excludedCount} {excludedCount === 1 ? 'holding' : 'holdings'} with no live price or in another currency, so the returns shown are accurate.
-              </p>
-            )}
           </Card>
           )}
 
@@ -2446,11 +2436,22 @@ function AssetsTab({
                       ? `${qty} unit${qty === 1 ? '' : 's'}`
                       : ASSET_CLASS_LABELS[a.assetClass];
               const loading = isAssetLivePriced(a) && !totalsReady;
+              const isBeingDragged = draggingId === a.id;
               return (
                 <div
                   key={a.id}
+                  ref={(el) => {
+                    rowRefs.current[a.id] = el;
+                  }}
                   role="button"
                   tabIndex={0}
+                  // Long-press a holding, then drag it up or down. The other rows simply
+                  // jump to their new place (no slide animation).
+                  onPointerDown={(e) => handleRowPointerDown(e, a.id)}
+                  onPointerMove={(e) => handleRowPointerMove(e, a.id)}
+                  onPointerUp={finishDrag}
+                  onPointerCancel={handleRowPointerCancel}
+                  onContextMenu={(e) => e.preventDefault()}
                   onClick={() => {
                     if (suppressRowClickRef.current) return;
                     openHolding(a);
@@ -2463,7 +2464,10 @@ function AssetsTab({
                       openHolding(a);
                     }
                   }}
-                  className="grid grid-cols-[1fr_auto] items-center gap-2 px-4 py-3 active:bg-slate-50 dark:active:bg-slate-800/40 cursor-pointer select-none"
+                  style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
+                  className={`grid grid-cols-[1fr_auto] items-center gap-2 px-4 py-3 active:bg-slate-50 dark:active:bg-slate-800/40 cursor-pointer select-none ${
+                    isBeingDragged ? 'relative z-10 bg-surface opacity-80 shadow-lg ring-2 ring-brand-400 touch-none' : ''
+                  }`}
                 >
                   <div className="min-w-0 flex items-center gap-2.5">
                     {MARKET_SELECTABLE_CLASSES.has(a.assetClass) && (a.symbol || a.assetClass === 'etf') && (
@@ -2482,6 +2486,7 @@ function AssetsTab({
                       className="text-right shrink-0 cursor-pointer -my-3 py-3 pl-3"
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (suppressRowClickRef.current) return;
                         cycleCompactSort(1);
                       }}
                     >
@@ -2491,7 +2496,7 @@ function AssetsTab({
                         <>
                           <div className={`text-sm font-semibold animate-value-in ${(r.pnl ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                             {r.pnl !== undefined && !privacyMode && r.pnl !== 0 && <TrendArrow up={r.pnl > 0} className="mr-1" />}
-                            {r.pnl !== undefined ? (privacyMode ? '••••••' : formatSignedCurrency(r.pnl, a.currency)) : '—'}
+                            {r.pnl !== undefined ? (privacyMode ? '' : formatSignedCurrency(r.pnl, a.currency)) : '—'}
                           </div>
                           <div className={`text-[11px] mt-0.5 ${(r.pnl ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                             {r.pnlPercent !== undefined && !privacyMode ? formatPercentMagnitude(r.pnlPercent) : ''}
@@ -2506,7 +2511,7 @@ function AssetsTab({
                             {r.dayChangePerUnit !== undefined && !privacyMode && r.dayChangePerUnit !== 0 && <TrendArrow up={r.dayChangePerUnit > 0} className="mr-1" />}
                             {r.dayChangePerUnit !== undefined && r.dayChangePercent !== undefined
                               ? privacyMode
-                                ? '••••'
+                                ? ''
                                 : `${formatSignedCurrency(r.dayChangePerUnit, a.currency)} (${formatPercentMagnitude(r.dayChangePercent)})`
                               : '—'}
                           </div>
@@ -2516,7 +2521,7 @@ function AssetsTab({
                           <div className="text-sm font-semibold text-ink animate-value-in">
                             <SplitAmount text={maskPreciseAmount(r.value, a.currency, privacyMode)} decimalClassName="text-[0.78em] font-medium text-faint" />
                           </div>
-                          <div className="text-[11px] mt-0.5 text-slate-600">
+                          <div className="text-[11px] mt-0.5 text-slate-600 pv-hide">
                             (<SplitAmount text={maskPreciseAmount(invested, a.currency, privacyMode)} decimalClassName="text-faint" />)
                           </div>
                         </>
@@ -2564,7 +2569,7 @@ function AssetsTab({
             className={cn('overflow-hidden', !draggingId && 'scroll-pause-hover')}
           >
             <TableContainer>
-              <Table className="min-w-[1020px]">
+              <Table className="min-w-[1020px] pv-cols">
                 <THead>
                   <tr>
                     <SortHeader label="Name" sortKeyName="name" className="sticky left-0 z-[1] bg-surface-muted" />
@@ -2587,7 +2592,7 @@ function AssetsTab({
                       qty > 0
                         ? WEIGHT_TRACKED_CLASSES.has(a.assetClass)
                           ? `${formatGrams(qty)} g`
-                          : hideNumber(formatLocaleNumber(qty, 'en-IN', { maximumFractionDigits: 4 }))
+                          : formatLocaleNumber(qty, 'en-IN', { maximumFractionDigits: 4 })
                         : '—';
                     const isBeingDragged = draggingId === a.id;
                     const pending = isAssetLivePriced(a) && !totalsReady;
@@ -2645,7 +2650,7 @@ function AssetsTab({
                           {qtyLabel}
                         </Td>
                         <Td numeric className="font-normal text-ink-2">
-                          {a.avgCost ? maskPreciseAmount(a.avgCost, a.currency, privacyMode) : '—'}
+                          {a.avgCost ? maskPreciseAmount(a.avgCost, a.currency, false) : '—'}
                         </Td>
                         <Td numeric>
                           {pending ? (
@@ -2655,15 +2660,13 @@ function AssetsTab({
                               <div>
                                 <div className="font-normal text-ink">
                                   {r.currentPrice !== undefined
-                                    ? maskPreciseAmount(r.currentPrice, a.currency, privacyMode)
+                                    ? maskPreciseAmount(r.currentPrice, a.currency, false)
                                     : '—'}
                                 </div>
                                 {r.dayChangePerUnit !== undefined && r.dayChangePercent !== undefined ? (
                                   <div className={`text-xs mt-0.5 font-normal ${tone(r.dayChangePerUnit)}`}>
-                                    {!privacyMode && r.dayChangePerUnit !== 0 && <TrendArrow up={r.dayChangePerUnit > 0} className="mr-1" />}
-                                    {privacyMode
-                                      ? '••••'
-                                      : `${formatSignedCurrency(r.dayChangePerUnit, a.currency)} (${formatPercentMagnitude(r.dayChangePercent)})`}
+                                    {r.dayChangePerUnit !== 0 && <TrendArrow up={r.dayChangePerUnit > 0} className="mr-1" />}
+                                    {`${rawSignedCurrency(r.dayChangePerUnit, a.currency)} (${rawPercentMagnitude(r.dayChangePercent)})`}
                                   </div>
                                 ) : null}
                               </div>
@@ -2671,14 +2674,14 @@ function AssetsTab({
                           )}
                         </Td>
                         <Td numeric className="font-normal text-ink-2">
-                          {maskPreciseAmount(invested, a.currency, privacyMode)}
+                          {maskPreciseAmount(invested, a.currency, false)}
                         </Td>
                         <Td numeric>
                           {pending ? (
                             skeleton
                           ) : (
                             <span className="font-semibold text-[15px] text-ink">
-                              {maskPreciseAmount(r.value, a.currency, privacyMode)}
+                              {maskPreciseAmount(r.value, a.currency, false)}
                             </span>
                           )}
                         </Td>
@@ -2688,12 +2691,12 @@ function AssetsTab({
                           ) : r.pnl !== undefined ? (
                             <div className={tone(r.pnl)}>
                               <div className="font-semibold">
-                                {!privacyMode && r.pnl !== 0 && <TrendArrow up={r.pnl > 0} className="mr-1" />}
-                                {privacyMode ? '••••••' : formatSignedCurrency(r.pnl, a.currency)}
+                                {r.pnl !== 0 && <TrendArrow up={r.pnl > 0} className="mr-1" />}
+                                {rawSignedCurrency(r.pnl, a.currency)}
                               </div>
                               <div className="text-xs mt-0.5 font-medium">
-                                {r.pnlPercent !== undefined && !privacyMode
-                                  ? `${r.pnl >= 0 ? '+' : '−'}${formatPercentMagnitude(r.pnlPercent)}`
+                                {r.pnlPercent !== undefined
+                                  ? `${r.pnl >= 0 ? '+' : '−'}${rawPercentMagnitude(r.pnlPercent)}`
                                   : ''}
                               </div>
                             </div>
@@ -2706,7 +2709,7 @@ function AssetsTab({
                             skeleton
                           ) : (
                             <div className="flex flex-col items-end gap-1.5">
-                              <span className="font-normal text-ink-2">{hideNumber(`${r.alloc.toFixed(1)}%`)}</span>
+                              <span className="font-normal text-ink-2">{`${r.alloc.toFixed(1)}%`}</span>
                               <span className="block h-1 w-16 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                                 <span
                                   className="block h-full rounded-full bg-brand-500"
@@ -2735,19 +2738,19 @@ function AssetsTab({
                 </TBody>
                 {totalsReady && (
                   <tfoot>
-                    <tr className="border-t border-line bg-surface-muted">
+                    <tr className="border-t border-line bg-surface-muted pv-hide">
                       <Td className="font-semibold sticky left-0 z-[1] bg-surface-muted">Total</Td>
                       <Td />
                       <Td />
                       <Td />
                       <Td numeric className="font-semibold">
-                        {maskAmount(totalInvested, 'INR', privacyMode, { fractionDigits: 0 })}
+                        {maskAmount(totalInvested, 'INR', false, { fractionDigits: 0 })}
                       </Td>
                       <Td numeric className="font-semibold">
-                        {maskAmount(totalCurrentValue, 'INR', privacyMode, { fractionDigits: 0 })}
+                        {maskAmount(totalCurrentValue, 'INR', false, { fractionDigits: 0 })}
                       </Td>
                       <Td numeric className={`font-semibold ${totalPnl >= 0 ? 'text-positive' : 'text-negative'}`}>
-                        {privacyMode ? '••••••' : formatSignedCurrency(totalPnl, 'INR', 0)}
+                        {rawSignedCurrency(totalPnl, 'INR', 0)}
                       </Td>
                       <Td />
                       <Td />
@@ -3526,11 +3529,11 @@ function HoldingDetailView({
   const privacyMode = useUiStore((s) => s.privacyMode);
   const trackedLoans = useLiabilitiesStore((s) => s.liabilities);
   // Eye closed => every figure on this page is hidden, not just the totals.
-  const HIDDEN = '••••••';
+  const HIDDEN = '';
   const mPrecise = (v: number, c: string) => (privacyMode ? HIDDEN : formatPreciseCurrency(v, c));
   const mSigned = (v: number, c: string, d?: number) => (privacyMode ? HIDDEN : formatSignedCurrency(v, c, d));
-  const mPct = (v: number, d?: number) => (privacyMode ? '•••' : formatPercentMagnitude(v, d));
-  const mNum = (v: ReactNode) => (privacyMode ? '•••' : v);
+  const mPct = (v: number, d?: number) => (privacyMode ? '' : formatPercentMagnitude(v, d));
+  const mNum = (v: ReactNode) => (privacyMode ? '' : v);
   const dayChangeResetActive = useDayChangeResetWindow();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const allTransactions = useTransactionsStore((s) => s.transactions);
@@ -3947,7 +3950,7 @@ function HoldingDetailView({
           <div className="divide-y divide-line-soft">
             {orderedLots.map((lot, i) => {
               const isWeight = WEIGHT_TRACKED_CLASSES.has(asset.assetClass);
-              const qtyLabel = privacyMode ? '••• qty' : isWeight ? `${formatGrams(lot.qty)}g` : `${lot.qty} qty`;
+              const qtyLabel = privacyMode ? '' : isWeight ? `${formatGrams(lot.qty)}g` : `${lot.qty} qty`;
 
               if (breakdownMode === 'returns') {
                 const lotCurrentPrice = currentPrice ?? lot.price;
@@ -4036,7 +4039,7 @@ function HoldingDetailView({
                     </p>
                     <p className="text-xs text-slate-600 mt-0.5 truncate">
                       {t.dividend?.perShare !== undefined
-                        ? `${mPrecise(t.dividend.perShare, asset.currency)} × ${privacyMode ? '•••' : t.dividend.qty}`
+                        ? `${mPrecise(t.dividend.perShare, asset.currency)} × ${privacyMode ? '' : t.dividend.qty}`
                         : 'Total amount'}
                       {t.dividend && t.dividend.tds > 0 ? ` · TDS ${mPrecise(t.dividend.tds, asset.currency)}` : ''}
                       {t.dividend?.exDate ? ` · Ex ${formatDate(t.dividend.exDate)}` : ''}
@@ -4940,7 +4943,7 @@ function AssetDetailPage({
     extra.isin ? `ISIN: ${extra.isin}` : null,
     extra.sector ? `Sector: ${extra.sector.toUpperCase()}` : null,
     pnl !== undefined
-      ? `P&L: ${privacyMode ? '••••••' : `${pnl >= 0 ? '+' : ''}${formatPreciseCurrency(pnl, asset.currency)}`}`
+      ? `P&L: ${privacyMode ? '' : `${pnl >= 0 ? '+' : ''}${formatPreciseCurrency(pnl, asset.currency)}`}`
       : null,
     extra.notes ?? null,
   ]
@@ -5021,7 +5024,7 @@ function AssetDetailPage({
           pnl !== undefined && (
             <p className={`flex items-center gap-1 text-sm font-medium mt-1 ${positive ? 'text-brand-600 dark:text-brand-300' : 'text-red-500 dark:text-red-400'}`}>
               {positive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-              {privacyMode ? '••••••' : `${positive ? '+' : ''}${formatPreciseCurrency(pnl, asset.currency)}`}
+              {privacyMode ? '' : `${positive ? '+' : ''}${formatPreciseCurrency(pnl, asset.currency)}`}
             </p>
           )
         )}
@@ -5147,7 +5150,7 @@ function PpfDetailCard({ asset, privacyMode }: { asset: Asset; privacyMode: bool
     <div className="bg-surface rounded-2xl border border-line p-5">
       <p className="text-xs font-semibold tracking-wide text-slate-600 mb-4">PPF DETAILS</p>
       <div className="grid grid-cols-2 gap-y-4 gap-x-4">
-        {d.accountNumber && <DetailField label="ACCOUNT NO." value={privacyMode ? '••••' : d.accountNumber} />}
+        {d.accountNumber && <DetailField label="ACCOUNT NO." value={privacyMode ? '' : d.accountNumber} />}
         {d.nominee && <DetailField label="NOMINEE" value={d.nominee} />}
         {status && <DetailField label="OPENED" value={formatDate(d.openingDate ?? asset.startDate ?? '')} />}
         {status && <DetailField label="MATURES ON" value={formatDate(status.maturityDate)} />}
@@ -5192,8 +5195,8 @@ function PropertyDetailCard({
   if (!sum) return null;
   const { appreciation: ap, rental: rt, loan: ln } = sum;
   const money = (n: number) => maskPreciseAmount(n, asset.currency, privacyMode);
-  const signed = (n: number) => (privacyMode ? '••••••' : formatSignedCurrency(n, asset.currency));
-  const pct = (n: number) => (privacyMode ? '•••' : formatPercentMagnitude(n));
+  const signed = (n: number) => (privacyMode ? '' : formatSignedCurrency(n, asset.currency));
+  const pct = (n: number) => (privacyMode ? '' : formatPercentMagnitude(n));
   const usageLabel = { self_occupied: 'Self-occupied', rented: 'Rented out', vacant: 'Vacant', under_construction: 'Under construction' }[
     pd.usage ?? 'self_occupied'
   ];
@@ -5755,7 +5758,13 @@ function AssetDetailsForm({
   // defaults to the total paid but is left alone once the person edits it,
   // so today's market rate can differ from cost without being overwritten.
   // For existing assets, preserve the saved current value (don't overwrite with invested amount).
-  const valueTouchedRef = useRef(!!initial?.value);
+  // Live-priced holdings (stocks, ETFs, crypto...) are the exception: their saved
+  // value is just an old quantity × price snapshot, so it must refresh from the
+  // live quote instead of being treated as hand-typed (which left a stale value
+  // such as 1 × price while the preview used the real quantity).
+  const valueTouchedRef = useRef(
+    !!initial?.value && !(isUnitTrackedClass(startClass) && !SIP_CLASSES.has(startClass))
+  );
   // EPF: Current Value follows the passbook balance until the person types a value themselves.
   const epfBalanceTotal = (epf.employeeBalance ?? 0) + (epf.employerBalance ?? 0);
   useEffect(() => {
@@ -6208,9 +6217,22 @@ function AssetDetailsForm({
   const errorCount = [nameMissing, symbolMissing, valueMissing, maturityBeforeStart].filter(Boolean).length;
   const hasErrors = errorCount > 0;
 
+  // Guards against double taps (a second tap while the first save is still
+  // going used to fire the save twice, or look like nothing happened).
+  const submittingRef = useRef(false);
   const submit = () => {
+    if (submittingRef.current) return;
     setAttemptedSubmit(true);
-    if (hasErrors) return;
+    if (hasErrors) {
+      // The red message sits at the bottom; make sure the person actually sees why.
+      requestAnimationFrame(() => {
+        document.querySelector('[data-save-error]')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      });
+      return;
+    }
+    submittingRef.current = true;
+    // Re-arm shortly after, so a failed save can be tapped again.
+    setTimeout(() => { submittingRef.current = false; }, 1500);
     const qty = quantity ? Number(quantity) : undefined;
     const avg = avgCost ? Number(avgCost) : undefined;
     const invested = investedValue
@@ -7662,7 +7684,7 @@ function AssetDetailsForm({
         </div>
       )}
       {attemptedSubmit && hasErrors && (
-        <p className="text-sm text-red-600 text-center">
+        <p data-save-error className="text-sm text-red-600 text-center">
           Please fix the highlighted field{errorCount > 1 ? 's' : ''} before saving.
         </p>
       )}
@@ -7675,14 +7697,16 @@ function AssetDetailsForm({
             Cancel
           </button>
           <button
+            type="button"
             onClick={submit}
-            className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors flex-1 bg-brand-600 hover:bg-brand-700 text-white"
+            style={{ touchAction: 'manipulation' }}
+            className="inline-flex items-center justify-center gap-2 h-11 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors flex-1 bg-brand-600 hover:bg-brand-700 text-white"
           >
             Save
           </button>
         </div>
       ) : (
-        <button onClick={submit} className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white">
+        <button type="button" onClick={submit} style={{ touchAction: 'manipulation' }} className="inline-flex items-center justify-center gap-2 h-11 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white">
           Save Asset
         </button>
       )}
@@ -7768,9 +7792,16 @@ function LiabilitiesTab({
       <PageHeader
         title="Liabilities"
         description={
-          <>
-            {liabilities.length} active · {formatPreciseCurrency(liabilities.reduce((s, l) => s + l.outstanding, 0))} outstanding
-          </>
+          <span className="flex flex-wrap items-center gap-2 mt-1.5">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-1 text-xs text-muted">
+              <span className="h-1.5 w-1.5 rounded-full bg-brand-600 dark:bg-brand-400" />
+              <b className="font-semibold text-ink">{liabilities.length}</b> active
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-1 text-xs text-muted">
+              <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+              <b className="font-semibold text-ink">{formatPreciseCurrency(liabilities.reduce((s, l) => s + l.outstanding, 0))}</b> outstanding
+            </span>
+          </span>
         }
         actions={
           <Button onClick={onAdd} leftIcon={<Plus size={16} />} className="w-full sm:w-auto">
@@ -8094,12 +8125,15 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   const livePrices = useLivePricesStore((s) => s.prices);
   const sipValues = useLivePricesStore((s) => s.sipValues);
   const liveGoldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
-  const totalAssets = assets.reduce(
-    (s, a) => s + resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).value,
-    0
-  );
+  // Fully sold-out holdings are no longer part of the portfolio. The automatic daily
+  // history and the Overview already skip them, so this page must too — otherwise the
+  // cards here disagree with the chart (and "Take Snapshot" would record a wrong point).
+  const totalAssets = assets
+    .filter((a) => !isFullySold(a))
+    .reduce((s, a) => s + resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).value, 0);
   const totalLiabilities = liabilities.reduce((s, l) => s + l.outstanding, 0);
   const netWorth = totalAssets - totalLiabilities;
+  const debtRatio = totalAssets > 0 ? (totalLiabilities / totalAssets) * 100 : 0;
 
   const snapshots = useSnapshotsStore((s) => s.snapshots);
   const today = toIsoDate();
@@ -8132,20 +8166,97 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   const hasTrend = data.length >= 2;
   const change = hasTrend ? last.netWorth - first.netWorth : 0;
   const changePct = hasTrend && first.netWorth > 0 ? (change / first.netWorth) * 100 : 0;
-  const avgPerSnapshot = hasTrend ? change / (data.length - 1) : 0;
+  // Snapshots are not evenly spaced (some days have none), so the average is per DAY.
+  const spanDays = hasTrend
+    ? Math.max(1, Math.round((new Date(`${last.date}T00:00:00`).getTime() - new Date(`${first.date}T00:00:00`).getTime()) / 86400000))
+    : 1;
+  const avgPerDay = hasTrend ? change / spanDays : 0;
 
-  const bestMonth = useMemo(() => {
-    if (data.length < 2) return null;
+  // Which series the chart draws.
+  const [metric, setMetric] = useState<'netWorth' | 'totalAssets' | 'totalLiabilities'>('netWorth');
+  const metricLabel = metric === 'netWorth' ? 'Net worth' : metric === 'totalAssets' ? 'Assets' : 'Liabilities';
+  const metricChange = hasTrend ? last[metric] - first[metric] : 0;
+  // For liabilities, going up is the bad direction.
+  const metricBad = metric === 'totalLiabilities' ? metricChange > 0 : metricChange < 0;
+
+  // Month-by-month change over the selected range. The first month is measured from the
+  // first snapshot (it used to be skipped, so a single month never showed anything).
+  const monthly = useMemo(() => {
+    if (data.length < 2) return [] as { month: string; delta: number }[];
     const byMonth = new Map<string, number>();
     for (const s of data) byMonth.set(s.date.slice(0, 7), s.netWorth);
     const months = [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-    let best: { month: string; delta: number } | null = null;
-    for (let i = 1; i < months.length; i++) {
-      const delta = months[i][1] - months[i - 1][1];
-      if (!best || delta > best.delta) best = { month: months[i][0], delta };
-    }
-    return best;
+    let prev = data[0].netWorth;
+    return months.map(([month, end]) => {
+      const delta = end - prev;
+      prev = end;
+      return { month, delta };
+    });
   }, [data]);
+  const bestMonth = useMemo(
+    () => (monthly.length ? monthly.reduce((b, m) => (m.delta > b.delta ? m : b)) : null),
+    [monthly]
+  );
+  const worstMonth = useMemo(
+    () => (monthly.length > 1 ? monthly.reduce((b, m) => (m.delta < b.delta ? m : b)) : null),
+    [monthly]
+  );
+
+  // All-time high and how far today is below it.
+  const peak = useMemo(
+    () => (sortedAsc.length ? sortedAsc.reduce((b, s) => (s.netWorth > b.netWorth ? s : b)) : null),
+    [sortedAsc]
+  );
+  const belowPeakPct = peak && peak.netWorth > 0 ? ((netWorth - peak.netWorth) / peak.netWorth) * 100 : 0;
+
+  // Change from today's live net worth versus the last snapshot on or before each date.
+  const periodChanges = useMemo(() => {
+    if (sortedAsc.length === 0) return [];
+    const onOrBefore = (iso: string) => {
+      let found: Snapshot | undefined;
+      for (const sn of sortedAsc) {
+        if (sn.date <= iso) found = sn;
+        else break;
+      }
+      return found;
+    };
+    const daysAgo = (n: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() - n);
+      return d;
+    };
+    const monthsAgo = (n: number) => {
+      const d = new Date();
+      d.setMonth(d.getMonth() - n);
+      return d;
+    };
+    const targets: [string, Date][] = [
+      ['1D', daysAgo(1)],
+      ['1W', daysAgo(7)],
+      ['1M', monthsAgo(1)],
+      ['3M', monthsAgo(3)],
+      ['YTD', new Date(new Date().getFullYear() - 1, 11, 31)],
+      ['1Y', monthsAgo(12)],
+    ];
+    return targets.map(([label, d]) => {
+      const base = onOrBefore(toIsoDate(d));
+      if (!base) return { label, delta: undefined as number | undefined, pct: undefined as number | undefined };
+      const delta = netWorth - base.netWorth;
+      return { label, delta, pct: base.netWorth > 0 ? (delta / base.netWorth) * 100 : undefined };
+    });
+  }, [sortedAsc, netWorth]);
+
+  const exportHistory = () => {
+    exportToCsv(
+      'net-worth-history',
+      historyDesc.map((sn) => ({
+        Date: sn.date,
+        Assets: Math.round(sn.totalAssets * 100) / 100,
+        Liabilities: Math.round(sn.totalLiabilities * 100) / 100,
+        'Net worth': Math.round(sn.netWorth * 100) / 100,
+      }))
+    );
+  };
 
   const trackingSinceLabel = sortedAsc[0]
     ? formatLocaleDate(new Date(`${sortedAsc[0].date}T00:00:00`), 'en-IN', { month: 'short', year: 'numeric' })
@@ -8195,9 +8306,19 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
       <PageHeader
         title="Net worth"
         description={
-          snapshots.length > 0
-            ? `${snapshots.length} snapshot${snapshots.length === 1 ? '' : 's'} · Tracking since ${trackingSinceLabel}`
-            : 'Everything you own and owe, in one view.'
+          snapshots.length > 0 ? (
+            <span className="flex flex-wrap items-center gap-2 mt-1.5">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-1 text-xs text-muted">
+                <span className="h-1.5 w-1.5 rounded-full bg-brand-600 dark:bg-brand-400" />
+                <b className="font-semibold text-ink">{sortedAsc.length}</b> snapshot{sortedAsc.length === 1 ? '' : 's'}
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-1 text-xs text-muted">
+                Tracking since <b className="font-semibold text-ink">{trackingSinceLabel}</b>
+              </span>
+            </span>
+          ) : (
+            'Everything you own and owe, in one view.'
+          )
         }
         actions={
           <Button variant="primary" size="sm" leftIcon={<Camera size={15} />} loading={savingSnapshot} onClick={takeSnapshot}>
@@ -8240,9 +8361,21 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
                   <div className="text-right hidden sm:block">
                     <p className="text-xs text-muted">{formatDate(last.date)}</p>
                     <p className="font-numeric text-sm font-semibold text-ink">
-                      {privacyMode ? '••••••' : formatPreciseCurrency(last.netWorth)}
+                      {privacyMode ? '' : formatPreciseCurrency(last[metric])}
                     </p>
                   </div>
+                )}
+                {sortedAsc.length >= 2 && (
+                  <SegmentedControl<'netWorth' | 'totalAssets' | 'totalLiabilities'>
+                    size="sm"
+                    value={metric}
+                    onChange={setMetric}
+                    items={[
+                      { key: 'netWorth', label: 'Net' },
+                      { key: 'totalAssets', label: 'Assets' },
+                      { key: 'totalLiabilities', label: 'Debt' },
+                    ]}
+                  />
                 )}
                 {sortedAsc.length >= 2 && (
                   <SegmentedControl<NetWorthRange>
@@ -8283,7 +8416,7 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
                     minTickGap={28}
                   />
                   <YAxis
-                    tickFormatter={(v: number) => (privacyMode ? '••••' : formatAxisAmount(v))}
+                    tickFormatter={(v: number) => (privacyMode ? '' : formatAxisAmount(v))}
                     tick={chart.tick}
                     axisLine={false}
                     tickLine={false}
@@ -8296,19 +8429,19 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
                     labelStyle={chart.tooltip.labelStyle}
                     itemStyle={chart.tooltip.itemStyle}
                     formatter={(v) => [
-                      privacyMode ? '••••••' : formatPreciseCurrency(Number(v)),
-                      'Net worth',
+                      privacyMode ? '' : formatPreciseCurrency(Number(v)),
+                      metricLabel,
                     ]}
                     labelFormatter={(l) => formatDate(String(l ?? ''))}
                   />
                   <Area
                     type="monotone"
-                    dataKey="netWorth" isAnimationActive={false}
-                    stroke={change < 0 ? chart.negative : chart.primary}
+                    dataKey={metric} isAnimationActive={false}
+                    stroke={metricBad ? chart.negative : chart.primary}
                     strokeWidth={2}
-                    fill={change < 0 ? chart.negativeSoft : chart.primarySoft}
-                    dot={{ r: 4, strokeWidth: 2, stroke: 'var(--color-surface)', fill: change < 0 ? chart.negative : chart.primary }}
-                    activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-surface)', fill: change < 0 ? chart.negative : chart.primary }}
+                    fill={metricBad ? chart.negativeSoft : chart.primarySoft}
+                    dot={data.length > 60 ? false : { r: 4, strokeWidth: 2, stroke: 'var(--color-surface)', fill: metricBad ? chart.negative : chart.primary }}
+                    activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-surface)', fill: metricBad ? chart.negative : chart.primary }}
                   />
                 </AreaChart>
               </ResponsiveContainer>
@@ -8333,13 +8466,108 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
           />
           <StatCard
             dense
-            label="Avg / snapshot"
-            value={hasTrend ? formatSignedCurrency(avgPerSnapshot, 'INR', 0) : '—'}
-            tone={hasTrend ? (avgPerSnapshot >= 0 ? 'positive' : 'negative') : 'default'}
-            sublabel={hasTrend ? 'per snapshot' : 'Need more snapshots'}
+            label="Avg / day"
+            value={hasTrend ? formatSignedCurrency(avgPerDay, 'INR', 0) : '—'}
+            tone={hasTrend ? (avgPerDay >= 0 ? 'positive' : 'negative') : 'default'}
+            sublabel={hasTrend ? `over ${spanDays} day${spanDays === 1 ? '' : 's'}` : 'Need more snapshots'}
           />
         </div>
       </div>
+
+      {sortedAsc.length > 0 && (
+        <Card padding="lg">
+          <CardHeader title="How it changed" description="Today's net worth versus past snapshots" />
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
+            {periodChanges.map((pc) => (
+              <div key={pc.label} className="rounded-lg bg-surface-muted px-3 py-2.5">
+                <p className="text-xs text-muted">{pc.label}</p>
+                {pc.delta === undefined ? (
+                  <p className="font-numeric text-sm font-semibold text-faint mt-0.5">—</p>
+                ) : (
+                  <>
+                    <p className={`font-numeric text-sm font-semibold mt-0.5 ${pc.delta >= 0 ? 'text-positive' : 'text-negative'}`}>
+                      {privacyMode ? '' : formatSignedCurrency(pc.delta, 'INR', 0)}
+                    </p>
+                    <p className={`font-numeric text-[11px] ${pc.delta >= 0 ? 'text-positive' : 'text-negative'}`}>
+                      {pc.pct !== undefined ? `${pc.pct >= 0 ? '+' : '−'}${formatPercentMagnitude(pc.pct, 1)}` : ''}
+                    </p>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-2.5">
+            <div className="rounded-lg bg-surface-muted px-3 py-2.5">
+              <p className="text-xs text-muted">All-time high</p>
+              <p className="font-numeric text-sm font-semibold text-ink mt-0.5">
+                {peak ? maskPreciseAmount(peak.netWorth, 'INR', privacyMode) : '—'}
+              </p>
+              <p className="text-[11px] text-muted">{peak ? formatDate(peak.date) : ''}</p>
+            </div>
+            <div className="rounded-lg bg-surface-muted px-3 py-2.5">
+              <p className="text-xs text-muted">From the high</p>
+              <p className={`font-numeric text-sm font-semibold mt-0.5 ${belowPeakPct >= -0.005 ? 'text-positive' : 'text-negative'}`}>
+                {peak ? (belowPeakPct >= -0.005 ? 'At the high' : formatPercentMagnitude(belowPeakPct, 1)) : '—'}
+              </p>
+              <p className="text-[11px] text-muted">{belowPeakPct < -0.005 ? 'below it' : ''}</p>
+            </div>
+            <div className="rounded-lg bg-surface-muted px-3 py-2.5">
+              <p className="text-xs text-muted">Worst month</p>
+              <p className={`font-numeric text-sm font-semibold mt-0.5 ${worstMonth && worstMonth.delta < 0 ? 'text-negative' : 'text-ink'}`}>
+                {worstMonth ? (privacyMode ? '' : formatSignedCurrency(worstMonth.delta, 'INR', 0)) : '—'}
+              </p>
+              <p className="text-[11px] text-muted">{worstMonth ? monthLabel(worstMonth.month) : ''}</p>
+            </div>
+            <div className="rounded-lg bg-surface-muted px-3 py-2.5">
+              <p className="text-xs text-muted">Debt vs assets</p>
+              <p className={`font-numeric text-sm font-semibold mt-0.5 ${debtRatio > 50 ? 'text-negative' : 'text-ink'}`}>
+                {totalAssets > 0 ? `${debtRatio.toFixed(1)}%` : '—'}
+              </p>
+              <p className="text-[11px] text-muted">{totalLiabilities > 0 ? 'of assets owed' : 'debt free'}</p>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {monthly.length >= 2 && (
+        <Card padding="lg">
+          <CardHeader title="Monthly change" description="How much your net worth moved each month" />
+          <div className="h-[200px] -ml-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthly.slice(-12)} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke={chart.grid} strokeDasharray="3 3" vertical={false} />
+                <XAxis
+                  dataKey="month"
+                  tickFormatter={(m: string) => monthLabel(m).split(' ')[0]}
+                  tick={chart.tick}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tickFormatter={(v: number) => (privacyMode ? '' : formatAxisAmount(v))}
+                  tick={chart.tick}
+                  axisLine={false}
+                  tickLine={false}
+                  width={56}
+                />
+                <Tooltip
+                  cursor={{ fill: 'transparent' }}
+                  contentStyle={chart.tooltip.contentStyle}
+                  labelStyle={chart.tooltip.labelStyle}
+                  itemStyle={chart.tooltip.itemStyle}
+                  formatter={(v) => [privacyMode ? '' : formatSignedCurrency(Number(v), 'INR', 0), 'Change']}
+                  labelFormatter={(l) => monthLabel(String(l ?? ''))}
+                />
+                <Bar dataKey="delta" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                  {monthly.slice(-12).map((m) => (
+                    <Cell key={m.month} fill={m.delta >= 0 ? chart.primary : chart.negative} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      )}
 
       <Card padding="none">
         <CardHeader
@@ -8351,6 +8579,13 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
           }
           padded
           divided={historyDesc.length > 0}
+          actions={
+            historyDesc.length > 0 ? (
+              <Button variant="secondary" size="sm" leftIcon={<Download size={14} />} onClick={exportHistory}>
+                Export CSV
+              </Button>
+            ) : undefined
+          }
         />
         {historyDesc.length === 0 ? (
           <EmptyState
@@ -8546,7 +8781,7 @@ function PerformsTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Performs" description="Your best and worst performing holdings today." />
+      <PageHeader title="Performs" />
       <TabNav tab={tab} setTab={setTab} />
       {count === 0 || dayChangeResetActive ? (
         <Card padding="none">
@@ -8573,7 +8808,7 @@ function PerformsTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
 function AnalyticsTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   return (
     <div className="space-y-4">
-      <PageHeader title="Analytics" description="Rebalancing, risk, capital-gains tax, projections and upcoming events." />
+      <PageHeader title="Analytics" />
       <TabNav tab={tab} setTab={setTab} />
       <Suspense fallback={null}>
         <AnalyticsContent />
@@ -8590,7 +8825,7 @@ function AllocationTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) 
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Allocation" description="How your wealth is spread across asset classes." />
+      <PageHeader title="Allocation" />
 
       <TabNav tab={tab} setTab={setTab} />
 

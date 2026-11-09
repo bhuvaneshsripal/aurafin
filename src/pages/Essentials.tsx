@@ -36,6 +36,13 @@ import { toast } from '../store/toastStore';
 
 type Tab = 'health' | 'goals';
 
+/** Score colour: red below 4, amber below 7, green from 7 up. */
+function scoreTone(score: number) {
+  if (score < 4) return { text: 'text-negative', bar: 'bg-negative' };
+  if (score < 7) return { text: 'text-warning', bar: 'bg-warning' };
+  return { text: 'text-positive', bar: 'bg-positive' };
+}
+
 export default function Essentials() {
   const [tab, setTab] = useUrlTab<Tab>(['health', 'goals'], 'health');
 
@@ -220,19 +227,19 @@ function HealthCheck() {
           <div className="bg-surface rounded-2xl border border-line p-6">
             <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
               <div className="flex items-baseline gap-2">
-                <span className="text-4xl font-numeric text-[#8a3b2e] dark:text-[#e08a72]">{overall}</span>
+                <span className={`text-4xl font-numeric ${scoreTone(overall).text}`}>{overall}</span>
                 <span className="text-slate-600 text-lg">/10</span>
                 <span className="text-xs font-medium text-slate-600 ml-2">
                   Overall Health Score
                 </span>
               </div>
-              <span className="text-sm font-semibold text-[#8a3b2e] dark:text-[#e08a72]">
+              <span className={`text-sm font-semibold ${scoreTone(overall).text}`}>
                 {scoreLabel(overall)}
               </span>
             </div>
             <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
               <div
-                className="h-full rounded-full bg-[#a5573f]"
+                className={`h-full rounded-full transition-[width] duration-500 ${scoreTone(overall).bar}`}
                 style={{ width: `${overall * 10}%` }}
               />
             </div>

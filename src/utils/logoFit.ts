@@ -20,8 +20,8 @@ export interface FittedLogo {
   bg: string;
 }
 
-const MAX_ANALYSE = 128;
-const OUT = 128;
+const MAX_ANALYSE = 256;
+const OUT = 256;
 
 const cache = new Map<string, Promise<FittedLogo | null>>();
 const resolved = new Map<string, FittedLogo | null>();
@@ -111,15 +111,17 @@ function analyse(img: HTMLImageElement): FittedLogo | null {
   // --- Find the artwork's bounding box. ---
   let minX = w, minY = h, maxX = -1, maxY = -1, hits = 0;
   const trimmable = transparentBg || uniform;
+  const isInk = (x: number, y: number) => {
+    const i = (y * w + x) * 4;
+    if (data[i + 3] < 24) return false;
+    if (!transparentBg && Math.hypot(data[i] - bgR, data[i + 1] - bgG, data[i + 2] - bgB) < 48) return false;
+    return true;
+  };
+  let markOnly = false;
   if (trimmable) {
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
-        const i = (y * w + x) * 4;
-        if (data[i + 3] < 24) continue;
-        if (!transparentBg) {
-          const d = Math.hypot(data[i] - bgR, data[i + 1] - bgG, data[i + 2] - bgB);
-          if (d < 48) continue;
-        }
+        if (!isInk(x, y)) continue;
         hits++;
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;
@@ -128,6 +130,57 @@ function analyse(img: HTMLImageElement): FittedLogo | null {
       }
     }
     if (hits < w * h * 0.004) return null; // basically blank: keep the original
+
+    // --- Symbol + company name: keep only the symbol. ---
+    // Many logo sources ship the mark with the name under it (or beside it).
+    // Split the artwork into blocks separated by empty rows / columns; when the
+    // first block is a compact mark and the rest is name text, crop to the mark.
+    const bandsOf = (len: number, from: number, to: number, count: (k: number) => number) => {
+      const minGap = Math.max(2, Math.round((to - from + 1) * 0.035));
+      const bands: [number, number][] = [];
+      let start = -1, gap = 0;
+      for (let k = from; k <= to; k++) {
+        if (count(k) > 0) {
+          if (start < 0) start = k;
+          gap = 0;
+        } else if (start >= 0) {
+          gap++;
+          if (gap >= minGap) { bands.push([start, k - gap]); start = -1; gap = 0; }
+        }
+      }
+      if (start >= 0) bands.push([start, to - gap]);
+      void len;
+      return bands;
+    };
+    const extent = (x0: number, x1: number, y0: number, y1: number) => {
+      let ax = x1, bx = x0, ay = y1, by = y0;
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+        if (isInk(x, y)) { if (x < ax) ax = x; if (x > bx) bx = x; if (y < ay) ay = y; if (y > by) by = y; }
+      }
+      return { x0: ax, x1: bx, y0: ay, y1: by };
+    };
+    // Stacked: mark on top, name below.
+    const rows = bandsOf(h, minY, maxY, (y) => { let c = 0; for (let x = minX; x <= maxX; x++) if (isInk(x, y)) c++; return c; });
+    if (rows.length >= 2) {
+      const top = extent(minX, maxX, rows[0][0], rows[0][1]);
+      const tw = top.x1 - top.x0 + 1, th = top.y1 - top.y0 + 1;
+      const restH = Math.max(...rows.slice(1).map((r) => r[1] - r[0] + 1));
+      if (th >= (maxY - minY + 1) * 0.35 && th > restH * 1.15 && tw / th <= 2) {
+        minX = top.x0; maxX = top.x1; minY = top.y0; maxY = top.y1; markOnly = true;
+      }
+    }
+    // Side by side: mark on the left, name to the right.
+    if (!markOnly) {
+      const cols = bandsOf(w, minX, maxX, (x) => { let c = 0; for (let y = minY; y <= maxY; y++) if (isInk(x, y)) c++; return c; });
+      if (cols.length >= 2) {
+        const left = extent(cols[0][0], cols[0][1], minY, maxY);
+        const lw = left.x1 - left.x0 + 1, lh = left.y1 - left.y0 + 1;
+        const restW = cols[cols.length - 1][1] - cols[1][0] + 1;
+        if (lw / lh <= 1.5 && lh >= (maxY - minY + 1) * 0.6 && restW > lw * 1.1) {
+          minX = left.x0; maxX = left.x1; minY = left.y0; maxY = left.y1; markOnly = true;
+        }
+      }
+    }
   } else {
     minX = 0; minY = 0; maxX = w - 1; maxY = h - 1;
   }
@@ -136,7 +189,7 @@ function analyse(img: HTMLImageElement): FittedLogo | null {
   const bh = maxY - minY + 1;
   const fullBleed = !trimmable || (bw >= w * 0.92 && bh >= h * 0.92);
   // Modest padding also keeps a source file's own faint outline out of frame.
-  const pad = fullBleed ? 0 : 0.1;
+  const pad = fullBleed ? 0 : markOnly ? 0.14 : 0.1;
   const side = Math.max(bw, bh) * (1 + pad * 2);
   const cx = (minX + maxX + 1) / 2;
   const cy = (minY + maxY + 1) / 2;
@@ -155,11 +208,24 @@ function analyse(img: HTMLImageElement): FittedLogo | null {
   octx.imageSmoothingQuality = 'high';
   // Draw the full-resolution image scaled into analysis space, positioned so the artwork is centred.
   octx.drawImage(img, OUT / 2 - cx * scale, OUT / 2 - cy * scale, w * scale, h * scale);
+  if (markOnly) {
+    // Wipe everything outside the symbol so no sliver of the name shows in the padding.
+    const m = 2;
+    const rx0 = OUT / 2 + (minX - m - cx) * scale;
+    const rx1 = OUT / 2 + (maxX + 1 + m - cx) * scale;
+    const ry0 = OUT / 2 + (minY - m - cy) * scale;
+    const ry1 = OUT / 2 + (maxY + 1 + m - cy) * scale;
+    octx.fillStyle = bg;
+    octx.fillRect(0, 0, OUT, ry0);
+    octx.fillRect(0, ry1, OUT, OUT - ry1);
+    octx.fillRect(0, ry0, rx0, ry1 - ry0);
+    octx.fillRect(rx1, ry0, OUT - rx1, ry1 - ry0);
+  }
   if (trimmable) {
     // Repaint a thin frame in the background colour: hides a source file's own
     // faint outline / anti-aliased rim so the tile edge is perfectly clean.
     octx.strokeStyle = bg;
-    octx.lineWidth = 16;
+    octx.lineWidth = OUT / 8;
     octx.strokeRect(0, 0, OUT, OUT);
   }
   try {
