@@ -114,10 +114,10 @@ export function usePushSubscription() {
         const json = sub.toJSON();
         const regKey = `aurafin-push-reg:${uid}`;
         const stamp = `${sub.endpoint}|${JSON.stringify(json.keys ?? {})}`;
-        // Already saved this exact subscription within the last day: nothing to write.
+        // Already saved this exact subscription within the last 6 hours: nothing to write.
         try {
           const prev = JSON.parse(localStorage.getItem(regKey) ?? 'null');
-          if (prev && prev.stamp === stamp && Date.now() - prev.at < 24 * 3600 * 1000) return;
+          if (prev && prev.stamp === stamp && Date.now() - prev.at < 6 * 3600 * 1000) return;
         } catch { /* ignore */ }
         await setDoc(
           doc(db, 'users', uid, 'pushSubscriptions', await deviceId(sub.endpoint)),

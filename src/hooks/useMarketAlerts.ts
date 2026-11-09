@@ -49,8 +49,28 @@ function indexLine(indices: IndexQuote[], withChange: boolean): string {
 /** Shows a real phone / desktop notification (status bar + sound) through the
  *  service worker, which is what Android requires. Returns false if the
  *  permission isn't granted. */
-// Looked up once and reused, so each pop-up isn't delayed by a fresh lookup.
-let regPromise: Promise<ServiceWorkerRegistration | undefined> | undefined;
+// Remembered once found. A "no worker yet" answer is NEVER remembered: caching it made every
+// later alert fall back to `new Notification()`, which Android Chrome refuses -- so no phone
+// pop-up ever appeared until the app was reloaded.
+let cachedReg: ServiceWorkerRegistration | undefined;
+
+async function getRegistration(): Promise<ServiceWorkerRegistration | undefined> {
+  if (cachedReg) return cachedReg;
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return undefined;
+  try {
+    cachedReg = (await navigator.serviceWorker.getRegistration()) ?? undefined;
+    if (!cachedReg) {
+      // The worker may still be installing on first launch: wait briefly for it.
+      cachedReg = await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 4000)),
+      ]);
+    }
+  } catch {
+    cachedReg = undefined;
+  }
+  return cachedReg;
+}
 
 export async function showSystemNotification(title: string, body: string, tag: string): Promise<boolean> {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return false;
@@ -62,13 +82,18 @@ export async function showSystemNotification(title: string, body: string, tag: s
     vibrate: [120, 60, 120],
     renotify: true,
   };
-  try {
-    regPromise ??= navigator.serviceWorker?.getRegistration() ?? Promise.resolve(undefined);
-    const reg = await regPromise;
-    if (reg) {
+  // Phones must go through the service worker.
+  const reg = await getRegistration();
+  if (reg) {
+    try {
       await reg.showNotification(title, options);
       return true;
+    } catch {
+      cachedReg = undefined; // stale registration: look it up again next time
     }
+  }
+  // Desktop browsers without a worker can still use the plain constructor.
+  try {
     new Notification(title, options);
     return true;
   } catch {
@@ -116,12 +141,14 @@ export function useMarketAlerts() {
   // person's first interaction (once) instead of hiding it inside the bell.
   useEffect(() => {
     if (!user || !enabled || typeof Notification === 'undefined' || Notification.permission !== 'default') return;
-    const ask = () => {
-      document.removeEventListener('pointerup', ask);
+    const events = ['pointerup', 'click', 'touchend'] as const;
+    const stop = () => events.forEach((e) => document.removeEventListener(e, ask));
+    function ask() {
+      stop();
       void Notification.requestPermission();
-    };
-    document.addEventListener('pointerup', ask, { once: true });
-    return () => document.removeEventListener('pointerup', ask);
+    }
+    events.forEach((e) => document.addEventListener(e, ask));
+    return stop;
   }, [user, enabled]);
 
   useEffect(() => {

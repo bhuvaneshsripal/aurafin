@@ -1077,7 +1077,7 @@ function GoalsCard({
   privacyMode: boolean;
 }) {
   return (
-    <Card padding="lg" className="h-full">
+    <Card padding="lg" className="h-full flex flex-col">
       <CardHeader
         title="Goals"
         description={goals.length > 0 ? `${goals.length} ${goals.length === 1 ? 'goal' : 'goals'} in progress` : undefined}
@@ -1105,28 +1105,51 @@ function GoalsCard({
           }
         />
       ) : (
-        <ul className="space-y-4">
-          {goals.slice(0, 4).map((g) => {
-            // Same rule as the Goals tab: every goal's progress follows live
-            // net worth (never a stale manual entry).
-            const current = Math.max(0, netWorth);
-            const pct = g.targetAmount > 0 ? Math.min(100, Math.max(0, Math.round((current / g.targetAmount) * 100))) : 0;
-            return (
-              <li key={g.id} className="flex items-center gap-3">
-                <ProgressRing percent={pct} size={56} stroke={7}>
-                  {privacyMode ? '•••' : `${pct}%`}
-                </ProgressRing>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-ink truncate">{g.name}</p>
-                  <p className="text-xs text-muted mt-0.5 font-numeric font-normal">
-                    {maskAmount(current, g.currency, privacyMode, { fractionDigits: 0 })} of{' '}
-                    {maskAmount(g.targetAmount, g.currency, privacyMode, { fractionDigits: 0 })}
-                  </p>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+        <>
+          <ul className="space-y-5">
+            {goals.slice(0, 4).map((g) => {
+              // Same rule as the Goals tab: every goal's progress follows live
+              // net worth (never a stale manual entry).
+              const current = Math.max(0, netWorth);
+              const pct = g.targetAmount > 0 ? Math.min(100, Math.max(0, Math.round((current / g.targetAmount) * 100))) : 0;
+              const remaining = Math.max(0, g.targetAmount - current);
+              return (
+                <li key={g.id}>
+                  <div className="flex items-center gap-4">
+                    <ProgressRing percent={pct} size={64} stroke={8}>
+                      {privacyMode ? '•••' : `${pct}%`}
+                    </ProgressRing>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-ink truncate">{g.name}</p>
+                      <p className="text-xs text-muted mt-0.5 font-numeric font-normal">
+                        {maskAmount(current, g.currency, privacyMode, { fractionDigits: 0 })} of{' '}
+                        {maskAmount(g.targetAmount, g.currency, privacyMode, { fractionDigits: 0 })}
+                      </p>
+                      <div className="mt-2 h-1.5 w-full rounded-full bg-line overflow-hidden" aria-hidden="true">
+                        <div className="h-full rounded-full bg-brand-600" style={{ width: `${pct}%` }} />
+                      </div>
+                      <p className="text-[11px] text-muted mt-1.5 font-numeric font-normal">
+                        {remaining > 0
+                          ? `${maskAmount(remaining, g.currency, privacyMode, { fractionDigits: 0 })} to go`
+                          : 'Goal reached'}
+                      </p>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          {/* Sits at the bottom of the card, so a card stretched to match its neighbour is not left blank. */}
+          <div className="mt-auto pt-5">
+            <Link
+              to="/essentials?tab=goals"
+              className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-line py-3 text-[13px] font-medium text-primary-ink hover:bg-surface-hover/70"
+            >
+              <Target size={14} />
+              {goals.length >= 4 ? 'See all goals' : 'Add a goal'}
+            </Link>
+          </div>
+        </>
       )}
     </Card>
   );

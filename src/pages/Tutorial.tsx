@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import {
-  Activity, Bell, Bookmark, BookOpen, Calculator, CircleUserRound, Eye, FileUp, Gem, LayoutDashboard,
+  Activity, Bell, ChevronUp, Hand, Bookmark, BookOpen, Calculator, CircleUserRound, Eye, FileUp, Gem, LayoutDashboard,
   LineChart, Lock, LogOut, Moon, PieChart, Settings as SettingsIcon, Smartphone, Target, TrendingUp, Users, Wallet,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -131,6 +131,35 @@ const pictures: Record<string, ReactNode> = {
           <Mark n={2} className="flex items-center gap-2.5 px-2.5 py-2 text-sm font-medium text-ink-2"><BookOpen size={16} className="text-muted" />Tutorial</Mark>
           <Mark n={3} className="flex items-center gap-2.5 px-2.5 py-2 text-sm font-medium text-ink-2"><Moon size={16} className="text-muted" />Dark mode</Mark>
           <Mark n={4} className="flex items-center gap-2.5 px-2.5 py-2 text-sm font-medium text-red-600 dark:text-red-400"><LogOut size={16} />Log out</Mark>
+        </div>
+      </div>
+    </Frame>
+  ),
+  bottombar: (
+    <Frame title="Phone bottom bar">
+      <div className="mx-auto w-64">
+        <div className="grid grid-cols-3 gap-2 mb-8">
+          {['Watchlist', 'Performance', 'Money', 'Essentials', 'Import', 'Calculators'].map((t) => (
+            <div key={t} className="rounded-lg border border-line bg-surface px-1 py-2.5 text-center text-[10px] font-medium text-ink-2">{t}</div>
+          ))}
+        </div>
+        <div className="relative flex flex-col items-center">
+          <Mark n={1} className="flex flex-col items-center gap-0.5 px-3 py-1 text-brand-600 dark:text-brand-400">
+            <ChevronUp size={16} /><ChevronUp size={16} className="-mt-3 opacity-60" />
+            <span className="text-[10px] font-semibold">Swipe up</span>
+          </Mark>
+          <div className="mt-6 w-full">
+            <Mark n={2} className="flex items-center justify-around rounded-full border border-line bg-surface px-3 py-2.5 shadow-md">
+              <LayoutDashboard size={18} className="text-muted" />
+              <Gem size={18} className="text-muted" />
+              <span className="h-8 w-8 rounded-full bg-brand-600 text-white flex items-center justify-center text-lg leading-none -mt-1">+</span>
+              <Wallet size={18} className="text-muted" />
+              <SettingsIcon size={18} className="text-muted" />
+            </Mark>
+          </div>
+          <div className="mt-6">
+            <Mark n={3} className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-medium text-ink-2"><Hand size={14} className="text-muted" />Finger starts on the bar</Mark>
+          </div>
         </div>
       </div>
     </Frame>
@@ -292,6 +321,21 @@ const guides: Guide[] = [
       { title: 'Log out', text: 'Logs you out straight away, with no extra confirmation. Everything stays saved in your account.' },
     ],
     advanced: ['The menu closes by itself when you scroll or click outside it.', 'If logging out fails (for example you are offline), the app tells you and keeps you signed in.'],
+  },
+  {
+    id: 'bottombar', title: 'Bottom bar and More menu', icon: <Smartphone size={16} />,
+    summary: 'On a phone, the bottom bar holds your main pages. The rest of the app is in the More menu, which has no button: you swipe up to open it.',
+    notes: [
+      { title: 'Swipe up', text: 'Put your finger on the bottom bar (or on the + button or the strip beside it) and slide it upward. The More menu slides up from the bottom, on every page.' },
+      { title: 'The bar', text: 'Overview, Wealth, Valuation and Settings are always one tap away. The green + adds an asset, a transaction and more.' },
+      { title: 'Start on the bar', text: 'The swipe only works when your finger starts on the bar. A swipe that starts higher up just scrolls the page.' },
+    ],
+    advanced: [
+      'More holds Watchlist, Performance, Money, Essentials, Import, High volume, Swing scan and Calculators.',
+      'Close the More menu with the X, by swiping it down, or with your phone\'s back button.',
+      'The Tutorial is in the ⋮ menu at the top right, next to the search and bell icons.',
+      'The bar is hidden while you type, so the keyboard has room.',
+    ],
   },
   {
     id: 'overview', title: 'Overview', icon: <LayoutDashboard size={16} />, path: '/',

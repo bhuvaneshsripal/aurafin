@@ -15,7 +15,6 @@ import {
   Activity,
   TrendingUp,
   Bookmark,
-  BookOpen,
 } from 'lucide-react';
 import { hardRefresh } from '../utils/hardRefresh';
 import { APP_VERSION } from '../config/version';
@@ -72,7 +71,6 @@ const moreLinks: MoreLink[] = [
   { to: '/volume', label: 'High volume', icon: Activity },
   { to: '/swing', label: 'Swing scan', icon: TrendingUp },
   { to: '/calculators', label: 'Calculators', icon: Calculator },
-  { to: '/tutorial', label: 'Tutorial', icon: BookOpen },
 ];
 
 /** Round nav button. Its size comes from the pill's `--nb` variable so the whole

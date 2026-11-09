@@ -4,6 +4,9 @@ import '../../_lib/quietDeprecations.js';
 import { resolveQuote } from '../../_lib/quote.js';
 import { parseSymbols, resolveQuotes } from '../../_lib/batchQuotes.js';
 
+// bucket-keyed snapshots, so concurrent requests on one instance share one upstream round
+const snapshots = new Map();
+
 export default async function handler(req, res) {
   const symbol = String(req.query.symbol ?? '').trim().toUpperCase();
   if (!symbol) {
@@ -22,10 +25,23 @@ export default async function handler(req, res) {
       return;
     }
     try {
-      const quotes = await resolveQuotes(symbols, market);
-      // Short edge cache: viewers with the same holdings share one upstream round.
-      res.setHeader('Cache-Control', 's-maxage=2, stale-while-revalidate=3');
-      res.status(200).json({ quotes, asOf: Date.now() });
+      // Same bucket + same symbols => identical answer, whichever device asks.
+      const bucket = String(req.query.b ?? '');
+      const key = `${market}|${bucket}|${symbols.join(',')}`;
+      let snap = bucket ? snapshots.get(key) : undefined;
+      if (!snap) {
+        snap = resolveQuotes(symbols, market).then((quotes) => ({ quotes, asOf: Date.now() }));
+        if (bucket) {
+          snapshots.set(key, snap);
+          snap.catch(() => snapshots.delete(key));
+          if (snapshots.size > 50) snapshots.delete(snapshots.keys().next().value);
+        }
+      }
+      const body = await snap;
+      // The CDN keeps this exact response for the whole bucket window (the b= value
+      // is in the URL), so every device in that window gets the same numbers.
+      res.setHeader('Cache-Control', 's-maxage=10, stale-while-revalidate=0');
+      res.status(200).json(body);
     } catch {
       res.status(502).json({ error: 'Could not reach the live price source' });
     }

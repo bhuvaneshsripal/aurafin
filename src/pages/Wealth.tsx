@@ -1401,11 +1401,19 @@ function AssetsTab({
   const dragRef = useRef<{
     id: string;
     startY: number;
+    lastY: number;
     timer: ReturnType<typeof setTimeout> | null;
     dragging: boolean;
   } | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [manualDragIds, setManualDragIds] = useState<string[] | null>(null);
+  const [manualDragIds, setManualDragIdsState] = useState<string[] | null>(null);
+  // Mirror of manualDragIds that the window-level drag listeners can read without going stale.
+  const manualIdsRef = useRef<string[] | null>(null);
+  const setManualDragIds = (updater: string[] | null | ((ids: string[] | null) => string[] | null)) => {
+    const next = typeof updater === 'function' ? updater(manualIdsRef.current) : updater;
+    manualIdsRef.current = next;
+    setManualDragIdsState(next);
+  };
   const suppressRowClickRef = useRef(false);
 
   const handleRowPointerDown = (e: ReactPointerEvent<HTMLTableRowElement>, id: string) => {
@@ -1420,44 +1428,47 @@ function AssetsTab({
         .map((x) => x.id);
       setManualDragIds(orderedIds);
       setDraggingId(id);
-      try {
-        (e.target as HTMLElement).setPointerCapture(e.pointerId);
-      } catch {
-        /* pointer capture isn't critical — dragging still works without it */
-      }
       navigator.vibrate?.(12);
     }, LONG_PRESS_MS);
-    dragRef.current = { id, startY, timer, dragging: false };
+    dragRef.current = { id, startY, lastY: startY, timer, dragging: false };
   };
 
+  // Before the long-press fires: moving more than a few pixels means scroll/tap, so cancel it.
+  // Once dragging, the window-level listeners below take over (the row itself is re-ordered in
+  // the DOM while dragging, which makes row-level pointer events unreliable).
   const handleRowPointerMove = (e: ReactPointerEvent<HTMLTableRowElement>, id: string) => {
     const info = dragRef.current;
-    if (!info || info.id !== id) return;
-    if (!info.dragging) {
-      if (Math.abs(e.clientY - info.startY) > DRAG_MOVE_CANCEL_PX && info.timer) {
-        clearTimeout(info.timer);
-        dragRef.current = null;
-      }
-      return;
+    if (!info || info.id !== id || info.dragging) return;
+    if (Math.abs(e.clientY - info.startY) > DRAG_MOVE_CANCEL_PX && info.timer) {
+      clearTimeout(info.timer);
+      dragRef.current = null;
     }
-    e.preventDefault();
+  };
+
+  /** Moves the dragged holding to wherever the pointer is now, in either direction. */
+  const updateDragTarget = (clientY: number) => {
+    const info = dragRef.current;
+    if (!info || !info.dragging) return;
+    const id = info.id;
     setManualDragIds((ids) => {
       if (!ids) return ids;
       const currentIndex = ids.indexOf(id);
       if (currentIndex === -1) return ids;
-      let targetIndex = ids.length - 1;
-      for (let i = 0; i < ids.length; i++) {
-        const el = rowRefs.current[ids[i]];
+      // Position among the OTHER rows: the dragged row's own midpoint must not count,
+      // otherwise moving up and moving down are measured differently.
+      const others = ids.filter((x) => x !== id);
+      let targetIndex = others.length;
+      for (let i = 0; i < others.length; i++) {
+        const el = rowRefs.current[others[i]];
         if (!el) continue;
         const rect = el.getBoundingClientRect();
-        if (e.clientY < rect.top + rect.height / 2) {
+        if (clientY < rect.top + rect.height / 2) {
           targetIndex = i;
           break;
         }
       }
       if (targetIndex === currentIndex) return ids;
-      const next = [...ids];
-      next.splice(currentIndex, 1);
+      const next = [...others];
       next.splice(targetIndex, 0, id);
       return next;
     });
@@ -1473,7 +1484,7 @@ function AssetsTab({
     setTimeout(() => {
       suppressRowClickRef.current = false;
     }, 0);
-    const ids = manualDragIds;
+    const ids = manualIdsRef.current;
     setDraggingId(null);
     setManualDragIds(null);
     if (ids && user) {
@@ -1497,6 +1508,60 @@ function AssetsTab({
     setDraggingId(null);
     setManualDragIds(null);
   };
+
+  // While a drag is active: follow the pointer on the WINDOW (not the row), stop touch screens
+  // from scrolling instead, and auto-scroll the page when the pointer nears the top or bottom
+  // edge -- without that, a holding could not be dragged up past the sticky header.
+  const finishDragRef = useRef(finishDrag);
+  finishDragRef.current = finishDrag;
+  const updateDragTargetRef = useRef(updateDragTarget);
+  updateDragTargetRef.current = updateDragTarget;
+  useEffect(() => {
+    if (!draggingId) return;
+    const TOP_EDGE_PX = 230; // below the sticky top bar
+    const BOTTOM_EDGE_PX = 90; // above the bottom nav
+    const onMove = (e: PointerEvent) => {
+      if (!dragRef.current) return;
+      dragRef.current.lastY = e.clientY;
+      if (e.cancelable) e.preventDefault();
+      updateDragTargetRef.current(e.clientY);
+    };
+    const onUp = () => {
+      void finishDragRef.current();
+    };
+    const onCancel = () => handleRowPointerCancel();
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.cancelable) e.preventDefault();
+    };
+    let raf = 0;
+    const tick = () => {
+      const y = dragRef.current?.lastY;
+      if (y !== undefined) {
+        const bottomStart = window.innerHeight - BOTTOM_EDGE_PX;
+        let dy = 0;
+        if (y < TOP_EDGE_PX) dy = -Math.min(22, (TOP_EDGE_PX - y) / 6 + 3);
+        else if (y > bottomStart) dy = Math.min(22, (y - bottomStart) / 6 + 3);
+        if (dy !== 0) {
+          window.scrollBy(0, dy);
+          updateDragTargetRef.current(y); // rows moved under a still pointer
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      document.removeEventListener('touchmove', onTouchMove);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draggingId]);
 
   // Sorting (column headers / Sort sheet) is only a temporary view: it is
   // never saved, so a refresh always brings back the saved manual order.

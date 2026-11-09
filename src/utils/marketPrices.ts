@@ -216,6 +216,11 @@ function parseQuote(json: unknown): LiveQuoteDetail | null {
 
 /** Most symbols sent in one batch request (the server caps a call at 60). */
 const BATCH_CHUNK = 40;
+/** All devices fetch on the same wall-clock grid. The bucket number is part of the
+ *  request URL, so the server/CDN hands every device in the same window the very
+ *  same cached answer -- two phones can no longer show different prices. */
+export const PRICE_BUCKET_MS = 10_000;
+export const priceBucket = (now: number = Date.now()) => Math.floor(now / PRICE_BUCKET_MS);
 /** After a batch, symbols it didn't price are retried one by one -- but only a few,
  *  so a provider outage can't turn one poll into dozens of requests again. */
 const MAX_SINGLE_RETRIES = 4;
@@ -228,7 +233,7 @@ const MAX_SINGLE_RETRIES = 4;
 async function fetchQuoteBatch(symbols: string[], market: 'IN' | 'US'): Promise<Map<string, LiveQuoteDetail> | null> {
   try {
     const res = await fetchWithTimeout(
-      `${QUOTE_BASE}/_batch?market=${market}&symbols=${encodeURIComponent(symbols.join(','))}`,
+      `${QUOTE_BASE}/_batch?market=${market}&b=${priceBucket()}&symbols=${encodeURIComponent([...symbols].sort().join(','))}`,
       12000
     );
     if (!res.ok) return null;
@@ -305,7 +310,7 @@ export async function fetchLiveQuotes(lookups: PriceLookup[]): Promise<Map<strin
 
   await Promise.all(
     [...byMarket.entries()].flatMap(([market, set]) => {
-      const symbols = [...set];
+      const symbols = [...set].sort();
       const chunks: string[][] = [];
       for (let i = 0; i < symbols.length; i += BATCH_CHUNK) chunks.push(symbols.slice(i, i + BATCH_CHUNK));
       return chunks.map(async (chunk) => {
