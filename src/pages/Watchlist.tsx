@@ -471,7 +471,7 @@ export default function Watchlist() {
 
   const menuItem = 'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-sm hover:bg-surface-hover';
 
-  const rowMenu = (s: SavedStock, k: string, note: string | undefined) => (
+  const rowMenu = (s: SavedStock, k: string) => (
     <div className="relative inline-block mr-4 sm:mr-5" data-wl-menu>
       <button
         onClick={(e) => {
@@ -978,7 +978,7 @@ export default function Watchlist() {
                           </div>
                         </Td>
                         <Td align="right" className="w-12" onClick={(e) => e.stopPropagation()}>
-                          {rowMenu(s, k, note)}
+                          {rowMenu(s, k)}
                         </Td>
                       </Tr>
                     );
