@@ -20,8 +20,8 @@ useUiStore.subscribe((s) => {
   hidden = s.privacyMode;
 });
 
-export const DOTS = '';
-const PCT_DOTS = '';
+export const DOTS = base.PRIVACY_DOTS;
+const PCT_DOTS = base.PRIVACY_DOTS;
 
 export function formatCurrency(value: number, currency: string = 'INR', options?: base.FormatCurrencyOptions) {
   if (hidden && !base.isZeroAmount(value, options?.fractionDigits ?? 0)) return DOTS;
@@ -45,9 +45,9 @@ export function formatPercentMagnitude(percent: number, fractionDigits: number =
   return hidden ? PCT_DOTS : base.formatPercentMagnitude(percent, fractionDigits);
 }
 
-/** Axis ticks have no room for dots — hide them entirely. */
+/** Axis ticks get a short run of dots while hidden. */
 export function formatAxisAmount(value: number, currency: string = 'INR') {
-  return hidden ? '' : base.formatAxisAmount(value, currency);
+  return hidden ? '\u2022\u2022\u2022' : base.formatAxisAmount(value, currency);
 }
 
 /** A plain number (quantity, ratio, percent string…) — dots while hidden. */

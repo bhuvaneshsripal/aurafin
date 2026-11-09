@@ -31,6 +31,69 @@ export async function fetchFundamentals(symbol: string, exchange: Exchange): Pro
   return res.json();
 }
 
+/** Auto-filled EPS growth is capped here; a raw 3-4 year CAGR from a tiny base can be 50%+. */
+export const GROWTH_CAP = 25;
+
+export interface AutoInputs {
+  price: number | null;
+  eps: number | null;
+  /** Rounded to 2 decimals, exactly as the Assumptions field shows it. */
+  growth: number | null;
+  growthNote: string;
+  /** Lowest historical P/E, rounded to 2 decimals. */
+  pe: number | null;
+  lookback: number;
+  cyclical: boolean;
+  earnings: EpsAnalysis | null;
+}
+
+/** The assumptions the Valuation page auto-fills from a fundamentals response. One place for it, so
+ *  a stock opened on the page and the same stock refreshed in the watchlist get identical numbers. */
+export function deriveAutoInputs(d: FundamentalsResponse): AutoInputs {
+  const cagr = epsCagr(d.epsHistory);
+  const earnings = analyseEps(d.epsHistory);
+  let g: number | null = null;
+  let note = '';
+  if (d.growth.next5y !== null) { g = d.growth.next5y; note = 'Analyst 5-year EPS growth estimate (Yahoo Finance)'; }
+  else if (d.growth.nextYear !== null) { g = d.growth.nextYear; note = 'Analyst next-year EPS growth estimate (Yahoo Finance), applied to every year because no 5-year estimate is available. A one-year jump can overstate five years of growth.'; }
+  else if (cagr !== null) {
+    g = cagr.pct;
+    note = `EPS CAGR over ${cagr.years.toFixed(1)} reported years (historical, not a forecast)${earnings?.cyclical ? '. Earnings are volatile, so this depends heavily on which years the history starts and ends on.' : ''}`;
+  }
+  else if (d.forwardEps && d.forwardEps > 0 && d.ttmEps && d.ttmEps > 0) {
+    g = (d.forwardEps / d.ttmEps - 1) * 100;
+    note = 'Growth implied by forward EPS vs trailing EPS (Yahoo Finance), applied to every year. No analyst growth or EPS history available yet.';
+  }
+  else note = 'No analyst or historical growth available. Enter your own assumption.';
+  // Compounding a 50%+ rate for 5 years wildly inflates X, so the auto-filled value stops at the cap.
+  if (g !== null && g > GROWTH_CAP) { note += `; capped at ${GROWTH_CAP}% (raw value ${g.toFixed(1)}%)`; g = GROWTH_CAP; }
+  return {
+    price: d.price,
+    eps: d.ttmEps,
+    growth: g !== null ? Number(g.toFixed(2)) : null,
+    growthNote: note,
+    pe: d.lowestPe ? Number(d.lowestPe.value.toFixed(2)) : null,
+    lookback: d.lowestPe ? Math.max(0.1, Math.round(d.lowestPe.spanYears * 10) / 10) : 10,
+    cyclical: earnings?.cyclical ?? false,
+    earnings,
+  };
+}
+
+/** Price, X/2 and X/3 for a stock using only the auto-filled assumptions (5 years, no edits).
+ *  Null when the data cannot produce a valuation (no EPS, no P/E, loss-making...). */
+export function autoWatchNumbers(d: FundamentalsResponse): { price: number; x2: number; x3: number } | null {
+  const a = deriveAutoInputs(d);
+  if (!(a.price !== null && a.price > 0)) return null;
+  const r = computeValuation({
+    price: a.price, eps: a.eps ?? NaN, exceptional: 0, growthPct: a.growth ?? NaN, dilutionPct: 0,
+    lowestPe: a.pe ?? NaN, years: 5, lookbackYears: a.lookback, requiredReturnPct: 15,
+    roundEps: false, cyclical: a.cyclical, weakPe: false, userProvided: false,
+  });
+  const x2 = r.levels.find((l) => l.key === 'X/2')?.target;
+  const x3 = r.levels.find((l) => l.key === 'X/3')?.target;
+  return r.errors.length === 0 && x2 && x3 && x2 > 0 && x3 > 0 ? { price: a.price, x2, x3 } : null;
+}
+
 export interface EpsPoint { date: string; eps: number }
 
 const YEAR_MS = 365.25 * 86_400_000;

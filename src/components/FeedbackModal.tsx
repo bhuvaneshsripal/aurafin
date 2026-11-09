@@ -38,6 +38,8 @@ export default function FeedbackModal({ open, onClose }: { open: boolean; onClos
         message: text,
         fromName: user?.displayName ?? '',
         fromEmail: user?.email ?? '',
+        uid: user?.uid,
+        isGuest: user?.isAnonymous === true,
       });
       setSent(true);
     } catch (e) {

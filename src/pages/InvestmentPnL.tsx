@@ -52,7 +52,7 @@ import {
 } from '../utils/investmentPnl';
 import { resolveAssetValues } from '../utils/assetValues';
 import { ASSET_CLASS_LABELS, ASSET_CLASS_COLORS, MARKET_SELECTABLE_CLASSES } from '../utils/taxonomy';
-import { maskAmount, maskPreciseAmount, CURRENCY_SYMBOLS } from '../utils/currency';
+import { maskAmount, maskPreciseAmount, CURRENCY_SYMBOLS, PRIVACY_DOTS } from '../utils/currency';
 import { formatCurrency, formatAxisAmount, hideNumber } from '../utils/privateFormat';
 import { exportToCsv } from '../utils/exportCsv';
 import { exportDomToPdf } from '../utils/exportPdf';
@@ -414,7 +414,7 @@ function PortfolioPerformanceChart({
                       <div style={chartTheme.tooltip.labelStyle}>{formatShortDate(String(label))}</div>
                       <div style={{ color, fontWeight: 600 }}>
                         {mode === 'value' ? 'Value' : 'P&L'}:{' '}
-                        {privacy ? '' : mode === 'pnl' && v > 0 ? `+${formatCurrency(v, currency)}` : formatCurrency(v, currency)}
+                        {privacy ? PRIVACY_DOTS : mode === 'pnl' && v > 0 ? `+${formatCurrency(v, currency)}` : formatCurrency(v, currency)}
                       </div>
                     </div>
                   );

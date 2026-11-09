@@ -129,6 +129,9 @@ export function isZeroAmount(value: number, fractionDigits: number = 0) {
  * "0" (formatted in the right currency) rather than a row of dots, since
  * there's nothing sensitive to protect there.
  */
+/** What every hidden figure shows while the eye is closed. */
+export const PRIVACY_DOTS = '\u2022\u2022\u2022\u2022\u2022\u2022';
+
 export function maskAmount(
   value: number,
   currency: string = 'INR',
@@ -136,7 +139,7 @@ export function maskAmount(
   options?: FormatCurrencyOptions
 ) {
   if (privacyMode && !isZeroAmount(value, options?.fractionDigits ?? 0)) {
-    return '';
+    return PRIVACY_DOTS;
   }
   return formatCurrency(value, currency, options);
 }

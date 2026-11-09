@@ -9,14 +9,14 @@ import { searchStockSymbols, type StockSearchResult } from '../utils/marketPrice
 import { useAuthStore } from '../store/authStore';
 import { useModalBackClose } from '../hooks/useModalBackClose';
 import { subscribeValuationHistory, saveValuationHistory, subscribeValuationWatchlist, saveValuationWatchlist } from '../hooks/useFirestoreSync';
+import { useWatchlistRefresh, type WatchUpdate } from '../hooks/useWatchlistRefresh';
 import {
-  analyseEps, computeValuation, currencySymbol, epsCagr, fetchFundamentals, money, signedPct,
+  computeValuation, currencySymbol, deriveAutoInputs, fetchFundamentals, money, signedPct,
   type EpsAnalysis, type Exchange, type FundamentalsResponse,
 } from '../utils/valuation';
 import { inToast } from '../utils/toastGuard';
 
 type Src = 'auto' | 'you';
-const GROWTH_CAP = 25;
 const HISTORY_KEY = 'aurafin.valuation.history';
 const HISTORY_MAX = 5;
 /** Recent-search chips shown before "+ N more". */
@@ -220,41 +220,23 @@ export default function Valuation() {
       });
       pickedRef.current = d.symbol;
       setQuery(d.symbol);
-      const cagr = epsCagr(d.epsHistory);
-      const ea = analyseEps(d.epsHistory);
-      setEarnings(ea);
+      const a = deriveAutoInputs(d);
+      setEarnings(a.earnings);
       // Loss years / repeated sharp EPS falls: tick "Cyclical" for the person (they can untick it).
-      setCyclical(ea?.cyclical ?? false);
-      let g: number | null = null;
-      let note = '';
-      if (d.growth.next5y !== null) { g = d.growth.next5y; note = 'Analyst 5-year EPS growth estimate (Yahoo Finance)'; }
-      else if (d.growth.nextYear !== null) { g = d.growth.nextYear; note = 'Analyst next-year EPS growth estimate (Yahoo Finance), applied to every year because no 5-year estimate is available. A one-year jump can overstate five years of growth.'; }
-      else if (cagr !== null) {
-        g = cagr.pct;
-        note = `EPS CAGR over ${cagr.years.toFixed(1)} reported years (historical, not a forecast)${ea?.cyclical ? '. Earnings are volatile, so this depends heavily on which years the history starts and ends on.' : ''}`;
-      }
-      else if (d.forwardEps && d.forwardEps > 0 && d.ttmEps && d.ttmEps > 0) {
-        g = (d.forwardEps / d.ttmEps - 1) * 100;
-        note = 'Growth implied by forward EPS vs trailing EPS (Yahoo Finance), applied to every year. No analyst growth or EPS history available yet.';
-      }
-      else note = 'No analyst or historical growth available. Enter your own assumption.';
-      // A raw 3-4 year EPS CAGR from a tiny base can be 50%+; compounding that for 5 years wildly
-      // inflates X. Cap the auto-filled value at 25% (you can still type any number).
-      if (g !== null && g > GROWTH_CAP) { note += `; capped at ${GROWTH_CAP}% (raw value ${g.toFixed(1)}%)`; g = GROWTH_CAP; }
-      setGrowthNote(note);
-      const lb = d.lowestPe ? Math.max(0.1, Math.round(d.lowestPe.spanYears * 10) / 10) : 10;
+      setCyclical(a.cyclical);
+      setGrowthNote(a.growthNote);
       setF((p) => ({
         ...p,
-        price: d.price !== null ? String(d.price) : '',
-        eps: d.ttmEps !== null ? String(d.ttmEps) : '',
-        growth: g !== null ? g.toFixed(2) : '',
-        pe: d.lowestPe ? d.lowestPe.value.toFixed(2) : '',
-        lookback: String(lb),
+        price: a.price !== null ? String(a.price) : '',
+        eps: a.eps !== null ? String(a.eps) : '',
+        growth: a.growth !== null ? a.growth.toFixed(2) : '',
+        pe: a.pe !== null ? a.pe.toFixed(2) : '',
+        lookback: String(a.lookback),
         exc: '0', dil: '0', fy: '',
       }));
       setSrc({
         price: d.price !== null ? 'auto' : 'you', eps: d.ttmEps !== null ? 'auto' : 'you',
-        growth: g !== null ? 'auto' : 'you', pe: d.lowestPe ? 'auto' : 'you', lookback: d.lowestPe ? 'auto' : 'you',
+        growth: a.growth !== null ? 'auto' : 'you', pe: d.lowestPe ? 'auto' : 'you', lookback: d.lowestPe ? 'auto' : 'you',
       });
     } catch (e) {
       if (id !== reqId.current) return;
@@ -350,13 +332,32 @@ export default function Valuation() {
   const x3v = lvl('X/3');
   const canSave = !!data && priceV > 0 && x2v > 0 && x3v > 0;
   const isSaved = !!data && watchlist.some((w) => w.symbol === data.symbol && w.exchange === exchange);
-  const updateWatchlist = (next: WatchItem[]) => { setWatchlist(next); persistWatchlist(next); };
+  // Always the newest list, so a background refresh never works from (or resurrects) an old copy.
+  const watchlistRef = useRef(watchlist);
+  watchlistRef.current = watchlist;
+  const updateWatchlist = (next: WatchItem[]) => { watchlistRef.current = next; setWatchlist(next); persistWatchlist(next); };
+  // Saved stocks are snapshots, so re-value any that are over 12 hours old (see useWatchlistRefresh).
+  const mergeRefreshed = (updates: Map<string, WatchUpdate>) => {
+    let changed = false;
+    const next = watchlistRef.current.map((w) => {
+      const u = updates.get(`${w.exchange}:${w.symbol}`);
+      if (!u) return w;
+      changed = true;
+      return { ...w, ...u };
+    });
+    if (changed) updateWatchlist(next);
+  };
+  const { refreshing: watchRefreshing, refreshNow: refreshWatchlist } = useWatchlistRefresh(
+    () => watchlistRef.current,
+    mergeRefreshed,
+    watchlist.map((w) => `${w.exchange}:${w.symbol}`).join(','),
+  );
   const toggleSaved = () => {
     if (!data || !canSave) return;
     if (isSaved) {
       updateWatchlist(watchlist.filter((w) => !(w.symbol === data.symbol && w.exchange === exchange)));
     } else {
-      updateWatchlist([{ symbol: data.symbol, name: data.name ?? data.symbol, exchange, price: priceV, x2: x2v, x3: x3v, savedAt: Date.now() }, ...watchlist]);
+      updateWatchlist([{ symbol: data.symbol, name: data.name ?? data.symbol, exchange, price: priceV, x2: x2v, x3: x3v, savedAt: Date.now(), ...(edited ? { manual: true } : {}) }, ...watchlist]);
     }
   };
   // A saved stock that is valued again gets its numbers refreshed.
@@ -366,13 +367,15 @@ export default function Valuation() {
       const i = prev.findIndex((w) => w.symbol === data.symbol && w.exchange === exchange);
       if (i < 0) return prev;
       const cur = prev[i];
-      if (cur.price === priceV && cur.x2 === x2v && cur.x3 === x3v) return prev;
+      if (cur.price === priceV && cur.x2 === x2v && cur.x3 === x3v && !!cur.manual === edited) return prev;
       const next = [...prev];
-      next[i] = { ...cur, price: priceV, x2: x2v, x3: x3v, savedAt: Date.now() };
+      // Firestore rejects `undefined`, so the flag is left out rather than set to undefined.
+      const { manual: _was, ...rest } = cur;
+      next[i] = { ...rest, price: priceV, x2: x2v, x3: x3v, savedAt: Date.now(), ...(edited ? { manual: true } : {}) };
       persistWatchlist(next);
       return next;
     });
-  }, [data, canSave, exchange, priceV, x2v, x3v]);
+  }, [data, canSave, exchange, priceV, x2v, x3v, edited]);
 
   return (
     <div>
@@ -536,6 +539,8 @@ export default function Valuation() {
           items={watchlist}
           onOpen={(w) => { setExchange(w.exchange); void load(w.symbol, w.exchange); }}
           onRemove={(w) => updateWatchlist(watchlist.filter((x) => !(x.symbol === w.symbol && x.exchange === w.exchange)))}
+          onRefresh={() => void refreshWatchlist()}
+          refreshing={watchRefreshing}
         />
       )}
 

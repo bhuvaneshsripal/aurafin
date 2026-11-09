@@ -10,11 +10,21 @@ export interface WhatsNew {
   items: { emoji?: string; title: string; description?: string }[];
 }
 
+/** Identity of a release-note item. Must match readKnownNotes() in vite.config.ts. */
+const noteKey = (item: { title?: unknown }): string =>
+  typeof item?.title === 'string' ? item.title.trim().toLowerCase() : '';
+
 /** Fetches the release notes published with the newest deploy (/whats-new.json).
  *  The running (older) app can't know what the new build contains, so it asks
  *  the server — only once `enabled`, i.e. when an update is actually waiting.
- *  Resolves to null if the file is missing or unreadable; the caller then shows
- *  a generic message instead of failing. */
+ *
+ *  The file keeps every release's items, so the list is trimmed to what is NEW
+ *  for this user: items already shipped in the running build (__KNOWN_NOTES__,
+ *  baked in at build time) are dropped. Someone who skipped a few releases
+ *  still sees everything added since their version.
+ *
+ *  Resolves to null if the file is missing/unreadable or has nothing new; the
+ *  caller then shows a generic message instead of failing. */
 export function useWhatsNew(enabled: boolean): WhatsNew | null {
   const [notes, setNotes] = useState<WhatsNew | null>(null);
   useEffect(() => {
@@ -24,7 +34,13 @@ export function useWhatsNew(enabled: boolean): WhatsNew | null {
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
         if (cancelled || !json || !Array.isArray(json.items) || json.items.length === 0) return;
-        setNotes(json as WhatsNew);
+        const known = new Set<string>(typeof __KNOWN_NOTES__ !== 'undefined' ? __KNOWN_NOTES__ : []);
+        const items = (json.items as WhatsNew['items']).filter((i) => {
+          const k = noteKey(i);
+          return k !== '' && !known.has(k);
+        });
+        if (items.length === 0) return;
+        setNotes({ ...(json as WhatsNew), items });
       })
       .catch(() => {});
     return () => {

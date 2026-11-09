@@ -110,7 +110,7 @@ import { useMediaQuery } from '../hooks/useMediaQuery';
 import { ACCOUNT_TYPES, resolveAccountIcon, type AccountType } from '../utils/accountVisuals';
 import type { Asset, AssetClass, EpfDetails, PpfDetails, PropertyDetails, EsopDetails, FundDetails, DividendKind, Liability, LiabilityClass, Snapshot, Transaction } from '../types';
 import { useTransactionsStore } from '../store/transactionsStore';
-import { maskPreciseAmount, maskAmount, formatLocaleNumber, formatSignedCurrency as rawSignedCurrency, formatPercentMagnitude as rawPercentMagnitude } from '../utils/currency';
+import { PRIVACY_DOTS, maskPreciseAmount, maskAmount, formatLocaleNumber, formatSignedCurrency as rawSignedCurrency, formatPercentMagnitude as rawPercentMagnitude } from '../utils/currency';
 import { formatPreciseCurrency, formatAxisAmount, formatPercentMagnitude, formatSignedCurrency, hideNumber } from '../utils/privateFormat';
 import {
   ASSET_TAXONOMY,
@@ -1011,6 +1011,9 @@ function AssetsTab({
     (a.assetClass === 'gold' && !!a.quantity && a.quantity > 0);
   const user = useAuthStore((s) => s.user);
   const privacyMode = useUiStore((s) => s.privacyMode);
+  // Privacy-aware wrappers for the figures that used to be hidden by CSS only.
+  const signedP = (n: number, c?: string, d?: number) => (privacyMode ? PRIVACY_DOTS : rawSignedCurrency(n, c, d));
+  const pctP = (n: number) => (privacyMode ? PRIVACY_DOTS : rawPercentMagnitude(n));
   const togglePrivacy = useUiStore((s) => s.togglePrivacy);
   // Long holdings list: stop rows re-running hover while the page scrolls.
   usePauseHoverOnScroll();
@@ -1355,6 +1358,40 @@ function AssetsTab({
     }
   };
 
+  // --- Order baseline (for the "Reset order" button) -------------------
+  // Sorting is only a temporary view, but a manual move IS saved. To let the
+  // person undo moves, the saved order from just before the first move is
+  // remembered here; "Reset order" puts it back. While it is set, the Reset
+  // button stays visible even though the list is in manual mode.
+  const [orderBaseline, setOrderBaselineState] = useState<string[] | null>(null);
+  const orderBaselineRef = useRef<string[] | null>(null);
+  const setOrderBaseline = (v: string[] | null) => {
+    orderBaselineRef.current = v;
+    setOrderBaselineState(v);
+  };
+  /** Remembers the saved order once; returns true if this call created it. */
+  const rememberOrderBaseline = () => {
+    if (orderBaselineRef.current) return false;
+    setOrderBaseline([...assets].sort(compareAssetsDefault).map((x) => x.id));
+    return true;
+  };
+  /** The full holdings order that matches what is on screen right now.
+   *  Rows may be filtered (category/type) and/or sorted, so only the visible
+   *  holdings trade places: they reuse the slots they already occupy in the
+   *  full stored order, in their on-screen sequence. Hidden holdings keep
+   *  their position. */
+  const orderFromVisible = (visibleIds: string[]) => {
+    const full = [...assets].sort(compareAssetsDefault).map((x) => x.id);
+    const slots = visibleIds.map((x) => full.indexOf(x)).filter((n) => n !== -1).sort((m, n) => m - n);
+    const finalIds = [...full];
+    visibleIds
+      .filter((x) => full.includes(x))
+      .forEach((x, i) => {
+        finalIds[slots[i]] = x;
+      });
+    return finalIds;
+  };
+
   /** Manual reorder from the Holdings table — swaps this asset's position
    *  with its neighbor above/below. Falls back to each asset's current
    *  index as its order the first time it's moved. */
@@ -1369,17 +1406,9 @@ function AssetsTab({
     const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
     if (idx === -1 || swapIdx < 0 || swapIdx >= ids.length) return;
     [ids[idx], ids[swapIdx]] = [ids[swapIdx], ids[idx]];
+    rememberOrderBaseline();
     setSortKey('manual');
-    // Rows may be filtered (category/type), so only the visible holdings
-    // trade places: they reuse the slots they already occupy in the full
-    // stored order, in the new on-screen sequence. Hidden holdings keep
-    // their position.
-    const full = [...assets].sort(compareAssetsDefault).map((x) => x.id);
-    const slots = ids.map((x) => full.indexOf(x)).sort((m, n) => m - n);
-    const finalIds = [...full];
-    ids.forEach((x, i) => {
-      finalIds[slots[i]] = x;
-    });
+    const finalIds = orderFromVisible(ids);
     try {
       for (let i = 0; i < finalIds.length; i++) {
         const asset = assets.find((x) => x.id === finalIds[i]);
@@ -1418,6 +1447,7 @@ function AssetsTab({
     setManualDragIdsState(next);
   };
   const suppressRowClickRef = useRef(false);
+  const dragSeedRef = useRef<{ ids: string[]; createdBaseline: boolean; wasSorted: boolean } | null>(null);
 
   const handleRowPointerDown = (e: ReactPointerEvent<HTMLElement>, id: string) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
@@ -1425,11 +1455,16 @@ function AssetsTab({
     const timer = setTimeout(() => {
       if (!dragRef.current || dragRef.current.id !== id) return;
       dragRef.current.dragging = true;
+      // Seed the drag from what is ON SCREEN (including an active sort such
+      // as Stock name A-Z), not from the saved order — otherwise the list
+      // jumps back to the saved order the moment a row is picked up.
+      dragSeedRef.current = {
+        ids: orderFromVisible(displayRows.map((r) => r.asset.id)),
+        createdBaseline: rememberOrderBaseline(),
+        wasSorted: sortKey !== 'manual',
+      };
       if (sortKey !== 'manual') setSortKey('manual');
-      const orderedIds = [...assets]
-        .sort(compareAssetsDefault)
-        .map((x) => x.id);
-      setManualDragIds(orderedIds);
+      setManualDragIds(dragSeedRef.current.ids);
       setDraggingId(id);
       navigator.vibrate?.(12);
     }, LONG_PRESS_MS);
@@ -1488,8 +1523,13 @@ function AssetsTab({
       suppressRowClickRef.current = false;
     }, 0);
     const ids = manualIdsRef.current;
+    const seed = dragSeedRef.current;
+    dragSeedRef.current = null;
     setDraggingId(null);
-    setManualDragIds(null);
+    // Picked up and dropped in the same place: nothing changed, so there is
+    // nothing to reset (unless a sort was active — that view stays as shown).
+    const unchanged = !!ids && !!seed && ids.length === seed.ids.length && ids.every((x, i) => x === seed.ids[i]);
+    if (unchanged && seed?.createdBaseline && !seed.wasSorted) setOrderBaseline(null);
     if (ids && user) {
       for (let i = 0; i < ids.length; i++) {
         const asset = assets.find((x) => x.id === ids[i]);
@@ -1502,12 +1542,18 @@ function AssetsTab({
         }
       }
     }
+    // Keep showing the dropped order until it is saved (no flash back to the
+    // old order), unless another drag has already started.
+    if (manualIdsRef.current === ids) setManualDragIds(null);
   };
 
   const handleRowPointerCancel = () => {
     const info = dragRef.current;
     if (info?.timer) clearTimeout(info.timer);
     dragRef.current = null;
+    const seed = dragSeedRef.current;
+    dragSeedRef.current = null;
+    if (seed?.createdBaseline && !seed.wasSorted) setOrderBaseline(null);
     setDraggingId(null);
     setManualDragIds(null);
   };
@@ -1569,9 +1615,26 @@ function AssetsTab({
   // Sorting (column headers / Sort sheet) is only a temporary view: it is
   // never saved, so a refresh always brings back the saved manual order.
   // This returns to that saved order without refreshing.
-  const resetOrder = () => {
+  const resetOrder = async () => {
     setSortKey('manual');
     setSortDir('desc');
+    const baseline = orderBaselineRef.current;
+    setOrderBaseline(null);
+    if (!baseline || !user) return;
+    // Put the order from before the manual moves back. Holdings added since
+    // then go to the end.
+    const current = [...assets].sort(compareAssetsDefault).map((x) => x.id);
+    const restore = [...baseline.filter((x) => current.includes(x)), ...current.filter((x) => !baseline.includes(x))];
+    for (let i = 0; i < restore.length; i++) {
+      const asset = assets.find((x) => x.id === restore[i]);
+      if (asset && (asset.order ?? -1) !== i) {
+        try {
+          await upsertDoc(user, 'assets', { ...asset, order: i });
+        } catch (err) {
+          console.error('Failed to restore order', err);
+        }
+      }
+    }
   };
 
   const toggleSort = (key: SortKey) => {
@@ -2189,8 +2252,8 @@ function AssetsTab({
                   {!totalsReady ? (
                     <LoadingDots />
                   ) : (
-                    <span className="font-numeric text-[28px] sm:text-[32px] font-bold tracking-tight text-ink break-words animate-value-in pv-hide">
-                      <SplitAmount text={maskAmount(totalCurrentValue, 'INR', false, { fractionDigits: 2 })} />
+                    <span className="font-numeric text-[28px] sm:text-[32px] font-bold tracking-tight text-ink break-words animate-value-in">
+                      <SplitAmount text={maskAmount(totalCurrentValue, 'INR', privacyMode, { fractionDigits: 2 })} />
                     </span>
                   )}
                 </div>
@@ -2252,10 +2315,10 @@ function AssetsTab({
               </div>
             </div>
 
-            <div className="my-4 sm:my-5 border-t border-dashed border-line pv-hide" />
+            <div className="my-4 sm:my-5 border-t border-dashed border-line" />
 
             {/* Below lg: stacked rows, label left / value right. */}
-            <div className="lg:hidden space-y-3 pv-hide">
+            <div className="lg:hidden space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[13px] sm:text-sm text-muted">1D returns</span>
                 {!totalsReady ? (
@@ -2269,7 +2332,7 @@ function AssetsTab({
                   >
                     {!has1dData
                       ? '—'
-                      : `${rawSignedCurrency(total1dAbs, 'INR', 2)} (${rawPercentMagnitude(total1dPercent)})`}
+                      : (privacyMode ? PRIVACY_DOTS : `${rawSignedCurrency(total1dAbs, 'INR', 2)} (${rawPercentMagnitude(total1dPercent)})`)}
                   </span>
                 )}
               </div>
@@ -2284,7 +2347,7 @@ function AssetsTab({
                       totalPnl >= 0 ? 'text-positive' : 'text-negative'
                     )}
                   >
-                    {`${rawSignedCurrency(totalPnl, 'INR', 2)} (${rawPercentMagnitude(totalPnlPercent)})`}
+                    {(privacyMode ? PRIVACY_DOTS : `${rawSignedCurrency(totalPnl, 'INR', 2)} (${rawPercentMagnitude(totalPnlPercent)})`)}
                   </span>
                 )}
               </div>
@@ -2294,7 +2357,7 @@ function AssetsTab({
                   <LoadingDots />
                 ) : (
                   <span className="font-numeric text-sm sm:text-base font-semibold text-ink text-right">
-                    {maskAmount(totalInvested, 'INR', false, { fractionDigits: 2 })}
+                    {maskAmount(totalInvested, 'INR', privacyMode, { fractionDigits: 2 })}
                   </span>
                 )}
               </div>
@@ -2302,14 +2365,14 @@ function AssetsTab({
 
             {/* lg and up: three columns — Invested value (left), 1D returns
                 (centre), Total returns (right) — label above value. */}
-            <div className="hidden lg:grid lg:grid-cols-3 lg:gap-6 pv-hide">
+            <div className="hidden lg:grid lg:grid-cols-3 lg:gap-6">
               <div className="text-left">
                 <p className="text-sm text-muted">Invested value</p>
                 {!totalsReady ? (
                   <LoadingDots className="mt-1.5" />
                 ) : (
                   <p className="mt-1.5 font-numeric text-sm font-semibold text-ink">
-                    {maskAmount(totalInvested, 'INR', false, { fractionDigits: 2 })}
+                    {maskAmount(totalInvested, 'INR', privacyMode, { fractionDigits: 2 })}
                   </p>
                 )}
               </div>
@@ -2326,7 +2389,7 @@ function AssetsTab({
                   >
                     {!has1dData
                       ? '—'
-                      : `${rawSignedCurrency(total1dAbs, 'INR', 2)} (${rawPercentMagnitude(total1dPercent)})`}
+                      : (privacyMode ? PRIVACY_DOTS : `${rawSignedCurrency(total1dAbs, 'INR', 2)} (${rawPercentMagnitude(total1dPercent)})`)}
                   </p>
                 )}
               </div>
@@ -2341,7 +2404,7 @@ function AssetsTab({
                       totalPnl >= 0 ? 'text-positive' : 'text-negative'
                     )}
                   >
-                    {`${rawSignedCurrency(totalPnl, 'INR', 2)} (${rawPercentMagnitude(totalPnlPercent)})`}
+                    {(privacyMode ? PRIVACY_DOTS : `${rawSignedCurrency(totalPnl, 'INR', 2)} (${rawPercentMagnitude(totalPnlPercent)})`)}
                   </p>
                 )}
               </div>
@@ -2362,7 +2425,7 @@ function AssetsTab({
               <span className="text-sm font-semibold text-ink">Sort</span>
               <ListFilter size={15} strokeWidth={2.25} className="text-ink" />
             </button>
-            {sortKey !== 'manual' && (
+            {(sortKey !== 'manual' || orderBaseline) && (
               <button
                 type="button"
                 onClick={resetOrder}
@@ -2496,7 +2559,7 @@ function AssetsTab({
                         <>
                           <div className={`text-sm font-semibold animate-value-in ${(r.pnl ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                             {r.pnl !== undefined && !privacyMode && r.pnl !== 0 && <TrendArrow up={r.pnl > 0} className="mr-1" />}
-                            {r.pnl !== undefined ? (privacyMode ? '' : formatSignedCurrency(r.pnl, a.currency)) : '—'}
+                            {r.pnl !== undefined ? (privacyMode ? PRIVACY_DOTS : formatSignedCurrency(r.pnl, a.currency)) : '—'}
                           </div>
                           <div className={`text-[11px] mt-0.5 ${(r.pnl ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                             {r.pnlPercent !== undefined && !privacyMode ? formatPercentMagnitude(r.pnlPercent) : ''}
@@ -2511,7 +2574,7 @@ function AssetsTab({
                             {r.dayChangePerUnit !== undefined && !privacyMode && r.dayChangePerUnit !== 0 && <TrendArrow up={r.dayChangePerUnit > 0} className="mr-1" />}
                             {r.dayChangePerUnit !== undefined && r.dayChangePercent !== undefined
                               ? privacyMode
-                                ? ''
+                                ? PRIVACY_DOTS
                                 : `${formatSignedCurrency(r.dayChangePerUnit, a.currency)} (${formatPercentMagnitude(r.dayChangePercent)})`
                               : '—'}
                           </div>
@@ -2521,7 +2584,7 @@ function AssetsTab({
                           <div className="text-sm font-semibold text-ink animate-value-in">
                             <SplitAmount text={maskPreciseAmount(r.value, a.currency, privacyMode)} decimalClassName="text-[0.78em] font-medium text-faint" />
                           </div>
-                          <div className="text-[11px] mt-0.5 text-slate-600 pv-hide">
+                          <div className="text-[11px] mt-0.5 text-slate-600">
                             (<SplitAmount text={maskPreciseAmount(invested, a.currency, privacyMode)} decimalClassName="text-faint" />)
                           </div>
                         </>
@@ -2552,7 +2615,7 @@ function AssetsTab({
           {/* Per-holding table (sm and up). Column headers are clickable and
               sort the rows (click again to flip direction). Rows still
               support press-and-drag manual ordering + click-through. */}
-          {isSmUp && sortKey !== 'manual' && (
+          {isSmUp && (sortKey !== 'manual' || orderBaseline) && (
             <div className="flex justify-end">
               <button
                 type="button"
@@ -2569,7 +2632,7 @@ function AssetsTab({
             className={cn('overflow-hidden', !draggingId && 'scroll-pause-hover')}
           >
             <TableContainer>
-              <Table className="min-w-[1020px] pv-cols">
+              <Table className="min-w-[1020px]">
                 <THead>
                   <tr>
                     <SortHeader label="Name" sortKeyName="name" className="sticky left-0 z-[1] bg-surface-muted" />
@@ -2647,10 +2710,10 @@ function AssetsTab({
                           </div>
                         </Td>
                         <Td numeric className="font-normal text-ink-2">
-                          {qtyLabel}
+                          {privacyMode ? PRIVACY_DOTS : qtyLabel}
                         </Td>
                         <Td numeric className="font-normal text-ink-2">
-                          {a.avgCost ? maskPreciseAmount(a.avgCost, a.currency, false) : '—'}
+                          {a.avgCost ? maskPreciseAmount(a.avgCost, a.currency, privacyMode) : '—'}
                         </Td>
                         <Td numeric>
                           {pending ? (
@@ -2660,13 +2723,13 @@ function AssetsTab({
                               <div>
                                 <div className="font-normal text-ink">
                                   {r.currentPrice !== undefined
-                                    ? maskPreciseAmount(r.currentPrice, a.currency, false)
+                                    ? maskPreciseAmount(r.currentPrice, a.currency, privacyMode)
                                     : '—'}
                                 </div>
                                 {r.dayChangePerUnit !== undefined && r.dayChangePercent !== undefined ? (
                                   <div className={`text-xs mt-0.5 font-normal ${tone(r.dayChangePerUnit)}`}>
                                     {r.dayChangePerUnit !== 0 && <TrendArrow up={r.dayChangePerUnit > 0} className="mr-1" />}
-                                    {`${rawSignedCurrency(r.dayChangePerUnit, a.currency)} (${rawPercentMagnitude(r.dayChangePercent)})`}
+                                    {(privacyMode ? PRIVACY_DOTS : `${rawSignedCurrency(r.dayChangePerUnit, a.currency)} (${rawPercentMagnitude(r.dayChangePercent)})`)}
                                   </div>
                                 ) : null}
                               </div>
@@ -2674,14 +2737,14 @@ function AssetsTab({
                           )}
                         </Td>
                         <Td numeric className="font-normal text-ink-2">
-                          {maskPreciseAmount(invested, a.currency, false)}
+                          {maskPreciseAmount(invested, a.currency, privacyMode)}
                         </Td>
                         <Td numeric>
                           {pending ? (
                             skeleton
                           ) : (
                             <span className="font-semibold text-[15px] text-ink">
-                              {maskPreciseAmount(r.value, a.currency, false)}
+                              {maskPreciseAmount(r.value, a.currency, privacyMode)}
                             </span>
                           )}
                         </Td>
@@ -2692,11 +2755,11 @@ function AssetsTab({
                             <div className={tone(r.pnl)}>
                               <div className="font-semibold">
                                 {r.pnl !== 0 && <TrendArrow up={r.pnl > 0} className="mr-1" />}
-                                {rawSignedCurrency(r.pnl, a.currency)}
+                                {signedP(r.pnl, a.currency)}
                               </div>
                               <div className="text-xs mt-0.5 font-medium">
                                 {r.pnlPercent !== undefined
-                                  ? `${r.pnl >= 0 ? '+' : '−'}${rawPercentMagnitude(r.pnlPercent)}`
+                                  ? (privacyMode ? PRIVACY_DOTS : `${r.pnl >= 0 ? '+' : '−'}${pctP(r.pnlPercent)}`)
                                   : ''}
                               </div>
                             </div>
@@ -2709,7 +2772,7 @@ function AssetsTab({
                             skeleton
                           ) : (
                             <div className="flex flex-col items-end gap-1.5">
-                              <span className="font-normal text-ink-2">{`${r.alloc.toFixed(1)}%`}</span>
+                              <span className="font-normal text-ink-2">{(privacyMode ? PRIVACY_DOTS : `${r.alloc.toFixed(1)}%`)}</span>
                               <span className="block h-1 w-16 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                                 <span
                                   className="block h-full rounded-full bg-brand-500"
@@ -2738,19 +2801,19 @@ function AssetsTab({
                 </TBody>
                 {totalsReady && (
                   <tfoot>
-                    <tr className="border-t border-line bg-surface-muted pv-hide">
+                    <tr className="border-t border-line bg-surface-muted">
                       <Td className="font-semibold sticky left-0 z-[1] bg-surface-muted">Total</Td>
                       <Td />
                       <Td />
                       <Td />
                       <Td numeric className="font-semibold">
-                        {maskAmount(totalInvested, 'INR', false, { fractionDigits: 0 })}
+                        {maskAmount(totalInvested, 'INR', privacyMode, { fractionDigits: 0 })}
                       </Td>
                       <Td numeric className="font-semibold">
-                        {maskAmount(totalCurrentValue, 'INR', false, { fractionDigits: 0 })}
+                        {maskAmount(totalCurrentValue, 'INR', privacyMode, { fractionDigits: 0 })}
                       </Td>
                       <Td numeric className={`font-semibold ${totalPnl >= 0 ? 'text-positive' : 'text-negative'}`}>
-                        {rawSignedCurrency(totalPnl, 'INR', 0)}
+                        {signedP(totalPnl, 'INR', 0)}
                       </Td>
                       <Td />
                       <Td />
@@ -3532,8 +3595,8 @@ function HoldingDetailView({
   const HIDDEN = '';
   const mPrecise = (v: number, c: string) => (privacyMode ? HIDDEN : formatPreciseCurrency(v, c));
   const mSigned = (v: number, c: string, d?: number) => (privacyMode ? HIDDEN : formatSignedCurrency(v, c, d));
-  const mPct = (v: number, d?: number) => (privacyMode ? '' : formatPercentMagnitude(v, d));
-  const mNum = (v: ReactNode) => (privacyMode ? '' : v);
+  const mPct = (v: number, d?: number) => (privacyMode ? PRIVACY_DOTS : formatPercentMagnitude(v, d));
+  const mNum = (v: ReactNode) => (privacyMode ? PRIVACY_DOTS : v);
   const dayChangeResetActive = useDayChangeResetWindow();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const allTransactions = useTransactionsStore((s) => s.transactions);
@@ -3950,7 +4013,7 @@ function HoldingDetailView({
           <div className="divide-y divide-line-soft">
             {orderedLots.map((lot, i) => {
               const isWeight = WEIGHT_TRACKED_CLASSES.has(asset.assetClass);
-              const qtyLabel = privacyMode ? '' : isWeight ? `${formatGrams(lot.qty)}g` : `${lot.qty} qty`;
+              const qtyLabel = privacyMode ? PRIVACY_DOTS : isWeight ? `${formatGrams(lot.qty)}g` : `${lot.qty} qty`;
 
               if (breakdownMode === 'returns') {
                 const lotCurrentPrice = currentPrice ?? lot.price;
@@ -4039,7 +4102,7 @@ function HoldingDetailView({
                     </p>
                     <p className="text-xs text-slate-600 mt-0.5 truncate">
                       {t.dividend?.perShare !== undefined
-                        ? `${mPrecise(t.dividend.perShare, asset.currency)} × ${privacyMode ? '' : t.dividend.qty}`
+                        ? `${mPrecise(t.dividend.perShare, asset.currency)} × ${privacyMode ? PRIVACY_DOTS : t.dividend.qty}`
                         : 'Total amount'}
                       {t.dividend && t.dividend.tds > 0 ? ` · TDS ${mPrecise(t.dividend.tds, asset.currency)}` : ''}
                       {t.dividend?.exDate ? ` · Ex ${formatDate(t.dividend.exDate)}` : ''}
@@ -4943,7 +5006,7 @@ function AssetDetailPage({
     extra.isin ? `ISIN: ${extra.isin}` : null,
     extra.sector ? `Sector: ${extra.sector.toUpperCase()}` : null,
     pnl !== undefined
-      ? `P&L: ${privacyMode ? '' : `${pnl >= 0 ? '+' : ''}${formatPreciseCurrency(pnl, asset.currency)}`}`
+      ? `P&L: ${privacyMode ? PRIVACY_DOTS : `${pnl >= 0 ? '+' : ''}${formatPreciseCurrency(pnl, asset.currency)}`}`
       : null,
     extra.notes ?? null,
   ]
@@ -5024,7 +5087,7 @@ function AssetDetailPage({
           pnl !== undefined && (
             <p className={`flex items-center gap-1 text-sm font-medium mt-1 ${positive ? 'text-brand-600 dark:text-brand-300' : 'text-red-500 dark:text-red-400'}`}>
               {positive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-              {privacyMode ? '' : `${positive ? '+' : ''}${formatPreciseCurrency(pnl, asset.currency)}`}
+              {privacyMode ? PRIVACY_DOTS : `${positive ? '+' : ''}${formatPreciseCurrency(pnl, asset.currency)}`}
             </p>
           )
         )}
@@ -5150,7 +5213,7 @@ function PpfDetailCard({ asset, privacyMode }: { asset: Asset; privacyMode: bool
     <div className="bg-surface rounded-2xl border border-line p-5">
       <p className="text-xs font-semibold tracking-wide text-slate-600 mb-4">PPF DETAILS</p>
       <div className="grid grid-cols-2 gap-y-4 gap-x-4">
-        {d.accountNumber && <DetailField label="ACCOUNT NO." value={privacyMode ? '' : d.accountNumber} />}
+        {d.accountNumber && <DetailField label="ACCOUNT NO." value={privacyMode ? PRIVACY_DOTS : d.accountNumber} />}
         {d.nominee && <DetailField label="NOMINEE" value={d.nominee} />}
         {status && <DetailField label="OPENED" value={formatDate(d.openingDate ?? asset.startDate ?? '')} />}
         {status && <DetailField label="MATURES ON" value={formatDate(status.maturityDate)} />}
@@ -5195,8 +5258,8 @@ function PropertyDetailCard({
   if (!sum) return null;
   const { appreciation: ap, rental: rt, loan: ln } = sum;
   const money = (n: number) => maskPreciseAmount(n, asset.currency, privacyMode);
-  const signed = (n: number) => (privacyMode ? '' : formatSignedCurrency(n, asset.currency));
-  const pct = (n: number) => (privacyMode ? '' : formatPercentMagnitude(n));
+  const signed = (n: number) => (privacyMode ? PRIVACY_DOTS : formatSignedCurrency(n, asset.currency));
+  const pct = (n: number) => (privacyMode ? PRIVACY_DOTS : formatPercentMagnitude(n));
   const usageLabel = { self_occupied: 'Self-occupied', rented: 'Rented out', vacant: 'Vacant', under_construction: 'Under construction' }[
     pd.usage ?? 'self_occupied'
   ];
@@ -5206,7 +5269,7 @@ function PropertyDetailCard({
   if (pd.areaSqft) fields.push({ label: 'AREA', value: `${pd.areaSqft.toLocaleString('en-IN')} sq ft` });
   if (pd.ownershipPct !== undefined && pd.ownershipPct > 0 && pd.ownershipPct < 100) fields.push({ label: 'YOUR SHARE', value: `${pd.ownershipPct}%` });
   if (ap?.nowPerSqft !== undefined) fields.push({ label: 'VALUE PER SQ FT', value: money(ap.nowPerSqft) });
-  if (ap) fields.push({ label: 'GAIN OVER COST', value: `${signed(ap.gain)}${privacyMode ? '' : ` (${pct(ap.gainPct)})`}` });
+  if (ap) fields.push({ label: 'GAIN OVER COST', value: `${signed(ap.gain)}${privacyMode ? PRIVACY_DOTS : ` (${pct(ap.gainPct)})`}` });
   if (ap?.cagr !== undefined) fields.push({ label: 'GROWTH PER YEAR', value: `${ap.cagr < 0 && !privacyMode ? '−' : ''}${pct(Math.abs(ap.cagr))}` });
   if (rt.earnsRent && pd.monthlyRent) fields.push({ label: 'MONTHLY RENT', value: money(pd.monthlyRent) });
   if (rt.grossYieldPct !== undefined) fields.push({ label: 'GROSS RENTAL YIELD', value: pct(rt.grossYieldPct) });
@@ -8361,7 +8424,7 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
                   <div className="text-right hidden sm:block">
                     <p className="text-xs text-muted">{formatDate(last.date)}</p>
                     <p className="font-numeric text-sm font-semibold text-ink">
-                      {privacyMode ? '' : formatPreciseCurrency(last[metric])}
+                      {privacyMode ? PRIVACY_DOTS : formatPreciseCurrency(last[metric])}
                     </p>
                   </div>
                 )}
@@ -8416,7 +8479,7 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
                     minTickGap={28}
                   />
                   <YAxis
-                    tickFormatter={(v: number) => (privacyMode ? '' : formatAxisAmount(v))}
+                    tickFormatter={(v: number) => (privacyMode ? PRIVACY_DOTS : formatAxisAmount(v))}
                     tick={chart.tick}
                     axisLine={false}
                     tickLine={false}
@@ -8429,7 +8492,7 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
                     labelStyle={chart.tooltip.labelStyle}
                     itemStyle={chart.tooltip.itemStyle}
                     formatter={(v) => [
-                      privacyMode ? '' : formatPreciseCurrency(Number(v)),
+                      privacyMode ? PRIVACY_DOTS : formatPreciseCurrency(Number(v)),
                       metricLabel,
                     ]}
                     labelFormatter={(l) => formatDate(String(l ?? ''))}
@@ -8486,7 +8549,7 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
                 ) : (
                   <>
                     <p className={`font-numeric text-sm font-semibold mt-0.5 ${pc.delta >= 0 ? 'text-positive' : 'text-negative'}`}>
-                      {privacyMode ? '' : formatSignedCurrency(pc.delta, 'INR', 0)}
+                      {privacyMode ? PRIVACY_DOTS : formatSignedCurrency(pc.delta, 'INR', 0)}
                     </p>
                     <p className={`font-numeric text-[11px] ${pc.delta >= 0 ? 'text-positive' : 'text-negative'}`}>
                       {pc.pct !== undefined ? `${pc.pct >= 0 ? '+' : '−'}${formatPercentMagnitude(pc.pct, 1)}` : ''}
@@ -8514,7 +8577,7 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
             <div className="rounded-lg bg-surface-muted px-3 py-2.5">
               <p className="text-xs text-muted">Worst month</p>
               <p className={`font-numeric text-sm font-semibold mt-0.5 ${worstMonth && worstMonth.delta < 0 ? 'text-negative' : 'text-ink'}`}>
-                {worstMonth ? (privacyMode ? '' : formatSignedCurrency(worstMonth.delta, 'INR', 0)) : '—'}
+                {worstMonth ? (privacyMode ? PRIVACY_DOTS : formatSignedCurrency(worstMonth.delta, 'INR', 0)) : '—'}
               </p>
               <p className="text-[11px] text-muted">{worstMonth ? monthLabel(worstMonth.month) : ''}</p>
             </div>
@@ -8544,7 +8607,7 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
                   tickLine={false}
                 />
                 <YAxis
-                  tickFormatter={(v: number) => (privacyMode ? '' : formatAxisAmount(v))}
+                  tickFormatter={(v: number) => (privacyMode ? PRIVACY_DOTS : formatAxisAmount(v))}
                   tick={chart.tick}
                   axisLine={false}
                   tickLine={false}
@@ -8555,7 +8618,7 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
                   contentStyle={chart.tooltip.contentStyle}
                   labelStyle={chart.tooltip.labelStyle}
                   itemStyle={chart.tooltip.itemStyle}
-                  formatter={(v) => [privacyMode ? '' : formatSignedCurrency(Number(v), 'INR', 0), 'Change']}
+                  formatter={(v) => [privacyMode ? PRIVACY_DOTS : formatSignedCurrency(Number(v), 'INR', 0), 'Change']}
                   labelFormatter={(l) => monthLabel(String(l ?? ''))}
                 />
                 <Bar dataKey="delta" radius={[4, 4, 0, 0]} isAnimationActive={false}>

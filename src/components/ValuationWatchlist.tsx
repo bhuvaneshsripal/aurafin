@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { X } from 'lucide-react';
+import { RefreshCw, X } from 'lucide-react';
 import { Badge, Card, cn } from './ui';
 import { money, type Exchange } from '../utils/valuation';
 
@@ -11,7 +11,10 @@ export type WatchItem = {
   price: number;
   x2: number;
   x3: number;
+  /** When these numbers were last calculated (set on save, then on every refresh). */
   savedAt: number;
+  /** The person changed the assumptions by hand. Refreshes then update only the price. */
+  manual?: boolean;
 };
 
 export const WATCHLIST_KEY = 'aurafin.valuation.watchlist';
@@ -67,6 +70,16 @@ const statusOf = (w: WatchItem): Status => (w.price <= w.x3 ? 'deep' : w.price <
 /** Negative = below X/2 (cheaper). Used for sorting and the text under the price. */
 const vsX2 = (w: WatchItem) => ((w.price - w.x2) / w.x2) * 100;
 
+/** "today, 6:02 pm" for today, otherwise "7 Nov". */
+function asOf(ts: number): string {
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return '—';
+  if (d.toDateString() === new Date().toDateString()) {
+    return `today, ${d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
+  }
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+}
+
 const FILTERS: { id: 'all' | Status; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'deep', label: 'Deep value' },
@@ -78,10 +91,15 @@ export default function ValuationWatchlist({
   items,
   onOpen,
   onRemove,
+  onRefresh,
+  refreshing = false,
 }: {
   items: WatchItem[];
   onOpen: (w: WatchItem) => void;
   onRemove: (w: WatchItem) => void;
+  /** Re-values every saved stock now. */
+  onRefresh?: () => void;
+  refreshing?: boolean;
 }) {
   const [filter, setFilter] = useState<'all' | Status>('all');
 
@@ -98,7 +116,8 @@ export default function ValuationWatchlist({
 
   return (
     <section aria-label="Watchlist" className="mb-4 mt-5">
-      <div className="mb-2 flex flex-nowrap items-center gap-2.5 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="mb-2 flex items-center gap-2">
+      <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2.5 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <h2 className="mr-1.5 shrink-0 text-[13px] font-semibold text-ink sm:text-sm">Watchlist</h2>
         {FILTERS.map((f) => (
           <button
@@ -116,6 +135,19 @@ export default function ValuationWatchlist({
             {f.label}
           </button>
         ))}
+      </div>
+        {onRefresh && (
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={refreshing}
+            aria-label={refreshing ? 'Updating watchlist' : 'Update watchlist now'}
+            title="Update prices and valuations now"
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line bg-surface text-muted transition-colors hover:bg-surface-hover disabled:opacity-60 sm:h-8 sm:w-8"
+          >
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+          </button>
+        )}
       </div>
 
       {shown.length === 0 ? (
@@ -154,7 +186,7 @@ export default function ValuationWatchlist({
                     <span className={cn('text-xs font-semibold', st.text)}>{note}</span>
                   </div>
                   <div className="mt-1 text-[11px] text-muted font-numeric">
-                    X/3 {money(w.x3, w.exchange)} · X/2 {money(w.x2, w.exchange)} · as of {new Date(w.savedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                    X/3 {money(w.x3, w.exchange)} · X/2 {money(w.x2, w.exchange)} · as of {asOf(w.savedAt)}
                   </div>
                 </button>
                 <button

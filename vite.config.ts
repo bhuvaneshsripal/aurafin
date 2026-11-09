@@ -2,6 +2,7 @@ import { defineConfig, type Plugin, type Connect, type ViteDevServer, type Previ
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { readFileSync } from 'node:fs'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
 import { searchIndia } from './api/_lib/indiaSearch.js'
 // @ts-expect-error - plain JS helper shared with the api/market/* Vercel functions, no .d.ts
@@ -298,6 +299,25 @@ function marketApiDevPlugin() {
 // download the whole new version before it can say "update available".
 const BUILD_ID = `${(process.env.VERCEL_GIT_COMMIT_SHA ?? '').slice(0, 10)}-${Date.now().toString(36)}`
 
+// The release notes this build ships with (public/whats-new.json), reduced to
+// item titles and baked into the app as __KNOWN_NOTES__. An older app that is
+// waiting to update fetches the newest /whats-new.json and hides every item
+// whose title is already in its own list, so the "New version" dialog shows
+// only what was added since the version that person is running, not the whole
+// history. (Keep this in sync with noteKey() in components/WhatsNewModal.)
+function readKnownNotes(): string[] {
+  try {
+    const json = JSON.parse(readFileSync(new URL('./public/whats-new.json', import.meta.url), 'utf8'))
+    const items: { title?: unknown }[] = Array.isArray(json?.items) ? json.items : []
+    return items
+      .map((i) => (typeof i?.title === 'string' ? i.title.trim().toLowerCase() : ''))
+      .filter(Boolean)
+  } catch {
+    return []
+  }
+}
+const KNOWN_NOTES = readKnownNotes()
+
 function versionFilePlugin(): Plugin {
   return {
     name: 'aurafin-version-file',
@@ -309,7 +329,7 @@ function versionFilePlugin(): Plugin {
 }
 
 export default defineConfig({
-  define: { __BUILD_ID__: JSON.stringify(BUILD_ID) },
+  define: { __BUILD_ID__: JSON.stringify(BUILD_ID), __KNOWN_NOTES__: JSON.stringify(KNOWN_NOTES) },
   plugins: [
     react(),
     versionFilePlugin(),

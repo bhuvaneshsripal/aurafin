@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Eye, EyeOff, X } from 'lucide-react';
+import { EyeOff } from 'lucide-react';
 import { useUiStore } from '../store/uiStore';
 import { useAppLockStore } from '../store/appLockStore';
 
@@ -22,8 +22,14 @@ function markShown() {
   }
 }
 
-/** A small card that slides in when the app is opened fresh with the eye
- *  still closed, inviting the person to reveal their amounts. */
+/** How long the notice stays on screen, in seconds. */
+const VISIBLE_SECONDS = 4;
+
+/** A small dark toast that slides up above the bottom bar when the app is
+ *  opened fresh with the eye still closed, inviting the person to reveal
+ *  their amounts. It covers almost nothing, shows a 4-second countdown ring
+ *  and hides itself — there is deliberately no way to dismiss it by hand
+ *  (the Show button only reveals the amounts). */
 export default function RevealEyePrompt() {
   const privacyMode = useUiStore((s) => s.privacyMode);
   const togglePrivacy = useUiStore((s) => s.togglePrivacy);
@@ -49,8 +55,22 @@ export default function RevealEyePrompt() {
     }, 180);
   };
 
-  // Stays until the person taps Show or dismisses it (or opens the eye
-  // some other way) — it never times out on its own.
+  // Countdown: the ring drains over VISIBLE_SECONDS (CSS), the number ticks
+  // down once a second, and the toast hides itself when time is up.
+  const [secs, setSecs] = useState(VISIBLE_SECONDS);
+  useEffect(() => {
+    if (!open) return;
+    setSecs(VISIBLE_SECONDS);
+    const tick = window.setInterval(() => setSecs((n) => Math.max(1, n - 1)), 1000);
+    const done = window.setTimeout(close, VISIBLE_SECONDS * 1000);
+    return () => {
+      window.clearInterval(tick);
+      window.clearTimeout(done);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Opening the eye some other way also clears it.
   useEffect(() => {
     if (open && !privacyMode) close();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -59,40 +79,42 @@ export default function RevealEyePrompt() {
   if (!open) return null;
 
   return (
-    <div className="fixed left-0 right-0 z-[90] flex justify-center px-4 pointer-events-none top-[calc(env(safe-area-inset-top)_+_64px)]">
+    <div className="fixed left-0 right-0 z-[90] flex justify-center px-4 pointer-events-none bottom-[calc(env(safe-area-inset-bottom)+96px)] md:bottom-6">
       <div
-        role="alert"
-        className={`${leaving ? 'eye-prompt-out' : 'eye-prompt-in'} pointer-events-auto relative w-full max-w-[420px] overflow-hidden flex items-center gap-3.5 rounded-[20px] border border-line bg-surface/95 backdrop-blur-md pl-4 pr-3 py-3 shadow-[0_14px_40px_-12px_rgba(0,0,0,0.55)]`}
+        role="status"
+        aria-live="polite"
+        className={`${leaving ? 'eye-toast-out' : 'eye-toast-in'} pointer-events-auto flex items-center gap-2.5 whitespace-nowrap rounded-full bg-[#1B2420] py-1.5 pl-4 pr-1.5 text-white shadow-[0_8px_24px_rgba(20,30,25,0.28)]`}
       >
-        {/* soft green glow along the top edge */}
-        <span aria-hidden className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-positive to-transparent opacity-70" />
-        <span className="relative shrink-0 inline-flex h-11 w-11 items-center justify-center rounded-full bg-primary-soft text-primary-ink">
-          <span aria-hidden className="eye-prompt-ring absolute inset-0 rounded-full border border-positive/60" />
-          <EyeOff size={20} className="eye-prompt-off absolute" />
-          <Eye size={20} className="eye-prompt-on absolute" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-ink leading-snug">Your amounts are hidden</p>
-          <p className="text-xs text-muted leading-snug mt-0.5">Open the eye to see your numbers.</p>
-        </div>
+        <EyeOff size={17} aria-hidden="true" />
+        <span className="text-sm font-medium">Amounts are hidden</span>
         <button
           type="button"
           onClick={() => {
             togglePrivacy();
             close();
           }}
-          className="shrink-0 h-9 px-3.5 rounded-full bg-primary text-white text-[13px] font-semibold hover:bg-primary-hover active:scale-[0.97] transition"
+          className="h-[34px] shrink-0 rounded-full bg-white px-4 text-sm font-bold text-[#17402B] active:scale-[0.97] transition"
         >
           Show
         </button>
-        <button
-          type="button"
-          onClick={close}
-          aria-label="Dismiss"
-          className="shrink-0 h-8 w-8 inline-flex items-center justify-center rounded-full text-faint hover:text-ink hover:bg-surface-hover"
-        >
-          <X size={16} />
-        </button>
+        {/* 4-second countdown: the ring drains, the number counts down. */}
+        <span className="relative inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center" aria-hidden="true">
+          <svg width="34" height="34" viewBox="0 0 34 34" className="absolute inset-0 -rotate-90">
+            <circle cx="17" cy="17" r="14" fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="3" />
+            <circle
+              cx="17"
+              cy="17"
+              r="14"
+              fill="none"
+              stroke="#7FD6A4"
+              strokeWidth="3"
+              strokeLinecap="round"
+              className="eye-countdown-ring"
+              style={{ animationDuration: `${VISIBLE_SECONDS}s` }}
+            />
+          </svg>
+          <span className="relative text-[13px] font-semibold tabular-nums">{secs}</span>
+        </span>
       </div>
     </div>
   );

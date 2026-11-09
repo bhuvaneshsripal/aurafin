@@ -235,9 +235,8 @@ export default function TopHeader() {
 
           <NotificationBell />
 
-          <IconButton label={privacyMode ? 'Show amounts' : 'Hide amounts'} onClick={togglePrivacy}>
-            {privacyMode ? <EyeOff size={18} /> : <Eye size={18} />}
-          </IconButton>
+          {/* Add (asset, expense, income...). The show/hide eye moved to the middle of the bottom bar. */}
+          <QuickAddMenu variant="header" />
 
           <div className="relative" ref={mobileMenuRef}>
             <IconButton label="Menu" onClick={() => setMobileMenuOpen((o) => !o)}>

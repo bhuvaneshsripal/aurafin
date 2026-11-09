@@ -15,11 +15,13 @@ import {
   Activity,
   TrendingUp,
   Bookmark,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { hardRefresh } from '../utils/hardRefresh';
 import { APP_VERSION } from '../config/version';
 import UpdateDot from './UpdateDot';
-import QuickAddMenu from './QuickAddMenu';
+import { useUiStore } from '../store/uiStore';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { useModalBackClose } from '../hooks/useModalBackClose';
 import { useExitPresence } from '../hooks/useExitPresence';
@@ -59,9 +61,6 @@ interface MoreLink {
   icon: typeof LayoutDashboard;
 }
 
-/** Shown in the More sheet as a disabled tile until the feature ships. */
-const COMING_SOON_LABEL = 'Coming soon';
-
 const moreLinks: MoreLink[] = [
   { to: '/watchlist', label: 'Watchlist', icon: Bookmark },
   { to: '/wealth/performance', label: 'Performance', icon: LineChart },
@@ -80,6 +79,29 @@ function navBtn(active: boolean) {
   return `tap-scale relative z-10 h-[var(--nb)] w-[var(--nb)] shrink-0 rounded-full inline-flex items-center justify-center transition-colors duration-100 ${
     active ? 'text-primary-ink' : 'text-muted hover:bg-surface-hover/70'
   }`;
+}
+
+/** The raised round button in the middle of the bar: shows / hides every amount in the app.
+ *  (It used to be the "+"; adding now lives in the top bar.) Shrinks with the bar like the + did. */
+function CenterEyeButton() {
+  const privacyMode = useUiStore((s) => s.privacyMode);
+  const togglePrivacy = useUiStore((s) => s.togglePrivacy);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        tapFeedback();
+        togglePrivacy();
+      }}
+      aria-label={privacyMode ? 'Show amounts' : 'Hide amounts'}
+      aria-pressed={!privacyMode}
+      title={privacyMode ? 'Show amounts' : 'Hide amounts'}
+      style={{ width: 52, height: 52, scale: 'calc(1 - 0.077 * var(--p, 0))' }}
+      className="mini-fab tap-scale relative z-30 flex items-center justify-center border-2 border-brand-600 bg-surface text-brand-600 shadow-md dark:border-brand-500 dark:text-brand-500"
+    >
+      {privacyMode ? <EyeOff size={24} /> : <Eye size={24} />}
+    </button>
+  );
 }
 
 function tapFeedback() {
@@ -117,7 +139,7 @@ export default function BottomNav() {
     return () => window.clearTimeout(t);
   }, [tapIdx]);
   const shownIdx = tapIdx ?? activeIdx;
-  // The centre slot (raised "+") sits between the 2nd and 3rd tab, so tabs on
+  // The centre slot (raised eye) sits between the 2nd and 3rd tab, so tabs on
   // its right are one slot further along.
   const CENTER_AFTER = 2;
   const slotIdx = shownIdx >= CENTER_AFTER ? shownIdx + 1 : shownIdx;
@@ -127,7 +149,7 @@ export default function BottomNav() {
   const barRef = useRef<HTMLDivElement | null>(null); // the visible pill
   const shrinkTarget = useRef(0);
   const shrinkNow = useRef(0);
-  // The "+" never hides on its own: it follows the bar, and the bar hides only
+  // The centre eye never hides on its own: it follows the bar, and the bar hides only
   // while typing (keyboard open), including inside the search.
   const hideFab = typing;
   const { mounted: moreMounted, closing: moreClosing } = useExitPresence(moreOpen, 180);
@@ -259,7 +281,7 @@ export default function BottomNav() {
     };
   }, [location.pathname]);
 
-  // Swipe up anywhere along the bottom bar area (the pill, the "+", or the strip
+  // Swipe up anywhere along the bottom bar area (the pill, the centre eye, or the strip
   // beside them) to open the More sheet, on every page. Listens on the document so it
   // does not depend on where inside the bar the finger lands.
   const barHidden = typing;
@@ -448,7 +470,7 @@ export default function BottomNav() {
         <nav
           aria-label="Primary"
           ref={(el) => {
-            // --p (0 = full size, 1 = shrunk) lives on the nav so the pill and the "+" both follow it.
+            // --p (0 = full size, 1 = shrunk) lives on the nav so the pill and the centre eye both follow it.
             pillRef.current = el;
             // Re-apply after the bar remounts (e.g. closing search).
             el?.style.setProperty('--p', shrinkNow.current.toFixed(4));
@@ -520,7 +542,7 @@ export default function BottomNav() {
             {primaryLinks.map(({ to, label, icon: Icon }, i) => (
               <Fragment key={to}>
                 {i === CENTER_AFTER && (
-                  // Empty middle cell under the raised "+" (the button itself lives outside the pill).
+                  // Empty middle cell under the raised eye (the button itself lives outside the pill).
                   <span aria-hidden className="h-[var(--nb)]" />
                 )}
               <NavLink
@@ -570,18 +592,15 @@ export default function BottomNav() {
             />
           </div>
 
-          {/* "+" centred horizontally and raised so it sits on the bar's top edge. Lives beside the pill (not inside it) because
-              the pill's backdrop blur would trap the menu's full-screen backdrop. Hidden when a
-              page's own bottom toolbar needs the space, and while typing. */}
+          {/* Eye centred horizontally and raised so it sits on the bar's top edge. Lives beside the pill, not inside it,
+              so the pill's styling doesn't clip it. Hidden while typing. */}
           {!hideFab && (
-            // No transform on this wrapper: a transformed parent would trap the menu's
-            // full-screen backdrop inside a small square around the button.
             <div
               className="pointer-events-none absolute inset-x-0 flex justify-center"
               style={{ bottom: 'calc(env(safe-area-inset-bottom) + 36px)' }}
             >
               <div className="pointer-events-auto">
-                <QuickAddMenu variant="center" />
+                <CenterEyeButton />
               </div>
             </div>
           )}
@@ -631,16 +650,20 @@ export default function BottomNav() {
                   {label}
                 </NavLink>
               ))}
-              <div
-                aria-disabled="true"
-                className="relative flex flex-col items-center justify-center gap-2 rounded-xl border border-line bg-surface px-2 py-4 text-xs font-medium text-center text-slate-500 opacity-70 cursor-not-allowed select-none"
+              <NavLink
+                to="/feedback"
+                onClick={() => setMoreOpen(false)}
+                className={({ isActive }) =>
+                  `tap-scale flex flex-col items-center justify-center gap-2 rounded-xl border px-2 py-4 text-xs font-medium text-center transition-colors ${
+                    isActive
+                      ? 'bg-primary-soft text-primary-ink border-transparent'
+                      : 'bg-surface border-line text-slate-600 hover:bg-surface-hover'
+                  }`
+                }
               >
                 <MessageSquare size={20} strokeWidth={1.75} />
                 Feedback
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
-                  {COMING_SOON_LABEL}
-                </span>
-              </div>
+              </NavLink>
             </div>
             <div className="px-5 pb-6 pt-2 text-center text-xs text-muted">
               <p className="mb-1 font-medium">Aurafin v{APP_VERSION}</p>

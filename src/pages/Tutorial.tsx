@@ -326,8 +326,8 @@ const guides: Guide[] = [
     id: 'bottombar', title: 'Bottom bar and More menu', icon: <Smartphone size={16} />,
     summary: 'On a phone, the bottom bar holds your main pages. The rest of the app is in the More menu, which has no button: you swipe up to open it.',
     notes: [
-      { title: 'Swipe up', text: 'Put your finger on the bottom bar (or on the + button or the strip beside it) and slide it upward. The More menu slides up from the bottom, on every page.' },
-      { title: 'The bar', text: 'Overview, Wealth, Valuation and Settings are always one tap away. The green + adds an asset, a transaction and more.' },
+      { title: 'Swipe up', text: 'Put your finger on the bottom bar (or on the eye button or the strip beside it) and slide it upward. The More menu slides up from the bottom, on every page.' },
+      { title: 'The bar', text: 'Overview, Wealth, Valuation and Settings are always one tap away. The raised eye in the middle shows or hides every amount. To add an asset, a transaction and more, tap the green + in the top bar.' },
       { title: 'Start on the bar', text: 'The swipe only works when your finger starts on the bar. A swipe that starts higher up just scrolls the page.' },
     ],
     advanced: [

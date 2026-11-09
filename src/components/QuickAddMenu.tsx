@@ -1,6 +1,7 @@
 import { SHORTCUT_HINT } from '../config/shortcuts';
 import { toast } from '../store/toastStore';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { hideNumber } from '../utils/privateFormat';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -43,20 +44,47 @@ const FAN_ITEMS: { action: Exclude<QuickAction, null>; label: string; icon: type
 
 type QuickAction = 'expense' | 'income' | 'transfer' | 'asset' | 'liability' | 'snapshot' | null;
 
-export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'desktop' | 'fab' | 'center' }) {
+/** 'desktop' = the "+ Add" pill with a dropdown (top bar, laptops).
+ *  'header'  = the same dropdown behind a round icon-only "+" (top bar, phones).
+ *  'fab' / 'center' = the floating round "+" and its fan (no longer used by the bottom bar). */
+export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'desktop' | 'header' | 'fab' | 'center' }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [active, setActive] = useState<QuickAction>(null);
   const ref = useRef<HTMLDivElement>(null);
+  // The header fan is rendered in a portal (so the sticky top bar can't clip
+  // or stack it), which puts it outside `ref` in the DOM. Track it separately
+  // so tapping a fan button isn't mistaken for a click outside the menu.
+  const fanRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  // Vertical centre of the header "+" when the fan opened; the fan's close
+  // button is drawn there, centred on screen, with the actions arcing below.
+  const [anchorY, setAnchorY] = useState(28);
   const navigate = useNavigate();
 
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
       if (inToast(e.target)) return;
-      if (ref.current && !ref.current.contains(e.target as Node)) setMenuOpen(false);
+      const t = e.target as Node;
+      if (ref.current?.contains(t) || fanRef.current?.contains(t)) return;
+      setMenuOpen(false);
     };
     document.addEventListener('mousedown', onClickOutside);
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, []);
+
+  // Header fan: Escape or a resize/rotation closes it (the arc is laid out
+  // once, from the screen size at the moment it opened).
+  useEffect(() => {
+    if (!menuOpen || variant !== 'header') return;
+    const close = () => setMenuOpen(false);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', close);
+    };
+  }, [menuOpen, variant]);
 
   // Keyboard shortcut (desktop): Ctrl+A (Cmd+A on Mac) opens the Add Asset
   // page. It leaves the normal "Select all" alone while typing in a field or
@@ -100,6 +128,7 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
   // 'center' is the raised + in the middle of the bottom nav: same mobile FAB, but its menu opens centred above it.
   const isCenter = variant === 'center';
   const isFab = variant === 'fab' || isCenter;
+  const isHeader = variant === 'header';
 
   return (
     <>
@@ -113,18 +142,29 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
         )}
 
         <button
-          onClick={() => setMenuOpen((o) => !o)}
+          ref={btnRef}
+          onClick={() => {
+            if (isHeader && !menuOpen && btnRef.current) {
+              const r = btnRef.current.getBoundingClientRect();
+              setAnchorY(r.top + r.height / 2);
+            }
+            setMenuOpen((o) => !o);
+          }}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
           // The centre "+" shrinks with the bottom bar (--p is set by BottomNav).
           style={isCenter ? { width: 52, height: 52, scale: 'calc(1 - 0.077 * var(--p, 0))' } : undefined}
           aria-label="Quick add"
-          title={isFab ? 'Quick add' : `Quick add (${SHORTCUT_HINT.addAsset} adds an asset)`}
+          title={isFab || isHeader ? 'Quick add' : `Quick add (${SHORTCUT_HINT.addAsset} adds an asset)`}
           className={
-            isFab
-              ? `fab-button${menuOpen ? ' fab-open' : ''} tap-scale relative z-30 flex items-center justify-center text-white ${isCenter ? '' : 'h-14 w-14'}`
-              : buttonClasses('primary', 'md', 'pl-3 pr-3')
+            isHeader
+              ? `fab-button${menuOpen ? ' fab-open' : ''} tap-scale mx-0.5 flex h-8 w-8 shrink-0 items-center justify-center text-white`
+              : isFab
+                ? `fab-button${menuOpen ? ' fab-open' : ''} tap-scale relative z-30 flex items-center justify-center text-white ${isCenter ? '' : 'h-14 w-14'}`
+                : buttonClasses('primary', 'md', 'pl-3 pr-3')
           }
         >
-          {isFab ? <Plus size={24} className="fab-icon" /> : (
+          {isHeader ? <Plus size={18} className="fab-icon" /> : isFab ? <Plus size={24} className="fab-icon" /> : (
             <>
               <Plus size={16} /> Add <ChevronDown size={15} className="opacity-80" />
             </>
@@ -163,6 +203,53 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
           </div>
         )}
 
+        {menuOpen && isHeader &&
+          createPortal(
+            // Header fan: same round buttons as the bottom-bar fan, but the
+            // close button sits at the top centre and the actions hang below
+            // it in a "U" arc over a dimmed + blurred page.
+            <div ref={fanRef} className="fixed inset-0 z-[60]">
+              <div className="fan-backdrop absolute inset-0" onClick={() => setMenuOpen(false)} aria-hidden="true" />
+              <div className="absolute left-1/2 h-0 w-0" style={{ top: anchorY }}>
+                {FAN_ITEMS.map(({ action, label, icon: Icon }, i) => {
+                  // Six buttons, 30° apart, symmetric around straight down (165°…15°).
+                  const angle = ((165 - i * 30) * Math.PI) / 180;
+                  const ry = Math.min(FAN_RY_MAX, window.innerHeight * 0.32);
+                  const x = Math.cos(angle) * FAN_RX;
+                  const y = Math.sin(angle) * ry;
+                  return (
+                    <button
+                      key={action}
+                      onClick={() => open(action)}
+                      aria-label={label}
+                      style={
+                        {
+                          '--fx': `${x.toFixed(1)}px`,
+                          '--fy': `${y.toFixed(1)}px`,
+                          transform: 'translate(calc(-50% + var(--fx)), calc(-50% + var(--fy)))',
+                          animationDelay: `${i * 25}ms`,
+                        } as React.CSSProperties
+                      }
+                      className="animate-fan-in keep-round tap-scale absolute left-0 top-0 flex h-[62px] w-[62px] flex-col items-center justify-center gap-0.5 rounded-full border border-line bg-surface text-[10px] font-medium text-ink shadow-lg"
+                    >
+                      <Icon size={18} className="text-muted" />
+                      {label}
+                    </button>
+                  );
+                })}
+                <button
+                  onClick={() => setMenuOpen(false)}
+                  aria-label="Close quick add"
+                  style={{ width: 52, height: 52, marginLeft: -26, marginTop: -26 }}
+                  className="fab-button fab-open tap-scale absolute left-0 top-0 flex items-center justify-center text-white"
+                >
+                  <Plus size={24} className="fab-icon" />
+                </button>
+              </div>
+            </div>,
+            document.body,
+          )}
+
         {menuOpen && isFab && !isCenter && (
           <div
             className="absolute bottom-full right-0 mb-3 flex flex-col items-end gap-2 z-30"
@@ -177,7 +264,7 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
           </div>
         )}
 
-        {menuOpen && !isFab && (
+        {menuOpen && !isFab && !isHeader && (
           <div className="animate-menu-in absolute right-0 mt-2 w-60 bg-surface border border-line rounded-xl shadow-lg overflow-hidden z-30 pb-1">
             <p className="px-4 pt-3 pb-1 text-xs font-medium text-faint">
               Cashflow
@@ -190,7 +277,7 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
             <p className="px-4 pt-3 pb-1 text-xs font-medium text-faint">
               Wealth
             </p>
-            <MenuItem icon={Coins} color="text-muted" label="Asset" hint={SHORTCUT_HINT.addAsset} onClick={() => open('asset')} />
+            <MenuItem icon={Coins} color="text-muted" label="Asset" hint={isHeader ? undefined : SHORTCUT_HINT.addAsset} onClick={() => open('asset')} />
             <MenuItem icon={Landmark} color="text-muted" label="Liability" onClick={() => open('liability')} />
             <MenuItem icon={Camera} color="text-muted" label="Snapshot" onClick={() => open('snapshot')} />
           </div>

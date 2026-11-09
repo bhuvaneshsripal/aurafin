@@ -4,5 +4,17 @@ service cloud.firestore {
     match /users/{userId}/{collection}/{docId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+
+    // In-app feedback: any signed-in user (guests included) may SEND their own
+    // message, but nobody can read, edit or delete feedback from the app.
+    // You read it in the Firebase console (Firestore Database > feedback).
+    match /feedback/{docId} {
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() <= 1000;
+      allow read, update, delete: if false;
+    }
   }
 }

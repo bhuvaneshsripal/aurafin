@@ -52,7 +52,7 @@ import {
   chart,
 } from '../components/ui';
 import { PriceStaleBanner, PriceUpdatedLine } from '../components/PriceStatus';
-import { ASSET_CLASS_LABELS, maskAmount } from '../utils/currency';
+import { ASSET_CLASS_LABELS, maskAmount, PRIVACY_DOTS } from '../utils/currency';
 import { formatAxisAmount, formatPercentMagnitude, formatSignedCurrency, formatPreciseCurrency } from '../utils/privateFormat';
 import { ASSET_CLASS_TO_CATEGORY } from '../utils/taxonomy';
 import { resolveAssetValues } from '../utils/assetValues';
@@ -427,7 +427,7 @@ function ChartTooltip({
           <span className="h-2 w-2 rounded-full" style={{ background: p.color }} />
           <span className="text-muted">{labels?.[String(p.dataKey)] ?? p.name}</span>
           <span className="font-numeric ml-auto pl-3">
-            {privacyMode ? '' : maskAmount(Number(p.value ?? 0), 'INR', false, { fractionDigits: 0 })}
+            {privacyMode ? PRIVACY_DOTS : maskAmount(Number(p.value ?? 0), 'INR', false, { fractionDigits: 0 })}
           </span>
         </p>
       ))}
@@ -469,7 +469,7 @@ function NetWorthTooltip({
       <div className="flex items-center justify-between gap-3">
         <span className="text-muted">Net worth</span>
         <span className="font-numeric font-semibold text-ink">
-          {privacyMode ? '' : formatPreciseCurrency(point.netWorth)}
+          {privacyMode ? PRIVACY_DOTS : formatPreciseCurrency(point.netWorth)}
         </span>
       </div>
       {change !== null && (
@@ -477,7 +477,7 @@ function NetWorthTooltip({
           <span className="text-muted">Change</span>
           <span className={`font-numeric font-medium ${change >= 0 ? 'text-positive' : 'text-negative'}`}>
             {privacyMode
-              ? ''
+              ? PRIVACY_DOTS
               : `${formatSignedCurrency(change, 'INR', 0)}${changePct !== null ? ` (${formatPercentMagnitude(changePct, 1)})` : ''}`}
           </span>
         </div>
@@ -751,7 +751,7 @@ function NetWorthOverTimeCard({
             {allProfilesNote ? ' · All profiles' : ''}
           </span>
           <span className="font-numeric text-lg font-semibold text-ink">
-            {!ready && !selected ? <LoadingDots /> : privacyMode ? '' : formatPreciseCurrency(shown.netWorth)}
+            {!ready && !selected ? <LoadingDots /> : privacyMode ? PRIVACY_DOTS : formatPreciseCurrency(shown.netWorth)}
           </span>
         </div>
       )}
@@ -789,7 +789,7 @@ function NetWorthOverTimeCard({
                 minTickGap={28}
               />
               <YAxis
-                tickFormatter={(v: number) => (privacyMode ? '' : formatAxisAmount(v))}
+                tickFormatter={(v: number) => (privacyMode ? PRIVACY_DOTS : formatAxisAmount(v))}
                 tick={chart.tick}
                 axisLine={false}
                 tickLine={false}
@@ -925,8 +925,8 @@ function AllocationCard({
             maxRings={6}
             activeKey={active}
             onActiveChange={setActive}
-            centerExtra={(r) => (privacyMode ? '' : maskAmount(r.value, 'INR', false, { fractionDigits: 0 }))}
-            formatPercent={(p) => (privacyMode ? '' : `${p >= 10 ? p.toFixed(0) : p.toFixed(1)}%`)}
+            centerExtra={(r) => (privacyMode ? PRIVACY_DOTS : maskAmount(r.value, 'INR', false, { fractionDigits: 0 }))}
+            formatPercent={(p) => (privacyMode ? PRIVACY_DOTS : `${p >= 10 ? p.toFixed(0) : p.toFixed(1)}%`)}
           />
           <ul className="mt-4 space-y-2" onMouseLeave={() => setActive(null)}>
             {legend.map((d) => (
@@ -937,7 +937,7 @@ function AllocationCard({
               >
                 <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: d.color }} />
                 <span className="text-ink-2 truncate flex-1">{d.label}</span>
-                <span className="font-numeric font-medium text-ink">{(privacyMode ? '' : `${sum > 0 ? ((d.value / sum) * 100).toFixed(1) : '0.0'}%`)}</span>
+                <span className="font-numeric font-medium text-ink">{(privacyMode ? PRIVACY_DOTS : `${sum > 0 ? ((d.value / sum) * 100).toFixed(1) : '0.0'}%`)}</span>
               </li>
             ))}
           </ul>
@@ -966,7 +966,7 @@ function CashflowCard({
   hasTransactions: boolean;
   privacyMode: boolean;
 }) {
-  const m = (v: number) => (privacyMode ? '' : maskAmount(v, 'INR', false, { fractionDigits: 0 }));
+  const m = (v: number) => (privacyMode ? PRIVACY_DOTS : maskAmount(v, 'INR', false, { fractionDigits: 0 }));
   const pin = usePinnedTooltip();
   const pinnedRow = pin.pinned ? trend.find((r) => r.label === pin.pinned!.label) : undefined;
   return (
@@ -1004,8 +1004,8 @@ function CashflowCard({
               <p className="text-xs text-muted">Saved</p>
               <p className={`font-numeric text-base font-semibold mt-0.5 ${saved >= 0 ? 'text-ink' : 'text-negative'}`}>
                 {m(saved)}
-                {savingsRate !== null && !privacyMode && (
-                  <span className="ml-1.5 text-xs font-medium text-muted">{(privacyMode ? '' : `${savingsRate.toFixed(0)}%`)}</span>
+                {savingsRate !== null && (
+                  <span className="ml-1.5 text-xs font-medium text-muted">{(privacyMode ? PRIVACY_DOTS : `${savingsRate.toFixed(0)}%`)}</span>
                 )}
               </p>
             </div>
@@ -1022,7 +1022,7 @@ function CashflowCard({
                   <CartesianGrid stroke={chart.grid} strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="label" tick={chart.tick} axisLine={false} tickLine={false} />
                   <YAxis
-                    tickFormatter={(v: number) => (privacyMode ? '' : formatAxisAmount(v))}
+                    tickFormatter={(v: number) => (privacyMode ? PRIVACY_DOTS : formatAxisAmount(v))}
                     tick={chart.tick}
                     axisLine={false}
                     tickLine={false}
@@ -1118,19 +1118,19 @@ function GoalsCard({
                 <li key={g.id}>
                   <div className="flex items-center gap-4">
                     <ProgressRing percent={pct} size={64} stroke={8}>
-                      {privacyMode ? '' : `${pct}%`}
+                      {privacyMode ? PRIVACY_DOTS : `${pct}%`}
                     </ProgressRing>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-ink truncate">{g.name}</p>
                       <p className="text-xs text-muted mt-0.5 font-numeric font-normal">
-                        {privacyMode ? '' : `${maskAmount(current, g.currency, false, { fractionDigits: 0 })} of ${maskAmount(g.targetAmount, g.currency, false, { fractionDigits: 0 })}`}
+                        {privacyMode ? PRIVACY_DOTS : `${maskAmount(current, g.currency, false, { fractionDigits: 0 })} of ${maskAmount(g.targetAmount, g.currency, false, { fractionDigits: 0 })}`}
                       </p>
                       <div className="mt-2 h-1.5 w-full rounded-full bg-line overflow-hidden" aria-hidden="true">
                         <div className="h-full rounded-full bg-brand-600" style={{ width: `${pct}%` }} />
                       </div>
                       <p className="text-[11px] text-muted mt-1.5 font-numeric font-normal">
                         {remaining > 0
-                          ? (privacyMode ? '' : `${maskAmount(remaining, g.currency, false, { fractionDigits: 0 })} to go`)
+                          ? (privacyMode ? PRIVACY_DOTS : `${maskAmount(remaining, g.currency, false, { fractionDigits: 0 })} to go`)
                           : 'Goal reached'}
                       </p>
                     </div>
@@ -1203,7 +1203,7 @@ function RecentTransactionsCard({
                   <Td className="hidden sm:table-cell text-muted max-w-[16rem] truncate">{t.note || '—'}</Td>
                   <Td numeric className={t.type === 'income' ? 'text-positive' : undefined}>
                     {privacyMode
-                      ? ''
+                      ? PRIVACY_DOTS
                       : `${t.type === 'income' ? '+' : '−'}${maskAmount(t.amount, t.currency, false, { fractionDigits: 0 })}`}
                   </Td>
                 </Tr>
@@ -1259,7 +1259,7 @@ function TopHoldingsCard({
               </div>
               <div className="text-right shrink-0">
                 <p className="font-numeric text-sm font-semibold text-ink">
-                  {(privacyMode ? '' : maskAmount(value, asset.currency, false, { fractionDigits: 0 }))}
+                  {(privacyMode ? PRIVACY_DOTS : maskAmount(value, asset.currency, false, { fractionDigits: 0 }))}
                 </p>
                 {pnlPercent !== undefined && !privacyMode ? (
                   <p className={`font-numeric text-xs font-medium ${pnlPercent >= 0 ? 'text-positive' : 'text-negative'}`}>

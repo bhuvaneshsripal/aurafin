@@ -1668,6 +1668,24 @@ body[data-no-bottom-fade] [data-bottom-fade] {
   display: none;
 }
 
+/* ---- "Amounts are hidden" toast (RevealEyePrompt): slides up from the bottom,
+   4-second countdown ring. ------------------------------------------------ */
+@keyframes eye-toast-in {
+  from { opacity: 0; transform: translate3d(0, 16px, 0) scale(0.97); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes eye-toast-out {
+  from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  to { opacity: 0; transform: translate3d(0, 12px, 0) scale(0.97); }
+}
+.eye-toast-in { animation: eye-toast-in 280ms var(--ease-out) both; }
+.eye-toast-out { animation: eye-toast-out 180ms ease-in both; }
+@keyframes eye-countdown { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 88; } }
+.eye-countdown-ring { stroke-dasharray: 88; animation: eye-countdown 4s linear forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .eye-toast-in, .eye-toast-out { animation: none; }
+}
+
 /* ---- "Open the eye" prompt (RevealEyePrompt) ---------------------------- */
 @keyframes eye-prompt-in {
   from { opacity: 0; transform: translate3d(0, -14px, 0) scale(0.97); }
@@ -1695,12 +1713,6 @@ body[data-no-bottom-fade] [data-bottom-fade] {
   .eye-prompt-on { opacity: 0; }
 }
 
-/* ---- Eye closed: show nothing rather than dots ------------------------------
-   Figures keep their real text in the DOM but are made invisible, so every
-   box keeps exactly the width and height it has with the eye open — nothing
-   collapses or shifts. Anything marked .pv-hide (labels, dividers, totals)
-   goes invisible with them, and tables marked .pv-cols keep only their first
-   (name) column and the trailing actions column visible. */
-.privacy-hidden .pv-hide { visibility: hidden !important; }
-.privacy-hidden .pv-cols th:not(:first-child):not(:last-child),
-.privacy-hidden .pv-cols td:not(:first-child):not(:last-child) { visibility: hidden; }
+/* ---- Eye closed: figures are replaced by dots in the markup itself ---------
+   (see PRIVACY_DOTS in utils/currency.ts), so cards and tables never look
+   empty. Nothing is hidden with CSS any more. */
