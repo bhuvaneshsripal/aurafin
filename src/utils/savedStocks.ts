@@ -22,7 +22,7 @@ export const SAVED_KEY = 'aurafin.stock.saved';
 export const ALERTS_KEY = 'aurafin.stock.alerts';
 /** Fired (on window) whenever saved stocks / alerts / lists really change on this device; the cloud sync listens. */
 export const WATCHLIST_CHANGED_EVENT = 'aurafin:watchlist-changed';
-export const MAX_SAVED = 50;
+export const MAX_SAVED = 1000;
 
 export const stockKey = (market: Market, symbol: string) => `${market}:${symbol.toUpperCase().replace(/\.(NS|BO)$/i, '')}`;
 

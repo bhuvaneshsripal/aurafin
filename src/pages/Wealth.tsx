@@ -6141,7 +6141,7 @@ function AssetDetailsForm({
     setSymbol(result.symbol);
     setSymbolSuggestions([]);
     setSymbolSearchOpen(false);
-    if (!name.trim() && result.name) setName(result.name);
+    if (!name.trim() && result.name) setName(result.name.replace(/[\s,]+(LIMITED|LTD)\.?\s*$/i, '').trim());
   };
 
   // Lets someone dismiss the "no matches" / "search unreachable" dropdown

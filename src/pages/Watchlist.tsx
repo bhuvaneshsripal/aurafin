@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowDown, ArrowUp, Bell, Bookmark, Check, Copy, Download, ListPlus, MoreHorizontal, Pencil, Plus, Search, StickyNote, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Bell, Bookmark, Check, ChevronLeft, ChevronRight, Copy, Download, ListPlus, MoreHorizontal, Pencil, Plus, Search, StickyNote, Trash2, X } from 'lucide-react';
 import CompanyLogo from '../components/CompanyLogo';
-import { Button, Card, DeltaChip, EmptyState, Field, IconButton, Input, PageHeader, Table, TBody, Td, Textarea, Th, THead, Tr, Tabs } from '../components/ui';
+import { Button, Card, DeltaChip, EmptyState, Field, IconButton, Input, PageHeader, Table, TBody, Td, Textarea, Th, THead, Tr } from '../components/ui';
 import Modal from '../components/Modal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { fetchLiveQuotes, searchStockSymbols, type LiveQuoteDetail } from '../utils/marketPrices';
@@ -114,6 +114,7 @@ export default function Watchlist() {
   const [quotes, setQuotes] = useState<Map<string, LiveQuoteDetail>>(new Map());
   const [active, setActive] = useState<string>(ALL);
   const [query, setQuery] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'manual', dir: 'asc' });
   const [menuKey, setMenuKey] = useState<string | null>(null);
   const [listMenu, setListMenu] = useState(false);
@@ -505,10 +506,6 @@ export default function Watchlist() {
   );
 
   const noteStock = noteKey ? items.find((x) => skey(x) === noteKey) ?? null : null;
-  const tabItems = [
-    { key: ALL, label: 'All', count: items.length },
-    ...lists.map((l) => ({ key: l.id, label: l.name, count: l.keys.length })),
-  ];
 
   return (
     <div className="space-y-4">
@@ -531,6 +528,55 @@ export default function Watchlist() {
           </>
         }
       />
+      {activeList ? (
+        <button
+          type="button"
+          onClick={() => setActive(ALL)}
+          className="tap-scale inline-flex items-center gap-1 -ml-1 pr-2 py-1 rounded-lg text-sm font-medium text-muted hover:text-ink"
+        >
+          <ChevronLeft size={18} /> All watchlists
+        </button>
+      ) : (
+        lists.length > 0 && (
+          <div>
+            <p className="px-1 pb-2 text-sm font-semibold text-ink">
+              {lists.length} {lists.length === 1 ? 'Watchlist' : 'Watchlists'}
+            </p>
+            <Card padding="none">
+              <ul className="divide-y divide-line">
+                {lists.map((l) => {
+                  const words = l.name.trim().split(/\s+/).filter(Boolean);
+                  const initials = (words.length > 1 ? words[0][0] + words[1][0] : l.name.trim().slice(0, 2)).toUpperCase();
+                  return (
+                    <li key={l.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuery('');
+                          setActive(l.id);
+                        }}
+                        className="w-full flex items-center gap-4 px-4 py-4 text-left hover:bg-surface-hover"
+                      >
+                        <span className="h-12 w-12 shrink-0 inline-flex items-center justify-center rounded-full bg-surface-muted text-base font-medium text-positive">
+                          {initials}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-base font-medium text-ink">{l.name}</span>
+                          <span className="block text-xs text-muted font-numeric">
+                            {l.keys.length} {l.keys.length === 1 ? 'stock' : 'stocks'}
+                          </span>
+                        </span>
+                        <ChevronRight size={18} className="shrink-0 text-faint" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Card>
+            {items.length > 0 && <p className="px-1 pt-5 text-sm font-semibold text-ink">All stocks</p>}
+          </div>
+        )
+      )}
       {items.length > 0 && (
         <div className="flex flex-nowrap items-center gap-1.5 whitespace-nowrap overflow-hidden pt-1">
               <span className="inline-flex items-center shrink-0 rounded-md bg-surface-muted px-1.5 sm:px-2 py-0.5 text-xs font-medium text-ink-2 font-numeric">
@@ -557,20 +603,21 @@ export default function Watchlist() {
             </div>
       )}
 
-      {lists.length > 0 && <Tabs value={active} onChange={(k) => setActive(k)} items={tabItems} />}
 
       <>
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative min-w-[160px] flex-1 sm:max-w-sm">
               <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
               <input
+                ref={searchRef}
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => setQuery(e.target.value.toUpperCase())}
+                autoCapitalize="characters"
                 placeholder="Search any stock to add"
                 aria-label="Search any stock to add to your watchlist"
                 autoComplete="off"
                 spellCheck={false}
-                className="h-10 w-full rounded-lg border border-line bg-surface pl-9 pr-9 text-sm text-ink outline-none focus:border-primary"
+                className="h-10 w-full rounded-lg border border-line bg-surface pl-9 pr-9 text-sm text-ink outline-none focus:border-primary uppercase placeholder:normal-case"
               />
               {query && (
                 <button
@@ -701,7 +748,12 @@ export default function Watchlist() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => toggleHit(h)}
+                          // keep the keyboard open: don't let the button take focus from the search box
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            toggleHit(h);
+                            searchRef.current?.focus({ preventScroll: true });
+                          }}
                           aria-label={added ? `Remove ${h.name}` : `Add ${h.name}${activeList ? ` to ${activeList.name}` : ' to Watchlist'}`}
                           aria-pressed={added}
                           className={`tap-scale inline-flex h-8 shrink-0 items-center gap-1 rounded-full px-3 text-xs font-semibold ${
