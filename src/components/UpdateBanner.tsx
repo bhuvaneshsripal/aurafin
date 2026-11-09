@@ -141,7 +141,7 @@ export default function UpdateBanner() {
     <div
       ref={wrapRef}
       id="app-update-banner"
-      className="max-md:fixed max-md:left-0 max-md:right-0 max-md:top-0 z-[35] bg-page px-3 sm:px-6 md:px-8 pt-[calc(env(safe-area-inset-top)_+_8px)] md:pt-3 pb-2"
+      className="max-md:fixed max-md:left-0 max-md:right-0 max-md:top-0 md:sticky md:top-0 z-[35] bg-page px-3 sm:px-6 md:px-8 pt-[calc(env(safe-area-inset-top)_+_8px)] md:pt-3 pb-2"
     >
       <div
         role="status"

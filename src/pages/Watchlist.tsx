@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowDown, ArrowUp, Bell, Bookmark, Check, ChevronLeft, ChevronRight, Copy, Download, ListPlus, MoreHorizontal, Pencil, Plus, Search, StickyNote, Trash2, X } from 'lucide-react';
+import { Bell, Bookmark, Check, ChevronRight, Copy, Download, ListPlus, MoreHorizontal, Pencil, Pin, Plus, Search, Trash2, X } from 'lucide-react';
 import CompanyLogo from '../components/CompanyLogo';
-import { Button, Card, DeltaChip, EmptyState, Field, IconButton, Input, PageHeader, Table, TBody, Td, Textarea, Th, THead, Tr } from '../components/ui';
+import { Button, Card, DeltaChip, EmptyState, Field, IconButton, Input, PageHeader, Table, Tabs, TBody, Td, Textarea, Th, THead, Tr } from '../components/ui';
 import Modal from '../components/Modal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { fetchLiveQuotes, searchStockSymbols, type LiveQuoteDetail } from '../utils/marketPrices';
@@ -17,7 +17,7 @@ import {
   deleteList,
   restoreList,
   duplicateList,
-  moveInList,
+  moveKeyTo,
   pruneTo,
   readLists,
   readNotes,
@@ -25,6 +25,7 @@ import {
   setNote,
   stockKey,
   toggleInList,
+  togglePinList,
   updateList,
   type WatchList,
 } from '../utils/watchlistLists';
@@ -40,6 +41,7 @@ const exchangeOf = (s: SavedStock): Exchange => (isBse(s) ? 'BSE' : 'NSE');
 
 type SortKey = 'manual' | 'name' | 'price' | 'change' | 'range';
 const ALL = 'all';
+const ALLSTOCKS = 'all-stocks';
 
 /** A stock found on the whole market (not necessarily one already in the watchlist). */
 interface MarketHit {
@@ -112,8 +114,13 @@ export default function Watchlist() {
   const [lists, setLists] = useState<WatchList[]>(() => readLists());
   const [notes, setNotes] = useState<Record<string, string>>(() => readNotes());
   const [quotes, setQuotes] = useState<Map<string, LiveQuoteDetail>>(new Map());
-  const [active, setActive] = useState<string>(ALL);
+  const [active, setActive] = useState<string>(() => {
+    const ls = readLists();
+    const first = ls.find((l) => l.pinned) ?? ls[0];
+    return first ? first.id : ALL;
+  });
   const [query, setQuery] = useState('');
+  const [pickKey, setPickKey] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'manual', dir: 'asc' });
   const [menuKey, setMenuKey] = useState<string | null>(null);
@@ -123,6 +130,7 @@ export default function Watchlist() {
   const [listModal, setListModal] = useState<null | 'new' | 'rename'>(null);
   const [nameDraft, setNameDraft] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [pinMode, setPinMode] = useState(false);
 
   // Whole-market search: anything typed (3+ letters) is also looked up across all NSE/BSE/US stocks.
   const rawQ = query.trim();
@@ -230,8 +238,10 @@ export default function Watchlist() {
   }, [load]);
 
   const activeList = lists.find((l) => l.id === active) ?? null;
+  const pinnedLists = useMemo(() => lists.filter((l) => l.pinned), [lists]);
+  const sortedLists = useMemo(() => [...lists.filter((l) => l.pinned), ...lists.filter((l) => !l.pinned)], [lists]);
   useEffect(() => {
-    if (active !== ALL && !activeList) setActive(ALL);
+    if (active !== ALL && active !== ALLSTOCKS && !activeList) setActive(ALL);
   }, [active, activeList]);
 
   const pctOf = (s: SavedStock) => {
@@ -361,9 +371,9 @@ export default function Watchlist() {
 
   const submitList = () => {
     if (!nameDraft.trim()) return;
-    if (listModal === 'rename' && activeList) updateList(activeList.id, { name: nameDraft });
+    if (listModal === 'rename' && activeList) updateList(activeList.id, { name: nameDraft.toUpperCase() });
     else {
-      const l = createList(nameDraft, '');
+      const l = createList(nameDraft.toUpperCase(), '');
       if (l) setActive(l.id);
     }
     setListModal(null);
@@ -384,6 +394,55 @@ export default function Watchlist() {
   };
 
   const manualMovable = !!activeList && sort.key === 'manual' && !query;
+
+  // Long-press a row, then drag it up/down to reorder (manual order inside a list).
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const suppressClick = useRef(false);
+  const startLongPress = (e: React.PointerEvent, k: string) => {
+    if (!manualMovable || !activeList || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    const listId = activeList.id;
+    const sx = e.clientX;
+    const sy = e.clientY;
+    let dragging = false;
+    const current = k;
+    const cleanup = () => {
+      clearTimeout(timer);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onEnd);
+      window.removeEventListener('pointercancel', onEnd);
+      window.removeEventListener('touchmove', block);
+      if (dragging) {
+        setDragKey(null);
+        suppressClick.current = true;
+        setTimeout(() => (suppressClick.current = false), 50);
+      }
+    };
+    const block = (ev: TouchEvent) => {
+      if (dragging) ev.preventDefault();
+    };
+    const onMove = (ev: PointerEvent) => {
+      if (!dragging) {
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) > 8) cleanup();
+        return;
+      }
+      const row = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)?.closest('tr[data-rowkey]');
+      const target = row?.getAttribute('data-rowkey');
+      if (target && target !== current) {
+        moveKeyTo(listId, current, target);
+        setLists(readLists());
+      }
+    };
+    const onEnd = () => cleanup();
+    const timer = window.setTimeout(() => {
+      dragging = true;
+      setDragKey(k);
+      navigator.vibrate?.(15);
+    }, 400);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onEnd);
+    window.addEventListener('pointercancel', onEnd);
+    window.addEventListener('touchmove', block, { passive: false });
+  };
 
   // Any click outside an open menu (or Escape) closes it; that click is swallowed so it doesn't also open a stock.
   useEffect(() => {
@@ -413,7 +472,7 @@ export default function Watchlist() {
   const menuItem = 'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-sm hover:bg-surface-hover';
 
   const rowMenu = (s: SavedStock, k: string, note: string | undefined) => (
-    <div className="relative inline-block mr-5" data-wl-menu>
+    <div className="relative inline-block mr-4 sm:mr-5" data-wl-menu>
       <button
         onClick={(e) => {
           e.stopPropagation();
@@ -427,58 +486,16 @@ export default function Watchlist() {
       {menuKey === k && (
         <>
           <div className="absolute right-0 top-9 z-30 w-56 rounded-xl border border-line bg-surface shadow-lg p-1 text-left">
-            <p className="px-2.5 pt-1.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-faint flex items-center gap-1">
-              <ListPlus size={12} /> Add to lists
-            </p>
-            {lists.length === 0 && <p className="px-2.5 pb-1.5 text-xs text-muted">Create a list first with “New list”.</p>}
-            {lists.map((l) => (
-              <label key={l.id} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-surface-hover cursor-pointer text-sm">
-                <input
-                  type="checkbox"
-                  checked={l.keys.includes(k)}
-                  onChange={() => {
-                    toggleInList(l.id, k);
-                    setLists(readLists());
-                  }}
-                  className="accent-brand-500"
-                />
-                <span>{l.emoji}</span>
-                <span className="truncate">{l.name}</span>
-              </label>
-            ))}
-            <div className="my-1 border-t border-line" />
             <button
               className={menuItem}
               onClick={() => {
                 setMenuKey(null);
-                setNoteKey(k);
-                setNoteDraft(note ?? '');
+                setPickKey(k);
               }}
             >
-              <StickyNote size={14} /> {note ? 'Edit note' : 'Add note'}
+              <ListPlus size={14} /> Add to list
             </button>
-            {manualMovable && (
-              <>
-                <button
-                  className={menuItem}
-                  onClick={() => {
-                    moveInList(activeList!.id, k, -1);
-                    setLists(readLists());
-                  }}
-                >
-                  <ArrowUp size={14} /> Move up
-                </button>
-                <button
-                  className={menuItem}
-                  onClick={() => {
-                    moveInList(activeList!.id, k, 1);
-                    setLists(readLists());
-                  }}
-                >
-                  <ArrowDown size={14} /> Move down
-                </button>
-              </>
-            )}
+            <div className="my-1 border-t border-line" />
             {activeList && (
               <button
                 className={menuItem}
@@ -505,6 +522,9 @@ export default function Watchlist() {
     </div>
   );
 
+  // Landing = the list of watchlists (with an "ALL" row on top). Stocks only show inside a list or in ALL.
+  const showStocks = lists.length === 0 || active !== ALL;
+
   const noteStock = noteKey ? items.find((x) => skey(x) === noteKey) ?? null : null;
 
   return (
@@ -514,7 +534,7 @@ export default function Watchlist() {
         title="Watchlist"
         actionsInline
         actions={
-          <>
+          <div className="flex items-center gap-4">
             {items.length > 0 && (
               <IconButton label="Export CSV" variant="secondary" onClick={exportCsv}>
                 <Download size={16} />
@@ -525,26 +545,73 @@ export default function Watchlist() {
                 New list
               </Button>
             )}
-          </>
+          </div>
         }
       />
-      {activeList ? (
-        <button
-          type="button"
-          onClick={() => setActive(ALL)}
-          className="tap-scale inline-flex items-center gap-1 -ml-1 pr-2 py-1 rounded-lg text-sm font-medium text-muted hover:text-ink"
-        >
-          <ChevronLeft size={18} /> All watchlists
-        </button>
-      ) : (
+      {lists.length > 0 && (
+        <div className="[&_[role=tab]]:text-[13px]">
+        <Tabs
+          items={[
+            ...pinnedLists.map((l) => ({ key: l.id, label: l.name })),
+            { key: ALL, label: 'All watchlists' },
+            { key: ALLSTOCKS, label: 'ALL' },
+            ...sortedLists.filter((l) => !l.pinned).map((l) => ({ key: l.id, label: l.name })),
+          ]}
+          value={activeList ? activeList.id : active}
+          onChange={(key) => {
+            setQuery('');
+            setPinMode(false);
+            setActive(key);
+          }}
+        />
+        </div>
+      )}
+      {activeList || active === ALLSTOCKS ? null : (
         lists.length > 0 && (
           <div>
-            <p className="px-1 pb-2 text-sm font-semibold text-ink">
-              {lists.length} {lists.length === 1 ? 'Watchlist' : 'Watchlists'}
-            </p>
-            <Card padding="none">
+            <div className="flex items-center justify-between px-1 pb-2">
+              <p className="text-sm font-semibold text-ink">
+                {lists.length} {lists.length === 1 ? 'Watchlist' : 'Watchlists'}
+              </p>
+              <button
+                type="button"
+                onClick={() => setPinMode((v) => !v)}
+                aria-pressed={pinMode}
+                className={`tap-scale inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold ${
+                  pinMode ? 'border-transparent bg-brand-500 text-white' : 'border-line text-ink hover:bg-surface-hover'
+                }`}
+              >
+                {pinMode ? <Check size={14} /> : <Pin size={14} />}
+                {pinMode ? 'Done' : 'Pin'}
+              </button>
+            </div>
+            <Card padding="none" className="-mx-4 rounded-none sm:mx-0 sm:rounded-[20px]">
               <ul className="divide-y divide-line">
-                {lists.map((l) => {
+                {items.length > 0 && (
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (pinMode) return;
+                        setQuery('');
+                        setActive(ALLSTOCKS);
+                      }}
+                      className="w-full flex items-center gap-4 px-4 py-4 text-left hover:bg-surface-hover"
+                    >
+                      <span className="h-12 w-12 shrink-0 inline-flex items-center justify-center rounded-full bg-surface-muted text-sm font-medium text-positive">
+                        AL
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-ink">ALL</span>
+                        <span className="block text-xs text-muted font-numeric">
+                          {items.length} {items.length === 1 ? 'stock' : 'stocks'}
+                        </span>
+                      </span>
+                      {!pinMode && <ChevronRight size={18} className="shrink-0 text-faint" />}
+                    </button>
+                  </li>
+                )}
+                {sortedLists.map((l) => {
                   const words = l.name.trim().split(/\s+/).filter(Boolean);
                   const initials = (words.length > 1 ? words[0][0] + words[1][0] : l.name.trim().slice(0, 2)).toUpperCase();
                   return (
@@ -552,32 +619,48 @@ export default function Watchlist() {
                       <button
                         type="button"
                         onClick={() => {
+                          if (pinMode) {
+                            togglePinList(l.id);
+                            setLists(readLists());
+                            return;
+                          }
                           setQuery('');
                           setActive(l.id);
                         }}
                         className="w-full flex items-center gap-4 px-4 py-4 text-left hover:bg-surface-hover"
                       >
-                        <span className="h-12 w-12 shrink-0 inline-flex items-center justify-center rounded-full bg-surface-muted text-base font-medium text-positive">
+                        <span className="relative h-12 w-12 shrink-0 inline-flex items-center justify-center rounded-full bg-surface-muted text-sm font-medium text-positive">
                           {initials}
+                          {l.pinned && <Pin size={13} aria-label="Pinned" className="absolute -bottom-0.5 -right-0.5 fill-current text-positive" />}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-base font-medium text-ink">{l.name}</span>
+                          <span className="block truncate text-sm font-medium text-ink">{l.name}</span>
                           <span className="block text-xs text-muted font-numeric">
                             {l.keys.length} {l.keys.length === 1 ? 'stock' : 'stocks'}
                           </span>
                         </span>
-                        <ChevronRight size={18} className="shrink-0 text-faint" />
+                        {pinMode ? (
+                          <span
+                            aria-label={l.pinned ? `Unpin ${l.name}` : `Pin ${l.name}`}
+                            className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                              l.pinned ? 'bg-positive-soft text-positive' : 'border border-line text-faint'
+                            }`}
+                          >
+                            <Pin size={15} className={l.pinned ? 'fill-current' : ''} />
+                          </span>
+                        ) : (
+                          <ChevronRight size={18} className="shrink-0 text-faint" />
+                        )}
                       </button>
                     </li>
                   );
                 })}
               </ul>
             </Card>
-            {items.length > 0 && <p className="px-1 pt-5 text-sm font-semibold text-ink">All stocks</p>}
           </div>
         )
       )}
-      {items.length > 0 && (
+      {showStocks && items.length > 0 && (
         <div className="flex flex-nowrap items-center gap-1.5 whitespace-nowrap overflow-hidden pt-1">
               <span className="inline-flex items-center shrink-0 rounded-md bg-surface-muted px-1.5 sm:px-2 py-0.5 text-xs font-medium text-ink-2 font-numeric">
                 {visible.length} {visible.length === 1 ? 'stock' : 'stocks'}
@@ -604,7 +687,7 @@ export default function Watchlist() {
       )}
 
 
-      <>
+      {showStocks && (<>
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative min-w-[160px] flex-1 sm:max-w-sm">
               <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
@@ -790,7 +873,7 @@ export default function Watchlist() {
           ) : visible.length === 0 ? (
             <EmptyState compact title="No stocks match your search" />
           ) : (
-            <Card padding="none">
+            <Card padding="none" className="-mx-4 rounded-none sm:mx-0 sm:rounded-[20px]">
               <Table className="table-fixed">
                 <colgroup>
                   <col />
@@ -798,16 +881,16 @@ export default function Watchlist() {
                   <col className="w-[84px] sm:w-[190px]" />
                   <col className="hidden lg:table-column w-[230px]" />
                   <col className="hidden md:table-column w-[190px]" />
-                  <col className="w-11 sm:w-14" />
+                  <col className="w-14" />
                 </colgroup>
-                <THead className="rounded-t-[20px]">
+                <THead className="sm:rounded-t-[20px]">
                   <tr>
                     <Th {...thProps('name')}>Stock</Th>
                     <Th align="right" {...thProps('price')}>
                       Price
                     </Th>
                     <Th align="right" {...thProps('change')}>
-                      Day
+                      %
                     </Th>
                     <Th className="hidden lg:table-cell !pl-10" {...thProps('range')}>
                       52-week range
@@ -829,7 +912,16 @@ export default function Watchlist() {
                     const alert = alerts.get(k);
                     const note = notes[k];
                     return (
-                      <Tr key={k} onClick={() => open(s)}>
+                      <Tr
+                        key={k}
+                        data-rowkey={k}
+                        onClick={() => {
+                          if (!suppressClick.current) open(s);
+                        }}
+                        onPointerDown={(e) => startLongPress(e, k)}
+                        onContextMenu={manualMovable ? (e) => e.preventDefault() : undefined}
+                        className={manualMovable ? `select-none ${dragKey === k ? 'bg-surface-hover shadow-lg' : ''}` : undefined}
+                      >
                         <Td>
                           <div className="flex items-center gap-3 min-w-0">
                             <CompanyLogo symbol={bare(s.symbol)} name={s.name} market={s.market} size={36} />
@@ -895,7 +987,7 @@ export default function Watchlist() {
               </Table>
             </Card>
           )}
-      </>
+      </>)}
 
       <Modal
         open={listModal !== null}
@@ -912,16 +1004,48 @@ export default function Watchlist() {
           </div>
         }
       >
-        <Field label="List name" hint="For example: Dividend picks, Long term, Watch for dips">
+        <Field label="Watchlist name">
           <Input
             autoFocus
             value={nameDraft}
             maxLength={30}
-            onChange={(e) => setNameDraft(e.target.value)}
+            onChange={(e) => setNameDraft(e.target.value.toUpperCase())}
+            autoCapitalize="characters"
+            className="uppercase placeholder:normal-case"
             onKeyDown={(e) => e.key === 'Enter' && submitList()}
-            placeholder="List name"
+            placeholder="Watchlist name"
           />
         </Field>
+      </Modal>
+
+      <Modal
+        open={pickKey !== null}
+        onClose={() => setPickKey(null)}
+        title="Add to list"
+        footer={
+          <div className="flex justify-end">
+            <Button onClick={() => setPickKey(null)}>Done</Button>
+          </div>
+        }
+      >
+        {lists.length === 0 && <p className="text-sm text-muted">Create a list first with “New list”.</p>}
+        <div className="space-y-1">
+          {pickKey &&
+            lists.map((l) => (
+              <label key={l.id} className="flex items-center gap-3 px-2 py-2.5 rounded-lg hover:bg-surface-hover cursor-pointer text-sm">
+                <input
+                  type="checkbox"
+                  checked={l.keys.includes(pickKey)}
+                  onChange={() => {
+                    toggleInList(l.id, pickKey);
+                    setLists(readLists());
+                  }}
+                  className="h-4 w-4 accent-brand-500"
+                />
+                <span className="truncate">{l.name}</span>
+              </label>
+            ))}
+        </div>
       </Modal>
 
       <Modal

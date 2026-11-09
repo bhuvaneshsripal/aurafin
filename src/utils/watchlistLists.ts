@@ -9,6 +9,8 @@ export interface WatchList {
   emoji: string;
   /** stockKey() values, in the user's manual order */
   keys: string[];
+  /** Pinned lists show as tabs at the top of the Watchlist page. Off unless the user pins it. */
+  pinned?: boolean;
 }
 interface Store {
   lists: WatchList[];
@@ -24,7 +26,7 @@ function load(): Store {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) || '{}');
     const lists = Array.isArray(v.lists)
-      ? v.lists.filter((l: WatchList) => l && typeof l.id === 'string' && typeof l.name === 'string' && Array.isArray(l.keys))
+      ? v.lists.filter((l: WatchList) => l && typeof l.id === 'string' && typeof l.name === 'string' && Array.isArray(l.keys)).map((l: WatchList) => ({ ...l, name: l.name.toUpperCase() }))
       : [];
     return { lists, notes: v.notes && typeof v.notes === 'object' ? v.notes : {} };
   } catch {
@@ -47,7 +49,7 @@ export const readNotes = (): Record<string, string> => load().notes;
 
 export function createList(name: string, emoji: string): WatchList | null {
   const s = load();
-  const n = name.trim().slice(0, 30);
+  const n = name.trim().toUpperCase().slice(0, 30);
   if (!n || s.lists.length >= MAX_LISTS) return null;
   const list: WatchList = { id: `l${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, name: n, emoji, keys: [] };
   save({ ...s, lists: [...s.lists, list] });
@@ -65,8 +67,22 @@ export function updateList(id: string, patch: Partial<Pick<WatchList, 'name' | '
   const s = load();
   save({
     ...s,
-    lists: s.lists.map((l) => (l.id === id ? { ...l, ...patch, name: (patch.name ?? l.name).trim().slice(0, 30) || l.name } : l)),
+    lists: s.lists.map((l) => (l.id === id ? { ...l, ...patch, name: (patch.name ?? l.name).trim().toUpperCase().slice(0, 30) || l.name } : l)),
   });
+}
+
+export function togglePinList(id: string): boolean {
+  const s = load();
+  let now = false;
+  save({
+    ...s,
+    lists: s.lists.map((l) => {
+      if (l.id !== id) return l;
+      now = !l.pinned;
+      return { ...l, pinned: now };
+    }),
+  });
+  return now;
 }
 
 export function deleteList(id: string) {
@@ -78,7 +94,7 @@ export function duplicateList(id: string): WatchList | null {
   const s = load();
   const src = s.lists.find((l) => l.id === id);
   if (!src || s.lists.length >= MAX_LISTS) return null;
-  const copy: WatchList = { ...src, id: `l${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, name: `${src.name} copy`.slice(0, 30), keys: [...src.keys] };
+  const copy: WatchList = { ...src, id: `l${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, name: `${src.name} COPY`.slice(0, 30), keys: [...src.keys] };
   save({ ...s, lists: [...s.lists, copy] });
   return copy;
 }
@@ -137,3 +153,21 @@ export function pruneTo(savedKeys: Set<string>) {
 }
 
 export { stockKey };
+
+/** Drag-reorder: put `key` where `targetKey` currently sits inside a list. */
+export function moveKeyTo(listId: string, key: string, targetKey: string) {
+  const s = load();
+  save({
+    ...s,
+    lists: s.lists.map((l) => {
+      if (l.id !== listId) return l;
+      const i = l.keys.indexOf(key);
+      const j = l.keys.indexOf(targetKey);
+      if (i < 0 || j < 0 || i === j) return l;
+      const keys = [...l.keys];
+      keys.splice(i, 1);
+      keys.splice(j, 0, key);
+      return { ...l, keys };
+    }),
+  });
+}
