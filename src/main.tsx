@@ -5,6 +5,7 @@ import './index.css'
 import App from './App.tsx'
 import BoldDigits from './utils/boldDigits.tsx'
 import ErrorBoundary from './components/ErrorBoundary.tsx'
+import { installChartTouchHide } from './utils/chartTouchHide'
 
 // Take over scroll restoration ourselves (see useScrollRestoration) instead
 // of letting the browser silently restore the old scroll position on a
@@ -25,6 +26,10 @@ document.addEventListener(
   },
   { passive: true }
 );
+
+// Chart values show while a finger is on a chart and hide when it lifts
+// (see utils/chartTouchHide). Mouse hover already behaves this way.
+installChartTouchHide();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

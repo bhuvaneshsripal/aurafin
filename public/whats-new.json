@@ -4,6 +4,11 @@
   "title": "What's new in Aurafin v1.0 🎉",
   "items": [
     {
+      "emoji": "👆",
+      "title": "Chart values show only while you touch",
+      "description": "Press or slide along any chart to see its values; lift your finger and they hide again. A quick tap shows the value for a moment."
+    },
+    {
       "emoji": "📈",
       "title": "Swing scanner",
       "description": "Nifty 200 stocks ranked by daily-chart swing setups (breakout, pullback, bounce), with RSI, volume and an entry, stop and target plan for each."

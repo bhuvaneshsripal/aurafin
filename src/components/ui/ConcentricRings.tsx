@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { cn } from './cn';
 
 export interface RingItem {
@@ -86,6 +86,25 @@ export default function ConcentricRings({
     onActiveChange?.(k);
   };
 
+  // Touch: the highlighted ring shows while the finger is on it and clears when
+  // the finger lifts (a quick tap keeps it for a moment). A mouse already clears
+  // it on mouse-leave.
+  const touchDownAt = useRef(0);
+  const releaseTimer = useRef(0);
+  useEffect(() => () => window.clearTimeout(releaseTimer.current), []);
+  const touchPress = (e: ReactPointerEvent, key: string) => {
+    if (e.pointerType === 'mouse') return;
+    window.clearTimeout(releaseTimer.current);
+    touchDownAt.current = Date.now();
+    setActive(key);
+  };
+  const touchRelease = (e: ReactPointerEvent) => {
+    if (e.pointerType === 'mouse') return;
+    window.clearTimeout(releaseTimer.current);
+    const quickTap = e.type === 'pointerup' && Date.now() - touchDownAt.current < 300;
+    releaseTimer.current = window.setTimeout(() => setActive(null), quickTap ? 1200 : 0);
+  };
+
   return (
     <div
       className={cn('relative mx-auto max-w-full', className)}
@@ -93,7 +112,13 @@ export default function ConcentricRings({
       role="img"
       aria-label={`Allocation: ${rings.map((r) => `${r.label} ${r.pct.toFixed(0)}%`).join(', ')}`}
     >
-      <svg viewBox={`0 0 ${VB} ${VB}`} className="h-full w-full -rotate-90" onMouseLeave={() => setActive(null)}>
+      <svg
+        viewBox={`0 0 ${VB} ${VB}`}
+        className="h-full w-full -rotate-90"
+        onMouseLeave={() => setActive(null)}
+        onPointerUp={touchRelease}
+        onPointerCancel={touchRelease}
+      >
         {rings.map((r, i) => {
           const radius = outerEdge - pitch * i - pitch / 2;
           const circ = 2 * Math.PI * radius;
@@ -107,6 +132,7 @@ export default function ConcentricRings({
               style={{ cursor: clickable ? 'pointer' : 'default', outline: 'none' }}
               opacity={dim ? 0.35 : 1}
               onMouseEnter={() => setActive(r.key)}
+              onPointerDown={(e) => touchPress(e, r.key)}
               onClick={clickable ? () => onSelect!(r.key) : undefined}
               onFocus={() => setActive(r.key)}
               onBlur={() => setActive(null)}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
-import { usePinnedTooltip, isTouchDevice, type ChartClickState } from '../hooks/usePinnedTooltip';
+import { usePinnedTooltip, isTouchDevice } from '../hooks/usePinnedTooltip';
 import PinnedChartTooltip from '../components/PinnedChartTooltip';
 import { isFullySold, computePortfolioPnl } from '../utils/investmentPnl';
 import { Link } from 'react-router-dom';
@@ -928,11 +928,18 @@ function AllocationCard({
             centerExtra={(r) => (privacyMode ? PRIVACY_DOTS : maskAmount(r.value, 'INR', false, { fractionDigits: 0 }))}
             formatPercent={(p) => (privacyMode ? PRIVACY_DOTS : `${p >= 10 ? p.toFixed(0) : p.toFixed(1)}%`)}
           />
-          <ul className="mt-4 space-y-2" onMouseLeave={() => setActive(null)}>
+          <ul
+            className="mt-4 space-y-2"
+            onMouseLeave={() => setActive(null)}
+            // Touch: the row highlights while pressed and clears when the finger lifts.
+            onPointerUp={(e) => { if (e.pointerType !== 'mouse') window.setTimeout(() => setActive(null), 250); }}
+            onPointerCancel={(e) => { if (e.pointerType !== 'mouse') setActive(null); }}
+          >
             {legend.map((d) => (
               <li
                 key={d.key}
                 onMouseEnter={() => setActive(d.key)}
+                onPointerDown={(e) => { if (e.pointerType !== 'mouse') setActive(d.key); }}
                 className={`flex items-center gap-2.5 text-sm transition-opacity ${active && active !== d.key ? 'opacity-40' : ''}`}
               >
                 <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: d.color }} />
@@ -967,8 +974,6 @@ function CashflowCard({
   privacyMode: boolean;
 }) {
   const m = (v: number) => (privacyMode ? PRIVACY_DOTS : maskAmount(v, 'INR', false, { fractionDigits: 0 }));
-  const pin = usePinnedTooltip();
-  const pinnedRow = pin.pinned ? trend.find((r) => r.label === pin.pinned!.label) : undefined;
   return (
     <Card padding="lg" className="h-full">
       <CardHeader
@@ -1011,13 +1016,12 @@ function CashflowCard({
             </div>
           </div>
           {trend.length > 1 && (
-            <div className="h-[190px] -ml-2 relative" ref={pin.containerRef}>
+            <div className="h-[190px] -ml-2 relative">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={trend}
                   margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
                   barGap={3}
-                  onClick={(state) => pin.handleChartClick(state as ChartClickState)}
                 >
                   <CartesianGrid stroke={chart.grid} strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="label" tick={chart.tick} axisLine={false} tickLine={false} />
@@ -1030,34 +1034,18 @@ function CashflowCard({
                   />
                   <Tooltip
                     cursor={{ fill: 'var(--color-surface-hover)' }}
-                    content={(p) =>
-                      pin.pinned || isTouchDevice() ? null : (
-                        <ChartTooltip
-                          {...(p as object)}
-                          privacyMode={privacyMode}
-                          labels={{ income: 'Income', expense: 'Expenses' }}
-                        />
-                      )
-                    }
+                    content={(p) => (
+                      <ChartTooltip
+                        {...(p as object)}
+                        privacyMode={privacyMode}
+                        labels={{ income: 'Income', expense: 'Expenses' }}
+                      />
+                    )}
                   />
                   <Bar dataKey="income" fill={chart.primary} radius={[3, 3, 0, 0]} maxBarSize={22} isAnimationActive={false} />
                   <Bar dataKey="expense" fill="#d6b06b" radius={[3, 3, 0, 0]} maxBarSize={22} isAnimationActive={false} />
                 </BarChart>
               </ResponsiveContainer>
-              {pin.pinned && pinnedRow && (
-                <PinnedChartTooltip containerRef={pin.containerRef} x={pin.pinned.x} onHide={pin.hidePinned}>
-                  <ChartTooltip
-                    active
-                    payload={[
-                      { dataKey: 'income', name: 'Income', value: pinnedRow.income, color: chart.primary },
-                      { dataKey: 'expense', name: 'Expenses', value: pinnedRow.expense, color: '#d6b06b' },
-                    ]}
-                    label={pinnedRow.label}
-                    privacyMode={privacyMode}
-                    labels={{ income: 'Income', expense: 'Expenses' }}
-                  />
-                </PinnedChartTooltip>
-              )}
             </div>
           )}
         </>

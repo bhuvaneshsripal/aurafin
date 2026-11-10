@@ -142,3 +142,12 @@ Deliberately NOT done: `content-visibility` on rows (would skew scroll restorati
 - Analytics → Tax CSV: same fixes as the Watchlist export (BOM, formula-safe, delayed revoke).
 - Backup .json: the download URL was revoked immediately, which can cancel the download in Safari / some mobile browsers.
 - New shared helpers in `utils/exportCsv.ts`: `triggerDownload`, `csvCell`, `safeFilename`.
+
+---
+
+# Fourth pass — chart values follow your finger
+
+- **Charts (whole site):** on phones the value card stayed on screen after you lifted your finger. Now the value shows while a finger is on the chart (press, or slide sideways to move along it) and hides when it lifts; a quick tap shows it for ~1.2 s. Mouse hover is unchanged. One shared listener, `utils/chartTouchHide.ts` (installed in `main.tsx`), covers every Recharts chart: Dashboard, Wealth (net worth history, monthly change), Portfolio Performance, Money → Insights, Analytics (allocation, projection) and the Calculators. `.recharts-wrapper` is `touch-action: pan-y` so sideways drags scrub and vertical swipes still scroll.
+- **Dashboard → Income & expenses:** no longer tap-to-pin; it uses the same show-while-touching behaviour. (Net worth over time already worked this way.)
+- **Allocation rings and the Dashboard legend:** the highlighted ring / row clears when the finger lifts.
+- **"What's new" dialog:** if nothing in the list is new by title, the full list is shown instead of the generic message.

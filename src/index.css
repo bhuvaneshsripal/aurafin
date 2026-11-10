@@ -377,6 +377,15 @@ textarea {
 .recharts-pie-sector {
   outline: none !important;
 }
+/* Touch: sliding a finger sideways along a chart scrubs through its values
+   (they hide again when the finger lifts, see utils/chartTouchHide), while a
+   vertical swipe still scrolls the page. */
+.recharts-wrapper {
+  touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):focus,
 select:focus,
 textarea:focus {
