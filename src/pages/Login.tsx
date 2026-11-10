@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import SocialLoginButtons from '../components/SocialLoginButtons';
 import { friendlyAuthError } from '../utils/authErrors';
 import LoginShowcase from '../components/LoginShowcase';
+import LoginWordmark from '../components/LoginWordmark';
 import StockAnalysisArticle from '../components/StockAnalysisArticle';
 import Modal from '../components/Modal';
 import SignUpScreen from '../components/SignUpScreen';
@@ -218,6 +219,8 @@ export default function Login() {
           <a href="/terms" className="hover:underline">Terms of Service</a>
         </footer>
       </main>
+
+      <LoginWordmark />
 
       <InstallBanner />
       <InstallPromptModal />

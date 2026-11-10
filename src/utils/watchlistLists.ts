@@ -11,6 +11,8 @@ export interface WatchList {
   keys: string[];
   /** Pinned lists show as tabs at the top of the Watchlist page. Off unless the user pins it. */
   pinned?: boolean;
+  /** When it was pinned (a counter, not a clock): pinned lists show in the order they were pinned, first pinned first. */
+  pinnedAt?: number;
 }
 interface Store {
   lists: WatchList[];
@@ -74,15 +76,32 @@ export function updateList(id: string, patch: Partial<Pick<WatchList, 'name' | '
 export function togglePinList(id: string): boolean {
   const s = load();
   let now = false;
+  // Next pin number: always after every list that is already pinned, so the list pinned
+  // first stays first and the one pinned last goes last.
+  const nextPin = s.lists.reduce((m, l) => Math.max(m, l.pinnedAt ?? 0), 0) + 1;
   save({
     ...s,
     lists: s.lists.map((l) => {
       if (l.id !== id) return l;
       now = !l.pinned;
-      return { ...l, pinned: now };
+      if (now) return { ...l, pinned: true, pinnedAt: nextPin };
+      const { pinnedAt: _drop, ...rest } = l;
+      void _drop;
+      return { ...rest, pinned: false };
     }),
   });
   return now;
+}
+
+/** Pinned lists first, in the order they were pinned (lists pinned before this existed keep
+ *  their old order, ahead of newer pins); then the rest in their usual order. */
+export function orderLists(lists: WatchList[]): WatchList[] {
+  const pinned = lists
+    .map((l, i) => ({ l, i }))
+    .filter((x) => x.l.pinned)
+    .sort((a, b) => (a.l.pinnedAt ?? 0) - (b.l.pinnedAt ?? 0) || a.i - b.i)
+    .map((x) => x.l);
+  return [...pinned, ...lists.filter((l) => !l.pinned)];
 }
 
 export function deleteList(id: string) {

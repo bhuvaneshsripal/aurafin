@@ -55,6 +55,7 @@ import { useSnapshotsStore } from '../store/snapshotsStore';
 import SplitAmount from '../components/SplitAmount';
 import { useLivePricesStore, resolvePreviousClose, isPriceCacheFresh } from '../store/livePricesStore';
 import { formatDate, formatLocaleDate, toIsoDate } from '../utils/date';
+import { AreaGradient, ChartTooltipCard, isoToMs, liveEndDot, makeTickFormatter, niceTimeTicks, paddedDomain, DAY_MS } from '../components/ui/chartKit';
 import { newId } from '../utils/id';
 import { goldPricePerGram22k } from '../utils/goldPrice';
 import { computeHoldingPnl, isFullySold } from '../utils/investmentPnl';
@@ -1809,7 +1810,7 @@ function AssetsTab({
         dayChangePerUnit !== undefined && previousClose
           ? dayChangeResetActive
             ? 0
-            : (dayChangePerUnit / previousClose) * 100
+            : ((computed.currentPrice! - previousClose) / previousClose) * 100 // exact values, not the paise-rounded change
           : undefined;
       return { asset: a, ...computed, alloc, previousClose, dayChangePerUnit, dayChangePercent };
     });
@@ -3652,7 +3653,7 @@ function HoldingDetailView({
     dayChangePerUnit !== undefined && previousClose
       ? dayChangeResetActive
         ? 0
-        : (dayChangePerUnit / previousClose) * 100
+        : ((currentPrice! - previousClose) / previousClose) * 100
       : undefined;
   const dayChangeTotal = dayChangePerUnit !== undefined ? dayChangePerUnit * qty : undefined;
 
@@ -8214,13 +8215,22 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
 
   const [range, setRange] = useState<NetWorthRange>('ALL');
   const data = useMemo(() => {
-    if (range === 'ALL') return sortedAsc;
-    const months = range === '3M' ? 3 : range === '6M' ? 6 : 12;
-    const cutoff = new Date();
-    cutoff.setMonth(cutoff.getMonth() - months);
-    const iso = toIsoDate(cutoff);
-    return sortedAsc.filter((s) => s.date >= iso);
-  }, [sortedAsc, range]);
+    let base: Snapshot[];
+    if (range === 'ALL') base = sortedAsc;
+    else {
+      const months = range === '3M' ? 3 : range === '6M' ? 6 : 12;
+      const cutoff = new Date();
+      cutoff.setMonth(cutoff.getMonth() - months);
+      const iso = toIsoDate(cutoff);
+      base = sortedAsc.filter((s) => s.date >= iso);
+    }
+    // The line always ends on TODAY'S LIVE numbers (the same ones as the cards above). Before, it
+    // stopped at the last saved snapshot, so the chart's latest value could disagree with the
+    // Assets / Net worth cards until a new snapshot was taken.
+    if (sortedAsc.length === 0 || !wealthDataKnown) return base;
+    const live: Snapshot = { id: 'live-today', date: today, netWorth, totalAssets, totalLiabilities };
+    return [...base.filter((s) => s.date !== today), live];
+  }, [sortedAsc, range, wealthDataKnown, today, netWorth, totalAssets, totalLiabilities]);
 
   const historyDesc = useMemo(() => [...sortedAsc].reverse(), [sortedAsc]);
 
@@ -8241,6 +8251,18 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   const metricChange = hasTrend ? last[metric] - first[metric] : 0;
   // For liabilities, going up is the bad direction.
   const metricBad = metric === 'totalLiabilities' ? metricChange > 0 : metricChange < 0;
+
+  // Chart series on a real time axis (x = the date in ms), so spacing = time between snapshots.
+  const chartPts = useMemo(() => data.map((d) => ({ t: isoToMs(d.date), v: d[metric] })), [data, metric]);
+  const chartX = useMemo(() => {
+    if (chartPts.length === 0) return { min: 0, max: 1, ticks: [] as number[] };
+    const lo = chartPts[0].t;
+    const hi = chartPts[chartPts.length - 1].t;
+    const min = lo === hi ? lo - DAY_MS : lo;
+    const max = lo === hi ? hi + DAY_MS : hi;
+    return { min, max, ticks: niceTimeTicks(min, max, 6) };
+  }, [chartPts]);
+  const chartYDomain = useMemo(() => paddedDomain(chartPts.map((p) => p.v)), [chartPts]);
 
   // Month-by-month change over the selected range. The first month is measured from the
   // first snapshot (it used to be skipped, so a single month never showed anything).
@@ -8466,17 +8488,23 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
           ) : (
             <div className="h-[260px] -ml-2">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke={chart.grid} strokeDasharray="3 3" vertical={false} />
+                <AreaChart data={chartPts} margin={{ top: 12, right: 14, left: 0, bottom: 0 }}>
+                  <defs>
+                    <AreaGradient id="nwFill" color={metricBad ? chart.negative : chart.primary} />
+                  </defs>
+                  <CartesianGrid stroke={chart.grid} strokeDasharray="2 6" vertical={false} />
                   <XAxis
-                    dataKey="date"
-                    tickFormatter={(d: string) =>
-                      formatLocaleDate(new Date(`${d}T00:00:00`), 'en-IN', { month: 'short', day: 'numeric' })
-                    }
+                    dataKey="t"
+                    type="number"
+                    scale="time"
+                    domain={[chartX.min, chartX.max]}
+                    ticks={chartX.ticks}
+                    tickFormatter={makeTickFormatter(chartX.min, chartX.max)}
                     tick={chart.tick}
                     axisLine={false}
                     tickLine={false}
-                    minTickGap={28}
+                    tickMargin={8}
+                    padding={{ left: 4, right: 12 }}
                   />
                   <YAxis
                     tickFormatter={(v: number) => (privacyMode ? PRIVACY_DOTS : formatAxisAmount(v))}
@@ -8484,27 +8512,40 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
                     axisLine={false}
                     tickLine={false}
                     width={56}
-                    domain={data.length === 1 ? [(v: number) => v * 0.97, (v: number) => v * 1.03] : ['auto', 'auto']}
+                    domain={chartYDomain}
+                    tickCount={5}
                   />
                   <Tooltip
-                    cursor={chart.tooltip.cursor}
-                    contentStyle={chart.tooltip.contentStyle}
-                    labelStyle={chart.tooltip.labelStyle}
-                    itemStyle={chart.tooltip.itemStyle}
-                    formatter={(v) => [
-                      privacyMode ? PRIVACY_DOTS : formatPreciseCurrency(Number(v)),
-                      metricLabel,
-                    ]}
-                    labelFormatter={(l) => formatDate(String(l ?? ''))}
+                    cursor={{ stroke: metricBad ? chart.negative : chart.primary, strokeWidth: 1, strokeDasharray: '3 4', strokeOpacity: 0.6 }}
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      const pt = payload[0].payload as { t: number; v: number };
+                      const first0 = chartPts[0];
+                      const d = pt.v - first0.v;
+                      const pct = first0.v > 0 ? (d / first0.v) * 100 : undefined;
+                      return (
+                        <ChartTooltipCard
+                          dateMs={pt.t}
+                          label={metricLabel}
+                          color={metricBad ? chart.negative : chart.primary}
+                          value={privacyMode ? PRIVACY_DOTS : formatPreciseCurrency(pt.v)}
+                          delta={chartPts.length > 1 && pt.t !== first0.t ? (privacyMode ? PRIVACY_DOTS : formatSignedCurrency(d, 'INR', 0)) : undefined}
+                          deltaPct={chartPts.length > 1 && pt.t !== first0.t && pct !== undefined && !privacyMode ? `${pct >= 0 ? '+' : '−'}${formatPercentMagnitude(pct, 1)}` : undefined}
+                        />
+                      );
+                    }}
                   />
                   <Area
                     type="monotone"
-                    dataKey={metric} isAnimationActive={false}
+                    dataKey="v"
+                    isAnimationActive
+                    animationDuration={600}
                     stroke={metricBad ? chart.negative : chart.primary}
-                    strokeWidth={2}
-                    fill={metricBad ? chart.negativeSoft : chart.primarySoft}
-                    dot={data.length > 60 ? false : { r: 4, strokeWidth: 2, stroke: 'var(--color-surface)', fill: metricBad ? chart.negative : chart.primary }}
-                    activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-surface)', fill: metricBad ? chart.negative : chart.primary }}
+                    strokeWidth={2.5}
+                    strokeLinecap="round"
+                    fill="url(#nwFill)"
+                    dot={liveEndDot(metricBad ? chart.negative : chart.primary, chartPts.length - 1)}
+                    activeDot={{ r: 5.5, strokeWidth: 2.5, stroke: 'var(--color-surface)', fill: metricBad ? chart.negative : chart.primary }}
                   />
                 </AreaChart>
               </ResponsiveContainer>

@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { hardRefresh } from '../utils/hardRefresh';
 
 const LAST_REFRESH_KEY = 'aurafin-last-auto-hard-refresh';
-const REFRESH_HOUR = 6; // 6:00 a.m. device-local time
+const REFRESH_HOUR = 8; // 8:00 a.m. device-local time
 const CHECK_INTERVAL_MS = 30_000;
 /** Don't reload while the person is actively using the app. */
 const IDLE_BEFORE_REFRESH_MS = 2 * 60_000;
@@ -23,7 +23,7 @@ function userIsBusy(): boolean {
   return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement;
 }
 
-/** The most recent 6:00 a.m. (local) that is <= now. */
+/** The most recent 8:00 a.m. (local) that is <= now. */
 function latestRefreshSlot(now: Date): number {
   const slot = new Date(now);
   slot.setHours(REFRESH_HOUR, 0, 0, 0);
@@ -50,7 +50,7 @@ function writeLast(ts: number) {
 }
 
 /**
- * Runs a hard refresh once every day at 6:00 a.m. (device local time).
+ * Runs a hard refresh once every day at 8:00 a.m. (device local time).
  * If the app was closed/asleep at 6 a.m., it refreshes the next time it is
  * opened or brought to the foreground. If the person is actively using the
  * app at that moment, it waits until they've been idle for a couple of
@@ -70,7 +70,7 @@ export function useDailyHardRefresh() {
         writeLast(now.getTime());
         return;
       }
-      if (last >= slot) return; // already refreshed since the last 6 a.m.
+      if (last >= slot) return; // already refreshed since the last 8 a.m.
       if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
       if (userIsBusy()) return; // try again on the next check, once they're idle
 

@@ -26,6 +26,7 @@ import {
   stockKey,
   toggleInList,
   togglePinList,
+  orderLists,
   updateList,
   type WatchList,
 } from '../utils/watchlistLists';
@@ -116,7 +117,7 @@ export default function Watchlist() {
   const [quotes, setQuotes] = useState<Map<string, LiveQuoteDetail>>(new Map());
   const [active, setActive] = useState<string>(() => {
     const ls = readLists();
-    const first = ls.find((l) => l.pinned) ?? ls[0];
+    const first = orderLists(ls)[0];
     return first ? first.id : ALL;
   });
   const [query, setQuery] = useState('');
@@ -238,8 +239,8 @@ export default function Watchlist() {
   }, [load]);
 
   const activeList = lists.find((l) => l.id === active) ?? null;
-  const pinnedLists = useMemo(() => lists.filter((l) => l.pinned), [lists]);
-  const sortedLists = useMemo(() => [...lists.filter((l) => l.pinned), ...lists.filter((l) => !l.pinned)], [lists]);
+  const sortedLists = useMemo(() => orderLists(lists), [lists]);
+  const pinnedLists = useMemo(() => sortedLists.filter((l) => l.pinned), [sortedLists]);
   useEffect(() => {
     if (active !== ALL && active !== ALLSTOCKS && !activeList) setActive(ALL);
   }, [active, activeList]);
@@ -553,7 +554,7 @@ export default function Watchlist() {
         <Tabs
           items={[
             ...pinnedLists.map((l) => ({ key: l.id, label: l.name })),
-            { key: ALL, label: 'All watchlists' },
+            { key: ALL, label: 'ALL WATCHLISTS' },
             { key: ALLSTOCKS, label: 'ALL' },
             ...sortedLists.filter((l) => !l.pinned).map((l) => ({ key: l.id, label: l.name })),
           ]}

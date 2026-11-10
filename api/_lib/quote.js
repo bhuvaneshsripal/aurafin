@@ -80,7 +80,12 @@ async function growwQuote(symbol) {
       const j = await res.json();
       const price = toNumber(j?.ltp);
       const ts = toNumber(j?.tsInMillis);
-      if (price !== undefined) q = { price, asOf: ts, previousClose: toNumber(j?.close) };
+      // Groww's own day change is what its app shows, so the previous close is ltp - dayChange
+      // (falls back to the `close` field when no day change is sent).
+      const dayChange = typeof j?.dayChange === 'number' && Number.isFinite(j.dayChange) ? j.dayChange : undefined;
+      const prevFromChange = price !== undefined && dayChange !== undefined ? toNumber(Math.round((price - dayChange) * 100) / 100) : undefined;
+      const previousClose = prevFromChange ?? toNumber(j?.close);
+      if (price !== undefined) q = { price, asOf: ts, previousClose };
     }
   } catch {
     /* no Groww price */
@@ -98,49 +103,11 @@ async function freshYahoo(sym) {
   return q;
 }
 
-// --- Previous close -------------------------------------------------------------------------
-// The "previous close" that NSE / Yahoo's live quote carries can lag on days with an unusual session
-// (e.g. the Sunday Diwali Muhurat session): it still holds the close from two sessions back, so every
-// stock showed the previous day's whole move as "today's" change while the index (a different feed)
-// was right. The close of the last session that finished BEFORE today comes straight from the daily
-// candles, and is the same for the whole day, so it is looked up once per symbol per day.
-const istDate = (ms) => new Date(ms + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
-const prevCloseCache = new Map(); // yahooSymbol -> { day, value, at }
-
-async function lastCompletedClose(yahooSymbol) {
-  const today = istDate(Date.now());
-  const hit = prevCloseCache.get(yahooSymbol);
-  if (hit && hit.day === today && (hit.value !== undefined || Date.now() - hit.at < 60_000)) return hit.value;
-  let value;
-  try {
-    const res = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=7d`,
-      { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(4000) }
-    );
-    if (res.ok) {
-      const r = (await res.json())?.chart?.result?.[0];
-      const ts = r?.timestamp ?? [];
-      const closes = r?.indicators?.quote?.[0]?.close ?? [];
-      for (let i = ts.length - 1; i >= 0; i--) {
-        if (istDate(ts[i] * 1000) < today && toNumber(closes[i]) !== undefined) {
-          value = toNumber(closes[i]);
-          break;
-        }
-      }
-    }
-  } catch {
-    /* keep the quote's own previous close */
-  }
-  prevCloseCache.set(yahooSymbol, { day: today, value, at: Date.now() });
-  return value;
-}
-
-async function withPrevClose(yahooSymbol, quote) {
-  const prev = await lastCompletedClose(yahooSymbol);
-  // Only accept a sane value (a bad candle must not create a fake 40% move).
-  if (prev !== undefined && Math.abs(quote.price / prev - 1) < 0.5) return { ...quote, previousClose: prev };
-  return quote;
-}
+// --- Previous close ---------------------------------------------------------------------------
+// The price and the previous close of a quote ALWAYS come from the same source and the same snapshot,
+// so "1D change" (price - previous close) is exactly what that exchange feed / Groww reports.
+// (An earlier version replaced the previous close with one rebuilt from Yahoo's daily candles while the
+// price came from NSE or Groww; when the two disagreed, the 1D change and % did not match Groww.)
 
 /** Returns { price, previousClose, currency, source } or null. */
 export async function resolveQuote(rawSymbol, market = 'IN') {
@@ -169,32 +136,23 @@ export async function resolveQuote(rawSymbol, market = 'IN') {
   }
 
   const bare = raw.replace(/\.NS$/, '');
-  try {
-    let q = { ...(await fetchNseQuote(bare)), source: 'nse' };
-    // NSE's equity quote can lag (it did not tick during the Sunday Muhurat session while Yahoo did).
-    // In trading hours, if NSE's quote is older than 5 minutes, take Yahoo's price when it is newer.
-    const ist = new Date(Date.now() + 5.5 * 3600 * 1000);
-    const mins = ist.getUTCHours() * 60 + ist.getUTCMinutes();
-    const stale = q.asOf === undefined || Date.now() - q.asOf > 5 * 60 * 1000;
-    if (stale && mins >= 9 * 60 && mins <= 16 * 60) {
-      const y = await freshYahoo(`${bare}.NS`);
-      if (y && y.asOf !== undefined && Date.now() - y.asOf < 5 * 60 * 1000 && (q.asOf === undefined || y.asOf > q.asOf)) {
-        q = { ...q, price: y.price, asOf: y.asOf, source: 'yahoo' };
-      } else {
-        const g = await growwQuote(bare);
-        // Groww's timestamp must prove the price is live (within 5 min) before it replaces NSE's.
-        if (g && g.asOf !== undefined && Date.now() - g.asOf < 5 * 60 * 1000 && (q.asOf === undefined || g.asOf > q.asOf)) {
-          q = { ...q, price: g.price, asOf: g.asOf, source: 'groww' };
-        }
-      }
-    }
-    return withPrevClose(`${bare}.NS`, q);
-  } catch {
-    // fall through to Yahoo
+  // Price and previous close are ALWAYS taken together from ONE source. Groww and NSE are asked at
+  // the same time; the one whose quote is newer wins (Groww on a tie, because Groww is the reference
+  // people compare against: its last traded price and its previous close, which includes the Sunday
+  // Muhurat session). NSE's own previous close can still point at the session before Muhurat.
+  const [g, n] = await Promise.all([growwQuote(bare).catch(() => null), fetchNseQuote(bare).catch(() => null)]);
+  const gOk = g && g.previousClose !== undefined && Math.abs(g.price / g.previousClose - 1) < 0.25;
+  const nOk = n && n.previousClose !== undefined;
+  if (gOk && (!nOk || g.asOf === undefined || n.asOf === undefined || g.asOf >= n.asOf)) {
+    return { ...g, currency: 'INR', source: 'groww' };
   }
+  if (nOk) return { ...n, source: 'nse' };
+  if (g) return { ...g, currency: 'INR', source: 'groww' };
+  if (n) return { ...n, source: 'nse' };
+  // Both failed: fall through to Yahoo (which carries its own previous close)
   for (const c of [`${bare}.NS`, `${bare}.BO`]) {
     const q = await fetchYahooQuote(c).catch(() => null);
-    if (q) return withPrevClose(c, { ...q, source: 'yahoo' });
+    if (q) return { ...q, source: 'yahoo' };
   }
   return null;
 }

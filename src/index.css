@@ -1725,3 +1725,25 @@ body[data-no-bottom-fade] [data-bottom-fade] {
 /* ---- Eye closed: figures are replaced by dots in the markup itself ---------
    (see PRIVACY_DOTS in utils/currency.ts), so cards and tables never look
    empty. Nothing is hidden with CSS any more. */
+
+
+/* ---- Login page: giant edge-to-edge wordmark (see LoginWordmark.tsx) ---- */
+.lp-wordmark { width: 100%; overflow: hidden; padding: clamp(1.5rem, 5vw, 4rem) clamp(1rem, 4vw, 3rem) 0; border-top: 1px solid var(--color-line-soft); background: var(--color-page, transparent); user-select: none; }
+.lp-wordmark-box { width: 100%; }
+.lp-wordmark-text {
+  display: inline-block;
+  white-space: nowrap;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  letter-spacing: -0.055em;
+  line-height: 0.82;
+  color: var(--color-ink);
+  /* sits on the bottom edge like a footer signature; small gap under the baseline */
+  padding-bottom: 0.06em;
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.8s ease, transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.lp-wordmark-text.is-shown { opacity: 1; transform: none; }
+.lp-wordmark-dot { color: var(--color-brand-500); }
+@media (prefers-reduced-motion: reduce) { .lp-wordmark-text { opacity: 1; transform: none; transition: none; } }

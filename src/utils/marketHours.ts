@@ -105,15 +105,16 @@ export function getIstDateInfo(now: Date = new Date()): { dateKey: string; isoWe
 }
 
 /** True from 5:30 AM IST up to (not including) 9:15 AM IST — the daily
- *  window where "1D returns" / day-change figures should reset to 0. */
+ *  window where "1D returns" / day-change figures should reset to 0.
+ *  Also true all day on weekends / exchange holidays (nothing traded today). */
 export function isDayChangeResetWindow(now: Date = new Date()): boolean {
   const { hour, minute } = getIstTimeOfDay(now);
   const { dateKey, isoWeekday } = getIstDateInfo(now);
   const minutesSinceMidnight = hour * 60 + minute;
   const marketOpen = MARKET_OPEN_HOUR * 60 + MARKET_OPEN_MINUTE;
   // No session today (weekend or listed exchange holiday): nothing has
-  // traded, so "1D returns" is flat all day instead of replaying the last
-  // session's change.
+  // traded today, so "1D returns" is flat (0.00) all day instead of
+  // replaying the last session's change as if it were today's.
   const special = SPECIAL_SESSIONS[dateKey];
   if (special) return minutesSinceMidnight < special.open; // special session: live once it opens
   if (isoWeekday > 5 || MARKET_HOLIDAYS.has(dateKey)) return true;

@@ -34,6 +34,7 @@ import {
   ReferenceLine,
 } from 'recharts';
 import { chart as chartTheme } from '../components/ui/chartTheme';
+import { ChartTooltipCard, DAY_MS, isoToMs, liveEndDot, makeTickFormatter, niceTimeTicks, paddedDomain } from '../components/ui/chartKit';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLivePricesStore } from '../store/livePricesStore';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
@@ -247,7 +248,7 @@ function PortfolioPerformanceChart({
   const [period, setPeriod] = useState<(typeof CHART_PERIODS)[number]['key']>('all');
   const [mode, setMode] = useState<'value' | 'pnl'>('value');
 
-  const points = useMemo(() => {
+  const { points, hasData } = useMemo(() => {
     type Ev = { date: string; investedDelta: number; realizedDelta: number };
     const events: Ev[] = [];
     for (const h of holdings) {
@@ -270,30 +271,73 @@ function PortfolioPerformanceChart({
     events.sort((a, b) => a.date.localeCompare(b.date));
 
     const periodDef = CHART_PERIODS.find((p) => p.key === period)!;
-    const cutoff = periodDef.days ? Date.now() - periodDef.days * 86400000 : null;
+    const cutoff = periodDef.days ? Date.now() - periodDef.days * DAY_MS : null;
+    const todayMs = isoToMs(toIsoDate());
+    // What the line shows at a point in time: capital deployed (Value) or cumulative REALIZED P&L (P&L).
+    // (In P&L mode the history used to plot capital deployed and only the last point was P&L, so the
+    // line jumped from a big "invested" number to a small P&L number at the end.)
+    const valueOf = (inv: number, real: number) => (mode === 'value' ? Math.max(0, inv) : real);
 
+    // State at the end of each calendar day that had a buy / sell.
+    const days: { date: string; inv: number; real: number }[] = [];
     let invested = 0;
     let realized = 0;
-    const series: { date: string; invested: number; realized: number; total: number }[] = [];
     for (const ev of events) {
       invested += ev.investedDelta;
       realized += ev.realizedDelta;
-      const t = new Date(`${ev.date}T00:00:00`).getTime();
-      if (cutoff !== null && t < cutoff) continue;
-      series.push({ date: ev.date, invested: Math.max(0, invested), realized, total: Math.max(0, invested) });
+      const last = days[days.length - 1];
+      if (last && last.date === ev.date) {
+        last.inv = invested;
+        last.real = realized;
+      } else days.push({ date: ev.date, inv: invested, real: realized });
     }
-    // Always end on a live "Today" point.
-    const today = toIsoDate();
-    series.push({
-      date: today,
-      invested: currentInvested,
-      realized,
-      total: mode === 'value' ? currentValue : realized + (currentValue - currentInvested),
-    });
-    return series;
+
+    // Plateau-then-move: before each change, hold the previous level until half a day earlier, so the
+    // line moves on the day it happened instead of sloping gently across the empty days before it.
+    type P = { t: number; total: number; live?: boolean };
+    const all: P[] = [];
+    for (const d of days) {
+      const t = isoToMs(d.date);
+      const prev = all[all.length - 1];
+      if (prev && t - DAY_MS / 2 > prev.t) all.push({ t: t - DAY_MS / 2, total: prev.total });
+      all.push({ t, total: valueOf(d.inv, d.real) });
+    }
+
+    let series: P[];
+    let eventsInWindow: number;
+    if (cutoff === null) {
+      series = all;
+      eventsInWindow = all.length;
+    } else {
+      const before = all.filter((p) => p.t < cutoff);
+      const inside = all.filter((p) => p.t >= cutoff);
+      eventsInWindow = inside.length;
+      // Start the window at the level it already had, so a 1M view doesn't begin mid-air.
+      series = before.length && inside.length ? [{ t: cutoff, total: before[before.length - 1].total }, ...inside] : inside;
+    }
+
+    // Always end on a live "Today" point (market value now / realized + unrealized).
+    const todayTotal = mode === 'value' ? currentValue : realized + (currentValue - currentInvested);
+    const lastPt = series[series.length - 1];
+    if (lastPt && lastPt.t === todayMs) series.pop();
+    const prevPt = series[series.length - 1];
+    if (prevPt && todayMs - DAY_MS / 2 > prevPt.t) series.push({ t: todayMs - DAY_MS / 2, total: prevPt.total });
+    series.push({ t: todayMs, total: todayTotal, live: true });
+    return { points: series, hasData: eventsInWindow > 0 };
   }, [holdings, period, mode, currentValue, currentInvested]);
 
-  const hasData = points.length > 1;
+  const xRange = useMemo(() => {
+    const lo = points[0]?.t ?? 0;
+    const hi = points[points.length - 1]?.t ?? 1;
+    const min = lo === hi ? lo - DAY_MS : lo;
+    const max = lo === hi ? hi + DAY_MS : hi;
+    return { min, max, ticks: niceTimeTicks(min, max, 6) };
+  }, [points]);
+  const yDomain = useMemo(
+    () => paddedDomain(mode === 'pnl' ? [...points.map((p) => p.total), 0] : points.map((p) => p.total)),
+    [points, mode]
+  );
+
 
   // Sign-aware colours (see the gradients below): where the zero line falls
   // inside the plotted range decides where green turns red.
@@ -306,7 +350,7 @@ function PortfolioPerformanceChart({
     const clamp = (n: number) => Math.min(1, Math.max(0, n));
     const split = (hi: number, lo: number) => (hi === lo ? (hi >= 0 ? 1 : 0) : clamp(hi / (hi - lo)));
     if (mode === 'value') {
-      return { strokeTop: GREEN, strokeBottom: GREEN, strokeSplit: 1, fillSplit: 1, fillTopOpacity: 0.16, fillBottomOpacity: 0.16, last: GREEN };
+      return { strokeTop: GREEN, strokeBottom: GREEN, strokeSplit: 1, fillSplit: 1, fillTopOpacity: 0.34, fillBottomOpacity: 0.34, last: GREEN };
     }
     const last = vals.length ? vals[vals.length - 1] : 0;
     return {
@@ -314,8 +358,8 @@ function PortfolioPerformanceChart({
       strokeBottom: RED,
       strokeSplit: split(max, min),
       fillSplit: split(Math.max(max, 0), Math.min(min, 0)),
-      fillTopOpacity: 0.18,
-      fillBottomOpacity: 0.18,
+      fillTopOpacity: 0.34,
+      fillBottomOpacity: 0.34,
       last: last < 0 ? RED : GREEN,
     };
   }, [points, mode]);
@@ -369,7 +413,7 @@ function PortfolioPerformanceChart({
       ) : (
         <div className="h-56 -ml-2">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={points} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
+            <AreaChart data={points} margin={{ top: 12, right: 14, left: 0, bottom: 0 }}>
               <defs>
                 {/* Colour follows the sign: green where the line is above zero,
                     red where it is below, switching exactly at the zero line. */}
@@ -381,42 +425,55 @@ function PortfolioPerformanceChart({
                 </linearGradient>
                 <linearGradient id="pnlFill" x1="0" y1="0" x2="0" y2="1">
                   <stop offset={0} stopColor={tone.strokeTop} stopOpacity={tone.fillTopOpacity} />
-                  <stop offset={tone.fillSplit} stopColor={tone.strokeTop} stopOpacity={0.04} />
-                  <stop offset={tone.fillSplit} stopColor={tone.strokeBottom} stopOpacity={0.04} />
+                  <stop offset={tone.fillSplit} stopColor={tone.strokeTop} stopOpacity={0.02} />
+                  <stop offset={tone.fillSplit} stopColor={tone.strokeBottom} stopOpacity={0.02} />
                   <stop offset={1} stopColor={tone.strokeBottom} stopOpacity={tone.fillBottomOpacity} />
                 </linearGradient>
               </defs>
-              <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3" vertical={false} />
+              <CartesianGrid stroke={chartTheme.grid} strokeDasharray="2 6" vertical={false} />
               <XAxis
-                dataKey="date"
-                tickFormatter={(d: string) => formatShortDate(d)}
+                dataKey="t"
+                type="number"
+                scale="time"
+                domain={[xRange.min, xRange.max]}
+                ticks={xRange.ticks}
+                tickFormatter={makeTickFormatter(xRange.min, xRange.max)}
                 tick={chartTheme.tick}
                 axisLine={false}
                 tickLine={false}
-                minTickGap={30}
+                tickMargin={8}
+                padding={{ left: 4, right: 12 }}
               />
               <YAxis
-                tickFormatter={(v: number) => formatAxisAmount(v, currency)}
+                tickFormatter={(v: number) => (privacy ? PRIVACY_DOTS : formatAxisAmount(v, currency))}
                 tick={chartTheme.tick}
                 axisLine={false}
                 tickLine={false}
                 width={58}
+                domain={yDomain}
+                tickCount={5}
               />
-              {mode === 'pnl' && <ReferenceLine y={0} stroke="var(--color-line)" strokeWidth={1.25} />}
+              {mode === 'pnl' && <ReferenceLine y={0} stroke="var(--color-faint)" strokeDasharray="4 4" strokeWidth={1} />}
               <RTooltip
-                cursor={chartTheme.tooltip.cursor}
-                content={({ active, payload, label }) => {
+                cursor={{ stroke: tone.last, strokeWidth: 1, strokeDasharray: '3 4', strokeOpacity: 0.6 }}
+                content={({ active, payload }) => {
                   if (!active || !payload?.length) return null;
-                  const v = Number(payload[0].value ?? 0);
+                  const pt = payload[0].payload as { t: number; total: number; live?: boolean };
+                  const v = pt.total;
                   const color = mode === 'pnl' ? (v < 0 ? chartTheme.negative : chartTheme.positive) : chartTheme.primary;
+                  const first0 = points[0];
+                  const d = v - first0.total;
+                  const showDelta = mode === 'value' && pt.t !== first0.t;
+                  const pct = first0.total > 0 ? (d / first0.total) * 100 : undefined;
                   return (
-                    <div style={chartTheme.tooltip.contentStyle}>
-                      <div style={chartTheme.tooltip.labelStyle}>{formatShortDate(String(label))}</div>
-                      <div style={{ color, fontWeight: 600 }}>
-                        {mode === 'value' ? 'Value' : 'P&L'}:{' '}
-                        {privacy ? PRIVACY_DOTS : mode === 'pnl' && v > 0 ? `+${formatCurrency(v, currency)}` : formatCurrency(v, currency)}
-                      </div>
-                    </div>
+                    <ChartTooltipCard
+                      dateMs={pt.t}
+                      label={mode === 'pnl' ? (pt.live ? 'Total P&L (live)' : 'Realized P&L') : pt.live ? 'Current value (live)' : 'Capital invested'}
+                      color={color}
+                      value={privacy ? PRIVACY_DOTS : mode === 'pnl' && v > 0 ? `+${formatCurrency(v, currency)}` : formatCurrency(v, currency)}
+                      delta={showDelta ? (privacy ? PRIVACY_DOTS : moneyLabel(d, currency, privacy)) : undefined}
+                      deltaPct={showDelta && pct !== undefined && !privacy ? pctLabel(pct) : undefined}
+                    />
                   );
                 }}
               />
@@ -424,13 +481,14 @@ function PortfolioPerformanceChart({
                 type="monotone"
                 dataKey="total"
                 stroke="url(#pnlStroke)"
-                strokeWidth={2}
+                strokeWidth={2.5}
+                strokeLinecap="round"
                 fill="url(#pnlFill)"
-                baseValue={0}
-                dot={points.length <= 6 ? { r: 3.5, strokeWidth: 2, stroke: 'var(--color-surface)', fill: tone.last } : false}
-                activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-surface)', fill: tone.last }}
+                baseValue={mode === 'pnl' ? 0 : yDomain[0]}
+                dot={liveEndDot(tone.last, points.length - 1)}
+                activeDot={{ r: 5.5, strokeWidth: 2.5, stroke: 'var(--color-surface)', fill: tone.last }}
                 isAnimationActive
-                animationDuration={500}
+                animationDuration={600}
               />
             </AreaChart>
           </ResponsiveContainer>
