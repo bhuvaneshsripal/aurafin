@@ -36,6 +36,7 @@ import { useWeeklyDigestScheduler } from './hooks/useWeeklyDigestScheduler';
 import { useMarketAlerts } from './hooks/useMarketAlerts';
 import { usePushSubscription } from './hooks/usePushSubscription';
 import { useDailyHardRefresh } from './hooks/useDailyHardRefresh';
+import { useResumeRefresh } from './hooks/useResumeRefresh';
 import { usePageShortcuts } from './hooks/usePageShortcuts';
 import { useScrollRestoration } from './hooks/useScrollRestoration';
 import Sidebar from './components/Sidebar';
@@ -52,6 +53,7 @@ import { hideBootShell } from './utils/bootShell';
 import InstallPromptModal from './components/InstallPromptModal';
 import ErrorBoundary from './components/ErrorBoundary';
 import { lazyWithRetry } from './utils/lazyWithRetry';
+import { startRoutePrefetch } from './utils/routePrefetch';
 import type { Asset, Liability, Goal, Transaction, Snapshot, BudgetItem, FinancialProfile, HouseholdProfile } from './types';
 
 // Signed-out-only / rarely-visited screens stay out of the main bundle so
@@ -115,8 +117,12 @@ function AppShell() {
   // bottom nav, back button) — see the hook for why a hard refresh still
   // resets to the top.
   useScrollRestoration();
-  // Auto hard-refresh every day at 6:00 a.m.
+  useEffect(() => startRoutePrefetch(), []);
+  // Auto hard-refresh every day at 8:00 a.m.
   useDailyHardRefresh();
+  // Opened (or brought back) after 30+ minutes away: switch to a newly deployed version straight
+  // away if nothing has been touched yet, and show the refresh line until fresh prices arrive.
+  useResumeRefresh();
   useVisualViewportOffset();
   // Ctrl+O Overview, Alt+W Wealth, Ctrl+P Performance (not during onboarding).
   usePageShortcuts(!needsOnboarding);

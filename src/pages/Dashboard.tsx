@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEven
 import { usePinnedTooltip, isTouchDevice } from '../hooks/usePinnedTooltip';
 import PinnedChartTooltip from '../components/PinnedChartTooltip';
 import { isFullySold, computePortfolioPnl } from '../utils/investmentPnl';
+import { computePortfolioXirr, MIN_XIRR_DAYS } from '../utils/portfolioXirr';
+import InfoTip from '../components/ui/InfoTip';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, Wallet, Receipt, Target, TrendingUp } from 'lucide-react';
 import {
@@ -29,6 +31,7 @@ import { useUiStore } from '../store/uiStore';
 import { useSyncStatusStore } from '../store/syncStatusStore';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import GoldPriceCard from '../components/GoldPriceCard';
+import SmartInsights from '../components/SmartInsights';
 import { formatDate, formatLocaleDate, toIsoDate, toIsoMonth } from '../utils/date';
 import {
   Badge,
@@ -212,6 +215,15 @@ export default function Dashboard() {
   // view; the realized-only view shows just the amount.
   const netWorthPnlPercent = investedShown > 0 ? (netWorthPnl / investedShown) * 100 : 0;
 
+  // XIRR: the annualised return on every dated buy, sale and installment, with today's value of
+  // what is still held as the last flow. Built from the same P&L engine output as the cards above
+  // (sold holdings included, so it is the lifetime return, not only the return on what is left).
+  // It does not change with the Net worth arrow toggle. Recomputed with the live prices.
+  const xirr = useMemo(
+    () => computePortfolioXirr(portfolioPnl, livePrices, sipValues, liveGoldPricePerGram),
+    [portfolioPnl, livePrices, sipValues, liveGoldPricePerGram]
+  );
+
   const thisMonth = toIsoMonth();
   const { monthIncome, monthExpense } = useMemo(() => {
     let income = 0;
@@ -304,10 +316,12 @@ export default function Dashboard() {
 
       <PriceStaleBanner />
 
+      {hasWealth && ready && <SmartInsights />}
+
       {/* KPI strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Full-width on phones so Net worth gets its own row; on desktop it
-           sits in the three-column strip like the other two cards. */}
+           sits in the four-column strip like the other cards. */}
         <div className="col-span-2 lg:col-span-1">
           <StatCard
             dense
@@ -340,6 +354,52 @@ export default function Dashboard() {
               : undefined
           }
         />
+        <div className="col-span-2 lg:col-span-1">
+          <StatCard
+            dense
+            label={
+              <span className="inline-flex items-center gap-1">
+                XIRR
+                <InfoTip size={12}>
+                  Your annualised return, worked out from the date of every buy, sale and SIP installment, with
+                  today&apos;s value of what you still hold as the last amount. It includes investments you have
+                  already sold, and leaves out Cash &amp; Savings. It is not affected by the arrow on Net worth.
+                  {xirr.excluded > 0 && (
+                    <>
+                      {' '}
+                      {xirr.excluded === 1 ? '1 holding is' : `${xirr.excluded} holdings are`} left out because
+                      its purchase dates or cost aren&apos;t on record: {xirr.excludedNames.slice(0, 5).join(', ')}
+                      {xirr.excludedNames.length > 5 ? ` and ${xirr.excludedNames.length - 5} more` : ''}.
+                    </>
+                  )}
+                  {xirr.reason === 'too-short' && ` Shown once your history is at least ${MIN_XIRR_DAYS} days long.`}
+                </InfoTip>
+              </span>
+            }
+            loading={!ready}
+            tone={
+              xirr.percent === null || privacyMode ? 'default' : xirr.percent >= 0 ? 'positive' : 'negative'
+            }
+            value={
+              !hasWealth || xirr.percent === null
+                ? '—'
+                : privacyMode
+                  ? '••••••'
+                  : `${xirr.percent < 0 ? '−' : ''}${formatPercentMagnitude(Math.abs(xirr.percent))}`
+            }
+            sublabel={
+              !hasWealth
+                ? undefined
+                : xirr.percent !== null && xirr.since
+                  ? `a year, since ${shortDate(xirr.since)}${xirr.excluded > 0 ? ` · ${xirr.included} of ${xirr.included + xirr.excluded} holdings` : ''}`
+                  : xirr.reason === 'too-short'
+                    ? `Needs ${MIN_XIRR_DAYS}+ days of history`
+                    : xirr.reason === 'no-history'
+                      ? 'Add purchase dates to see it'
+                      : 'Could not be worked out'
+            }
+          />
+        </div>
       </div>
 
       {/* Performance + allocation */}

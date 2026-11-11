@@ -20,6 +20,7 @@ import {
 } from '../../utils/portfolioAnalytics';
 import type { AnalyticsData } from './useAnalyticsData';
 import CategoryBreakdownList from './CategoryBreakdown';
+import RebalanceTradePlan from './RebalanceTradePlan';
 
 const LIMIT_OPTIONS = ['10', '15', '20', '25'];
 
@@ -271,6 +272,8 @@ export default function AllocationTab({ data }: { data: AnalyticsData }) {
               <p className="px-5 pb-4 pt-3 text-xs text-muted">Selling keeps the proceeds as cash inside the portfolio, so the total value does not change.</p>
             )}
           </Card>
+
+          {hasTargets && <RebalanceTradePlan data={data} rows={rows} />}
 
           <Card>
             <CardHeader title="Rebalance with new money (no selling)" description="Add fresh money to the underweight classes instead of selling winners, which avoids triggering tax." />

@@ -193,6 +193,29 @@ export function computeDepositProgress(asset: Asset, asOf: Date = new Date()): D
   return { currentValue, invested: principal, isMatured };
 }
 
+/**
+ * Every monthly installment a Recurring Deposit has received so far, with its date — the same
+ * installments `computeDepositProgress` adds up for "invested" (same start date, same month
+ * stepping, stops at maturity). Used to date each rupee for XIRR. Empty when the asset has no
+ * installment, start date or rate, i.e. whenever `computeDepositProgress` doesn't use them either.
+ */
+export function listDepositInstallments(asset: Asset, asOf: Date = new Date()): { date: string; amount: number }[] {
+  const { startDate, maturityDate, interestRate, monthlyInstallment } = asset;
+  if (asset.assetClass !== 'recurring_deposit') return [];
+  if (!startDate || !interestRate || interestRate <= 0 || !monthlyInstallment || monthlyInstallment <= 0) return [];
+  const maturityTime = maturityDate ? parseLocalDate(maturityDate).getTime() : undefined;
+  const isMatured = maturityTime !== undefined && maturityTime <= asOf.getTime();
+  const effectiveAsOf = isMatured ? maturityTime! : asOf.getTime();
+  const start = parseLocalDate(startDate);
+  const out: { date: string; amount: number }[] = [];
+  let candidate = new Date(start);
+  while (candidate.getTime() <= effectiveAsOf && (maturityTime === undefined || candidate.getTime() <= maturityTime)) {
+    out.push({ date: toIsoDate(candidate), amount: monthlyInstallment });
+    candidate = shiftMonths(candidate.getFullYear(), candidate.getMonth(), start.getDate(), 1);
+  }
+  return out;
+}
+
 export interface MaturityInfo {
   /** Quarterly compound interest projected value at maturity, computed over 
    *  the full start-date-to-maturity-date term (not "today to maturity"). 

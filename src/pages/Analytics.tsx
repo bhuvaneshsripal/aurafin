@@ -6,9 +6,10 @@ import AllocationTab from './analytics/AllocationTab';
 import RiskTab from './analytics/RiskTab';
 import TaxTab from './analytics/TaxTab';
 import ProjectionTab from './analytics/ProjectionTab';
+import RetirementTab from './analytics/RetirementTab';
 import CalendarTab from './analytics/CalendarTab';
 
-const VIEWS = ['allocation', 'risk', 'tax', 'projection', 'calendar'] as const;
+const VIEWS = ['allocation', 'risk', 'tax', 'projection', 'retirement', 'calendar'] as const;
 type ViewKey = (typeof VIEWS)[number];
 
 /** Analytics body, rendered as the "Analytics" tab of the Wealth page. Sub-sections live in the `view` URL param. */
@@ -36,6 +37,7 @@ export default function AnalyticsContent() {
             { key: 'risk', label: 'Risk' },
             { key: 'tax', label: 'Tax & gains' },
             { key: 'projection', label: 'Projection' },
+            { key: 'retirement', label: 'Retirement' },
             { key: 'calendar', label: 'Calendar' },
           ]}
         />
@@ -47,6 +49,7 @@ export default function AnalyticsContent() {
       {view === 'risk' && <RiskTab data={data} />}
       {view === 'tax' && <TaxTab data={data} />}
       {view === 'projection' && <ProjectionTab data={data} />}
+      {view === 'retirement' && <RetirementTab data={data} />}
       {view === 'calendar' && <CalendarTab data={data} />}
     </div>
   );

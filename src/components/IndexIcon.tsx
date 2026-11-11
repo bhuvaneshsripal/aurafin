@@ -58,6 +58,7 @@ export default function IndexIcon({ indexKey, exchange }: { indexKey: string; ex
         <img
           src={sources[step]}
           alt=""
+          decoding="async"
           className="h-full w-full object-contain p-1"
           onError={() => setStep((n) => n + 1)}
         />

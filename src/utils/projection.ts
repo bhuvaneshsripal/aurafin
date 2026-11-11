@@ -35,7 +35,7 @@ export function suggestAssumptions(slices: CategorySlice[]): { ret: number; vol:
   return { ret: Math.round(ret * 10) / 10, vol: Math.round(Math.sqrt(variance) * 10) / 10 };
 }
 
-function mulberry32(seed: number) {
+export function mulberry32(seed: number) {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -46,7 +46,7 @@ function mulberry32(seed: number) {
   };
 }
 
-function makeNormal(rand: () => number) {
+export function makeNormal(rand: () => number) {
   return () => {
     let u = 0;
     while (u === 0) u = rand();
@@ -99,7 +99,7 @@ export interface ProjectionResult {
   finalP50Real: number;
 }
 
-function quantile(sorted: number[], q: number): number {
+export function quantile(sorted: number[], q: number): number {
   if (sorted.length === 0) return 0;
   const pos = (sorted.length - 1) * q;
   const lo = Math.floor(pos);

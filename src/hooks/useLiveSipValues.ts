@@ -87,9 +87,18 @@ export function useLiveSipValues() {
     const id = setInterval(() => {
       if (!document.hidden) refresh();
     }, REFRESH_MS);
+    // Back in the foreground (or back online): refresh now instead of waiting for the next tick,
+    // which after a long time away could otherwise leave SIP values stale for up to a minute.
+    const onBack = () => {
+      if (!document.hidden) refresh();
+    };
+    document.addEventListener('visibilitychange', onBack);
+    window.addEventListener('online', onBack);
     return () => {
       cancelled = true;
       clearInterval(id);
+      document.removeEventListener('visibilitychange', onBack);
+      window.removeEventListener('online', onBack);
     };
   }, [lookupKey, setSipValues, setSipValuesAttempted]);
 }
