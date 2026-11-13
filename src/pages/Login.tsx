@@ -289,17 +289,6 @@ export default function Login() {
 
           <SocialLoginButtons onError={setError} disabled={googleLoading} />
 
-          {error && (
-            <p role="alert" className="text-[0.875em] text-red-500 mb-[0.75em]">
-              {error}
-            </p>
-          )}
-          {notice && (
-            <p role="status" className="text-[0.875em] text-brand-600 mb-[0.75em]">
-              {notice}
-            </p>
-          )}
-
           <div className="login-divider flex items-center gap-3">
             <div className="h-px bg-line flex-1" />
             <span className="text-ink-2">or use email</span>
@@ -358,6 +347,16 @@ export default function Login() {
               </button>
               {passErr && <FieldError message={passErr} />}
             </div>
+            {error && (
+              <p role="alert" className="text-[0.875em] text-red-500">
+                {error}
+              </p>
+            )}
+            {notice && (
+              <p role="status" className="text-[0.875em] text-brand-600">
+                {notice}
+              </p>
+            )}
             {mode === 'login' && (
               <div className="text-right">
                 <button

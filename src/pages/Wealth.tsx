@@ -6294,7 +6294,8 @@ function AssetDetailsForm({
     .filter((d): d is string => !!d && /^\d{4}-\d{2}-\d{2}$/.test(d))
     .sort()[0];
 
-  const nameMissing = !name.trim();
+  // For stocks / ETFs the ticker identifies the holding, so Name is optional there.
+  const nameMissing = !isUnitTracked && !name.trim();
   // A stock / ETF needs its ticker: the name, price and live value all come from it.
   const symbolMissing = isUnitTracked && !symbol.trim();
   // SIP's Current Value is auto-calculated, so it's never a required
@@ -6387,7 +6388,7 @@ function AssetDetailsForm({
       // account colour / icon, IPO details…) instead of dropping it on every save.
       ...(initial ?? {}),
       id: initial?.id ?? newId(),
-      name,
+      name: name.trim() || (isUnitTracked ? symbol.trim() : name),
       assetClass,
       value: Number(value),
       currency,
@@ -6477,7 +6478,7 @@ function AssetDetailsForm({
   // and price are already on the screen.
   const nameCurrencyField = (
     <div className="grid grid-cols-[1fr_128px] gap-3">
-      <Field label="Name" required>
+      <Field label="Name" required={!isUnitTracked}>
         <input
           value={name}
           onChange={(e) => setName(e.target.value.toUpperCase())}

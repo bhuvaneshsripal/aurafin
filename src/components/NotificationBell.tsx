@@ -274,6 +274,26 @@ export default function NotificationBell(_props: { align?: 'right' | 'left' } = 
     setOpen(false);
   }, [location.pathname, location.search]);
 
+  // The panel is a full-screen overlay, so the phone's Back button used to skip
+  // past it and go to the previous page. Give it its own history entry: Back
+  // now just closes the panel and leaves you on the page you opened it from.
+  useEffect(() => {
+    if (!open) return;
+    window.history.pushState({ ...(window.history.state ?? {}), aurafinNotif: true }, '');
+    let pushed = true;
+    const onPop = () => {
+      pushed = false;
+      setOpen(false);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      // Closed from inside the panel (arrow, tap outside, Esc): drop the extra
+      // entry. If the user navigated elsewhere meanwhile, leave history alone.
+      if (pushed && window.history.state?.aurafinNotif) window.history.back();
+    };
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);

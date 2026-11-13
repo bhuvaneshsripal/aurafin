@@ -5,7 +5,11 @@ import { isFullySold, computePortfolioPnl } from '../utils/investmentPnl';
 import { computePortfolioXirr, MIN_XIRR_DAYS } from '../utils/portfolioXirr';
 import InfoTip from '../components/ui/InfoTip';
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, Wallet, Receipt, Target, TrendingUp } from 'lucide-react';
+import { ArrowUpRight, RefreshCw, Wallet, Receipt, Target, TrendingUp } from 'lucide-react';
+import { fetchLiveQuotes, type PriceLookup } from '../utils/marketPrices';
+import { fetchLiveGoldPrice } from '../utils/goldPrice';
+import { applyGoldPremium, useGoldSettingsStore } from '../store/goldSettingsStore';
+import { fetchFundNavHistory, computeSipLiveValue } from '../utils/mutualFunds';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -57,7 +61,7 @@ import { PriceUpdatedLine } from '../components/PriceStatus';
 import { ASSET_CLASS_LABELS, maskAmount, PRIVACY_DOTS } from '../utils/currency';
 import { formatAxisAmount, formatPercentMagnitude, formatSignedCurrency, formatPreciseCurrency } from '../utils/privateFormat';
 import { ASSET_CLASS_TO_CATEGORY } from '../utils/taxonomy';
-import { resolveAssetValues } from '../utils/assetValues';
+import { listSipInstallments, resolveAssetValues } from '../utils/assetValues';
 import type { Goal, Snapshot, Transaction } from '../types';
 
 const INVESTMENT_CLASSES = new Set([
@@ -223,6 +227,80 @@ export default function Dashboard() {
     [portfolioPnl, livePrices, sipValues, liveGoldPricePerGram]
   );
 
+  // Small refresh button on the XIRR card: pulls fresh share prices, the gold rate and mutual-fund
+  // NAVs right now (instead of waiting for the next background poll), then the XIRR above is
+  // recomputed from those. Each source is fetched on its own, so one failing never blocks the rest.
+  const goldPremiumPercent = useGoldSettingsStore((s) => s.premiumPercent);
+  const [xirrRefreshing, setXirrRefreshing] = useState(false);
+  const [xirrUpdatedAt, setXirrUpdatedAt] = useState<number | null>(null);
+  const [xirrRefreshFailed, setXirrRefreshFailed] = useState(false);
+  const refreshXirr = async () => {
+    if (xirrRefreshing) return;
+    setXirrRefreshing(true);
+    setXirrRefreshFailed(false);
+    const store = useLivePricesStore.getState();
+    const held = useAssetsStore.getState().assets;
+    let anySuccess = false;
+    let anyFailure = false;
+
+    const equities = async () => {
+      const targets = held.filter((a) => a.symbol && a.quantity && a.quantity > 0);
+      if (targets.length === 0) return;
+      const lookups: PriceLookup[] = targets.map((a) => ({ key: a.symbol!, isin: a.isin, name: a.name }));
+      const quotes = await fetchLiveQuotes(lookups);
+      const prices: Record<string, number> = {};
+      const closes: Record<string, number> = {};
+      quotes.forEach((q, symbol) => {
+        // Same guard as the live poll: a price more than 50% away from yesterday's close is a bad quote.
+        if (q.previousClose !== undefined && Math.abs(q.price / q.previousClose - 1) > 0.5) return;
+        if (!(q.price > 0)) return;
+        prices[symbol] = q.price;
+        if (q.previousClose !== undefined) closes[symbol] = q.previousClose;
+      });
+      if (Object.keys(prices).length > 0) {
+        store.setPrices(prices);
+        if (Object.keys(closes).length > 0) store.setPreviousCloses(closes);
+        anySuccess = true;
+      } else anyFailure = true;
+    };
+
+    const gold = async () => {
+      if (!held.some((a) => a.assetClass === 'gold')) return;
+      const g = await fetchLiveGoldPrice();
+      if (g) {
+        store.setGoldPrice(applyGoldPremium(g.pricePerGram24k, goldPremiumPercent), g.asOf);
+        anySuccess = true;
+      } else anyFailure = true;
+    };
+
+    const sips = async () => {
+      const targets = held.filter((a) => a.assetClass === 'sip' && a.symbol && /^\d+$/.test(a.symbol));
+      const values: Record<string, { value: number; units: number; latestNav: number }> = {};
+      for (const a of targets) {
+        const installments = listSipInstallments(a);
+        if (installments.length === 0) continue;
+        const nav = await fetchFundNavHistory(Number(a.symbol), a.startDate);
+        if (!nav) {
+          anyFailure = true;
+          continue;
+        }
+        const { value, units } = computeSipLiveValue(installments, nav);
+        values[a.symbol as string] = { value, units, latestNav: nav.latestNav };
+      }
+      if (Object.keys(values).length > 0) {
+        store.setSipValues(values);
+        anySuccess = true;
+      }
+    };
+
+    await Promise.allSettled([equities(), gold(), sips()]).then((r) => {
+      if (r.some((x) => x.status === 'rejected')) anyFailure = true;
+    });
+    if (anySuccess || !anyFailure) setXirrUpdatedAt(Date.now());
+    if (anyFailure && !anySuccess) setXirrRefreshFailed(true);
+    setXirrRefreshing(false);
+  };
+
   const thisMonth = toIsoMonth();
   const { monthIncome, monthExpense } = useMemo(() => {
     let income = 0;
@@ -367,6 +445,24 @@ export default function Dashboard() {
                   )}
                   {xirr.reason === 'too-short' && ` Needs ${MIN_XIRR_DAYS}+ days of history.`}
                 </InfoTip>
+                <button
+                  type="button"
+                  onClick={refreshXirr}
+                  disabled={xirrRefreshing || !hasWealth}
+                  aria-label="Refresh XIRR"
+                  title={
+                    xirrRefreshFailed
+                      ? "Couldn't fetch latest prices. Tap to retry."
+                      : xirrUpdatedAt
+                        ? `Updated ${new Date(xirrUpdatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })} · tap to refresh`
+                        : 'Refresh XIRR with the latest prices'
+                  }
+                  className={`ml-0.5 p-1 rounded-md transition-colors disabled:opacity-50 ${
+                    xirrRefreshFailed ? 'text-negative' : 'text-faint hover:text-ink hover:bg-surface-hover'
+                  }`}
+                >
+                  <RefreshCw size={12} className={xirrRefreshing ? 'animate-spin' : ''} />
+                </button>
               </span>
             }
             loading={!ready}

@@ -8,7 +8,7 @@ interface AccessPasswordModalProps {
   onClose: () => void;
   /** Called once the correct password has been entered. */
   onUnlock: () => void;
-  /** When true, the dialog has no Continue button: only "Contact us", which opens LinkedIn. */
+  /** When true, a "Contact us" button (opens LinkedIn) is shown below Continue, for people who don't have the password. */
   contactOnly?: boolean;
 }
 
@@ -30,7 +30,6 @@ export default function AccessPasswordModal({ open, onClose, onUnlock, contactOn
   }, [open]);
 
   const submit = () => {
-    if (contactOnly) return;
     if (!value.trim()) {
       setError('Enter the password');
       return;
@@ -45,7 +44,7 @@ export default function AccessPasswordModal({ open, onClose, onUnlock, contactOn
   return (
     <Modal open={open} onClose={onClose} title="Enter password">
       <div className="login-modal-body">
-        <p className="text-ink-2 text-[0.875em] mb-[1em]">{contactOnly ? 'Sign-up needs an access password. Tap Contact us to get access.' : 'Enter the access password to continue.'}</p>
+        <p className="text-ink-2 text-[0.875em] mb-[1em]">{contactOnly ? 'Sign-up needs an access password. Enter it below, or tap Contact us to get access.' : 'Enter the access password to continue.'}</p>
         <form
           className="login-fields"
           onSubmit={(e) => {
@@ -88,23 +87,22 @@ export default function AccessPasswordModal({ open, onClose, onUnlock, contactOn
               </p>
             )}
           </div>
-          {contactOnly ? (
+          <button
+            type="submit"
+            className="btn-press login-btn bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white font-medium"
+          >
+            Continue
+          </button>
+          {contactOnly && (
             <a
               href={CONTACT_URL}
               target="_blank"
               rel="noopener noreferrer"
               onClick={onClose}
-              className="btn-press login-btn bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white font-medium flex items-center justify-center"
+              className="btn-press login-btn border border-brand-600 text-brand-600 hover:bg-brand-50 font-medium flex items-center justify-center"
             >
               Contact us
             </a>
-          ) : (
-            <button
-              type="submit"
-              className="btn-press login-btn bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white font-medium"
-            >
-              Continue
-            </button>
           )}
         </form>
       </div>
