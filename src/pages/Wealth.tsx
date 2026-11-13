@@ -101,7 +101,6 @@ import {
   TrendArrow,
   ConcentricRings,
 } from '../components/ui';
-import { PriceStaleBanner } from '../components/PriceStatus';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import CurrencySelect from '../components/CurrencySelect';
 import CustomSelect from '../components/CustomSelect';
@@ -1362,14 +1361,49 @@ function AssetsTab({
   // --- Order baseline (for the "Reset order" button) -------------------
   // Sorting is only a temporary view, but a manual move IS saved. To let the
   // person undo moves, the saved order from just before the first move is
-  // remembered here; "Reset order" puts it back. While it is set, the Reset
-  // button stays visible even though the list is in manual mode.
-  const [orderBaseline, setOrderBaselineState] = useState<string[] | null>(null);
-  const orderBaselineRef = useRef<string[] | null>(null);
+  // remembered here; "Reset order" puts it back. It is also saved on this
+  // device (per login and profile), so the Reset button is still there after a
+  // refresh or after leaving the page — it shows whenever the order differs
+  // from that remembered one, not only until the page is reloaded.
+  const orderBaselineKey = `aurafin-order-baseline:${user?.uid ?? 'anon'}:${activeProfileId ?? 'all'}`;
+  const readStoredBaseline = (): string[] | null => {
+    try {
+      const raw = localStorage.getItem(orderBaselineKey);
+      const v = raw ? JSON.parse(raw) : null;
+      return Array.isArray(v) && v.every((x) => typeof x === 'string') ? (v as string[]) : null;
+    } catch {
+      return null;
+    }
+  };
+  const [orderBaseline, setOrderBaselineState] = useState<string[] | null>(readStoredBaseline);
+  const orderBaselineRef = useRef<string[] | null>(orderBaseline);
   const setOrderBaseline = (v: string[] | null) => {
     orderBaselineRef.current = v;
     setOrderBaselineState(v);
+    try {
+      if (v) localStorage.setItem(orderBaselineKey, JSON.stringify(v));
+      else localStorage.removeItem(orderBaselineKey);
+    } catch {
+      /* storage unavailable: still works until the page is reloaded */
+    }
   };
+  // Signed in late, or switched profile: pick up that profile's remembered order.
+  useEffect(() => {
+    const v = readStoredBaseline();
+    orderBaselineRef.current = v;
+    setOrderBaselineState(v);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderBaselineKey]);
+  // True when the saved order is no longer the one remembered from before the moves.
+  const orderChanged = useMemo(() => {
+    if (!orderBaseline) return false;
+    const live = new Set(assets.map((a) => a.id));
+    const was = new Set(orderBaseline);
+    const current = [...assets].sort(compareAssetsDefault).map((a) => a.id).filter((id) => was.has(id));
+    const before = orderBaseline.filter((id) => live.has(id));
+    return current.length !== before.length || current.some((id, i) => id !== before[i]);
+  }, [orderBaseline, assets]);
+  const showResetOrder = sortKey !== 'manual' || orderChanged;
   /** Remembers the saved order once; returns true if this call created it. */
   const rememberOrderBaseline = () => {
     if (orderBaselineRef.current) return false;
@@ -2096,8 +2130,6 @@ function AssetsTab({
         }
       />
 
-      <PriceStaleBanner />
-
       {/* Typing a search query hides the tabs, filter row, and the holdings
           summary card so the list of matches gets the space — nothing here
           affects what's actually being filtered, just what's shown above
@@ -2426,7 +2458,7 @@ function AssetsTab({
               <span className="text-sm font-semibold text-ink">Sort</span>
               <ListFilter size={15} strokeWidth={2.25} className="text-ink" />
             </button>
-            {(sortKey !== 'manual' || orderBaseline) && (
+            {showResetOrder && (
               <button
                 type="button"
                 onClick={resetOrder}
@@ -2616,7 +2648,7 @@ function AssetsTab({
           {/* Per-holding table (sm and up). Column headers are clickable and
               sort the rows (click again to flip direction). Rows still
               support press-and-drag manual ordering + click-through. */}
-          {isSmUp && (sortKey !== 'manual' || orderBaseline) && (
+          {isSmUp && showResetOrder && (
             <div className="flex justify-end">
               <button
                 type="button"
@@ -4301,6 +4333,10 @@ function BuySellDividendModal({
       setError('Enter a valid quantity and price.');
       return;
     }
+    if (!date) {
+      setError('Please enter the buy date.');
+      return;
+    }
     if (date > toIsoDate()) {
       setError('Purchase date cannot be in the future.');
       return;
@@ -5656,41 +5692,22 @@ function AssetDetailsForm({
   const [lotPriceCurrency, setLotPriceCurrency] = useDraftState<Record<string, string>>(draftKey, 'lotPriceCurrency', {});
   // Once there are 2+ purchase entries, each is collapsible to a single
   // summary line (see "Purchase N" row below) so a long purchase history
-  // doesn't turn the form into an endless scroll. Which entries are
-  // collapsed is remembered per-asset in localStorage, so expanding one to
-  // check or edit it and then refreshing the page doesn't silently put it
-  // back the way it was — the seed value (before any toggle has ever been
-  // saved) collapses every already-saved purchase and leaves a freshly
-  // added one expanded, since that's the one the person is actively filling
-  // in.
-  const collapseStorageKey = initial?.id ? `assetLotCollapse:${initial.id}` : null;
-  const [collapsedLotIds, setCollapsedLotIds] = useState<Set<string>>(() => {
-    if (collapseStorageKey) {
-      try {
-        const saved = localStorage.getItem(collapseStorageKey);
-        if (saved) return new Set(JSON.parse(saved));
-      } catch {
-        // Corrupt/unavailable storage — fall through to the default seed.
-      }
-    }
-    return new Set([
-      ...(initial?.shareLots?.map((l) => l.id) ?? []),
-      ...(initial?.purchaseLots?.map((l) => l.id) ?? []),
-    ]);
-  });
+  // doesn't turn the form into an endless scroll. Every purchase that was
+  // already saved starts collapsed each time the form opens; only a purchase
+  // being added now (a new, unsaved row) starts open, since that's the one the
+  // person is filling in. Tapping a row opens or closes it for this visit.
+  const [collapsedLotIds, setCollapsedLotIds] = useState<Set<string>>(
+    () =>
+      new Set([
+        ...(initial?.shareLots?.map((l) => l.id) ?? []),
+        ...(initial?.purchaseLots?.map((l) => l.id) ?? []),
+      ])
+  );
   const toggleLotCollapsed = (id: string) => {
     setCollapsedLotIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
-      if (collapseStorageKey) {
-        try {
-          localStorage.setItem(collapseStorageKey, JSON.stringify([...next]));
-        } catch {
-          // Storage full/unavailable — the toggle still works for this
-          // session, it just won't survive a refresh.
-        }
-      }
       return next;
     });
   };
@@ -6278,7 +6295,20 @@ function AssetDetailsForm({
   const valueMissing = !isSip && !value.trim();
   // A deposit can't mature on or before the day it starts.
   const maturityBeforeStart = isDepositLike && !!startDate && !!maturityDate && maturityDate <= startDate;
-  const errorCount = [nameMissing, symbolMissing, valueMissing, maturityBeforeStart].filter(Boolean).length;
+  // Every finished purchase (stocks/ETFs/funds by units, gold-style by grams) needs its buy date:
+  // returns, XIRR and tax lots are all worked out from it. Half-filled rows are dropped on save, so
+  // only rows that will actually be kept are checked.
+  const isRealDate = (d?: string) => !!d && /^\d{4}-\d{2}-\d{2}$/.test(d);
+  const lotsMissingDate: string[] = [
+    ...(isUnitTracked
+      ? shareLots.filter((l) => Number(l.quantity) > 0 && Number(l.price) > 0 && !isRealDate(l.date)).map((l) => l.id)
+      : []),
+    ...(isWeightTracked
+      ? purchaseLots.filter((l) => Number(l.grams) > 0 && Number(l.amount) > 0 && !isRealDate(l.date)).map((l) => l.id)
+      : []),
+  ];
+  const buyDateMissing = lotsMissingDate.length > 0;
+  const errorCount = [nameMissing, symbolMissing, valueMissing, maturityBeforeStart, buyDateMissing].filter(Boolean).length;
   const hasErrors = errorCount > 0;
 
   // Guards against double taps (a second tap while the first save is still
@@ -6288,10 +6318,25 @@ function AssetDetailsForm({
     if (submittingRef.current) return;
     setAttemptedSubmit(true);
     if (hasErrors) {
+      if (buyDateMissing) {
+        toast.error('Please add the buy date before saving.');
+        // A collapsed purchase hides its date field — open the ones that need it.
+        setCollapsedLotIds((prev) => {
+          const next = new Set(prev);
+          lotsMissingDate.forEach((id) => next.delete(id));
+          return next;
+        });
+      }
       // The red message sits at the bottom; make sure the person actually sees why.
-      requestAnimationFrame(() => {
-        document.querySelector('[data-save-error]')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      });
+      // A missing buy date is highlighted right at its field, so jump there instead.
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          const target = buyDateMissing
+            ? document.querySelector('[data-buy-date-error]')
+            : document.querySelector('[data-save-error]');
+          target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        })
+      );
       return;
     }
     submittingRef.current = true;
@@ -6749,8 +6794,9 @@ function AssetDetailsForm({
                           <DateInput
                             value={lot.date ?? ''}
                             onChange={(v) => updatePurchaseLot(lot.id, { date: v })}
-                            className={inputClass}
+                            className={`${inputClass} ${attemptedSubmit && lotsMissingDate.includes(lot.id) ? errorInputClass : ''}`}
                           />
+                          {attemptedSubmit && lotsMissingDate.includes(lot.id) && <p data-buy-date-error className={errorTextClass}>Buy date is required.</p>}
                         </Field>
                         <Field label="Grams">
                           <input
@@ -6811,8 +6857,9 @@ function AssetDetailsForm({
                   <DateInput
                     value={shareLots[0].date ?? ''}
                     onChange={(v) => updateShareLot(shareLots[0].id, { date: v })}
-                    className={inputClass}
+                    className={`${inputClass} ${attemptedSubmit && lotsMissingDate.includes(shareLots[0].id) ? errorInputClass : ''}`}
                   />
+                  {attemptedSubmit && lotsMissingDate.includes(shareLots[0].id) && <p data-buy-date-error className={errorTextClass}>Buy date is required.</p>}
                 </Field>
                 <Field label="Quantity">
                   <input
@@ -6966,8 +7013,9 @@ function AssetDetailsForm({
                         <DateInput
                           value={lot.date ?? ''}
                           onChange={(v) => updateShareLot(lot.id, { date: v })}
-                          className={`${inputClass}`}
+                          className={`${inputClass} ${attemptedSubmit && lotsMissingDate.includes(lot.id) ? errorInputClass : ''}`}
                         />
+                        {attemptedSubmit && lotsMissingDate.includes(lot.id) && <p data-buy-date-error className={errorTextClass}>Buy date is required.</p>}
                       </Field>
                       {mode === 'qty' ? (
                         <Field label="Quantity">

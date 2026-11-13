@@ -31,7 +31,6 @@ import { useUiStore } from '../store/uiStore';
 import { useSyncStatusStore } from '../store/syncStatusStore';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import GoldPriceCard from '../components/GoldPriceCard';
-import SmartInsights from '../components/SmartInsights';
 import { formatDate, formatLocaleDate, toIsoDate, toIsoMonth } from '../utils/date';
 import {
   Badge,
@@ -54,7 +53,7 @@ import {
   TrendArrow,
   chart,
 } from '../components/ui';
-import { PriceStaleBanner, PriceUpdatedLine } from '../components/PriceStatus';
+import { PriceUpdatedLine } from '../components/PriceStatus';
 import { ASSET_CLASS_LABELS, maskAmount, PRIVACY_DOTS } from '../utils/currency';
 import { formatAxisAmount, formatPercentMagnitude, formatSignedCurrency, formatPreciseCurrency } from '../utils/privateFormat';
 import { ASSET_CLASS_TO_CATEGORY } from '../utils/taxonomy';
@@ -314,10 +313,6 @@ export default function Dashboard() {
     <div className="space-y-5">
       <PageHeader title="Overview" />
 
-      <PriceStaleBanner />
-
-      {hasWealth && ready && <SmartInsights />}
-
       {/* KPI strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Full-width on phones so Net worth gets its own row; on desktop it
@@ -361,18 +356,16 @@ export default function Dashboard() {
               <span className="inline-flex items-center gap-1">
                 XIRR
                 <InfoTip size={12}>
-                  Your annualised return, worked out from the date of every buy, sale and SIP installment, with
-                  today&apos;s value of what you still hold as the last amount. It includes investments you have
-                  already sold, and leaves out Cash &amp; Savings. It is not affected by the arrow on Net worth.
+                  Yearly return from the date of every buy, sale and SIP installment, plus today&apos;s value of
+                  what you hold. Includes sold investments; excludes Cash &amp; Savings.
                   {xirr.excluded > 0 && (
                     <>
                       {' '}
-                      {xirr.excluded === 1 ? '1 holding is' : `${xirr.excluded} holdings are`} left out because
-                      its purchase dates or cost aren&apos;t on record: {xirr.excludedNames.slice(0, 5).join(', ')}
-                      {xirr.excludedNames.length > 5 ? ` and ${xirr.excludedNames.length - 5} more` : ''}.
+                      Not counted (no buy date or cost): {xirr.excludedNames.slice(0, 5).join(', ')}
+                      {xirr.excludedNames.length > 5 ? ` +${xirr.excludedNames.length - 5} more` : ''}.
                     </>
                   )}
-                  {xirr.reason === 'too-short' && ` Shown once your history is at least ${MIN_XIRR_DAYS} days long.`}
+                  {xirr.reason === 'too-short' && ` Needs ${MIN_XIRR_DAYS}+ days of history.`}
                 </InfoTip>
               </span>
             }
@@ -391,12 +384,12 @@ export default function Dashboard() {
               !hasWealth
                 ? undefined
                 : xirr.percent !== null && xirr.since
-                  ? `a year, since ${shortDate(xirr.since)}${xirr.excluded > 0 ? ` · ${xirr.included} of ${xirr.included + xirr.excluded} holdings` : ''}`
+                  ? `Since ${shortDate(xirr.since)}`
                   : xirr.reason === 'too-short'
-                    ? `Needs ${MIN_XIRR_DAYS}+ days of history`
+                    ? `Needs ${MIN_XIRR_DAYS}+ days`
                     : xirr.reason === 'no-history'
-                      ? 'Add purchase dates to see it'
-                      : 'Could not be worked out'
+                      ? 'Add buy dates'
+                      : 'Not available'
             }
           />
         </div>
