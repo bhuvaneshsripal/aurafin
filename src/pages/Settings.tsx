@@ -57,7 +57,7 @@ import { useUpdateStore } from '../store/updateStore';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useUrlTab } from '../hooks/useUrlTab';
 import CustomSelect from '../components/CustomSelect';
-import { PageHeader, Button } from '../components/ui';
+import { PageHeader, Button, RequiredMark } from '../components/ui';
 import type { ReportSectionKey } from '../components/PortfolioPdfReport';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 
@@ -358,7 +358,7 @@ function SetPasswordCard() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {hasPasswordProvider && (
               <div className="sm:col-span-2">
-                <label className="block text-xs text-muted mb-1.5">Current Password</label>
+                <label className="block text-xs text-muted mb-1.5">Current Password<RequiredMark /></label>
                 <div className="relative">
                   <input
                     type={showOldPassword ? 'text' : 'password'}
@@ -379,7 +379,7 @@ function SetPasswordCard() {
               </div>
             )}
             <div>
-              <label className="block text-xs text-muted mb-1.5">New Password</label>
+              <label className="block text-xs text-muted mb-1.5">New Password<RequiredMark /></label>
               <input
                 type="password"
                 value={newPassword}
@@ -389,7 +389,7 @@ function SetPasswordCard() {
               />
             </div>
             <div>
-              <label className="block text-xs text-muted mb-1.5">Confirm New Password</label>
+              <label className="block text-xs text-muted mb-1.5">Confirm New Password<RequiredMark /></label>
               <input
                 type="password"
                 value={confirmPassword}
@@ -403,7 +403,7 @@ function SetPasswordCard() {
               <>
                 <div>
                   <label className="block text-xs text-muted mb-1.5">
-                    Security Question
+                    Security Question<RequiredMark />
                   </label>
                   <CustomSelect
                     value={securityQuestion}
@@ -413,7 +413,7 @@ function SetPasswordCard() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-muted mb-1.5">Answer</label>
+                  <label className="block text-xs text-muted mb-1.5">Answer<RequiredMark /></label>
                   <input
                     value={securityAnswer}
                     onChange={(e) => setSecurityAnswer(e.target.value)}
@@ -455,7 +455,7 @@ function SetPasswordCard() {
             <HelpCircle size={16} className="text-slate-600 shrink-0 mt-0.5" />
             <p className="text-sm text-ink-2">{forgotQuestion}</p>
           </div>
-          <label className="block text-xs text-muted mb-1.5">Your Answer</label>
+          <label className="block text-xs text-muted mb-1.5">Your Answer<RequiredMark /></label>
           <input
             value={forgotAnswer}
             onChange={(e) => setForgotAnswer(e.target.value)}
@@ -643,16 +643,16 @@ function AppLockCard() {
         <div className="space-y-4">
           {needsOldPin && (
             <div>
-              <label className="block text-xs text-muted mb-2 text-center">Current PIN</label>
+              <label className="block text-xs text-muted mb-2 text-center">Current PIN<RequiredMark /></label>
               <PinBoxInput value={oldPin} onChange={setOldPin} autoFocus />
             </div>
           )}
           <div>
-            <label className="block text-xs text-muted mb-2 text-center">{needsOldPin ? 'New 4-digit PIN' : '4-digit PIN'}</label>
+            <label className="block text-xs text-muted mb-2 text-center">{needsOldPin ? 'New 4-digit PIN' : '4-digit PIN'}<RequiredMark /></label>
             <PinBoxInput ref={newPinRef} value={pin} onChange={setPinInput} autoFocus={!needsOldPin} />
           </div>
           <div>
-            <label className="block text-xs text-muted mb-2 text-center">{needsOldPin ? 'Confirm new PIN' : 'Confirm PIN'}</label>
+            <label className="block text-xs text-muted mb-2 text-center">{needsOldPin ? 'Confirm new PIN' : 'Confirm PIN'}<RequiredMark /></label>
             <PinBoxInput ref={confirmPinRef} value={confirmPin} onChange={setConfirmPin} />
           </div>
           {pinError && <p className="text-xs text-red-500">{pinError}</p>}
@@ -674,7 +674,7 @@ function AppLockCard() {
             Anyone with access to this device will be able to open <span className="font-luxury">Aurafin</span> without a PIN. Enter your current PIN to turn the lock off.
           </p>
           <div>
-            <label className="block text-xs text-muted mb-2 text-center">Current PIN</label>
+            <label className="block text-xs text-muted mb-2 text-center">Current PIN<RequiredMark /></label>
             <PinBoxInput value={disablePin} onChange={setDisablePin} autoFocus />
           </div>
           {disableError && <p className="text-xs text-red-500">{disableError}</p>}
@@ -1696,7 +1696,7 @@ function ProfilesTab() {
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add Profile">
         <div className="space-y-4">
           <label className="block">
-            <span className="text-xs font-medium text-muted mb-1.5 block">Name</span>
+            <span className="text-xs font-medium text-muted mb-1.5 block">Name<RequiredMark /></span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -1731,7 +1731,7 @@ function ProfilesTab() {
       <Modal open={!!editingProfile} onClose={() => setEditingProfile(null)} title="Edit Profile">
         <div className="space-y-4">
           <label className="block">
-            <span className="text-xs font-medium text-muted mb-1.5 block">Name</span>
+            <span className="text-xs font-medium text-muted mb-1.5 block">Name<RequiredMark /></span>
             <input
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
@@ -2016,7 +2016,7 @@ function DataTab() {
         </p>
         <label className="block mb-4">
           <span className="text-xs font-medium text-muted mb-1.5 block">
-            Type <strong>DELETE</strong> to confirm
+            Type <strong>DELETE</strong> to confirm<RequiredMark />
           </span>
           <input
             value={confirmText}

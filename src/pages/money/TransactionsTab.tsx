@@ -40,6 +40,7 @@ import {
   cn,
   inputClasses,
   DateInput,
+  RequiredMark,
 } from '../../components/ui';
 import { inToast } from '../../utils/toastGuard';
 
@@ -959,7 +960,7 @@ function TransactionForm({
           </button>
         ))}
       </div>
-      <Field label="Category">
+      <Field label="Category" required>
         <input
           value={category}
           onChange={(e) => setCategory(e.target.value)}
@@ -987,7 +988,7 @@ function TransactionForm({
         )}
       </Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Amount">
+        <Field label="Amount" required>
           <input
             type="number"
             inputMode="decimal"
@@ -1007,7 +1008,7 @@ function TransactionForm({
           This entry came from a holding's sale or dividend, so its amount and type are locked.
         </p>
       )}
-      <Field label="Date">
+      <Field label="Date" required>
         <DateInput value={date} onChange={(v) => setDate(v)} className={inputClass} />
       </Field>
       <Field label="Note (optional)">
@@ -1038,10 +1039,13 @@ function TransactionForm({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-sm font-medium text-slate-500 mb-1 block">{label}</span>
+      <span className="text-sm font-medium text-slate-500 mb-1 block">
+        {label}
+        {required && <RequiredMark />}
+      </span>
       {children}
     </label>
   );

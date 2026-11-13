@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, Loader2, ChevronDown, X, Star } from 'lucide-react';
-import { Card, CardHeader, PageHeader, Button, Input, CardSkeleton, Badge, cn } from '../components/ui';
+import { Card, CardHeader, PageHeader, Button, Input, CardSkeleton, Badge, RequiredMark, cn } from '../components/ui';
 import ValuationBar from '../components/ValuationBar';
 import ValuationWatchlist, { readWatchlist, writeWatchlist, cleanWatchlist, type WatchItem } from '../components/ValuationWatchlist';
 import InfoTip from '../components/ui/InfoTip';
@@ -36,11 +36,14 @@ const num = (s: string) => (s.trim() === '' ? NaN : Number(s));
 /** Give up on a symbol lookup after this long and report it as unreachable. */
 const SEARCH_TIMEOUT_MS = 10_000;
 
-function Field({ label, src, hint, children }: { label: string; src?: Src; hint?: string; children: React.ReactNode }) {
+function Field({ label, src, hint, required, children }: { label: string; src?: Src; hint?: string; required?: boolean; children: React.ReactNode }) {
   return (
     <label className="block min-w-0">
       <span className="flex items-start justify-between gap-1.5 text-xs text-muted mb-1 leading-snug">
-        {label}
+        <span>
+          {label}
+          {required && <RequiredMark />}
+        </span>
         {src && <span className={cn('shrink-0 text-[10px] px-1.5 rounded-full border', src === 'auto' ? 'border-brand-300 text-brand-700' : 'border-line')}>{src === 'auto' ? 'Auto' : 'Yours'}</span>}
       </span>
       {children}
@@ -550,14 +553,15 @@ export default function Valuation() {
             <CardHeader title="Assumptions" description="Every field is editable and the results update instantly." />
             <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-3">
               <Field label={`Price (${cur})`} src={src.price}><Input type="number" inputMode="decimal" value={f.price} onChange={set('price')} /></Field>
-              <Field label={`Current EPS, TTM (${cur})`} src={src.eps}><Input type="number" inputMode="decimal" value={f.eps} onChange={set('eps')} /></Field>
-              <Field label="EPS growth / year (%)" src={src.growth} hint={src.growth === 'auto' ? growthNote : undefined}><Input type="number" inputMode="decimal" value={f.growth} onChange={set('growth')} /></Field>
+              <Field label={`Current EPS, TTM (${cur})`} src={src.eps} required><Input type="number" inputMode="decimal" value={f.eps} onChange={set('eps')} /></Field>
+              <Field label="EPS growth / year (%)" src={src.growth} required={f.fy.trim() === ''} hint={src.growth === 'auto' ? growthNote : undefined}><Input type="number" inputMode="decimal" value={f.growth} onChange={set('growth')} /></Field>
               <Field
                 label="Lowest historical P/E"
                 src={src.pe}
+                required
                 hint={peInfo ? `Low in ${monthYear(peInfo.date)}. ${peInfo.points} readings over ${peInfo.spanYears.toFixed(1)} years. Source: ${peInfo.method}.` : undefined}
               ><Input type="number" inputMode="decimal" value={f.pe} onChange={set('pe')} /></Field>
-              <Field label="Projection years"><Input type="number" min={1} max={10} value={f.years} onChange={set('years')} /></Field>
+              <Field label="Projection years" required><Input type="number" min={1} max={10} value={f.years} onChange={set('years')} /></Field>
               <Field label="P/E lookback (years)" src={src.lookback}><Input type="number" min={1} value={f.lookback} onChange={set('lookback')} /></Field>
               <Field label={`Exceptional items in EPS (${cur})`}><Input type="number" inputMode="decimal" value={f.exc} onChange={set('exc')} /></Field>
               <div className="min-[400px]:col-span-2">
@@ -565,7 +569,7 @@ export default function Valuation() {
                   <Input type="number" inputMode="decimal" placeholder="e.g. analyst estimate; replaces growth %" value={f.fy} onChange={set('fy')} />
                 </Field>
               </div>
-              <Field label="Required return / year (%)"><Input type="number" inputMode="decimal" value={f.req} onChange={set('req')} /></Field>
+              <Field label="Required return / year (%)" required><Input type="number" inputMode="decimal" value={f.req} onChange={set('req')} /></Field>
               <Field label="Share dilution / year (%)"><Input type="number" inputMode="decimal" value={f.dil} onChange={set('dil')} /></Field>
             </div>
             {data && !hasPeData && <p className="mt-2 text-xs text-amber-700">Historical P/E isn’t available for this stock. Enter the lowest positive P/E from your own research.</p>}

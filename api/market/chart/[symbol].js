@@ -40,7 +40,7 @@ export default async function handler(req, res) {
       const body = await snap;
       // The CDN keeps this exact response for the whole bucket window (the b= value
       // is in the URL), so every device in that window gets the same numbers.
-      res.setHeader('Cache-Control', 's-maxage=10, stale-while-revalidate=0');
+      res.setHeader('Cache-Control', 's-maxage=1, stale-while-revalidate=0');
       res.status(200).json(body);
     } catch {
       res.status(502).json({ error: 'Could not reach the live price source' });

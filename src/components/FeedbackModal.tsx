@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckCircle2, MessageSquare, Send } from 'lucide-react';
 import Modal from './Modal';
-import { Button, Textarea } from './ui';
+import { Button, Label, Textarea } from './ui';
 import { useAuthStore } from '../store/authStore';
 import { isFeedbackConfigured, sendFeedback } from '../utils/feedback';
 
@@ -88,7 +88,11 @@ export default function FeedbackModal({ open, onClose }: { open: boolean; onClos
           </div>
 
           <div>
+            <Label htmlFor="feedback-modal-message" required>
+              Your message
+            </Label>
             <Textarea
+              id="feedback-modal-message"
               value={message}
               onChange={(e) => setMessage(e.target.value.slice(0, MAX))}
               rows={5}

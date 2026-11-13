@@ -4,12 +4,16 @@ import { useLivePricesStore } from '../store/livePricesStore';
 import { PRICE_BUCKET_MS, fetchLiveQuotes, forgetResolvedSymbol, looksLikeTicker, type PriceLookup } from '../utils/marketPrices';
 import { isMarketOpen } from '../utils/marketHours';
 
-/** Poll every 10s (on a clock shared by all devices) while the market is open (and the tab is visible);
+/** Poll every second (on a clock shared by all devices) while the market is open (and the tab is visible);
  *  prices can't change outside trading hours, so back off to once a minute. */
 const LIVE_REFRESH_MS = PRICE_BUCKET_MS;
 const IDLE_REFRESH_MS = 60_000;
 /** Next tick on the shared wall-clock grid (+ small jitter), so all devices fetch the same bucket. */
-const alignedDelay = (ms: number) => ms - (Date.now() % ms) + Math.floor(Math.random() * 400) + 100;
+const alignedDelay = (ms: number) => {
+  // Jitter scales with the interval: a flat 100-500 ms would stretch a 1 s poll to 1.1-1.5 s.
+  const jitter = Math.min(400, ms * 0.1);
+  return ms - (Date.now() % ms) + Math.floor(Math.random() * jitter) + Math.min(100, ms * 0.05);
+};
 /** Hidden tab / app in the background: refresh the saved prices once a minute. */
 const BACKGROUND_REFRESH_MS = 60_000;
 /** A price this far (as a fraction) from the last one we showed is treated as
@@ -54,7 +58,9 @@ export function useLivePrices() {
       if (fetching.current && Date.now() - fetchStartedAt.current < 30_000) return;
       fetching.current = true;
       fetchStartedAt.current = Date.now();
-      setLoading(true);
+      // Only the very first fetch shows a "loading" state. Flipping it on and off around
+      // every 1 s refresh just made two extra store updates (and storage writes) per second.
+      if (useLivePricesStore.getState().pricesUpdatedAt === null) setLoading(true);
       try {
         const lookups: PriceLookup[] = equityAssets.map((a) => ({
           key: a.symbol!,

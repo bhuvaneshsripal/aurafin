@@ -57,7 +57,7 @@ export default function Feedback() {
               <MessageSquarePlus size={18} className="text-primary-ink" />
               <span className="text-sm font-semibold">Share your thoughts</span>
             </div>
-            <Field label="Your message">
+            <Field label="Your message" required>
               <Textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value.slice(0, MAX))}

@@ -1005,7 +1005,7 @@ export default function Watchlist() {
           </div>
         }
       >
-        <Field label="Watchlist name">
+        <Field label="Watchlist name" required>
           <Input
             autoFocus
             value={nameDraft}

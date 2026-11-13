@@ -29,7 +29,7 @@ const ENDPOINT: Record<IndicesVariant, string> = {
 };
 const POLL_MS = 30_000;
 // Indian indices refresh every 2 seconds while the market is open.
-const LIVE_POLL_MS = 2_000;
+const LIVE_POLL_MS = 1_000;
 
 // Built once: `n.toLocaleString(locale, options)` creates a new Intl.NumberFormat
 // on every call, and this table formats ~7 numbers per row on every refresh

@@ -24,7 +24,7 @@ import {
 import { formatCurrency } from '../utils/currency';
 import { toIsoDate } from '../utils/date';
 import CustomSelect from '../components/CustomSelect';
-import { DateInput, inputClasses } from '../components/ui';
+import { DateInput, inputClasses, RequiredMark } from '../components/ui';
 import { PageHeader } from '../components/ui';
 
 type CalcKey = 'xirr' | 'sip' | 'lumpsum' | 'phased' | 'cagr' | 'emi' | 'swp' | 'retirement' | 'fd';
@@ -283,13 +283,13 @@ function SipCalculator() {
       inputs={
         <>
           <h2 className="text-lg font-semibold text-ink">SIP Details</h2>
-          <Field label="Monthly Investment">
+          <Field label="Monthly Investment" required>
             <input type="number" value={monthly} onChange={(e) => setMonthly(e.target.value)} className={inputClass} />
           </Field>
-          <Field label="Expected Annual Return (%)">
+          <Field label="Expected Annual Return (%)" required>
             <input type="number" value={rate} onChange={(e) => setRate(e.target.value)} className={inputClass} />
           </Field>
-          <Field label="Duration (Years)">
+          <Field label="Duration (Years)" required>
             <input type="number" value={years} onChange={(e) => setYears(e.target.value)} className={inputClass} />
           </Field>
           <Field label="Annual Step-Up (%, optional)">
@@ -338,13 +338,13 @@ function LumpsumCalculator() {
       inputs={
         <>
           <h2 className="text-lg font-semibold text-ink">Lumpsum Details</h2>
-          <Field label="Investment Amount">
+          <Field label="Investment Amount" required>
             <input type="number" value={principal} onChange={(e) => setPrincipal(e.target.value)} className={inputClass} />
           </Field>
-          <Field label="Expected Annual Return (%)">
+          <Field label="Expected Annual Return (%)" required>
             <input type="number" value={rate} onChange={(e) => setRate(e.target.value)} className={inputClass} />
           </Field>
-          <Field label="Duration (Years)">
+          <Field label="Duration (Years)" required>
             <input type="number" value={years} onChange={(e) => setYears(e.target.value)} className={inputClass} />
           </Field>
         </>
@@ -456,7 +456,7 @@ function PhasedCalculator() {
           <div className="space-y-2">
             {phases.map((p, i) => (
               <div key={p.id} className="flex items-end gap-2">
-                <Field label={i === 0 ? 'Monthly Amount' : ''}>
+                <Field label={i === 0 ? 'Monthly Amount' : ''} required={i === 0}>
                   <input
                     type="number"
                     placeholder="Amount"
@@ -465,7 +465,7 @@ function PhasedCalculator() {
                     className={inputClass}
                   />
                 </Field>
-                <Field label={i === 0 ? 'From Year' : ''}>
+                <Field label={i === 0 ? 'From Year' : ''} required={i === 0}>
                   <input
                     type="number"
                     placeholder="From"
@@ -474,7 +474,7 @@ function PhasedCalculator() {
                     className={`${inputClass} w-20`}
                   />
                 </Field>
-                <Field label={i === 0 ? 'To Year' : ''}>
+                <Field label={i === 0 ? 'To Year' : ''} required={i === 0}>
                   <input
                     type="number"
                     placeholder="To"
@@ -506,7 +506,7 @@ function PhasedCalculator() {
             <Plus size={16} /> Add another phase
           </button>
 
-          <Field label="Expected Annual Return (%)">
+          <Field label="Expected Annual Return (%)" required>
             <input type="number" value={rate} onChange={(e) => setRate(e.target.value)} className={inputClass} />
           </Field>
         </>
@@ -575,13 +575,13 @@ function FdCalculator() {
       inputs={
         <>
           <h2 className="text-lg font-semibold text-ink">Fixed Deposit Details</h2>
-          <Field label="Deposit Amount">
+          <Field label="Deposit Amount" required>
             <input type="number" value={principal} onChange={(e) => setPrincipal(e.target.value)} className={inputClass} />
           </Field>
-          <Field label="Interest Rate (%)">
+          <Field label="Interest Rate (%)" required>
             <input type="number" value={rate} onChange={(e) => setRate(e.target.value)} className={inputClass} />
           </Field>
-          <Field label="Tenure (Years)">
+          <Field label="Tenure (Years)" required>
             <input type="number" value={years} onChange={(e) => setYears(e.target.value)} className={inputClass} />
           </Field>
           <Field label="Compounding Frequency (times/year)">
@@ -633,13 +633,13 @@ function CagrCalculator() {
       inputs={
         <>
           <h2 className="text-lg font-semibold text-ink">CAGR Details</h2>
-          <Field label="Initial Value">
+          <Field label="Initial Value" required>
             <input type="number" value={initial} onChange={(e) => setInitial(e.target.value)} className={inputClass} />
           </Field>
-          <Field label="Final Value">
+          <Field label="Final Value" required>
             <input type="number" value={final} onChange={(e) => setFinal(e.target.value)} className={inputClass} />
           </Field>
-          <Field label="Duration (Years)">
+          <Field label="Duration (Years)" required>
             <input type="number" value={years} onChange={(e) => setYears(e.target.value)} className={inputClass} />
           </Field>
         </>
@@ -697,13 +697,13 @@ function EmiCalculator() {
       inputs={
         <>
           <h2 className="text-lg font-semibold text-ink">Loan Details</h2>
-          <Field label="Loan Amount">
+          <Field label="Loan Amount" required>
             <input type="number" value={principal} onChange={(e) => setPrincipal(e.target.value)} className={inputClass} />
           </Field>
-          <Field label="Interest Rate (% p.a.)">
+          <Field label="Interest Rate (% p.a.)" required>
             <input type="number" value={rate} onChange={(e) => setRate(e.target.value)} className={inputClass} />
           </Field>
-          <Field label="Tenure (Years)">
+          <Field label="Tenure (Years)" required>
             <input type="number" value={years} onChange={(e) => setYears(e.target.value)} className={inputClass} />
           </Field>
         </>
@@ -828,7 +828,7 @@ function XirrCalculator() {
         </button>
 
         <div className="pt-2 border-t border-line-soft space-y-3">
-          <Field label="Current Value (positive)">
+          <Field label="Current Value (positive)" required>
             <input
               type="number"
               value={currentValue}
@@ -836,7 +836,7 @@ function XirrCalculator() {
               className={inputClass}
             />
           </Field>
-          <Field label="As of Date">
+          <Field label="As of Date" required>
             <DateInput
               value={currentDate}
               onChange={(v) => setCurrentDate(v)}
@@ -906,10 +906,10 @@ function SwpCalculator() {
       inputs={
         <>
           <h2 className="text-lg font-semibold text-ink">Withdrawal Plan</h2>
-          <Field label="Starting Corpus">
+          <Field label="Starting Corpus" required>
             <input type="number" value={corpus} onChange={(e) => setCorpus(e.target.value)} className={inputClass} />
           </Field>
-          <Field label="Monthly Withdrawal (today's value)">
+          <Field label="Monthly Withdrawal (today's value)" required>
             <input
               type="number"
               value={withdrawal}
@@ -917,7 +917,7 @@ function SwpCalculator() {
               className={inputClass}
             />
           </Field>
-          <Field label="Expected Annual Return (%)">
+          <Field label="Expected Annual Return (%)" required>
             <input
               type="number"
               value={returnRate}
@@ -1028,14 +1028,14 @@ function RetirementCalculator() {
         <>
           <h2 className="text-lg font-semibold text-ink">Your Plan</h2>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Current Age">
+            <Field label="Current Age" required>
               <input type="number" value={currentAge} onChange={(e) => setCurrentAge(e.target.value)} className={inputClass} />
             </Field>
-            <Field label="Retirement Age">
+            <Field label="Retirement Age" required>
               <input type="number" value={retireAge} onChange={(e) => setRetireAge(e.target.value)} className={inputClass} />
             </Field>
           </div>
-          <Field label="Life Expectancy (Age)">
+          <Field label="Life Expectancy (Age)" required>
             <input
               type="number"
               value={lifeExpectancy}
@@ -1043,7 +1043,7 @@ function RetirementCalculator() {
               className={inputClass}
             />
           </Field>
-          <Field label="Current Monthly Expense">
+          <Field label="Current Monthly Expense" required>
             <input
               type="number"
               value={monthlyExpense}
@@ -1095,10 +1095,13 @@ function RetirementCalculator() {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-sm font-medium text-muted mb-1 block">{label}</span>
+      <span className="text-sm font-medium text-muted mb-1 block">
+        {label}
+        {required && <RequiredMark />}
+      </span>
       {children}
     </label>
   );

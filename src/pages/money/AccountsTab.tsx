@@ -22,7 +22,7 @@ import {
 } from '../../utils/accountVisuals';
 import { formatDate, toIsoDate } from '../../utils/date';
 import type { Asset, Liability } from '../../types';
-import { DateInput, inputClasses } from '../../components/ui';
+import { DateInput, inputClasses, RequiredMark } from '../../components/ui';
 
 const inputClass = inputClasses;
 
@@ -472,7 +472,7 @@ function AccountForm({
     <div className="space-y-5">
       <div>
         <p className="text-sm font-medium text-ink-2 mb-2">
-          Type <span className="text-red-500">*</span>
+          Type<RequiredMark />
         </p>
         <div className="grid grid-cols-3 gap-2">
           {ACCOUNT_TYPES.map((t) => {
@@ -505,7 +505,7 @@ function AccountForm({
 
       <label className="block">
         <span className="text-sm font-medium text-ink-2 mb-1 block">
-          Name <span className="text-red-500">*</span>
+          Name<RequiredMark />
         </span>
         <input
           value={name}

@@ -18,7 +18,7 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react';
-import { hardRefresh } from '../utils/hardRefresh';
+import { handleActiveTabTap } from '../utils/tabTap';
 import { APP_VERSION } from '../config/version';
 import UpdateDot from './UpdateDot';
 import { useUiStore } from '../store/uiStore';
@@ -422,43 +422,17 @@ export default function BottomNav() {
     return () => window.removeEventListener('keydown', onKey);
   }, [moreOpen]);
 
-  /** Tapping the tab you're already on refreshes it. */
-  const onTabTap = (to: string) => {
-    setMoreOpen(false);
+  /** Tapping the tab you're already on shows its main view from the top (no reload). */
+  const onTabTap = (to: string, e: React.MouseEvent) => {
     tapFeedback();
-    // Tapping the tab you're already on refreshes the page (falls back to
-    // scrolling to the top if the app can't reach the network).
-    // Only on the page's own main view. On a sub-view of the same page (an open
-    // edit / add form, a holding detail... these live in the URL as ?edit=, ?add=...)
-    // the tap just goes back to the main view instead of refreshing.
-    // Read the real address bar, not the router's `location`: open sub-views
-    // (?holding=, ?edit=) are written with history.replaceState, which the router
-    // never sees, so `location.search` would wrongly look empty there.
-    // A page that has its own in-page "opened" state (e.g. a stock loaded on Valuation)
-    // can claim the tap by cancelling this event: it goes back to its main view first,
-    // and only a second tap on the main view refreshes.
     if (location.pathname === to) {
-      const ev = new CustomEvent('aurafin:tab-home', { cancelable: true });
-      window.dispatchEvent(ev);
-      if (ev.defaultPrevented) {
-        window.scrollTo({ top: 0, behavior: 'instant' });
-        return;
-      }
-    }
-    // Any other open overlay (a modal / sheet that locks page scroll) also means we are
-    // not on the main view, so don't refresh the page underneath it.
-    const overlayOpen = document.documentElement.style.overflow === 'hidden';
-    if (location.pathname === to && !window.location.search && !location.search && !overlayOpen) {
-      void hardRefresh({ showBar: true, keepPage: true }).then((ok) => {
-        if (!ok) window.scrollTo({ top: 0, behavior: 'smooth' });
-      });
+      // The More sheet has its own history entry, which closing it removes by itself.
+      handleActiveTabTap(e, { skipHistoryPop: moreOpen });
     } else {
-      // Picking a tab always shows that page from its top. A normal tab change is
-      // a new navigation, which the router-level scroll handling already starts
-      // at the top; this also covers tapping the tab you are already inside
-      // (a sub-view that never reaches the router).
+      // Picking another tab always shows that page from its top.
       window.scrollTo({ top: 0, behavior: 'instant' });
     }
+    setMoreOpen(false);
   };
 
   return (
@@ -548,9 +522,11 @@ export default function BottomNav() {
               <NavLink
                 to={to}
                 end={to === '/' || to === '/wealth'}
-                onClick={() => {
+                // Tapping the tab you are on never adds a history entry.
+                replace={location.pathname === to}
+                onClick={(e) => {
                   setTapIdx(i);
-                  onTabTap(to);
+                  onTabTap(to, e);
                 }}
                 aria-label={label}
                 title={label}

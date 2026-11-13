@@ -1242,7 +1242,9 @@ input.global-search-input:focus,
 }
 .dark .login-btn-demo { border-color: #e5e5e5; box-shadow: 0 0.25em 0.6em rgba(0, 0, 0, 0.6); }
 
-/* Login: outlined floating-label fields (label sits in the border when focused/filled). */
+/* Login / sign-up / access-password fields: outlined floating-label fields. The label rests
+   inside the box while empty and slides up onto the border (cutting a notch in it) as soon as
+   the field is focused or has text. */
 .lf { position: relative; --lf-focus: #1a73e8; --lf-error: #d93025; }
 .dark .lf { --lf-focus: #8ab4f8; --lf-error: #f28b82; }
 .lf-input {
@@ -1282,11 +1284,40 @@ input.global-search-input:focus,
 .lf-err .lf-input:focus { border-color: var(--lf-error); box-shadow: 0 0 0 1px var(--lf-error); }
 .lf-err .lf-label,
 .lf-err .lf-input:focus ~ .lf-label { color: var(--lf-error); }
+/* Red * for compulsory fields. While the field is empty and not focused it sits ON the top
+   border at the right end (never inside the box). Once the label floats up (focus or text),
+   that star fades out and the one beside the label name ("Email *") appears instead. */
+.lf-req {
+  position: absolute;
+  top: 0;
+  right: 0.85em;
+  padding: 0 0.25em;
+  font-size: 1em;
+  line-height: 1;
+  font-weight: 600;
+  color: var(--lf-error);
+  background: var(--color-surface);
+  pointer-events: none;
+  transform: translateY(-35%);
+  transition: opacity 0.15s;
+}
+.lf-label .lf-star {
+  display: none;
+  margin-left: 0.15em;
+  font-weight: 600;
+  color: var(--lf-error);
+}
+.lf-input:focus ~ .lf-req,
+.lf-input:not(:placeholder-shown) ~ .lf-req,
+.lf-input:-webkit-autofill ~ .lf-req { opacity: 0; }
+.lf-input:focus ~ .lf-label .lf-star,
+.lf-input:not(:placeholder-shown) ~ .lf-label .lf-star,
+.lf-input:-webkit-autofill ~ .lf-label .lf-star { display: inline; }
 .lf-eye {
   position: absolute;
   right: 0;
   top: 0;
-  height: 2.9em;
+  height: 3.1em;
   padding: 0 0.85em;
   display: flex;
   align-items: center;

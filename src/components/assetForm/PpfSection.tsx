@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronDown, Plus, Trash2 } from 'lucide-react';
 import InfoTip, { InfoNote } from '../ui/InfoTip';
-import { DateInput, Select, inputClasses } from '../ui';
+import { DateInput, RequiredMark, Select, inputClasses } from '../ui';
 import { COMMON_BANKS } from '../../utils/banks';
 import { formatCurrency, formatPreciseCurrency } from '../../utils/privateFormat';
 import { formatDate, toIsoDate } from '../../utils/date';
@@ -23,11 +23,14 @@ import {
 } from '../../utils/ppf';
 import type { PpfDetails, PpfDeposit } from '../../types';
 
-function Field({ label, hint, children }: { label: ReactNode; hint?: ReactNode; children: ReactNode }) {
+function Field({ label, hint, required, children }: { label: ReactNode; hint?: ReactNode; required?: boolean; children: ReactNode }) {
   return (
     <label className="block min-w-0">
       <span className="text-sm font-medium text-slate-500 mb-1 flex items-end gap-1.5 min-h-[2.25rem] leading-snug">
-        {label}
+        <span>
+          {label}
+          {required && <RequiredMark />}
+        </span>
         {hint && <InfoTip>{hint}</InfoTip>}
       </span>
       {children}
@@ -188,7 +191,7 @@ export default function PpfSection({
           </Field>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Account opened on" hint={maturity ? `Matures on ${formatDate(maturity)} — 15 years after the end of that financial year` : 'Sets the 15-year term, loan and withdrawal windows'}>
+          <Field label="Account opened on" required hint={maturity ? `Matures on ${formatDate(maturity)} — 15 years after the end of that financial year` : 'Sets the 15-year term, loan and withdrawal windows'}>
             <DateInput value={value.openingDate ?? ''} onChange={(v) => set({ openingDate: v || undefined })} max={todayIso} className={inputClasses} />
           </Field>
           <Field label="Interest rate (% p.a.)" hint={`Reset by the government every quarter — ${DEFAULT_PPF_RATE}% for Oct–Dec 2026`}>

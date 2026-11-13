@@ -10,7 +10,7 @@ import type { Asset, AssetClass } from '../types';
 import { ASSET_CLASS_LABELS, formatCurrency } from '../utils/currency';
 import CurrencySelect from '../components/CurrencySelect';
 import CustomSelect from '../components/CustomSelect';
-import { inputClasses } from '../components/ui';
+import { inputClasses, RequiredMark } from '../components/ui';
 
 const ASSET_CLASSES = Object.keys(ASSET_CLASS_LABELS) as AssetClass[];
 
@@ -150,7 +150,7 @@ function AssetForm({ initial, onSave }: { initial: Asset | null; onSave: (a: Ass
 
   return (
     <div className="space-y-4">
-      <Field label="Name">
+      <Field label="Name" required>
         <input value={name} onChange={(e) => setName(e.target.value.toUpperCase())} className={`${inputClass}`} placeholder="e.g. HDFC Flexicap SIP" />
       </Field>
       <Field label="Asset Class">
@@ -162,7 +162,7 @@ function AssetForm({ initial, onSave }: { initial: Asset | null; onSave: (a: Ass
         />
       </Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Value">
+        <Field label="Value" required>
           <input
             type="number"
             value={value}
@@ -182,10 +182,13 @@ function AssetForm({ initial, onSave }: { initial: Asset | null; onSave: (a: Ass
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-xs font-medium text-slate-500 mb-1 block">{label}</span>
+      <span className="text-xs font-medium text-slate-500 mb-1 block">
+        {label}
+        {required && <RequiredMark />}
+      </span>
       {children}
     </label>
   );

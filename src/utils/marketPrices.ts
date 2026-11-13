@@ -219,7 +219,7 @@ const BATCH_CHUNK = 40;
 /** All devices fetch on the same wall-clock grid. The bucket number is part of the
  *  request URL, so the server/CDN hands every device in the same window the very
  *  same cached answer -- two phones can no longer show different prices. */
-export const PRICE_BUCKET_MS = 10_000;
+export const PRICE_BUCKET_MS = 1_000;
 export const priceBucket = (now: number = Date.now()) => Math.floor(now / PRICE_BUCKET_MS);
 /** After a batch, symbols it didn't price are retried one by one -- but only a few,
  *  so a provider outage can't turn one poll into dozens of requests again. */

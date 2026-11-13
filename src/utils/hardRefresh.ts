@@ -1,4 +1,5 @@
 import { useRefreshBarStore } from '../store/refreshBarStore';
+import { discardPendingPriceCache } from '../store/livePricesStore';
 
 /**
  * Hard refresh: throws away everything the browser/PWA may be serving stale
@@ -62,6 +63,8 @@ export async function hardRefresh({
 
   // Cached last-known prices — drop so stale numbers can't flash first.
   try {
+    // A batched write still waiting would otherwise be flushed on page-hide and bring the old prices back.
+    discardPendingPriceCache();
     localStorage.removeItem('aurafin-live-prices-cache');
   } catch { /* ignore */ }
 

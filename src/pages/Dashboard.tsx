@@ -380,12 +380,12 @@ export default function Dashboard() {
                   ? '••••••'
                   : `${xirr.percent < 0 ? '−' : ''}${formatPercentMagnitude(Math.abs(xirr.percent))}`
             }
+            cornerLabel={hasWealth && xirr.percent !== null && xirr.since ? `Since ${shortDate(xirr.since)}` : undefined}
+            cornerTone={xirr.percent === null || privacyMode ? 'neutral' : xirr.percent >= 0 ? 'positive' : 'negative'}
             sublabel={
-              !hasWealth
+              !hasWealth || (xirr.percent !== null && xirr.since)
                 ? undefined
-                : xirr.percent !== null && xirr.since
-                  ? `Since ${shortDate(xirr.since)}`
-                  : xirr.reason === 'too-short'
+                : xirr.reason === 'too-short'
                     ? `Needs ${MIN_XIRR_DAYS}+ days`
                     : xirr.reason === 'no-history'
                       ? 'Add buy dates'

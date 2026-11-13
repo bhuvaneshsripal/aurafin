@@ -1,5 +1,66 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
+
+/** Quotes now arrive every second, and `persist` would serialise the whole price map into
+ *  localStorage (a synchronous write) on every one of them. Writes are batched instead: at most
+ *  one every few seconds, plus an immediate flush when the page is hidden or closed so the next
+ *  visit still opens on the freshest prices. */
+const PRICE_CACHE_WRITE_EVERY_MS = 5_000;
+let pendingWrite: { name: string; value: string } | null = null;
+let writeTimer: ReturnType<typeof setTimeout> | undefined;
+
+function flushPriceCache() {
+  if (writeTimer !== undefined) {
+    clearTimeout(writeTimer);
+    writeTimer = undefined;
+  }
+  if (!pendingWrite) return;
+  const { name, value } = pendingWrite;
+  pendingWrite = null;
+  try {
+    localStorage.setItem(name, value);
+  } catch {
+    /* storage full / unavailable: prices still work, just no instant paint next visit */
+  }
+}
+
+/** Drops a write that is still waiting (used by hard refresh, which clears the cache on purpose). */
+export function discardPendingPriceCache() {
+  pendingWrite = null;
+  if (writeTimer !== undefined) {
+    clearTimeout(writeTimer);
+    writeTimer = undefined;
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', flushPriceCache);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushPriceCache();
+  });
+}
+
+const throttledStorage: StateStorage = {
+  getItem: (name) => {
+    try {
+      return localStorage.getItem(name);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (name, value) => {
+    pendingWrite = { name, value };
+    if (writeTimer === undefined) writeTimer = setTimeout(flushPriceCache, PRICE_CACHE_WRITE_EVERY_MS);
+  },
+  removeItem: (name) => {
+    discardPendingPriceCache();
+    try {
+      localStorage.removeItem(name);
+    } catch {
+      /* ignore */
+    }
+  },
+};
 
 /** Live-computed value for a SIP holding — the auto-calculated Current Value
  *  (units bought at each installment's NAV, priced at the latest NAV) plus
@@ -122,6 +183,7 @@ export const useLivePricesStore = create<LivePricesState>()(
       // anything that's changed since — this only avoids the *wait*, it
       // doesn't skip the refresh.
       name: 'aurafin-live-prices-cache',
+      storage: createJSONStorage(() => throttledStorage),
       partialize: (s) => ({
         prices: s.prices,
         previousCloses: s.previousCloses,

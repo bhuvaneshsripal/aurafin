@@ -100,6 +100,7 @@ import {
   DateInput,
   TrendArrow,
   ConcentricRings,
+  RequiredMark,
 } from '../components/ui';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import CurrencySelect from '../components/CurrencySelect';
@@ -3257,7 +3258,7 @@ function SipTopUpsCard({
       <Modal open={!!editing} onClose={() => !busy && setEditing(null)} title="Edit top-up">
         {editing && (
           <div className="space-y-4">
-            <Field label="Date">
+            <Field label="Date" required>
               <DateInput
                 value={editing.date}
                 onChange={(v) => setEditing({ ...editing, date: v })}
@@ -3265,7 +3266,7 @@ function SipTopUpsCard({
                 className="mt-1 w-full border border-line bg-transparent rounded-lg px-3 py-2.5 text-sm"
               />
             </Field>
-            <Field label="Amount">
+            <Field label="Amount" required>
               <input
                 type="number"
                 step="any"
@@ -3375,7 +3376,7 @@ function SipPauseModal({
         </p>
         <div>
           <label className="text-xs font-medium text-muted">
-            {isPaused ? 'Resumed from' : 'Paused from'}
+            {isPaused ? 'Resumed from' : 'Paused from'}<RequiredMark />
           </label>
           <DateInput
             value={date}
@@ -3445,6 +3446,10 @@ function SipBuyMoreModal({
   const submitTopUp = async () => {
     const amt = Number(amount);
     if (!amt || amt <= 0) return;
+    if (!date) {
+      toast.error('Please enter the date before saving.');
+      return;
+    }
     setSaving(true);
     try {
       const topUps = [...(asset.sipTopUps ?? []), { id: newId(), date, amount: amt }];
@@ -3503,7 +3508,7 @@ function SipBuyMoreModal({
       {mode === 'topup' && (
         <div className="space-y-4">
           <div>
-            <label className="text-xs font-medium text-muted">Top-up amount</label>
+            <label className="text-xs font-medium text-muted">Top-up amount<RequiredMark /></label>
             <input
               type="number"
               inputMode="decimal"
@@ -3515,7 +3520,7 @@ function SipBuyMoreModal({
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-muted">Date</label>
+            <label className="text-xs font-medium text-muted">Date<RequiredMark /></label>
             <DateInput
               value={date}
               onChange={(v) => setDate(v)}
@@ -3546,7 +3551,7 @@ function SipBuyMoreModal({
         <div className="space-y-4">
           <div>
             <label className="text-xs font-medium text-muted">
-              New {asset.sipFrequency === 'quarterly' ? 'quarterly' : 'monthly'} amount
+              New {asset.sipFrequency === 'quarterly' ? 'quarterly' : 'monthly'} amount<RequiredMark />
             </label>
             <input
               type="number"
@@ -3559,7 +3564,7 @@ function SipBuyMoreModal({
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-muted">Effective from</label>
+            <label className="text-xs font-medium text-muted">Effective from<RequiredMark /></label>
             <DateInput
               value={date}
               onChange={(v) => setDate(v)}
@@ -4333,12 +4338,14 @@ function BuySellDividendModal({
       setError('Enter a valid quantity and price.');
       return;
     }
-    if (!date) {
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       setError('Please enter the buy date.');
+      toast.error('Please enter the buy date before saving.');
       return;
     }
     if (date > toIsoDate()) {
       setError('Purchase date cannot be in the future.');
+      toast.error('Purchase date cannot be in the future.');
       return;
     }
     setSaving(true);
@@ -4608,11 +4615,11 @@ function BuySellDividendModal({
         {mode === 'buy' && (
           <>
             <div>
-              <label className="text-xs font-medium text-muted">Quantity ({unitLabel})</label>
+              <label className="text-xs font-medium text-muted">Quantity ({unitLabel})<RequiredMark /></label>
               <input type="number" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="e.g. 10" className={inputClass} autoFocus />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted">Price per {isWeightTracked ? 'gram' : 'unit'}</label>
+              <label className="text-xs font-medium text-muted">Price per {isWeightTracked ? 'gram' : 'unit'}<RequiredMark /></label>
               <input type="number" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="e.g. 150" className={inputClass} />
             </div>
           </>
@@ -4622,7 +4629,7 @@ function BuySellDividendModal({
           <>
             <div>
               <label className="text-xs font-medium text-muted">
-                Quantity to sell ({unitLabel}) — you hold {currentQty}
+                Quantity to sell ({unitLabel}) — you hold {currentQty}<RequiredMark />
               </label>
               <input type="number" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="e.g. 5" className={inputClass} autoFocus />
               <div className="mt-2 flex gap-2">
@@ -4646,7 +4653,7 @@ function BuySellDividendModal({
             </div>
             <div>
               <div className="flex items-center justify-between">
-                <label className="text-xs font-medium text-muted">Sell price per {isWeightTracked ? 'gram' : 'unit'}</label>
+                <label className="text-xs font-medium text-muted">Sell price per {isWeightTracked ? 'gram' : 'unit'}<RequiredMark /></label>
                 {currentPrice !== undefined && (
                   <button
                     type="button"
@@ -4736,13 +4743,13 @@ function BuySellDividendModal({
             {divEntry === 'perShare' ? (
               <div>
                 <label className="text-xs font-medium text-muted">
-                  Dividend per share — you hold {currentQty}
+                  Dividend per share — you hold {currentQty}<RequiredMark />
                 </label>
                 <input type="number" inputMode="decimal" value={divPerShare} onChange={(e) => setDivPerShare(e.target.value)} placeholder="e.g. 2.5" className={inputClass} autoFocus />
               </div>
             ) : (
               <div>
-                <label className="text-xs font-medium text-muted">Dividend amount (before tax)</label>
+                <label className="text-xs font-medium text-muted">Dividend amount (before tax)<RequiredMark /></label>
                 <input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 250" className={inputClass} autoFocus />
               </div>
             )}
@@ -4937,13 +4944,13 @@ function BuySellDividendModal({
               <DateInput value={exDate} onChange={(v) => setExDate(v)} className={inputClass} />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted">Payment date</label>
+              <label className="text-xs font-medium text-muted">Payment date<RequiredMark /></label>
               <DateInput value={date} onChange={(v) => setDate(v)} className={inputClass} />
             </div>
           </div>
         ) : (
           <div>
-            <label className="text-xs font-medium text-muted">Date</label>
+            <label className="text-xs font-medium text-muted">Date<RequiredMark /></label>
             <DateInput value={date} onChange={(v) => setDate(v)} className={inputClass} />
           </div>
         )}
@@ -6299,12 +6306,35 @@ function AssetDetailsForm({
   // returns, XIRR and tax lots are all worked out from it. Half-filled rows are dropped on save, so
   // only rows that will actually be kept are checked.
   const isRealDate = (d?: string) => !!d && /^\d{4}-\d{2}-\d{2}$/.test(d);
+  // The date rule is for purchases entered from now on. A purchase that was already saved without a
+  // date (or an older holding whose single lot was filled in for it) is left alone, so editing an old
+  // holding never gets blocked by it.
+  const legacyUndatedLotIds = useRef<Set<string> | null>(null);
+  if (legacyUndatedLotIds.current === null) {
+    const savedIds = new Set([
+      ...(initial?.shareLots?.map((l) => l.id) ?? []),
+      ...(initial?.purchaseLots?.map((l) => l.id) ?? []),
+    ]);
+    const hadNoLots = savedIds.size === 0;
+    legacyUndatedLotIds.current = new Set(
+      initial
+        ? [...shareLots, ...purchaseLots]
+            .filter((l) => !isRealDate(l.date) && (savedIds.has(l.id) || hadNoLots))
+            .map((l) => l.id)
+        : []
+    );
+  }
+  const isLegacyLot = (id: string) => legacyUndatedLotIds.current?.has(id) ?? false;
   const lotsMissingDate: string[] = [
     ...(isUnitTracked
-      ? shareLots.filter((l) => Number(l.quantity) > 0 && Number(l.price) > 0 && !isRealDate(l.date)).map((l) => l.id)
+      ? shareLots
+          .filter((l) => Number(l.quantity) > 0 && Number(l.price) > 0 && !isRealDate(l.date) && !isLegacyLot(l.id))
+          .map((l) => l.id)
       : []),
     ...(isWeightTracked
-      ? purchaseLots.filter((l) => Number(l.grams) > 0 && Number(l.amount) > 0 && !isRealDate(l.date)).map((l) => l.id)
+      ? purchaseLots
+          .filter((l) => Number(l.grams) > 0 && Number(l.amount) > 0 && !isRealDate(l.date) && !isLegacyLot(l.id))
+          .map((l) => l.id)
       : []),
   ];
   const buyDateMissing = lotsMissingDate.length > 0;
@@ -6447,7 +6477,7 @@ function AssetDetailsForm({
   // and price are already on the screen.
   const nameCurrencyField = (
     <div className="grid grid-cols-[1fr_128px] gap-3">
-      <Field label={isUnitTracked ? 'Name' : <>Name <span className="text-red-500">*</span></>}>
+      <Field label="Name" required>
         <input
           value={name}
           onChange={(e) => setName(e.target.value.toUpperCase())}
@@ -6513,7 +6543,7 @@ function AssetDetailsForm({
           </button>
       )}
       {isUnitTracked && (
-    <Field label={<>Ticker <span className="text-red-500">*</span></>}>
+    <Field label="Ticker" required>
       <div className="relative">
         <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
@@ -6790,7 +6820,7 @@ function AssetDetailsForm({
                   {!collapsed && (
                     <>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        <Field label="Date">
+                        <Field label="Date" required>
                           <DateInput
                             value={lot.date ?? ''}
                             onChange={(v) => updatePurchaseLot(lot.id, { date: v })}
@@ -6798,7 +6828,7 @@ function AssetDetailsForm({
                           />
                           {attemptedSubmit && lotsMissingDate.includes(lot.id) && <p data-buy-date-error className={errorTextClass}>Buy date is required.</p>}
                         </Field>
-                        <Field label="Grams">
+                        <Field label="Grams" required>
                           <input
                             type="number"
                             step="any"
@@ -6808,7 +6838,7 @@ function AssetDetailsForm({
                             placeholder="e.g. 10"
                           />
                         </Field>
-                        <Field label="Amount Paid">
+                        <Field label="Amount Paid" required>
                           <input
                             type="number"
                             step="any"
@@ -6853,7 +6883,7 @@ function AssetDetailsForm({
             // so nothing about multi-lot/FX support is actually lost.
             <>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <Field label="Date">
+                <Field label="Date" required>
                   <DateInput
                     value={shareLots[0].date ?? ''}
                     onChange={(v) => updateShareLot(shareLots[0].id, { date: v })}
@@ -6861,7 +6891,7 @@ function AssetDetailsForm({
                   />
                   {attemptedSubmit && lotsMissingDate.includes(shareLots[0].id) && <p data-buy-date-error className={errorTextClass}>Buy date is required.</p>}
                 </Field>
-                <Field label="Quantity">
+                <Field label="Quantity" required>
                   <input
                     type="number"
                     step="any"
@@ -6871,7 +6901,7 @@ function AssetDetailsForm({
                     placeholder="e.g. 10"
                   />
                 </Field>
-                <Field label="Price / Unit" className="col-span-2 sm:col-span-1">
+                <Field label="Price / Unit" required className="col-span-2 sm:col-span-1">
                   {isMarketSelectable ? (
                     <div className="flex gap-1">
                       <input
@@ -7009,7 +7039,7 @@ function AssetDetailsForm({
                     {!collapsed && (
                     <>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      <Field label="Date">
+                      <Field label="Date" required>
                         <DateInput
                           value={lot.date ?? ''}
                           onChange={(v) => updateShareLot(lot.id, { date: v })}
@@ -7018,7 +7048,7 @@ function AssetDetailsForm({
                         {attemptedSubmit && lotsMissingDate.includes(lot.id) && <p data-buy-date-error className={errorTextClass}>Buy date is required.</p>}
                       </Field>
                       {mode === 'qty' ? (
-                        <Field label="Quantity">
+                        <Field label="Quantity" required>
                           <input
                             type="number"
                             step="any"
@@ -7029,7 +7059,7 @@ function AssetDetailsForm({
                           />
                         </Field>
                       ) : (
-                        <Field label="Amount Invested">
+                        <Field label="Amount Invested" required>
                           <div className="flex gap-1">
                             <input
                               type="number"
@@ -7054,7 +7084,7 @@ function AssetDetailsForm({
                           </div>
                         </Field>
                       )}
-                      <Field label="Price / Unit" className="col-span-2 sm:col-span-1">
+                      <Field label="Price / Unit" required className="col-span-2 sm:col-span-1">
                         {isMarketSelectable ? (
                           <div className="flex gap-1">
                             <input
@@ -7529,7 +7559,7 @@ function AssetDetailsForm({
         />
       )}
       <div className="grid grid-cols-2 gap-3">
-        <Field label={isSip || ppfAuto || propertyValueAuto ? 'Current Value (auto)' : (isDepositLike ? 'Maturity Amount (auto)' : 'Current Value')}>
+        <Field required={!isSip && !isDepositLike && !ppfAuto && !propertyValueAuto} label={isSip || ppfAuto || propertyValueAuto ? 'Current Value (auto)' : (isDepositLike ? 'Maturity Amount (auto)' : 'Current Value')}>
           {isSip ? (
             <div className="relative">
               <input
@@ -7628,6 +7658,7 @@ function AssetDetailsForm({
           {!isSip && !isDepositLike && attemptedSubmit && valueMissing && <p className={errorTextClass}>Current Value is required.</p>}
         </Field>
         <Field
+          required={isDepositLike}
           label={
             SIP_CLASSES.has(assetClass)
               ? 'Initial Investment Amount'
@@ -8081,7 +8112,7 @@ function LiabilityDetailsForm({
           <ArrowLeft size={16} /> Back to liability type
         </button>
       )}
-      <Field label="Name">
+      <Field label="Name" required>
         <input
           value={name}
           onChange={(e) => setName(e.target.value.toUpperCase())}
@@ -8115,7 +8146,7 @@ function LiabilityDetailsForm({
         />
       </Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label={isCreditCard ? 'Current Outstanding' : 'Outstanding Amount'}>
+        <Field label={isCreditCard ? 'Current Outstanding' : 'Outstanding Amount'} required>
           <input
             type="number"
             value={outstanding}
@@ -8841,8 +8872,24 @@ type PerformRow = {
   price: number | undefined;
 };
 
-function PerformsList({ title, tone, rows }: { title: string; tone: 'up' | 'down'; rows: PerformRow[] }) {
+function PerformsList({
+  title,
+  tone,
+  topRows,
+  allRows,
+}: {
+  title: string;
+  tone: 'up' | 'down';
+  /** The collapsed view: the best / worst few. */
+  topRows: PerformRow[];
+  /** Every gainer (or loser) of the day, shown when expanded. */
+  allRows: PerformRow[];
+}) {
   const Icon = tone === 'up' ? TrendingUp : TrendingDown;
+  // Deliberately plain state: always starts collapsed, also after a refresh.
+  const [expanded, setExpanded] = useState(false);
+  const canExpand = allRows.length > topRows.length;
+  const rows = expanded && canExpand ? allRows : topRows;
   return (
     <Card padding="none">
       <div className="flex items-center gap-2 px-5 py-4 border-b border-line-soft">
@@ -8854,6 +8901,18 @@ function PerformsList({ title, tone, rows }: { title: string; tone: 'up' | 'down
           <Icon size={15} />
         </span>
         <h3 className="text-[15px] font-semibold text-ink">{title}</h3>
+        {canExpand && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            aria-label={expanded ? `Show fewer: ${title}` : `Show all ${allRows.length}: ${title}`}
+            className="ml-auto -mr-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-muted hover:text-ink hover:bg-surface-hover transition-colors"
+          >
+            <span className="font-numeric">{expanded ? 'Show less' : `All ${allRows.length}`}</span>
+            <ChevronDown size={16} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          </button>
+        )}
       </div>
       {rows.length === 0 ? (
         <p className="px-5 py-8 text-sm text-muted text-center">Nothing to show yet.</p>
@@ -8892,7 +8951,7 @@ function PerformsList({ title, tone, rows }: { title: string; tone: 'up' | 'down
   );
 }
 
-/** Performs: today's six best and six worst holdings by 1D % change (same
+/** Performs: today's six best and six worst holdings by 1D % change, each expandable to all gainers / losers (same
  *  numbers as the Assets table's 1D column). */
 function PerformsTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   const allAssets = useAssetsStore((s) => s.assets);
@@ -8903,7 +8962,7 @@ function PerformsTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   const liveGoldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
   const dayChangeResetActive = useDayChangeResetWindow();
 
-  const { best, worst, count } = useMemo(() => {
+  const { best, worst, bestAll, worstAll, count } = useMemo(() => {
     const assets = (activeProfileId ? allAssets.filter((a) => a.profileId === activeProfileId) : allAssets).filter(
       (a) => !isFullySold(a)
     );
@@ -8927,6 +8986,9 @@ function PerformsTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
     return {
       best: rows.slice(0, n),
       worst: rows.slice(rows.length - m).reverse(),
+      // Expanded view: every holding that is up today / down today (sorted best→worst).
+      bestAll: rows.filter((r) => r.percent >= 0),
+      worstAll: rows.filter((r) => r.percent < 0).reverse(),
       count: rows.length,
     };
   }, [allAssets, activeProfileId, livePrices, previousCloses, sipValues, liveGoldPricePerGram]);
@@ -8948,9 +9010,9 @@ function PerformsTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
           />
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <PerformsList title={`Best performing today`} tone="up" rows={best} />
-          <PerformsList title={`Worst performing today`} tone="down" rows={worst} />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+          <PerformsList title={`Best performing today`} tone="up" topRows={best} allRows={bestAll} />
+          <PerformsList title={`Worst performing today`} tone="down" topRows={worst} allRows={worstAll} />
         </div>
       )}
     </div>
@@ -9039,12 +9101,15 @@ function AllocationChart({
 function Field({
   label,
   hint,
+  required,
   children,
   className,
 }: {
   label: React.ReactNode;
   /** Longer explanation, shown in an "i" popover next to the label instead of as text under the field. */
   hint?: React.ReactNode;
+  /** Compulsory field: shows a red * after the label. */
+  required?: boolean;
   children: React.ReactNode;
   className?: string;
 }) {
@@ -9055,7 +9120,10 @@ function Field({
          (e.g. "Interest Rate (%)" beside "Bank / Institution"), both inputs
          still start at the same y position instead of one sitting lower. */}
       <span className="text-sm font-medium text-slate-500 mb-1 flex items-end gap-1.5 min-h-[2.25rem] leading-snug">
-        {label}
+        <span>
+          {label}
+          {required && <RequiredMark />}
+        </span>
         {hint && <InfoTip>{hint}</InfoTip>}
       </span>
       {children}
@@ -9065,11 +9133,14 @@ function Field({
 
 /** Like Field, but a <div>: use it when the content has several buttons (tag chips, purity cards), because
  *  clicking a <label> activates the first button inside it — e.g. clicking "Tags" removed the first tag. */
-function FieldGroup({ label, hint, children }: { label: React.ReactNode; hint?: React.ReactNode; children: React.ReactNode }) {
+function FieldGroup({ label, hint, required, children }: { label: React.ReactNode; hint?: React.ReactNode; required?: boolean; children: React.ReactNode }) {
   return (
     <div className="block min-w-0" role="group">
       <span className="text-sm font-medium text-slate-500 mb-1 flex items-end gap-1.5 min-h-[2.25rem] leading-snug">
-        {label}
+        <span>
+          {label}
+          {required && <RequiredMark />}
+        </span>
         {hint && <InfoTip>{hint}</InfoTip>}
       </span>
       {children}

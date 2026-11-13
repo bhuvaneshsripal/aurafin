@@ -27,7 +27,7 @@ import AppLogo from './AppLogo';
 import FeedbackModal from './FeedbackModal';
 import UpdateDot from './UpdateDot';
 
-import { hardRefresh } from '../utils/hardRefresh';
+import { handleActiveTabTap } from '../utils/tabTap';
 
 type NavLinkDef = { to: string; label: string; icon: typeof LayoutDashboard; end?: boolean };
 
@@ -70,11 +70,11 @@ function NavItem({ to, label, icon: Icon, end }: NavLinkDef) {
   return (
     <NavLink
       to={to}
-      onClick={() => {
-        // Clicking the page you're already on refreshes it, but only from its main
-        // view. From a sub-view (?holding=, ?edit=... written via replaceState, so
-        // check the real address bar) the click just goes back to the main view.
-        if (location.pathname === to && !window.location.search) void hardRefresh({ showBar: true, keepPage: true });
+      // Clicking the page you're already on shows its main view from the top: no reload,
+      // and no extra history entry, so Back still goes exactly one step.
+      replace={location.pathname === to}
+      onClick={(e) => {
+        if (location.pathname === to) handleActiveTabTap(e);
       }}
       end={end ?? to === '/'}
       title={PAGE_SHORTCUT_BY_PATH[to] ? `${label} (${PAGE_SHORTCUT_BY_PATH[to]})` : label}

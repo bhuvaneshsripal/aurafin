@@ -18,6 +18,7 @@ import { useAssetsStore } from '../store/assetsStore';
 import { upsertDoc } from '../hooks/useFirestoreSync';
 import { ASSET_TAXONOMY } from '../utils/taxonomy';
 import Modal from '../components/Modal';
+import { RequiredMark } from '../components/ui';
 import PinBoxInput, { type PinBoxInputHandle } from '../components/PinBoxInput';
 import CustomSelect from '../components/CustomSelect';
 import CurrencySelect from '../components/CurrencySelect';
@@ -605,7 +606,7 @@ const AddAssetModal = memo((props: AddAssetModalProps) => (
   <Modal open={props.isOpen} onClose={props.onClose} title="Add Asset">
     <div className="space-y-4">
       <div>
-        <label className="block text-xs text-muted mb-2">Asset Name</label>
+        <label className="block text-xs text-muted mb-2">Asset Name<RequiredMark /></label>
         <input
           type="text"
           value={props.assetName}
@@ -633,7 +634,7 @@ const AddAssetModal = memo((props: AddAssetModalProps) => (
       </div>
 
       <div>
-        <label className="block text-xs text-muted mb-2">Value</label>
+        <label className="block text-xs text-muted mb-2">Value<RequiredMark /></label>
         <input
           type="number"
           inputMode="decimal"
@@ -747,13 +748,13 @@ const SecureStep = memo((props: SecureStepProps) => {
         <div className="space-y-4">
           <div>
             <label className="block text-xs text-muted mb-2 text-center">
-              4-digit PIN
+              4-digit PIN<RequiredMark />
             </label>
             <PinBoxInput value={pin} onChange={setPinInput} autoFocus />
           </div>
           <div>
             <label className="block text-xs text-muted mb-2 text-center">
-              Confirm PIN
+              Confirm PIN<RequiredMark />
             </label>
             <PinBoxInput ref={confirmPinRef} value={confirmPin} onChange={setConfirmPin} />
           </div>

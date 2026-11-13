@@ -12,6 +12,7 @@ import SignUpScreen from '../components/SignUpScreen';
 import InstallBanner from '../components/InstallBanner';
 import InstallPromptModal from '../components/InstallPromptModal';
 import LoginUpdateButton from '../components/LoginUpdateButton';
+import AccessPasswordModal from '../components/AccessPasswordModal';
 
 // Cinematic growth section: loaded on demand so it adds nothing to the login page's first paint.
 const GrowthJourney = lazy(() => import('../components/growth/GrowthJourney'));
@@ -48,6 +49,31 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [resetting, setResetting] = useState(false);
+  // Access-password gate: whatever the visitor tried to do (log in, sign up,
+  // try the demo) waits here until the correct password has been entered.
+  // Asked every time, nothing is remembered.
+  const [gateOpen, setGateOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  // Sign-up is gated with "Contact us" only; the demo keeps the normal Continue flow.
+  const [gateContactOnly, setGateContactOnly] = useState(false);
+
+  const requireAccess = (action: () => void, contactOnly = false) => {
+    setGateContactOnly(contactOnly);
+    setPendingAction(() => action);
+    setGateOpen(true);
+  };
+
+  const closeGate = () => {
+    setGateOpen(false);
+    setPendingAction(null);
+  };
+
+  const handleUnlock = () => {
+    const action = pendingAction;
+    setGateOpen(false);
+    setPendingAction(null);
+    action?.();
+  };
 
   const submit = async () => {
     if (busy) return; // ignore double taps / Enter while a request is in flight
@@ -144,13 +170,18 @@ export default function Login() {
     }
   };
 
+  // Login opens straight away (no access password). Create-new asks for the
+  // access password and offers only "Contact us" (opens LinkedIn).
   const openAuth = (m: 'login' | 'register') => {
     if (m === 'register') {
-      setError('');
-      setFullSignup(true);
+      setOpen(false);
+      requireAccess(() => {
+        setError('');
+        setFullSignup(true);
+      }, true);
       return;
     }
-    switchMode(m);
+    switchMode('login');
     setOpen(true);
   };
 
@@ -201,7 +232,7 @@ export default function Login() {
           <p className="lp-intro-line">
             <span className="font-brand lp-intro-name">Aurafin</span> is a privacy-first net worth tracker for stocks, crypto, cash, goals and more, built for Indian investors.
           </p>
-          <button type="button" className="btn-press lp-demo-btn" onClick={tryDemo} disabled={demoLoading}>
+          <button type="button" className="btn-press lp-demo-btn" onClick={() => requireAccess(tryDemo)} disabled={demoLoading}>
             {demoLoading ? 'Starting demo…' : 'Try demo'}
           </button>
           {demoError && <p className="lf-msg" role="alert">{demoError}</p>}
@@ -224,6 +255,8 @@ export default function Login() {
 
       <InstallBanner />
       <InstallPromptModal />
+
+      <AccessPasswordModal open={gateOpen} onClose={closeGate} onUnlock={handleUnlock} contactOnly={gateContactOnly} />
 
       <Modal open={open} onClose={() => setOpen(false)} title={mode === 'login' ? 'Welcome back' : 'Create your account'}>
         <div className="login-modal-body">
@@ -291,7 +324,8 @@ export default function Login() {
                 aria-invalid={!!emailErr}
                 className="lf-input"
               />
-              <label htmlFor="login-email" className="lf-label">Email</label>
+              <label htmlFor="login-email" className="lf-label">Email<span className="lf-star" aria-hidden="true">*</span></label>
+<span className="lf-req" aria-hidden="true">*</span>
               {emailErr && <FieldError message={emailErr} />}
             </div>
             <div className={`lf${passErr ? ' lf-err' : ''}`}>
@@ -311,7 +345,8 @@ export default function Login() {
                 aria-invalid={!!passErr}
                 className="lf-input has-eye"
               />
-              <label htmlFor="login-password" className="lf-label">Password</label>
+              <label htmlFor="login-password" className="lf-label">Password<span className="lf-star" aria-hidden="true">*</span></label>
+<span className="lf-req" aria-hidden="true">*</span>
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
@@ -348,7 +383,7 @@ export default function Login() {
             {mode === 'login' ? "No account yet? " : 'Already have an account? '}
             <button
               type="button"
-              onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}
+              onClick={() => openAuth(mode === 'login' ? 'register' : 'login')}
               className="text-brand-600 font-medium"
             >
               {mode === 'login' ? 'Create one' : 'Log in'}

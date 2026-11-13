@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from 'react';
 import { useLocation, useNavigationType } from 'react-router-dom';
+import { KEEP_PAGE_FLAG } from '../utils/hardRefresh';
 
 /**
  * Route-aware scroll handling, keyed by HISTORY ENTRY (location.key), not by URL:
@@ -27,7 +28,10 @@ let reloadRestore: { key: string; top: number } | null = null;
 try {
   const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
   const raw = sessionStorage.getItem(SESSION_KEY);
-  if (raw && nav?.type === 'reload') reloadRestore = JSON.parse(raw);
+  // Only a refresh the person asked for on a page (tapping the tab they're on) keeps its
+  // scroll spot. Logging in, opening the app or a plain reload always start at the top.
+  const keepPage = sessionStorage.getItem(KEEP_PAGE_FLAG) === '1';
+  if (raw && nav?.type === 'reload' && keepPage) reloadRestore = JSON.parse(raw);
 } catch {
   /* best-effort */
 }

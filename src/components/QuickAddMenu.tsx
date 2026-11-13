@@ -21,7 +21,7 @@ import { useSnapshotsStore } from '../store/snapshotsStore';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import { upsertDoc } from '../hooks/useFirestoreSync';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
-import { buttonClasses, DateInput, inputClasses } from './ui';
+import { buttonClasses, DateInput, inputClasses, RequiredMark } from './ui';
 import Modal from './Modal';
 import type { Asset, Snapshot, Transaction, TransactionType } from '../types';
 import CurrencySelect from './CurrencySelect';
@@ -356,10 +356,13 @@ function MenuItem({
 
 const inputClass = inputClasses;
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-sm font-medium text-muted mb-1 block">{label}</span>
+      <span className="text-sm font-medium text-muted mb-1 block">
+        {label}
+        {required && <RequiredMark />}
+      </span>
       {children}
     </label>
   );
@@ -410,7 +413,7 @@ function TransactionForm({ type, onDone }: { type: TransactionType; onDone: () =
 
   return (
     <div className="space-y-4">
-      <Field label="Category">
+      <Field label="Category" required>
         <input
           value={category}
           onChange={(e) => setCategory(e.target.value)}
@@ -419,14 +422,14 @@ function TransactionForm({ type, onDone }: { type: TransactionType; onDone: () =
         />
       </Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Amount">
+        <Field label="Amount" required>
           <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} placeholder="0" />
         </Field>
         <Field label="Currency">
           <CurrencySelect value={currency} onChange={setCurrency} className={inputClass} />
         </Field>
       </div>
-      <Field label="Date">
+      <Field label="Date" required>
         <DateInput value={date} onChange={(v) => setDate(v)} className={inputClass} />
       </Field>
       <button onClick={submit} disabled={busy} className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white disabled:opacity-60 disabled:cursor-not-allowed">
@@ -495,7 +498,7 @@ function TransferForm({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="space-y-4">
-      <Field label="From">
+      <Field label="From" required>
         <CustomSelect
           value={fromId}
           onChange={setFromId}
@@ -503,7 +506,7 @@ function TransferForm({ onDone }: { onDone: () => void }) {
           options={assets.map((a) => ({ value: a.id, label: a.name.toUpperCase() }))}
         />
       </Field>
-      <Field label="To">
+      <Field label="To" required>
         <CustomSelect
           value={toId}
           onChange={setToId}
@@ -511,7 +514,7 @@ function TransferForm({ onDone }: { onDone: () => void }) {
           options={assets.map((a) => ({ value: a.id, label: a.name.toUpperCase() }))}
         />
       </Field>
-      <Field label="Amount">
+      <Field label="Amount" required>
         <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} placeholder="0" />
       </Field>
       <button onClick={submit} disabled={busy} className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white disabled:opacity-60 disabled:cursor-not-allowed">

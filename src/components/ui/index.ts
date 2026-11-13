@@ -4,7 +4,7 @@ export { buttonClasses } from './buttonStyles';
 export type { ButtonVariant, ButtonSize } from './buttonStyles';
 export type { ButtonProps, IconButtonProps } from './Button';
 export { default as Card, CardHeader } from './Card';
-export { default as Input, Textarea, Label, Field, inputClasses, fieldBase } from './Input';
+export { default as Input, Textarea, Label, Field, RequiredMark, inputClasses, fieldBase } from './Input';
 export { default as DateInput } from './DateInput';
 export type { DateInputProps } from './DateInput';
 export { default as Select } from './Select';

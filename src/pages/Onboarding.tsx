@@ -16,6 +16,7 @@ import { upsertDoc } from '../hooks/useFirestoreSync';
 import { ASSET_TAXONOMY } from '../utils/taxonomy';
 import { setPendingImportFile } from '../utils/pendingImportFile';
 import Modal from '../components/Modal';
+import { RequiredMark } from '../components/ui';
 import PinBoxInput, { type PinBoxInputHandle } from '../components/PinBoxInput';
 
 const STEPS = ['welcome', 'profile', 'secure', 'assets'] as const;
@@ -525,13 +526,13 @@ function SecureStep({
         <div className="space-y-4">
           <div>
             <label className="block text-xs text-muted mb-2 text-center">
-              4-digit PIN
+              4-digit PIN<RequiredMark />
             </label>
             <PinBoxInput value={pin} onChange={setPinInput} autoFocus />
           </div>
           <div>
             <label className="block text-xs text-muted mb-2 text-center">
-              Confirm PIN
+              Confirm PIN<RequiredMark />
             </label>
             <PinBoxInput ref={confirmPinRef} value={confirmPin} onChange={setConfirmPin} />
           </div>

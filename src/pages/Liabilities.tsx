@@ -9,7 +9,7 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import type { Liability } from '../types';
 import { formatCurrency } from '../utils/currency';
 import CurrencySelect from '../components/CurrencySelect';
-import { inputClasses } from '../components/ui';
+import { inputClasses, RequiredMark } from '../components/ui';
 
 export default function Liabilities() {
   const liabilities = useLiabilitiesStore((s) => s.liabilities);
@@ -155,11 +155,11 @@ function LiabilityForm({
 
   return (
     <div className="space-y-4">
-      <Field label="Name">
+      <Field label="Name" required>
         <input value={name} onChange={(e) => setName(e.target.value.toUpperCase())} className={`${inputClass}`} placeholder="e.g. Home Loan" />
       </Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Outstanding">
+        <Field label="Outstanding" required>
           <input
             type="number"
             value={outstanding}
@@ -182,10 +182,13 @@ function LiabilityForm({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-xs font-medium text-slate-500 mb-1 block">{label}</span>
+      <span className="text-xs font-medium text-slate-500 mb-1 block">
+        {label}
+        {required && <RequiredMark />}
+      </span>
       {children}
     </label>
   );

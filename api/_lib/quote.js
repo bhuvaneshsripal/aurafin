@@ -20,6 +20,14 @@ const BSE_CODE_ALIASES = {
   'NSEI.BO': '544937',
 };
 
+/**
+ * The apps ask for prices every second, but the exchange feeds (and Groww / Yahoo behind them) only
+ * tick every second or two, and NSE throttles callers that ask too often. So one upstream lookup per
+ * symbol is shared by everyone asking within this window (and by requests that arrive while it is
+ * still in flight). Lower it for fresher numbers; raise it if NSE starts refusing requests.
+ */
+const QUOTE_REFRESH_MS = 2000;
+
 const toNumber = (v) => {
   const n = typeof v === 'string' ? parseFloat(v.replace(/,/g, '')) : v;
   return typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : undefined;
@@ -69,7 +77,7 @@ async function fetchBseQuote(scripCode) {
 const growwRecent = new Map(); // symbol -> { at, q }
 async function growwQuote(symbol) {
   const hit = growwRecent.get(symbol);
-  if (hit && Date.now() - hit.at < 4000) return hit.q;
+  if (hit && Date.now() - hit.at < QUOTE_REFRESH_MS) return hit.q;
   let q = null;
   try {
     const res = await fetch(
@@ -97,7 +105,7 @@ async function growwQuote(symbol) {
 const yahooRecent = new Map(); // symbol -> { at, q }
 async function freshYahoo(sym) {
   const hit = yahooRecent.get(sym);
-  if (hit && Date.now() - hit.at < 4000) return hit.q;
+  if (hit && Date.now() - hit.at < QUOTE_REFRESH_MS) return hit.q;
   const q = await fetchYahooQuote(sym).catch(() => null);
   yahooRecent.set(sym, { at: Date.now(), q });
   return q;
@@ -109,8 +117,26 @@ async function freshYahoo(sym) {
 // (An earlier version replaced the previous close with one rebuilt from Yahoo's daily candles while the
 // price came from NSE or Groww; when the two disagreed, the 1D change and % did not match Groww.)
 
-/** Returns { price, previousClose, currency, source } or null. */
-export async function resolveQuote(rawSymbol, market = 'IN') {
+const resolvedRecently = new Map(); // "IN:TCS" -> { at, promise }
+
+/** Returns { price, previousClose, currency, source } or null. Shared for QUOTE_REFRESH_MS per symbol. */
+export function resolveQuote(rawSymbol, market = 'IN') {
+  const key = `${market}:${String(rawSymbol).trim().toUpperCase()}`;
+  const now = Date.now();
+  const hit = resolvedRecently.get(key);
+  if (hit && now - hit.at < QUOTE_REFRESH_MS) return hit.promise;
+  const promise = resolveQuoteUncached(rawSymbol, market);
+  resolvedRecently.set(key, { at: now, promise });
+  // A failed lookup is not kept: the next request tries the sources again straight away.
+  const forget = () => {
+    if (resolvedRecently.get(key)?.promise === promise) resolvedRecently.delete(key);
+  };
+  promise.then((q) => { if (!q) forget(); }, forget);
+  if (resolvedRecently.size > 500) resolvedRecently.delete(resolvedRecently.keys().next().value);
+  return promise;
+}
+
+async function resolveQuoteUncached(rawSymbol, market = 'IN') {
   const raw = String(rawSymbol).trim().toUpperCase();
 
   if (market === 'US') {

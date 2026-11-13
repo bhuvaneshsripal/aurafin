@@ -30,7 +30,7 @@ import type { Goal } from '../types';
 import { formatCurrency, hideNumber } from '../utils/privateFormat';
 import CurrencySelect from '../components/CurrencySelect';
 import { useUrlTab } from '../hooks/useUrlTab';
-import { inputClasses } from '../components/ui';
+import { inputClasses, RequiredMark } from '../components/ui';
 import { PageHeader, Tabs, ProgressRing, EmptyState, Button, Card } from '../components/ui';
 import { toast } from '../store/toastStore';
 
@@ -716,7 +716,7 @@ function GoalForm({ initial, onSave }: { initial: Goal | null; onSave: (g: Goal)
 
   return (
     <div className="space-y-4">
-      <Field label="Goal Name">
+      <Field label="Goal Name" required>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -732,7 +732,7 @@ function GoalForm({ initial, onSave }: { initial: Goal | null; onSave: (g: Goal)
         </datalist>
       </Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Target Amount">
+        <Field label="Target Amount" required>
           <input type="number" value={targetAmount} onChange={(e) => setTargetAmount(e.target.value)} className={inputClass} placeholder="0" />
         </Field>
         <Field label="Currency">
@@ -749,10 +749,13 @@ function GoalForm({ initial, onSave }: { initial: Goal | null; onSave: (g: Goal)
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-sm font-medium text-muted mb-1 block">{label}</span>
+      <span className="text-sm font-medium text-muted mb-1 block">
+        {label}
+        {required && <RequiredMark />}
+      </span>
       {children}
     </label>
   );

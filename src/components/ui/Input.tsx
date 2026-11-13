@@ -104,20 +104,38 @@ export function Textarea({ invalid, className, ref, ...rest }: TextareaProps) {
   );
 }
 
-export function Label({ className, children, ...rest }: LabelHTMLAttributes<HTMLLabelElement>) {
+/** Red asterisk shown after the label of a compulsory field. Decorative for
+ *  screen readers — the control itself carries `required` / `aria-required`. */
+export function RequiredMark({ className }: { className?: string }) {
+  return (
+    <span aria-hidden="true" className={cn('text-negative font-semibold ml-0.5', className)}>
+      *
+    </span>
+  );
+}
+
+export function Label({
+  className,
+  children,
+  required,
+  ...rest
+}: LabelHTMLAttributes<HTMLLabelElement> & { required?: boolean }) {
   return (
     <label className={cn('block text-[13px] font-medium text-ink-2 mb-1.5', className)} {...rest}>
       {children}
+      {required && <RequiredMark />}
     </label>
   );
 }
 
-/** Label + control + optional hint/error, stacked with consistent spacing. */
+/** Label + control + optional hint/error, stacked with consistent spacing.
+ *  Pass `required` to put a red * after the label for compulsory fields. */
 export function Field({
   label,
   htmlFor,
   hint,
   error,
+  required,
   className,
   children,
 }: {
@@ -125,12 +143,17 @@ export function Field({
   htmlFor?: string;
   hint?: ReactNode;
   error?: ReactNode;
+  required?: boolean;
   className?: string;
   children: ReactNode;
 }) {
   return (
     <div className={className}>
-      {label && <Label htmlFor={htmlFor}>{label}</Label>}
+      {label && (
+        <Label htmlFor={htmlFor} required={required}>
+          {label}
+        </Label>
+      )}
       {children}
       {error ? (
         <p className="text-xs text-negative mt-1.5">{error}</p>

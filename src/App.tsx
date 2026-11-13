@@ -393,49 +393,6 @@ function AppReady({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// Browsers report a tab restored from last session / "reopen closed tab" /
-// "continue where you left off" as type 'reload' too, which kept the old page
-// (e.g. /settings) instead of opening on the Dashboard. A genuine F5 /
-// pull-to-refresh comes back within a second or two of the page going away, so
-// the tab leaves a "last seen" stamp and a reload only counts if it's fresh.
-const LAST_SEEN_KEY = 'aurafin:lastSeen';
-const RELOAD_WINDOW_MS = 15_000;
-let previousSeen = 0;
-try {
-  previousSeen = parseInt(sessionStorage.getItem(LAST_SEEN_KEY) ?? '0', 10) || 0; // read before we write
-} catch {
-  /* storage blocked: treated as "not a reload" */
-}
-if (typeof window !== 'undefined') {
-  const stamp = () => {
-    try {
-      sessionStorage.setItem(LAST_SEEN_KEY, String(Date.now()));
-    } catch {
-      /* ignore */
-    }
-  };
-  window.addEventListener('pagehide', stamp);
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') stamp();
-  });
-  window.setInterval(stamp, 5000);
-}
-
-/** True only for a real reload (F5 / pull-to-refresh) of a tab that was just
- *  in use — not a restored or freshly opened tab. */
-function isPageReload(): boolean {
-  try {
-    const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
-    if (nav?.type !== 'reload') return false;
-    return previousSeen > 0 && Date.now() - previousSeen < RELOAD_WINDOW_MS;
-  } catch {
-    return false;
-  }
-}
-// Set when the sign-in screen has been shown, so a login always lands on the
-// Dashboard even if the tab was left on another URL (e.g. /settings).
-let loginScreenShown = false;
-
 export default function App() {
   // Public policy pages: reachable signed-out (and by Google's verification bot).
   const legalPath = window.location.pathname.replace(/\/+$/, '');
@@ -473,15 +430,15 @@ export default function App() {
   }
 
   if (!user) {
-    loginScreenShown = true;
     // Signed out (logout, expired session, fresh visit): the address goes back
     // to the start page too, instead of keeping the old /essentials?tab=... URL.
     if (window.location.pathname !== '/') window.history.replaceState(null, '', '/');
     return <Suspense fallback={null}><Login /></Suspense>;
   }
 
-  // Opening the app or logging in starts on the Dashboard. Only a plain
-  // reload keeps whatever page you were on. Done before <BrowserRouter>
+  // Logging in, opening the app or reloading always starts on the Overview
+  // page, at the top. The one exception is a refresh the person asked for
+  // on a page (tapping the tab they're on), which stays on that page. Done before <BrowserRouter>
   // mounts so it reads the corrected URL (no flash of the old page).
   if (!startRouteChecked.current) {
     startRouteChecked.current = true;
@@ -492,7 +449,7 @@ export default function App() {
       keepPage = sessionStorage.getItem(KEEP_PAGE_FLAG) === '1';
       sessionStorage.removeItem(KEEP_PAGE_FLAG);
     } catch { /* ignore */ }
-    if (!keepPage && (loginScreenShown || !isPageReload()) && window.location.pathname !== '/') {
+    if (!keepPage && window.location.pathname !== '/') {
       window.history.replaceState(null, '', '/');
     }
     // Drop the cache-busting "_r" the refresh added, leaving the rest of the address as it was.

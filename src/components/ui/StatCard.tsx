@@ -16,6 +16,8 @@ export interface StatCardProps {
   deltaInCorner?: boolean;
   /** Small neutral tag at the top right (e.g. "Realized"). */
   cornerLabel?: ReactNode;
+  /** Colours the corner tag like the change chip (soft green / red) instead of neutral grey. */
+  cornerTone?: 'neutral' | 'positive' | 'negative';
   sublabel?: ReactNode;
   icon?: ReactNode;
   loading?: boolean;
@@ -32,9 +34,14 @@ export interface StatCardProps {
 }
 
 const tones = { default: 'text-ink', positive: 'text-positive', negative: 'text-negative' };
+const cornerTones = {
+  neutral: 'bg-surface-muted text-muted',
+  positive: 'bg-positive-soft text-positive',
+  negative: 'bg-negative-soft text-negative',
+};
 
 /** KPI tile. Values are never truncated — long ₹ figures wrap instead of being cut off. */
-export default function StatCard({ label, value, tone = 'default', delta, deltaInCorner, cornerLabel, sublabel, icon, loading, dense, hero, onToggle, toggled, className }: StatCardProps) {
+export default function StatCard({ label, value, tone = 'default', delta, deltaInCorner, cornerLabel, cornerTone = 'neutral', sublabel, icon, loading, dense, hero, onToggle, toggled, className }: StatCardProps) {
   return (
     <Card padding="md" className={cn(dense && (hero ? '!p-5 sm:!p-5' : '!p-3 sm:!p-5'), className)}>
       <div className="flex items-center justify-between gap-2 min-h-6">
@@ -52,7 +59,7 @@ export default function StatCard({ label, value, tone = 'default', delta, deltaI
         )}
         {icon && <span className="text-faint shrink-0">{icon}</span>}
         {cornerLabel && !(deltaInCorner && !loading && delta) && (
-          <span className="ml-auto shrink-0 text-xs font-medium px-1.5 py-0.5 rounded-md bg-surface-muted text-muted">
+          <span className={cn('ml-auto shrink-0 whitespace-nowrap text-xs font-medium px-1.5 py-0.5 rounded-md', cornerTones[cornerTone])}>
             {cornerLabel}
           </span>
         )}

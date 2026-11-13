@@ -111,7 +111,8 @@ export default function SignUpScreen({ onBack, onLogin }: SignUpScreenProps) {
               aria-invalid={!!emailErr}
               className="lf-input"
             />
-            <label htmlFor="su-email" className="lf-label">Email</label>
+            <label htmlFor="su-email" className="lf-label">Email<span className="lf-star" aria-hidden="true">*</span></label>
+<span className="lf-req" aria-hidden="true">*</span>
             {emailErr && <FieldError message={emailErr} />}
           </div>
 
@@ -132,7 +133,8 @@ export default function SignUpScreen({ onBack, onLogin }: SignUpScreenProps) {
               aria-invalid={!!passErr}
               className="lf-input has-eye"
             />
-            <label htmlFor="su-password" className="lf-label">Password</label>
+            <label htmlFor="su-password" className="lf-label">Password<span className="lf-star" aria-hidden="true">*</span></label>
+<span className="lf-req" aria-hidden="true">*</span>
             <button
               type="button"
               onClick={() => setShowPassword((v) => !v)}
