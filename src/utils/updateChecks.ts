@@ -1,26 +1,17 @@
 /**
- * Finds out quickly when a new version of the app has been deployed.
+ * Finds out quickly when a new version of the app has been deployed -- and only tells the person.
  *
- * Two checks run side by side:
+ * Every build publishes a tiny /version.json. The app compares its own build id with it every
+ * VERSION_POLL_MS, so a new deploy is noticed within seconds and the "update" notice appears.
+ * Nothing is downloaded or switched: the installed app stays on its current version (each build's
+ * service worker has its own file name, see vite.config.ts) until the person taps Update.
  *
- *  1. Version ping (fast). Every build publishes a tiny /version.json. The app
- *     compares its own build id with it every VERSION_POLL_MS, so a new deploy
- *     is noticed within seconds and the "update" notice can appear right away,
- *     without waiting for the new service worker to finish downloading. The
- *     moment a difference is seen the service worker is also told to fetch the
- *     new version, so it is usually ready by the time "Update" is tapped.
- *
- *  2. Service worker check. A deploy also changes `sw.js`, so
- *     `registration.update()` is repeated every SW_POLL_MS as a safety net.
- *
- * Both run while the app is on screen, and straight away when it returns to
- * the foreground, regains focus, is restored from the back/forward cache, or
- * the connection comes back. Nothing is polled while it is in the background
- * (saves battery and data). Checks never overlap and are spaced at least
- * MIN_GAP_MS apart. Returns a function that stops everything.
+ * It runs while the app is on screen, and straight away when it returns to the foreground,
+ * regains focus, is restored from the back/forward cache, or the connection comes back. Nothing is
+ * polled while it is in the background (saves battery and data). Checks never overlap and are
+ * spaced at least MIN_GAP_MS apart. Returns a function that stops everything.
  */
 const VERSION_POLL_MS = 10_000;
-const SW_POLL_MS = 20_000;
 const MIN_GAP_MS = 2_000;
 
 /** The id of the deployed build, or null when it can't be read (offline, dev, odd response). */
@@ -35,21 +26,12 @@ export async function fetchDeployedBuildId(): Promise<string | null> {
   }
 }
 
-export function startUpdateChecks(reg: ServiceWorkerRegistration | undefined, onNewVersion?: (deployedId: string) => void): () => void {
+export function startUpdateChecks(_reg: ServiceWorkerRegistration | undefined, onNewVersion?: (deployedId: string) => void): () => void {
   let lastVersionCheck = 0;
-  let lastSwCheck = 0;
   let versionInFlight = false;
-  let swInFlight = false;
   let announced: string | null = null; // deployed id the user was already told about
 
   const canCheck = () => navigator.onLine !== false && document.visibilityState !== 'hidden';
-
-  const checkSw = () => {
-    if (!reg || !canCheck() || swInFlight || Date.now() - lastSwCheck < MIN_GAP_MS) return;
-    lastSwCheck = Date.now();
-    swInFlight = true;
-    void reg.update().catch(() => {}).finally(() => { swInFlight = false; });
-  };
 
   const checkVersion = () => {
     if (import.meta.env.DEV || typeof __BUILD_ID__ === 'undefined') return;
@@ -59,7 +41,6 @@ export function startUpdateChecks(reg: ServiceWorkerRegistration | undefined, on
     void fetchDeployedBuildId()
       .then((id) => {
         if (!id || id === __BUILD_ID__) return;
-        checkSw(); // start downloading the new version now
         if (id !== announced) {
           announced = id;
           onNewVersion?.(id);
@@ -70,12 +51,10 @@ export function startUpdateChecks(reg: ServiceWorkerRegistration | undefined, on
 
   const checkAll = () => {
     checkVersion();
-    checkSw();
   };
 
   checkAll();
   const versionTimer = window.setInterval(checkVersion, VERSION_POLL_MS);
-  const swTimer = window.setInterval(checkSw, SW_POLL_MS);
   document.addEventListener('visibilitychange', checkAll);
   window.addEventListener('focus', checkAll);
   window.addEventListener('pageshow', checkAll);
@@ -83,7 +62,6 @@ export function startUpdateChecks(reg: ServiceWorkerRegistration | undefined, on
 
   return () => {
     window.clearInterval(versionTimer);
-    window.clearInterval(swTimer);
     document.removeEventListener('visibilitychange', checkAll);
     window.removeEventListener('focus', checkAll);
     window.removeEventListener('pageshow', checkAll);

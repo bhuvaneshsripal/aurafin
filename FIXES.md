@@ -74,7 +74,14 @@
 - Before: the app looked for a new deploy every 5 minutes, so people could keep using an old version for several minutes after a code change.
 - Now: `utils/updateChecks.ts` re-checks every 30 seconds while the app is on screen, and straight away when it returns to the foreground, regains focus, is restored from the back/forward cache, or comes back online. Nothing is polled while the app is in the background. Checks never overlap and are spaced at least 5 s apart.
 - `UpdateBanner` (signed in) and `LoginUpdateButton` (signed out) share this one checker, and both now stop it when they unmount (the banner used to leave its timer and listeners running).
-- Any change to the built code changes `sw.js`, which is what triggers the "Update now" notice, so no extra step is needed when deploying. The update still waits for a tap on "Update now" (`registerType: 'prompt'`), so nothing reloads under someone mid-task.
+- UPDATED: the app now changes version ONLY when Update is tapped (Settings > New version, or the Update pill on the login page). The notice comes from the `/version.json` check alone. What was changed to make that true:
+  - Each build's service worker has its own file name (`sw-<build>.js`, set in `vite.config.ts`). A newer deploy removes the old file, so an installed app finds nothing new to install and stays exactly as it is, even after being closed and reopened (browsers otherwise switch a waiting worker in by themselves at that point).
+  - The 8:00 a.m. daily hard refresh is no longer started (`useDailyHardRefresh` is not called from `App.tsx`).
+  - Coming back after 30+ minutes no longer switches to a new version (`useResumeRefresh` only shows the price-refresh line).
+  - Every chunk (3D login scene, PDF export, Excel) is now saved with the version, because the older files disappear from the server after a deploy.
+  - Tapping Update runs `hardRefresh()` (removes the worker and caches, reloads from the network), which registers the new build's worker.
+  - Not preventable: the browser's own hard reload (Ctrl+Shift+R) skips the service worker and fetches whatever is deployed.
+  - Tested in Chromium: after deploying a second build, normal reload, close and reopen, and a deep link all stayed on the first build; the Update steps moved to the second.
 - Tested by serving a build, opening it, then dropping a changed build into the served folder: the notice appeared after about 24 s (old code: not within 100 s), and 0.3 s after returning to the foreground.
 
 ## Valuation search dropdown (typed text no longer shows unrelated recents)

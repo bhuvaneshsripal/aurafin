@@ -17,7 +17,7 @@
       "destination": "/api/market/indices?mode=indian"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/((?!api/|sw[-.]).*)",
       "destination": "/index.html"
     }
   ],
@@ -32,7 +32,7 @@
       ]
     },
     {
-      "source": "/(sw.js|index.html|version.json|registerSW.js|manifest.webmanifest)",
+      "source": "/(sw-.*|sw.js|index.html|version.json|registerSW.js|manifest.webmanifest)",
       "headers": [
         {
           "key": "Cache-Control",

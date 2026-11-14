@@ -35,7 +35,6 @@ import { useLiveGoldPrice } from './hooks/useLiveGoldPrice';
 import { useWeeklyDigestScheduler } from './hooks/useWeeklyDigestScheduler';
 import { useMarketAlerts } from './hooks/useMarketAlerts';
 import { usePushSubscription } from './hooks/usePushSubscription';
-import { useDailyHardRefresh } from './hooks/useDailyHardRefresh';
 import { useResumeRefresh } from './hooks/useResumeRefresh';
 import { usePageShortcuts } from './hooks/usePageShortcuts';
 import { useScrollRestoration } from './hooks/useScrollRestoration';
@@ -118,10 +117,9 @@ function AppShell() {
   // resets to the top.
   useScrollRestoration();
   useEffect(() => startRoutePrefetch(), []);
-  // Auto hard-refresh every day at 8:00 a.m.
-  useDailyHardRefresh();
-  // Opened (or brought back) after 30+ minutes away: switch to a newly deployed version straight
-  // away if nothing has been touched yet, and show the refresh line until fresh prices arrive.
+  // The app never changes version by itself (no daily hard refresh, no switch on return): a new
+  // version is applied only when the person taps Update (Settings > New version).
+  // Opened (or brought back) after 30+ minutes away: show the refresh line until fresh prices arrive.
   useResumeRefresh();
   useVisualViewportOffset();
   // Ctrl+O Overview, Alt+W Wealth, Ctrl+P Performance (not during onboarding).

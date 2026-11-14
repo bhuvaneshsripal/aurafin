@@ -338,6 +338,13 @@ export default defineConfig({
     VitePWA({
       registerType: 'prompt',
       injectRegister: 'auto',
+      // Each build's service worker gets its OWN file name (sw-<build>.js). An installed app keeps
+      // asking for the file it was installed from; after a newer deploy that file no longer exists,
+      // so the browser finds nothing new to install and the app stays exactly as it is. Browsers
+      // otherwise switch a waiting service worker in by themselves as soon as the app is closed and
+      // reopened. A new version only arrives when the person taps Update (Settings > New version),
+      // which clears the old worker and registers the new build's.
+      filename: `sw-${BUILD_ID}.js`,
       includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'favicon-32.png', 'favicon-16.png', 'maskable-512.png'],
       manifest: {
         name: 'Aurafin · Net Worth Tracker',
@@ -373,11 +380,11 @@ export default defineConfig({
         // xlsx is loaded on demand; /logo.png is a 1.5 MB master image that
         // nothing in the app references, so don't make every first-time
         // visitor download it in the background (it is still served normally).
-        // The 3D login scene (three.js, ~1 MB), PDF export (jspdf + html2canvas
-        // + dompurify) and the Indices page are only needed on demand — they are
-        // cached the first time they are actually used (see runtimeCaching)
-        // instead of being downloaded up-front by every first-time visitor.
-        globIgnores: ['**/xlsx-*.js', '**/logo.png', '**/GrowthScene-*.js', '**/jspdf*.js', '**/html2canvas-*.js', '**/index.es-*.js', '**/purify-*.js'],
+        // Everything the app can load is saved with the version (including the 3D login scene, PDF
+        // export and Excel chunks). The app stays on the version you updated to until you tap
+        // Update, and a newer deploy removes the older files from the server, so a chunk that was
+        // only fetched on first use would be gone by then.
+        globIgnores: ['**/logo.png'],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
