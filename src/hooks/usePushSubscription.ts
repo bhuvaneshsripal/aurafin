@@ -4,16 +4,32 @@ import { db } from '../firebase/config';
 import { useAuthStore } from '../store/authStore';
 import { useAlertsStore } from '../store/alertsStore';
 
-/** Public VAPID key (set VITE_VAPID_PUBLIC_KEY; see PUSH_SETUP.md). */
-const VAPID_PUBLIC_KEY = (import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined) ?? '';
+/** Public VAPID key (set VITE_VAPID_PUBLIC_KEY; see PUSH_SETUP.md). Cleaned the same way the server
+ *  cleans it, so a pasted key with quotes, spaces, "=" padding or +/ characters still works. */
+const VAPID_PUBLIC_KEY = String((import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined) ?? '')
+  .trim()
+  .replace(/^(['"`])([\s\S]*)\1$/, '$2')
+  .replace(/\s+/g, '')
+  .replace(/=+$/, '')
+  .replace(/\+/g, '-')
+  .replace(/\//g, '_');
 
-function keyToBytes(base64Url: string): Uint8Array<ArrayBuffer> {
-  const pad = '='.repeat((4 - (base64Url.length % 4)) % 4);
-  const raw = atob((base64Url + pad).replace(/-/g, '+').replace(/_/g, '/'));
-  const out = new Uint8Array(new ArrayBuffer(raw.length));
-  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
-  return out;
+function keyToBytes(base64Url: string): Uint8Array<ArrayBuffer> | null {
+  try {
+    const pad = '='.repeat((4 - (base64Url.length % 4)) % 4);
+    const raw = atob((base64Url + pad).replace(/-/g, '+').replace(/_/g, '/'));
+    const out = new Uint8Array(new ArrayBuffer(raw.length));
+    for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    // A real VAPID public key is an uncompressed P-256 point: exactly 65 bytes, starting with 0x04.
+    // Anything else (the private key pasted by mistake, a truncated key) is rejected by the browser.
+    return out.length === 65 && out[0] === 4 ? out : null;
+  } catch {
+    return null;
+  }
 }
+
+const VAPID_KEY_BYTES = keyToBytes(VAPID_PUBLIC_KEY);
+let warnedBadKey = false;
 
 /** Stable document id for a device: a hash of its push endpoint. */
 async function deviceId(endpoint: string): Promise<string> {
@@ -30,7 +46,8 @@ export const pushSupported = () =>
   'serviceWorker' in navigator &&
   'PushManager' in window &&
   typeof Notification !== 'undefined' &&
-  VAPID_PUBLIC_KEY !== '';
+  VAPID_PUBLIC_KEY !== '' &&
+  VAPID_KEY_BYTES !== null;
 
 /** Forget this device on the server (alerts turned off, or signed out). */
 export async function removePushSubscription(uid: string): Promise<void> {
@@ -91,7 +108,19 @@ export function usePushSubscription() {
   const guest = (user as { isAnonymous?: boolean } | null)?.isAnonymous === true;
 
   useEffect(() => {
-    if (!uid || guest || !pushSupported()) return;
+    if (!uid || guest) return;
+    if (VAPID_PUBLIC_KEY !== '' && VAPID_KEY_BYTES === null) {
+      // Say it once, plainly, instead of failing on every app-focus.
+      if (!warnedBadKey) {
+        warnedBadKey = true;
+        console.info(
+          'Push alerts are off: VITE_VAPID_PUBLIC_KEY is not a valid VAPID public key (it must decode to 65 bytes). ' +
+            'Set it to the Public Key from "npx web-push generate-vapid-keys" (not the Private Key), then redeploy. See PUSH_SETUP.md.'
+        );
+      }
+      return;
+    }
+    if (!pushSupported()) return;
     let cancelled = false;
 
     if (!enabled) {
@@ -107,7 +136,7 @@ export function usePushSubscription() {
         if (!sub) {
           sub = await reg.pushManager.subscribe({
             userVisibleOnly: true,
-            applicationServerKey: keyToBytes(VAPID_PUBLIC_KEY),
+            applicationServerKey: VAPID_KEY_BYTES!,
           });
         }
         if (cancelled) return;

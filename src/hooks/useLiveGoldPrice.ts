@@ -3,10 +3,11 @@ import { useLivePricesStore } from '../store/livePricesStore';
 import { fetchLiveGoldPrice } from '../utils/goldPrice';
 import { useGoldSettingsStore, applyGoldPremium } from '../store/goldSettingsStore';
 
-// The API response is CDN-cached for 60s (see api/market/gold.js), so
-// polling faster than that just hits cache — 30s keeps the "Live" ticker
-// feeling current without any wasted round-trips.
-const REFRESH_MS = 30_000;
+// Checked every second, like the share prices, so the gold ticker and every value built on it
+// update as soon as a new rate exists. (The API response is CDN-cached for up to 60s, see
+// api/market/gold.js, so most checks are answered from cache and the number only moves when the
+// upstream rate does.)
+const REFRESH_MS = 1_000;
 
 /**
  * Polls the live 24K gold rate (see api/market/gold.js) app-wide, so the
@@ -32,7 +33,8 @@ export function useLiveGoldPrice() {
     const refresh = async () => {
       if (fetching.current) return;
       fetching.current = true;
-      setGoldPriceLoading(true);
+      // Only the very first fetch shows "loading"; flipping it on/off every second would just churn the store.
+      if (useLivePricesStore.getState().goldPricePerGram === null) setGoldPriceLoading(true);
       const result = await fetchLiveGoldPrice();
       if (result) {
         setGoldPrice(applyGoldPremium(result.pricePerGram24k, premiumPercent), result.asOf);

@@ -65,6 +65,23 @@ export function looksLikeTicker(symbol: string): boolean {
 }
 
 /** A single symbol-search suggestion, shown in the "type 3 letters" autocomplete. */
+/**
+ * A company's registered name boiled down to what you'd actually say out loud:
+ * "KMC SPECIALITY HOSPITALS (INDIA) LIMITED" -> "KMC SPECIALITY HOSPITALS".
+ * Drops "(India)", and legal endings like Limited / Ltd / Pvt / Inc / Corp / Plc.
+ * Returns the original (uppercased) text if stripping would leave nothing.
+ */
+export function shortCompanyName(raw: string): string {
+  const original = raw.replace(/\s+/g, ' ').trim().toUpperCase();
+  let s = original
+    .replace(/\s*\((?:INDIA|I|BSE|NSE)\)/g, '') // "(INDIA)" and similar tags
+    .replace(/\s*\([^)]*$/, ''); // a name cut off mid-bracket, e.g. "... (INDI"
+  const ending = /[\s,]+(?:LIMITED|LTD|PVT|PRIVATE|INC|CORPORATION|CORP|COMPANY|CO|PLC|LLC)\.?\s*$/;
+  while (ending.test(s)) s = s.replace(ending, '');
+  s = s.replace(/[\s,.&-]+$/, '').trim();
+  return s || original;
+}
+
 export interface StockSearchResult {
   symbol: string;
   /** Company name, when the upstream provides one (Yahoo does; NSE's autocomplete doesn't, so it falls back to the symbol). */

@@ -59,22 +59,24 @@ export function useLiveSipValues() {
           .getState()
           .assets.filter((a) => a.assetClass === 'sip' && a.symbol && /^\d+$/.test(a.symbol));
         const sipValues: Record<string, SipLiveEntry> = {};
-        // Sequential with a small stagger — most of these resolve instantly
-        // from the persisted cache anyway, but for the ones that do need a
-        // real network call, firing them all at once is exactly the kind of
-        // burst that trips a free API's rate limiting.
-        for (const asset of latest) {
-          if (cancelled) return;
-          const installments = listSipInstallments(asset);
-          if (installments.length === 0) continue;
-          const nav = await fetchFundNavHistory(Number(asset.symbol), asset.startDate);
-          if (cancelled) return;
-          if (!nav) continue;
-          const { value, units } = computeSipLiveValue(installments, nav);
-          sipValues[asset.symbol as string] = { value, units, latestNav: nav.latestNav };
-          await new Promise((r) => setTimeout(r, 150));
-        }
-        if (!cancelled && Object.keys(sipValues).length > 0) setSipValues(sipValues);
+        // A few at a time instead of one after another with a pause between each: most resolve
+        // instantly from the persisted cache, and for the ones that need a real network call a
+        // small pool (4 in flight) is fast without the burst that trips a free API's rate limit.
+        let next = 0;
+        const worker = async () => {
+          while (next < latest.length && !cancelled) {
+            const asset = latest[next++];
+            const installments = listSipInstallments(asset);
+            if (installments.length === 0) continue;
+            const nav = await fetchFundNavHistory(Number(asset.symbol), asset.startDate);
+            if (cancelled || !nav) continue;
+            const { value, units } = computeSipLiveValue(installments, nav);
+            sipValues[asset.symbol as string] = { value, units, latestNav: nav.latestNav };
+          }
+        };
+        await Promise.all(Array.from({ length: Math.min(4, latest.length) }, worker));
+        if (cancelled) return;
+        if (Object.keys(sipValues).length > 0) setSipValues(sipValues);
       } catch {
         // A failed refresh just leaves the last-known values in place.
       } finally {

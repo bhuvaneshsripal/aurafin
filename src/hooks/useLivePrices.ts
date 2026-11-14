@@ -2,12 +2,10 @@ import { useEffect, useRef } from 'react';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLivePricesStore } from '../store/livePricesStore';
 import { PRICE_BUCKET_MS, fetchLiveQuotes, forgetResolvedSymbol, looksLikeTicker, type PriceLookup } from '../utils/marketPrices';
-import { isMarketOpen } from '../utils/marketHours';
 
-/** Poll every second (on a clock shared by all devices) while the market is open (and the tab is visible);
- *  prices can't change outside trading hours, so back off to once a minute. */
+/** Poll every second (on a clock shared by all devices) whenever the tab is visible -- market open or
+ *  not, so values always tick every second. Unchanged prices skip the store write, so it stays cheap. */
 const LIVE_REFRESH_MS = PRICE_BUCKET_MS;
-const IDLE_REFRESH_MS = 60_000;
 /** Next tick on the shared wall-clock grid (+ small jitter), so all devices fetch the same bucket. */
 const alignedDelay = (ms: number) => {
   // Jitter scales with the interval: a flat 100-500 ms would stretch a 1 s poll to 1.1-1.5 s.
@@ -144,10 +142,7 @@ export function useLivePrices() {
         await refresh();
       }
       if (stopped || myGeneration !== generation) return;
-      timer = setTimeout(
-        loop,
-        alignedDelay(document.hidden ? BACKGROUND_REFRESH_MS : isMarketOpen() ? LIVE_REFRESH_MS : IDLE_REFRESH_MS)
-      );
+      timer = setTimeout(loop, alignedDelay(document.hidden ? BACKGROUND_REFRESH_MS : LIVE_REFRESH_MS));
     };
     const onVisible = () => {
       if (!document.hidden) {

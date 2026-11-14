@@ -30,7 +30,7 @@ import { useTransactionsStore } from '../store/transactionsStore';
 import { useGoalsStore } from '../store/goalsStore';
 import LoadingDots from '../components/LoadingDots';
 import { useSnapshotsStore } from '../store/snapshotsStore';
-import { useLivePricesStore } from '../store/livePricesStore';
+import { useLivePricesStore, isPriceCacheFresh } from '../store/livePricesStore';
 import { useUiStore } from '../store/uiStore';
 import { useSyncStatusStore } from '../store/syncStatusStore';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
@@ -115,11 +115,21 @@ export default function Dashboard() {
   const goldAttempted = useLivePricesStore((s) => s.goldAttempted);
   const goldPriceError = useLivePricesStore((s) => s.goldPriceError);
   const goldReady = !hasLiveGold || liveGoldPricePerGram !== null || goldAttempted || goldPriceError;
+  // Fast path: if the last visit saved a recent price for EVERY live-priced holding (and a NAV value
+  // for every linked SIP), show numbers straight away instead of waiting out the first network
+  // round-trip. The 1-second poll then corrects anything that moved. A holding with no saved price
+  // (e.g. just added) still waits, so it never flashes a wrong old value.
+  const pricesUpdatedAt = useLivePricesStore((s) => s.pricesUpdatedAt);
+  const pricesCached =
+    hasLivePriced &&
+    isPriceCacheFresh(pricesUpdatedAt) &&
+    liveEquityAssets.every((a) => livePrices[a.symbol!.trim().toUpperCase()] !== undefined);
+  const sipCached = hasSipLinked && sipLinkedAssets.every((a) => sipValues[a.symbol!.trim()] !== undefined);
   const netWorthReady =
     assetsServerConfirmed &&
     liabilitiesServerConfirmed &&
-    (!hasLivePriced || pricesAttempted) &&
-    (!hasSipLinked || sipValuesAttempted) &&
+    (!hasLivePriced || pricesAttempted || pricesCached) &&
+    (!hasSipLinked || sipValuesAttempted || sipCached) &&
     goldReady;
 
   const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);

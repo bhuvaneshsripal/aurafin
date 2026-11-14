@@ -144,7 +144,7 @@ import {
   computeSipLiveValue,
   type MfSearchResult,
 } from '../utils/mutualFunds';
-import { fetchLivePrices, fetchFxRate, searchStockSymbols, type StockSearchResult } from '../utils/marketPrices';
+import { fetchLivePrices, fetchFxRate, searchStockSymbols, shortCompanyName, type StockSearchResult } from '../utils/marketPrices';
 import { buildCategoryBreakdown, type CategoryBreakdown } from '../utils/portfolioAnalytics';
 import { useAnalyticsData } from './analytics/useAnalyticsData';
 import CategoryBreakdownList from './analytics/CategoryBreakdown';
@@ -6133,6 +6133,7 @@ function AssetDetailsForm({
   const [symbolSearchFailed, setSymbolSearchFailed] = useState(false);
   const [symbolSearchedQuery, setSymbolSearchedQuery] = useState('');
   const symbolTouched = useRef(false);
+  const nameTouched = useRef(false); // true once the person types in (or clears) the Name box themselves
   const symbolIsSearchable = isUnitTracked;
 
   useEffect(() => {
@@ -6166,8 +6167,32 @@ function AssetDetailsForm({
     setSymbol(result.symbol);
     setSymbolSuggestions([]);
     setSymbolSearchOpen(false);
-    if (!name.trim() && result.name) setName(result.name.replace(/[\s,]+(LIMITED|LTD)\.?\s*$/i, '').trim());
+    if (!name.trim() && result.name) setName(shortCompanyName(result.name));
   };
+
+  // The Name box fills itself from the ticker -- even one typed in directly instead of picked from
+  // the list -- with a short, readable name ("KMC SPECIALITY HOSPITALS"), so nobody has to type the
+  // full registered name. Never overwrites anything the person typed.
+  useEffect(() => {
+    if (!symbolIsSearchable || nameTouched.current || name.trim()) return;
+    const sym = symbol.trim();
+    if (sym.length < 3) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      searchStockSymbols(sym, isMarketSelectable ? market : 'IN').then((results) => {
+        if (cancelled || nameTouched.current || !results) return;
+        const hit = results.find((r) => r.symbol.toUpperCase() === sym.toUpperCase());
+        // NSE's autocomplete has no company name and echoes the symbol back -- nothing useful to fill.
+        if (!hit?.name || hit.name.toUpperCase() === hit.symbol.toUpperCase()) return;
+        setName(shortCompanyName(hit.name));
+      });
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [symbol, name, symbolIsSearchable, market, isMarketSelectable]);
 
   // Lets someone dismiss the "no matches" / "search unreachable" dropdown
   // and keep the ticker they already typed — e.g. a same-day IPO that
@@ -6481,9 +6506,12 @@ function AssetDetailsForm({
       <Field label="Name" required={!isUnitTracked}>
         <input
           value={name}
-          onChange={(e) => setName(e.target.value.toUpperCase())}
+          onChange={(e) => {
+            nameTouched.current = true;
+            setName(e.target.value.toUpperCase());
+          }}
           className={`${inputClass} ${attemptedSubmit && nameMissing ? errorInputClass : ''}`}
-          placeholder=""
+          placeholder={isUnitTracked ? 'Fills in from ticker — short name is enough' : ''}
         />
         {attemptedSubmit && nameMissing && <p className={errorTextClass}>Name is required.</p>}
       </Field>
