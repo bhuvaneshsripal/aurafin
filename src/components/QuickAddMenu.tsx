@@ -264,6 +264,19 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
           </div>
         )}
 
+        {menuOpen && !isFab && !isHeader &&
+          createPortal(
+            // Laptop: dim + soften the page behind the dropdown. It sits just
+            // under the sticky top bar (z-30), so the Add button and its menu
+            // stay bright and clickable; a click anywhere on the dim closes it.
+            <div
+              className="animate-backdrop-in fixed inset-0 z-[29] bg-slate-900/30 backdrop-blur-[3px]"
+              onClick={() => setMenuOpen(false)}
+              aria-hidden="true"
+            />,
+            document.body,
+          )}
+
         {menuOpen && !isFab && !isHeader && (
           <div className="animate-menu-in absolute right-0 mt-2 w-60 bg-surface border border-line rounded-xl shadow-lg overflow-hidden z-30 pb-1">
             <p className="px-4 pt-3 pb-1 text-xs font-medium text-faint">

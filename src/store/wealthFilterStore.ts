@@ -5,6 +5,9 @@ export interface WealthFilterSelection {
   categories: string[];
   types: string[];
   currencies: string[];
+  /** Holdings sort choice (Sort by sheet / column headers), synced too. */
+  sortKey?: string;
+  sortDir?: 'asc' | 'desc';
 }
 
 interface WealthFilterState extends WealthFilterSelection {
@@ -14,6 +17,8 @@ interface WealthFilterState extends WealthFilterSelection {
    *  coming, instead of briefly showing "no filter" and then jumping to the
    *  real one a moment later. */
   loaded: boolean;
+  sortKey: string;
+  sortDir: 'asc' | 'desc';
   setCategories: (v: string[]) => void;
   setTypes: (v: string[]) => void;
   setCurrencies: (v: string[]) => void;
@@ -27,6 +32,8 @@ export const useWealthFilterStore = create<WealthFilterState>((set) => ({
   types: [],
   currencies: [],
   loaded: false,
+  sortKey: 'manual',
+  sortDir: 'desc',
   setCategories: (categories) => set({ categories }),
   setTypes: (types) => set({ types }),
   setCurrencies: (currencies) => set({ currencies }),
@@ -35,6 +42,8 @@ export const useWealthFilterStore = create<WealthFilterState>((set) => ({
       categories: v?.categories ?? [],
       types: v?.types ?? [],
       currencies: v?.currencies ?? [],
+      sortKey: v?.sortKey ?? 'manual',
+      sortDir: v?.sortDir === 'asc' ? 'asc' : 'desc',
       loaded: true,
     }),
 }));

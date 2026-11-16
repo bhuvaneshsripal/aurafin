@@ -21,6 +21,7 @@ import {
 import { handleActiveTabTap } from '../utils/tabTap';
 import { APP_VERSION } from '../config/version';
 import UpdateDot from './UpdateDot';
+import FeedbackModal from './FeedbackModal';
 import { useUiStore } from '../store/uiStore';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { useModalBackClose } from '../hooks/useModalBackClose';
@@ -116,6 +117,7 @@ function tapFeedback() {
 
 export default function BottomNav() {
   const [moreOpen, setMoreOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [typing, setTyping] = useState(false);
   // While the on-screen keyboard is up over a focused text field it covers the
   // bottom of the screen. Native apps hide their tab bar in that state; do the same
@@ -626,20 +628,14 @@ export default function BottomNav() {
                   {label}
                 </NavLink>
               ))}
-              <NavLink
-                to="/feedback"
-                onClick={() => setMoreOpen(false)}
-                className={({ isActive }) =>
-                  `tap-scale flex flex-col items-center justify-center gap-2 rounded-xl border px-2 py-4 text-xs font-medium text-center transition-colors ${
-                    isActive
-                      ? 'bg-primary-soft text-primary-ink border-transparent'
-                      : 'bg-surface border-line text-slate-600 hover:bg-surface-hover'
-                  }`
-                }
+              <button
+                type="button"
+                onClick={() => { setMoreOpen(false); setFeedbackOpen(true); }}
+                className="tap-scale flex flex-col items-center justify-center gap-2 rounded-xl border px-2 py-4 text-xs font-medium text-center transition-colors bg-surface border-line text-slate-600 hover:bg-surface-hover"
               >
                 <MessageSquare size={20} strokeWidth={1.75} />
                 Feedback
-              </NavLink>
+              </button>
             </div>
             <div className="px-5 pb-6 pt-2 text-center text-xs text-muted">
               <p className="mb-1 font-medium">Aurafin v{APP_VERSION}</p>
@@ -656,6 +652,7 @@ export default function BottomNav() {
           </div>
         </div>
       )}
+      <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </>
   );
 }

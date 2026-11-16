@@ -208,6 +208,7 @@ export default function Login() {
             <a href="#reviews">Reviews</a>
             <a href="#privacy">Privacy</a>
             <a href="#faq">FAQ</a>
+            <a href="/calculators">Calculators</a>
           </div>
           <LoginUpdateButton />
           <button
@@ -254,6 +255,7 @@ export default function Login() {
               <a href="#reviews" onClick={() => setMenuOpen(false)}>Reviews</a>
               <a href="#privacy" onClick={() => setMenuOpen(false)}>Privacy</a>
               <a href="#faq" onClick={() => setMenuOpen(false)}>FAQ</a>
+              <a href="/calculators">Calculators</a>
               <div className="lp-menu-sep" />
               <button type="button" onClick={() => { setMenuOpen(false); openAuth('login'); }}>Sign in</button>
               <button type="button" onClick={toggleTheme}>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</button>

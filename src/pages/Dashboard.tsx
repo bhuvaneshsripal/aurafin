@@ -486,8 +486,8 @@ export default function Dashboard() {
                   ? '••••••'
                   : `${xirr.percent < 0 ? '−' : ''}${formatPercentMagnitude(Math.abs(xirr.percent))}`
             }
-            // The "Since <date>" chip waits for loading to finish — while the dots show, no date.
-            cornerLabel={ready && hasWealth && xirr.percent !== null && xirr.since ? `Since ${shortDate(xirr.since)}` : undefined}
+            // The "Since <date>" chip waits for loading to finish, and is hidden while the eye (privacy mode) is closed.
+            cornerLabel={!privacyMode && ready && hasWealth && xirr.percent !== null && xirr.since ? `Since ${shortDate(xirr.since)}` : undefined}
             cornerTone={xirr.percent === null || privacyMode ? 'neutral' : xirr.percent >= 0 ? 'positive' : 'negative'}
             sublabel={
               !ready || !hasWealth || (xirr.percent !== null && xirr.since)

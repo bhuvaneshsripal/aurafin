@@ -68,7 +68,7 @@ import { useUiStore } from '../store/uiStore';
 import SectorAllocationCard from '../components/SectorAllocationCard';
 import MarketCapCard from '../components/MarketCapCard';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
-import { upsertDoc, removeDoc, saveWealthFilters } from '../hooks/useFirestoreSync';
+import { upsertDoc, removeDoc, saveWealthFilters, saveWealthSort } from '../hooks/useFirestoreSync';
 import { useWealthFilterStore } from '../store/wealthFilterStore';
 import { exportToCsv } from '../utils/exportCsv';
 import { findMergeTarget, findDuplicateGroups, mergeHoldings } from '../utils/mergeHoldings';
@@ -106,6 +106,7 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import CurrencySelect from '../components/CurrencySelect';
 import CustomSelect from '../components/CustomSelect';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
+import { useSheetSwipeClose } from '../hooks/useSheetSwipeClose';
 import { usePauseHoverOnScroll } from '../hooks/usePauseHoverOnScroll';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { ACCOUNT_TYPES, resolveAccountIcon, type AccountType } from '../utils/accountVisuals';
@@ -173,6 +174,7 @@ import { computePpfNow, migrateLegacyPpf, ppfMaturityDate, ppfRate, ppfStatus, y
 import { inToast } from '../utils/toastGuard';
 
 type Tab = 'assets' | 'liabilities' | 'performs' | 'networth' | 'allocation' | 'analytics';
+const SORT_KEYS = ['manual', 'name', 'qty', 'avgCost', 'perUnit', 'invested', 'value', 'pnl', 'alloc', 'dayChange'] as const;
 type SortKey = 'manual' | 'name' | 'qty' | 'avgCost' | 'perUnit' | 'invested' | 'value' | 'pnl' | 'alloc' | 'dayChange';
 type EntryType = 'asset' | 'liability';
 type NetWorthRange = '3M' | '6M' | '1Y' | 'ALL';
@@ -1074,8 +1076,13 @@ function AssetsTab({
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(() => searchParams.get('q') ?? '');
   const isSearching = search.trim().length > 0;
-  const [sortKey, setSortKey] = useState<SortKey>('manual');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  // Start from the synced sort (kept in the filter store, which follows the
+  // account across devices) so coming back to this page doesn't reset it.
+  const [sortKey, setSortKey] = useState<SortKey>(() => {
+    const k = useWealthFilterStore.getState().sortKey;
+    return (SORT_KEYS as readonly string[]).includes(k) ? (k as SortKey) : 'manual';
+  });
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>(() => useWealthFilterStore.getState().sortDir);
   // Filter selection, synced across devices via wealthFilterStore /
   // useWealthFilterSync (mounted at the app root, see App.tsx) instead of
   // localStorage — so choosing a filter here shows up already applied the
@@ -1110,6 +1117,24 @@ function AssetsTab({
       saveWealthFilters(user, { categories: selectedCategories, types: selectedTypes, currencies });
     }
   };
+  // Sort sync. Remote -> local: a sort chosen on another device (or loaded
+  // at login) is applied here. Local -> remote: a sort chosen here is saved.
+  // Each side only acts when the two differ, so they can't ping-pong.
+  const remoteSortKey = useWealthFilterStore((s) => s.sortKey);
+  const remoteSortDir = useWealthFilterStore((s) => s.sortDir);
+  useEffect(() => {
+    if (!filtersLoaded) return;
+    if ((SORT_KEYS as readonly string[]).includes(remoteSortKey)) {
+      setSortKey((prev) => (prev === remoteSortKey ? prev : (remoteSortKey as SortKey)));
+    }
+    setSortDir((prev) => (prev === remoteSortDir ? prev : remoteSortDir));
+  }, [filtersLoaded, remoteSortKey, remoteSortDir]);
+  useEffect(() => {
+    if (!user || !filtersLoaded) return;
+    if (sortKey === remoteSortKey && sortDir === remoteSortDir) return;
+    void saveWealthSort(user, { sortKey, sortDir });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortKey, sortDir]);
   // Tag filter — tags are typed per asset in the edit form ("Show details"), so this just lists
   // whatever tags exist. Kept in this session only (it isn't synced like the other filters).
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -1745,6 +1770,7 @@ function AssetsTab({
     { key: 'name', label: 'Stock name' },
   ];
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
+  const sortSheetRef = useSheetSwipeClose(() => setSortSheetOpen(false));
   useBodyScrollLock(sortSheetOpen);
   const [draftSortKey, setDraftSortKey] = useState<SortKey>(sortKey === 'manual' ? 'value' : sortKey);
   const [draftSortDir, setDraftSortDir] = useState<'asc' | 'desc'>(sortDir);
@@ -1765,6 +1791,7 @@ function AssetsTab({
   // before you even see a holding. Below `sm` they collapse into a single
   // compact button that opens this sheet with the same controls instead.
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const filterSheetRef = useSheetSwipeClose(() => setFilterSheetOpen(false));
   useBodyScrollLock(filterSheetOpen);
   const activeFilterCount = selectedCategories.length + selectedTypes.length + selectedCurrencies.length + selectedTags.length;
   const clearAllFilters = () => {
@@ -2223,9 +2250,11 @@ function AssetsTab({
           onClick={() => setFilterSheetOpen(false)}
         >
           <div
+            ref={filterSheetRef}
             onClick={(e) => e.stopPropagation()}
-            className="animate-sheet-in w-full sm:max-w-sm bg-surface rounded-t-2xl sm:rounded-2xl sm:mb-6 sm:shadow-2xl pb-[env(safe-area-inset-bottom)] max-h-[85vh] sm:max-h-[75vh] overflow-y-auto"
+            className="animate-sheet-in w-full sm:max-w-sm bg-surface rounded-t-2xl sm:rounded-2xl sm:mb-6 sm:shadow-2xl pb-[env(safe-area-inset-bottom)] max-h-[85vh] sm:max-h-[75vh] overflow-y-auto overscroll-contain"
           >
+            <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-slate-300 dark:bg-slate-600 sm:hidden" aria-hidden />
             <div className="px-5 pt-5 pb-1 flex items-center justify-between">
               <h3 className="text-lg font-bold text-ink">Filters</h3>
               {activeFilterCount > 0 && (
@@ -2681,15 +2710,25 @@ function AssetsTab({
           {/* Per-holding table (sm and up). Column headers are clickable and
               sort the rows (click again to flip direction). Rows still
               support press-and-drag manual ordering + click-through. */}
-          {isSmUp && showResetOrder && (
-            <div className="flex justify-end">
+          {isSmUp && (
+            <div className="flex items-center justify-between px-1">
               <button
                 type="button"
-                onClick={resetOrder}
-                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-line text-xs font-medium text-ink hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+                onClick={openSortSheet}
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-line text-sm font-semibold text-ink hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
               >
-                <RotateCcw size={13} strokeWidth={2.25} /> Reset order
+                Sort
+                <ListFilter size={15} strokeWidth={2.25} />
               </button>
+              {showResetOrder && (
+                <button
+                  type="button"
+                  onClick={resetOrder}
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-line text-xs font-medium text-ink hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+                >
+                  <RotateCcw size={13} strokeWidth={2.25} /> Reset order
+                </button>
+              )}
             </div>
           )}
           {isSmUp && (
@@ -2980,9 +3019,11 @@ function AssetsTab({
           onClick={() => setSortSheetOpen(false)}
         >
           <div
+            ref={sortSheetRef}
             onClick={(e) => e.stopPropagation()}
-            className="animate-sheet-in w-full sm:max-w-sm bg-surface rounded-t-2xl sm:rounded-2xl sm:mb-6 sm:shadow-2xl pb-[env(safe-area-inset-bottom)] max-h-[85vh] sm:max-h-[75vh] overflow-y-auto"
+            className="animate-sheet-in w-full sm:max-w-sm bg-surface rounded-t-2xl sm:rounded-2xl sm:mb-6 sm:shadow-2xl pb-[env(safe-area-inset-bottom)] max-h-[85vh] sm:max-h-[75vh] overflow-y-auto overscroll-contain"
           >
+            <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-slate-300 dark:bg-slate-600 sm:hidden" aria-hidden />
             <div className="px-5 pt-5 pb-1">
               <h3 className="text-lg font-bold text-ink">Sort by</h3>
             </div>

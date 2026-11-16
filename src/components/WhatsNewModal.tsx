@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, Check, RefreshCw, X } from 'lucide-react';
+import { ArrowRight, RefreshCw, X } from 'lucide-react';
 import Modal from './Modal';
 import { APP_VERSION } from '../config/version';
 
@@ -78,7 +78,7 @@ export function useWhatsNew(enabled: boolean): WhatsNew | null {
 export default function WhatsNewModal({
   open,
   onClose,
-  notes,
+  notes: _notes,
   updating,
   onUpdate,
   status = 'available',
@@ -112,7 +112,7 @@ export default function WhatsNewModal({
     document.body.setAttribute('data-no-bottom-fade', '1');
     return () => document.body.removeAttribute('data-no-bottom-fade');
   }, [open]);
-  const heading = available ? notes?.title ?? "What's new" : "What's new";
+  const heading = available ? "Update available" : "What's new";
   return (
     // Every state fills the working area (sidebar + top bar stay visible), so
     // the update notice, the spinner and the "up to date" view all look alike.
@@ -237,52 +237,13 @@ export default function WhatsNewModal({
               {/* Desktop heading, left-aligned (no icon). */}
               <div className="hidden md:block text-left mb-7">
                 <h3 className="text-[28px] font-semibold text-ink tracking-tight">A new version is ready</h3>
-                <p className="mt-2 text-base text-muted">Here's what you'll get when you update.</p>
               </div>
-              {(notes?.version || notes?.date) && (
-                <div className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl bg-[#e7f4ec] dark:bg-[#0a9a4b]/15 px-3.5 py-2.5">
-                  {notes.version && !(notes.title ?? '').includes(notes.version) && (
-                    <span className="rounded-full bg-[#0a9a4b] px-2.5 py-0.5 text-xs font-bold text-white">
-                      Version {notes.version}
-                    </span>
-                  )}
-                  {notes.date && (
-                    <span className="text-sm font-semibold text-ink">Released {notes.date}</span>
-                  )}
-                </div>
-              )}
-              {notes ? (
-                <>
-                <style>{'@keyframes wn-in{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}.wn-item{opacity:0;animation:wn-in .18s ease-out forwards}@media (prefers-reduced-motion:reduce){.wn-item{opacity:1;animation:none}}'}</style>
-                <ul className="space-y-3.5 md:space-y-0 md:divide-y md:divide-line-soft md:rounded-2xl md:border md:border-line md:bg-surface md:px-5 md:shadow-sm">
-                  {notes.items.map((item, i) => (
-                    <li
-                      key={item.title}
-                      className="wn-item flex items-center gap-3 md:gap-4 md:py-4"
-                      style={{ animationDelay: `${Math.min(i, 8) * 0.03}s` }}
-                    >
-                      {item.emoji ? (
-                        <span className="shrink-0 h-9 w-9 md:h-11 md:w-11 rounded-xl bg-[#e7f4ec] dark:bg-[#0a9a4b]/15 inline-flex items-center justify-center text-xl md:text-2xl leading-none" aria-hidden>
-                          {item.emoji}
-                        </span>
-                      ) : (
-                        <span className="shrink-0 h-5 w-5 md:h-7 md:w-7 rounded-full bg-[#e7f4ec] dark:bg-[#0a9a4b]/15 text-[#0a9a4b] inline-flex items-center justify-center">
-                          <Check size={13} strokeWidth={3} />
-                        </span>
-                      )}
-                      <div className="min-w-0">
-                        <p className="text-sm md:text-[15px] font-semibold text-ink leading-snug">{item.title}</p>
-                        {item.description && <p className="text-[13px] md:text-sm text-muted leading-snug mt-0.5 md:mt-1">{item.description}</p>}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-                </>
-              ) : (
-                <p className="text-sm md:text-base text-muted md:text-center">
-                  A new version of Aurafin is ready, with improvements and fixes. Update to get it.
+              <div className="rounded-2xl border border-line bg-surface px-5 py-6 text-center shadow-sm md:text-left">
+                <p className="text-[15px] font-semibold text-ink">A new version of AuraFin is ready</p>
+                <p className="mt-1.5 text-sm md:text-base text-muted">
+                  It brings improvements and fixes. Tap Update now to get the latest version.
                 </p>
-              )}
+              </div>
             </div>
           </div>
           <div className="hidden md:flex shrink-0 items-center justify-between gap-2 border-t border-line-soft bg-surface px-10 py-5">

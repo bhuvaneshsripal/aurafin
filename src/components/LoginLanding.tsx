@@ -602,6 +602,7 @@ export default function LoginLanding({ onSignup, onDemo, demoLoading, demoError 
             <button type="button" onClick={onDemo}>Live demo</button>
             <a href="#features">Features</a>
             <a href="#faq">FAQ</a>
+            <a href="/calculators">Calculators</a>
           </div>
           <div>
             <h4>Legal</h4>

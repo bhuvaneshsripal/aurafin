@@ -226,7 +226,6 @@ export default function FeedbackPanel({ onCancel, onDone }: { onCancel?: () => v
             )}
           </div>
 
-          <p className="text-xs text-faint">Your rating, message and first name may be shown in the reviews on our home page.</p>
           {error && <p className="text-sm text-negative">{error}</p>}
 
           <div className="flex justify-end gap-2">

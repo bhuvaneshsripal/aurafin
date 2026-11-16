@@ -59,6 +59,7 @@ import type { Asset, Liability, Goal, Transaction, Snapshot, BudgetItem, Financi
 // the common path (an already signed-in user) parses less JS at startup.
 const Login = lazyWithRetry(() => import('./pages/Login'));
 const LegalPage = lazyWithRetry(() => import('./pages/LegalPage'));
+const PublicCalculators = lazyWithRetry(() => import('./pages/PublicCalculators'));
 const dashboardImport = () => import('./pages/Dashboard');
 const Dashboard = lazyWithRetry(dashboardImport);
 // Start downloading the default route's code right away, in parallel with
@@ -425,6 +426,11 @@ export default function App() {
 
   if (loading) {
     return null;
+  }
+
+  if (!user && legalPath === '/calculators') {
+    // Public calculators, opened from the login page's "Calculators" link.
+    return <Suspense fallback={null}><PublicCalculators /></Suspense>;
   }
 
   if (!user) {

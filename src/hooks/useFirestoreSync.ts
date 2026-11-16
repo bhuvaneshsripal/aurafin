@@ -715,15 +715,18 @@ function readGuestWealthFilters(uid: string): WealthFilterSelection | null {
       categories: Array.isArray(parsed?.categories) ? parsed.categories : [],
       types: Array.isArray(parsed?.types) ? parsed.types : [],
       currencies: Array.isArray(parsed?.currencies) ? parsed.currencies : [],
+      sortKey: typeof parsed?.sortKey === 'string' ? parsed.sortKey : undefined,
+      sortDir: parsed?.sortDir === 'asc' ? 'asc' : parsed?.sortDir === 'desc' ? 'desc' : undefined,
     };
   } catch {
     return null;
   }
 }
 
-function writeGuestWealthFilters(uid: string, value: WealthFilterSelection) {
+function writeGuestWealthFilters(uid: string, value: Partial<WealthFilterSelection>) {
   try {
-    localStorage.setItem(guestWealthFilterKey(uid), JSON.stringify(value));
+    const merged = { ...(readGuestWealthFilters(uid) ?? {}), ...value };
+    localStorage.setItem(guestWealthFilterKey(uid), JSON.stringify(merged));
   } catch {
     // localStorage unavailable — filter just won't survive a refresh.
   }
@@ -764,6 +767,8 @@ export function useWealthFilterSync() {
                 categories: Array.isArray(data.categories) ? data.categories : [],
                 types: Array.isArray(data.types) ? data.types : [],
                 currencies: Array.isArray(data.currencies) ? data.currencies : [],
+                sortKey: typeof data.sortKey === 'string' ? data.sortKey : undefined,
+                sortDir: data.sortDir === 'asc' ? 'asc' : data.sortDir === 'desc' ? 'desc' : undefined,
               }
             : null
         );
@@ -789,6 +794,23 @@ export async function saveWealthFilters(
     return;
   }
 
+  const ref = doc(db, 'users', uid, 'meta', 'wealthFilters');
+  await setDoc(ref, value, { merge: true });
+}
+
+/** Save the Assets holdings sort (key + direction) into the same
+ *  wealthFilters doc, so it follows the account to every device. Merged, so
+ *  it never touches the saved Category/Type/Currency filters. */
+export async function saveWealthSort(
+  uidOrUser: string | { uid: string; isAnonymous?: boolean },
+  value: { sortKey: string; sortDir: 'asc' | 'desc' }
+) {
+  const uid = typeof uidOrUser === 'string' ? uidOrUser : uidOrUser.uid;
+  const isGuest = typeof uidOrUser === 'object' && isAnonymousUser(uidOrUser);
+  if (isGuest) {
+    writeGuestWealthFilters(uid, value);
+    return;
+  }
   const ref = doc(db, 'users', uid, 'meta', 'wealthFilters');
   await setDoc(ref, value, { merge: true });
 }
