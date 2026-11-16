@@ -13,8 +13,27 @@ service cloud.firestore {
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.message is string
         && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() <= 2000;
+      // Users may read back only their own feedback (the History tab).
+      allow read: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // Public reviews shown on the login page: anyone may READ them (they hold
+    // only first name, rating and message), signed-in users may add one, and
+    // nobody can edit or delete from the app (moderate in the console).
+    match /reviews/{docId} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['name', 'rating', 'message', 'createdAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 40
+        && request.resource.data.rating is int
+        && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
         && request.resource.data.message.size() <= 1000;
-      allow read, update, delete: if false;
+      allow update, delete: if false;
     }
   }
 }

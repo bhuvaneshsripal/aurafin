@@ -725,7 +725,14 @@ function NetWorthOverTimeCard({
     const today = toIsoDate();
     const todaySaved = byDate.get(today);
     if (!ready) byDate.delete(today);
-    else if (todaySaved && Number.isFinite(liveNetWorth)) byDate.set(today, { ...todaySaved, netWorth: liveNetWorth });
+    else if (Number.isFinite(liveNetWorth)) {
+      // No snapshot saved yet today? Still end the line at the live value, so the
+      // chart's last point is always the current net worth, not an older day's.
+      byDate.set(today, {
+        ...(todaySaved ?? { id: `live-${today}`, date: today, totalAssets: liveNetWorth, totalLiabilities: 0 }),
+        netWorth: liveNetWorth,
+      });
+    }
     return dropSpikes([...byDate.values()]);
   }, [snapshots, ready, liveNetWorth]);
 
@@ -864,24 +871,36 @@ function NetWorthOverTimeCard({
   const lineColor = isDown ? chart.negative : chart.primary;
   const fillColor = isDown ? chart.negativeSoft : chart.primarySoft;
 
-  // Y-axis domain: padded around the data's own min/max (not forced to
-  // start at 0) so real movement is legible, but with a floor on the
-  // padded span so a handful of rupees of noise between snapshots never
-  // gets stretched into a dramatic-looking cliff.
-  const yDomain = useMemo((): [number, number] | undefined => {
+  // Y-axis: the gridlines/labels sit exactly on the data's real LOW and HIGH
+  // (plus evenly spaced ones between), with a little room above and below so
+  // the line is never clipped. Not forced to start at 0, so real movement is
+  // legible, but a floor on the span stops a handful of rupees of noise between
+  // snapshots from being stretched into a dramatic-looking cliff.
+  const yAxis = useMemo((): { domain: [number, number]; ticks: number[] } | undefined => {
     if (data.length === 0) return undefined;
     const values = data.map((d) => d.netWorth);
-    const minV = Math.min(...values);
-    const maxV = Math.max(...values);
-    const mid = (minV + maxV) / 2 || 1;
-    const rawSpan = maxV - minV;
-    // 0.5% floor (was 6%) so day-to-day market volatility is visible
-    // instead of being flattened into a straight line.
+    let lo = Math.min(...values);
+    let hi = Math.max(...values);
+    const mid = (lo + hi) / 2 || 1;
+    // 0.5% floor so day-to-day market volatility is visible instead of being
+    // flattened into a straight line.
     const minSpan = Math.max(Math.abs(mid) * 0.005, 1);
-    const span = Math.max(rawSpan, minSpan);
-    const pad = span * 0.2;
-    return [minV - pad, maxV + pad];
+    if (hi - lo < minSpan) {
+      lo = mid - minSpan / 2;
+      hi = mid + minSpan / 2;
+    }
+    const pad = (hi - lo) * 0.08;
+    const ticks = [0, 1, 2, 3].map((i) => lo + ((hi - lo) * i) / 3);
+    return { domain: [lo - pad, hi + pad], ticks };
   }, [data]);
+  // Axis labels keep 2 decimals in lakhs (₹1.67L, not ₹1.7L) so the high and
+  // low read as the real figures.
+  const formatNetWorthTick = (v: number) => {
+    if (privacyMode) return PRIVACY_DOTS;
+    const abs = Math.abs(v);
+    if (abs >= 1e5 && abs < 1e7) return `${v < 0 ? '-' : ''}₹${(abs / 1e5).toFixed(2).replace(/\.?0+$/, '')}L`;
+    return formatAxisAmount(v);
+  };
 
   return (
     <Card padding="lg" className="h-full">
@@ -949,12 +968,13 @@ function NetWorthOverTimeCard({
                 minTickGap={28}
               />
               <YAxis
-                tickFormatter={(v: number) => (privacyMode ? PRIVACY_DOTS : formatAxisAmount(v))}
+                tickFormatter={formatNetWorthTick}
                 tick={chart.tick}
                 axisLine={false}
                 tickLine={false}
                 width={56}
-                domain={yDomain ?? ['auto', 'auto']}
+                domain={yAxis?.domain ?? ['auto', 'auto']}
+                ticks={yAxis?.ticks}
                 allowDecimals={false}
               />
               {/* Recharts' own cursor/active dot follow its hover state, which a

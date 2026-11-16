@@ -1,21 +1,16 @@
-import { lazy, Suspense, useState } from 'react';
-import { Eye, EyeOff, Moon, Sun } from 'lucide-react';
+import { useState } from 'react';
+import { Eye, EyeOff, Menu, Moon, Sun, X } from 'lucide-react';
 import { useUiStore } from '../store/uiStore';
 import { useAuthStore } from '../store/authStore';
 import SocialLoginButtons from '../components/SocialLoginButtons';
 import { friendlyAuthError } from '../utils/authErrors';
-import LoginShowcase from '../components/LoginShowcase';
-import LoginWordmark from '../components/LoginWordmark';
-import StockAnalysisArticle from '../components/StockAnalysisArticle';
+import LoginLanding from '../components/LoginLanding';
 import Modal from '../components/Modal';
 import SignUpScreen from '../components/SignUpScreen';
 import InstallBanner from '../components/InstallBanner';
 import InstallPromptModal from '../components/InstallPromptModal';
 import LoginUpdateButton from '../components/LoginUpdateButton';
 import AccessPasswordModal from '../components/AccessPasswordModal';
-
-// Cinematic growth section: loaded on demand so it adds nothing to the login page's first paint.
-const GrowthJourney = lazy(() => import('../components/growth/GrowthJourney'));
 
 function FieldError({ message }: { message: string }) {
   return (
@@ -45,6 +40,7 @@ export default function Login() {
   const [emailErr, setEmailErr] = useState('');
   const [passErr, setPassErr] = useState('');
   const [open, setOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
@@ -207,51 +203,73 @@ export default function Login() {
           </span>
         </div>
         <nav className="lp-nav">
+          <div className="fb-nav-links">
+            <a href="#features">Features</a>
+            <a href="#reviews">Reviews</a>
+            <a href="#privacy">Privacy</a>
+            <a href="#faq">FAQ</a>
+          </div>
           <LoginUpdateButton />
           <button
             type="button"
             onClick={toggleTheme}
             aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
-            className="btn-press lp-theme-btn"
+            className="btn-press lp-theme-btn lp-desk-only"
           >
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </button>
-          <button type="button" onClick={() => openAuth('login')} className="btn-press lp-nav-btn lp-nav-outline text-ink">
-            Login
+          <button type="button" onClick={() => openAuth('login')} className="btn-press lp-nav-btn lp-nav-outline text-ink lp-desk-only">
+            Sign in
           </button>
           <button type="button" onClick={() => openAuth('register')} className="btn-press lp-nav-btn bg-brand-600 hover:bg-brand-700 text-white">
-            Sign up
+            Get Started
+          </button>
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={menuOpen}
+            className="btn-press lp-theme-btn lp-burger"
+          >
+            {menuOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
         </nav>
+        {menuOpen && (
+          <>
+            <div className="lp-menu-scrim" onClick={() => setMenuOpen(false)} />
+            <div className="lp-menu bg-surface" role="menu">
+              <div className="lp-menu-top">
+                <div className="lp-brand">
+                  <img src="/logo-icon.png" alt="" className="lp-brand-logo" />
+                  <span className="font-brand text-ink lp-brand-name">
+                    Aurafin<span className="text-brand-500">.</span>
+                  </span>
+                </div>
+                <button type="button" onClick={() => setMenuOpen(false)} aria-label="Close menu" className="btn-press lp-theme-btn">
+                  <X size={22} />
+                </button>
+              </div>
+              <a href="#features" onClick={() => setMenuOpen(false)}>Features</a>
+              <a href="#reviews" onClick={() => setMenuOpen(false)}>Reviews</a>
+              <a href="#privacy" onClick={() => setMenuOpen(false)}>Privacy</a>
+              <a href="#faq" onClick={() => setMenuOpen(false)}>FAQ</a>
+              <div className="lp-menu-sep" />
+              <button type="button" onClick={() => { setMenuOpen(false); openAuth('login'); }}>Sign in</button>
+              <button type="button" onClick={toggleTheme}>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</button>
+            </div>
+          </>
+        )}
       </header>
 
-      <main className="lp-main">
-        <section className="lp-intro" aria-label="About Aurafin">
-          <span className="lp-intro-kicker">About Aurafin</span>
-          <p className="lp-intro-line">
-            <span className="font-brand lp-intro-name">Aurafin</span> is a privacy-first net worth tracker for stocks, crypto, cash, goals and more, built for Indian investors.
-          </p>
-          <button type="button" className="btn-press lp-demo-btn" onClick={() => requireAccess(tryDemo)} disabled={demoLoading}>
-            {demoLoading ? 'Starting demo…' : 'Try demo'}
-          </button>
-          {demoError && <p className="lf-msg" role="alert">{demoError}</p>}
-        </section>
-        <div className="lp-hero">
-          <LoginShowcase onCta={() => openAuth('register')} />
-        </div>
-        <StockAnalysisArticle />
-        <Suspense fallback={null}>
-          <GrowthJourney />
-        </Suspense>
-        <footer className="py-6 text-center text-xs text-ink-2">
-          <a href="/privacy" className="hover:underline">Privacy Policy</a>
-          <span className="mx-2" aria-hidden>·</span>
-          <a href="/terms" className="hover:underline">Terms of Service</a>
-        </footer>
+      <main className="lp-main lp-main-landing">
+        <LoginLanding
+          onSignup={() => openAuth('register')}
+          onDemo={() => requireAccess(tryDemo)}
+          demoLoading={demoLoading}
+          demoError={demoError}
+        />
       </main>
-
-      <LoginWordmark />
 
       <InstallBanner />
       <InstallPromptModal />
@@ -387,6 +405,12 @@ export default function Login() {
             >
               {mode === 'login' ? 'Create one' : 'Log in'}
             </button>
+          </p>
+
+          <p className="login-terms text-ink-2 text-center">
+            By continuing, you agree to our{' '}
+            <a href="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a> and{' '}
+            <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
           </p>
         </div>
       </Modal>

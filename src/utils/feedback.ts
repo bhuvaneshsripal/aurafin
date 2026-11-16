@@ -37,6 +37,9 @@ async function saveToFirestore(p: FeedbackParams) {
   if (!p.uid) throw new Error('not signed in');
   await addDoc(collection(db, 'feedback'), {
     message: p.message,
+    rating: p.rating,
+    category: p.category,
+    ...(p.attachment ? { attachment: p.attachment } : {}),
     name: p.fromName || 'Aurafin user',
     email: p.fromEmail || '',
     uid: p.uid,
@@ -45,6 +48,20 @@ async function saveToFirestore(p: FeedbackParams) {
     userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
     screen: typeof window !== 'undefined' ? `${window.innerWidth}x${window.innerHeight}` : '',
     status: 'new',
+    createdAt: serverTimestamp(),
+  });
+}
+
+/** Public, trimmed-down copy shown on the login page: first name, rating and
+ *  message only (never email, uid or device info). The private `feedback`
+ *  document above is untouched and stays the full record. */
+async function saveReview(p: FeedbackParams) {
+  if (!p.uid) throw new Error('not signed in');
+  const first = (p.fromName || '').trim().split(/\s+/)[0];
+  await addDoc(collection(db, 'reviews'), {
+    name: (first || (p.isGuest ? 'Guest' : 'Aurafin member')).slice(0, 40),
+    rating: p.rating,
+    message: p.message.length > 400 ? `${p.message.slice(0, 397)}...` : p.message,
     createdAt: serverTimestamp(),
   });
 }
@@ -59,6 +76,8 @@ async function sendEmail(p: FeedbackParams) {
       user_id: PUBLIC_KEY,
       template_params: {
         message: p.message,
+        rating: `${p.rating}/5`,
+        category: p.category,
         from_name: p.fromName || 'Aurafin user',
         from_email: p.fromEmail || 'not available',
         page: typeof window !== 'undefined' ? window.location.pathname : '',
@@ -68,8 +87,14 @@ async function sendEmail(p: FeedbackParams) {
   if (!res.ok) throw new Error('email failed');
 }
 
+export type FeedbackCategory = 'bug' | 'feature' | 'other';
+export interface FeedbackAttachment { name: string; type: string; dataUrl: string }
+
 export interface FeedbackParams {
+  category: FeedbackCategory;
+  attachment?: FeedbackAttachment;
   message: string;
+  rating: number; // 1-5
   fromName: string;
   fromEmail: string;
   uid?: string;
@@ -78,6 +103,8 @@ export interface FeedbackParams {
 
 export async function sendFeedback(params: FeedbackParams) {
   const jobs: Promise<unknown>[] = [saveToFirestore(params)];
+  // Best-effort public review; its failure never fails the feedback itself.
+  void saveReview(params).catch((e) => console.warn('Could not publish review', e));
   if (emailConfigured()) jobs.push(sendEmail(params));
   const results = await Promise.allSettled(jobs);
   if (results.every((r) => r.status === 'rejected')) {

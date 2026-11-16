@@ -210,6 +210,23 @@ function compareAssetsDefault(a: Asset, b: Asset): number {
   );
 }
 
+/** Where a brand-new holding goes. It has no saved `order`, so by default it
+ *  lands on top of its asset class. But when the person has arranged that
+ *  class A-Z by hand, it is slotted in alphabetically instead. Returns the
+ *  class's new sequence (including `incoming`), or null to keep the default. */
+function planNewHoldingOrder(incoming: Asset, existing: Asset[]): Asset[] | null {
+  const rank = defaultAssetClassRank(incoming);
+  const group = existing
+    .filter((a) => defaultAssetClassRank(a) === rank && !isFullySold(a))
+    .sort(compareAssetsDefault);
+  const byName = (a: Asset, b: Asset) => a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+  // Holdings added after the last manual arrangement have no `order` yet; only
+  // the arranged ones tell us whether the person keeps this class A-Z.
+  const arranged = group.filter((a) => typeof a.order === 'number');
+  if (arranged.length < 2 || arranged.some((a, i) => i > 0 && byName(arranged[i - 1], a) > 0)) return null;
+  return [...group, incoming].sort(byName);
+}
+
 /** Common Indian/US brokers for the "Held in account" dropdown on Stock/ETF
  *  holdings — stored in the same `institution` field the Bank/Institution
  *  field already uses for deposits, so no schema change was needed. */
@@ -454,7 +471,22 @@ function AddWealthPage({
       if (target) {
         await upsertDoc(user, 'assets', mergeHoldings(target, [toSave]));
       } else {
-        await upsertDoc(user, 'assets', toSave);
+        // If this asset class is arranged A-Z by hand, slot the new holding in
+        // alphabetically instead of leaving it on top.
+        const scope = toSave.profileId
+          ? existingAssets.filter((a) => a.profileId === toSave.profileId)
+          : existingAssets;
+        const plan = planNewHoldingOrder(toSave, scope);
+        if (plan) {
+          await upsertDoc(user, 'assets', { ...toSave, order: plan.indexOf(toSave) });
+          await Promise.all(
+            plan.map((a, i) =>
+              a !== toSave && a.order !== i ? upsertDoc(user, 'assets', { ...a, order: i }) : null
+            )
+          ).catch((err) => console.error('Failed to reorder assets', err));
+        } else {
+          await upsertDoc(user, 'assets', toSave);
+        }
       }
       onClose();
     } catch (err) {

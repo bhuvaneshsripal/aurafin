@@ -103,7 +103,7 @@ function Terms() {
       </Section>
       <Section title="Privacy and contact">
         <p>
-          See our <a className="text-brand-600 underline" href="/privacy">Privacy Policy</a> for how data is
+          See our <a className="text-brand-600 underline" href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a> for how data is
           handled. Questions:{' '}
           <a className="text-brand-600 underline" href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
         </p>
