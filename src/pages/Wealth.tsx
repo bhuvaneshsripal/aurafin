@@ -3775,7 +3775,6 @@ function HoldingDetailView({
   onLogTransaction: (t: Transaction) => void | Promise<void>;
   onDeleteDividend?: (t: Transaction) => void | Promise<void>;
 }) {
-  const navigateToStock = useNavigate();
   const livePrices = useLivePricesStore((s) => s.prices);
   const sipValues = useLivePricesStore((s) => s.sipValues);
   const previousCloses = useLivePricesStore((s) => s.previousCloses);
