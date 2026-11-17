@@ -1350,10 +1350,14 @@ input.global-search-input:focus,
 /* Very narrow phones (≤ 380px): slightly tighter buttons so "Sign up" stays on one line. */
 @media (max-width: 380px) { .lp-nav-btn { padding: 0.5rem 0.9rem; } }
 .lp-nav-outline { border: 0; background: transparent; }
+/* "Sign in" and the theme toggle read like the Features / Reviews / Privacy links beside them:
+   same softer colour (ink-2), regular weight, darker only on hover. */
+.lp-nav-outline { color: var(--color-ink-2); font-weight: 400; font-size: 0.92rem; }
+.lp-nav-outline:hover, .lp-theme-btn:hover { color: var(--color-ink); }
 .lp-theme-btn {
   width: 2.5rem; height: 2.5rem; flex-shrink: 0; border-radius: 9999px; cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
-  border: 0; background: transparent; color: inherit;
+  border: 0; background: transparent; color: var(--color-ink-2);
 }
 /* Carousel fills the first screen; the article sits below it and appears on scroll. */
 .lp-main-landing { padding: 0 !important; align-items: stretch !important; }
@@ -1792,3 +1796,9 @@ body[data-no-bottom-fade] [data-bottom-fade] {
 .login-terms { font-size: 0.8125em; line-height: 1.5; margin-top: 1.25em; }
 .login-terms a { text-decoration: underline; color: inherit; }
 .login-terms a:hover { color: var(--color-ink); }
+
+
+/* Overview net-worth chart: fades in once everything has loaded. */
+@keyframes nw-chart-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.nw-chart-in { animation: nw-chart-in 420ms cubic-bezier(.2,.7,.2,1) both; }
+@media (prefers-reduced-motion: reduce) { .nw-chart-in { animation: none; } }

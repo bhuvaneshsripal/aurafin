@@ -319,7 +319,6 @@ function Reveal({ children, className = '' }: { children: ReactNode; className?:
 
 export default function LoginLanding({ onSignup, onDemo, demoLoading, demoError }: Props) {
   const [tab, setTab] = useState<TabKey>('spending');
-  const [paused, setPaused] = useState(false);
   const [openFaq, setOpenFaq] = useState<number[]>([]);
   // Newest 6 real reviews (older ones stay in the database); samples until any exist.
   const [liveReviews, setLiveReviews] = useState<Review[]>([]);
@@ -342,15 +341,14 @@ export default function LoginLanding({ onSignup, onDemo, demoLoading, demoError 
   const heroScale = useHeroScale();
   const showScale = useShowScale();
 
-  // Rotate the phone mockup through its four views.
+  // Rotate the phone mockup through its four views, one every 3 seconds. It keeps going while the
+  // mouse is over it, and tapping a tab simply restarts the 3-second count from that view.
   useEffect(() => {
-    if (paused) return;
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
-    const id = window.setInterval(() => {
+    const id = window.setTimeout(() => {
       setTab((t) => TABS[(TABS.findIndex((x) => x.key === t) + 1) % TABS.length].key);
     }, 3000);
-    return () => window.clearInterval(id);
-  }, [paused]);
+    return () => window.clearTimeout(id);
+  }, [tab]);
 
   // Fade sections in as they scroll into view.
   useEffect(() => {
@@ -398,7 +396,7 @@ export default function LoginLanding({ onSignup, onDemo, demoLoading, demoError 
           </ul>
         </div>
 
-        <div className="fb-hero-visual" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
+        <div className="fb-hero-visual">
           <div className="fb-blob" aria-hidden="true" />
           <div style={{ width: PHONE_W * heroScale, height: PHONE_H * heroScale, position: 'relative' }}>
             <div style={{ width: PHONE_W, height: PHONE_H, transform: `scale(${heroScale})`, transformOrigin: 'top left' }}>

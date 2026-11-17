@@ -4,6 +4,7 @@ import { getNetworkQuality } from '../store/networkStore';
 import { visibleInterval } from '../utils/visibleInterval';
 
 const EVERY_MS = 60_000;
+const FIRST_RUN_DELAY_MS = 8_000;
 
 const SOURCES: { name: string; url: string }[] = [
   { name: CACHE_NAMES.indian, url: '/api/market/indian-indices' },
@@ -36,10 +37,13 @@ export function useBackgroundDataCache() {
         })
       );
     };
-    void run();
+    // Not needed to draw the first screen, and on a weak connection these two requests compete
+    // with the app's own scripts and the live-price fetch -- so the first run waits a few seconds.
+    const firstRun = setTimeout(() => void run(), FIRST_RUN_DELAY_MS);
     const stopPoll = visibleInterval(() => void run(), EVERY_MS);
     return () => {
       stopped = true;
+      clearTimeout(firstRun);
       stopPoll();
     };
   }, []);

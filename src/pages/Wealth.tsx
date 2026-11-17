@@ -53,7 +53,8 @@ import {
 import { useAssetsStore } from '../store/assetsStore';
 import { useSnapshotsStore } from '../store/snapshotsStore';
 import SplitAmount from '../components/SplitAmount';
-import { useLivePricesStore, resolvePreviousClose, isPriceCacheFresh } from '../store/livePricesStore';
+import { useLivePricesStore, resolvePreviousClose, isPriceCacheFresh, isPriceCacheUsable } from '../store/livePricesStore';
+import { useStartupGrace } from '../hooks/useStartupGrace';
 import { formatDate, formatLocaleDate, toIsoDate } from '../utils/date';
 import { AreaGradient, ChartTooltipCard, isoToMs, liveEndDot, makeTickFormatter, niceTimeTicks, paddedDomain, DAY_MS } from '../components/ui/chartKit';
 import { newId } from '../utils/id';
@@ -212,9 +213,9 @@ function compareAssetsDefault(a: Asset, b: Asset): number {
   );
 }
 
-/** Where a brand-new holding goes. It has no saved `order`, so by default it
- *  lands on top of its asset class. But when the person has arranged that
- *  class A-Z by hand, it is slotted in alphabetically instead. Returns the
+/** Where a brand-new holding goes. When the person has arranged that class A-Z by hand,
+ *  it is slotted in alphabetically; otherwise it goes after the class's existing holdings
+ *  (see handleSaveAsset), not on top. Returns the
  *  class's new sequence (including `incoming`), or null to keep the default. */
 function planNewHoldingOrder(incoming: Asset, existing: Asset[]): Asset[] | null {
   const rank = defaultAssetClassRank(incoming);
@@ -487,7 +488,14 @@ function AddWealthPage({
             )
           ).catch((err) => console.error('Failed to reorder assets', err));
         } else {
-          await upsertDoc(user, 'assets', toSave);
+          // No A-Z arrangement to follow: a new holding no longer jumps to the top of its class.
+          // It takes the next place after the holdings already in that class. (With a Sort option
+          // active, the list orders it by that sort anyway, so it lands where the sort puts it.)
+          const rank = defaultAssetClassRank(toSave);
+          const lastOrder = scope
+            .filter((a) => defaultAssetClassRank(a) === rank && typeof a.order === 'number')
+            .reduce((m, a) => Math.max(m, a.order as number), -1);
+          await upsertDoc(user, 'assets', { ...toSave, order: lastOrder + 1 });
         }
       }
       onClose();
@@ -865,7 +873,7 @@ function FilterDropdown({
 }: {
   label: string;
   placeholder: string;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; icon?: ReactNode }[];
   selected: string[];
   onChange: (next: string[]) => void;
   /** Close just this dropdown after an option is picked (the parent
@@ -900,6 +908,7 @@ function FilterDropdown({
                   key={v}
                   className="inline-flex items-center gap-1 bg-primary-soft text-primary-ink text-xs font-medium pl-2 pr-1 py-0.5 rounded-md max-w-full truncate"
                 >
+                  {opt?.icon}
                   {opt?.label ?? v}
                   <span
                     role="button"
@@ -948,6 +957,7 @@ function FilterDropdown({
                   onChange={() => toggleOption(opt.value)}
                   className="h-4 w-4 rounded border-slate-300 accent-brand-600"
                 />
+                {opt.icon}
                 {opt.label}
               </label>
             ))
@@ -1023,6 +1033,14 @@ function AssetsTab({
   );
   const hasSipLinked = sipLinkedAssets.length > 0;
   const sipCached = hasSipLinked && sipLinkedAssets.every((a) => sipValues[a.symbol!.trim()] !== undefined);
+  // After a short grace from page load, an older saved price (up to a week) is shown instead of
+  // loading skeletons on a slow connection; the live poll corrects it silently.
+  const startupGraceOver = useStartupGrace();
+  const pricesCachedStale =
+    hasLivePriced &&
+    startupGraceOver &&
+    isPriceCacheUsable(pricesUpdatedAt) &&
+    liveEquityAssets.every((a) => livePrices[a.symbol!.toUpperCase()] !== undefined);
   const liveGoldAssets = allAssets.filter((a) => a.assetClass === 'gold' && a.quantity && a.quantity > 0);
   const hasLiveGold = liveGoldAssets.length > 0;
   // A failed gold-price fetch (goldPriceError) also counts as "attempted" —
@@ -1031,7 +1049,7 @@ function AssetsTab({
   const goldPriceCached = hasLiveGold && (liveGoldPricePerGram !== null || goldPriceError);
   const totalsReady =
     assetsServerConfirmed &&
-    (!hasLivePriced || pricesAttempted || pricesCached) &&
+    (!hasLivePriced || pricesAttempted || pricesCached || pricesCachedStale) &&
     (!hasSipLinked || sipValuesAttempted || sipCached) &&
     (!hasLiveGold || goldPriceCached);
   // Per-row version of the same readiness check — an asset only needs to
@@ -1138,6 +1156,28 @@ function AssetsTab({
   // Tag filter — tags are typed per asset in the edit form ("Show details"), so this just lists
   // whatever tags exist. Kept in this session only (it isn't synced like the other filters).
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  // Shown only while the "Direct Stock" type is picked: Unknown (bought without analysis) / Known.
+  const [selectedAnalysis, setSelectedAnalysis] = useState<string[]>([]);
+  const analysisOptions = [
+    {
+      value: 'without',
+      label: 'Unknown',
+      icon: (
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-50 dark:bg-red-950/40">
+          <AlertTriangle size={13} strokeWidth={2.25} className="text-red-500" />
+        </span>
+      ),
+    },
+    {
+      value: 'analysed',
+      label: 'Known',
+      icon: (
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-950/40">
+          <CheckCircle2 size={13} strokeWidth={2.25} className="text-emerald-600" />
+        </span>
+      ),
+    },
+  ];
   const [viewingAsset, setViewingAsset] = useState<Asset | null>(null);
   // Viewing an asset swaps the whole tab into a full detail page (like a
   // pushed screen), so the phone/PWA Back button should close it and land
@@ -1793,12 +1833,17 @@ function AssetsTab({
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const filterSheetRef = useSheetSwipeClose(() => setFilterSheetOpen(false));
   useBodyScrollLock(filterSheetOpen);
-  const activeFilterCount = selectedCategories.length + selectedTypes.length + selectedCurrencies.length + selectedTags.length;
+  useEffect(() => {
+    if (!selectedTypes.includes('stock') && selectedAnalysis.length) setSelectedAnalysis([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTypes]);
+  const activeFilterCount = selectedCategories.length + selectedTypes.length + selectedCurrencies.length + selectedTags.length + selectedAnalysis.length;
   const clearAllFilters = () => {
     setSelectedCategories([]);
     setSelectedTypes([]);
     setSelectedCurrencies([]);
     setSelectedTags([]);
+    setSelectedAnalysis([]);
   };
 
 
@@ -1857,7 +1902,11 @@ function AssetsTab({
         const matchesType = selectedTypes.length === 0 || selectedTypes.includes(a.assetClass);
         const matchesCurrency = selectedCurrencies.length === 0 || selectedCurrencies.includes(a.currency);
         const matchesTags = selectedTags.length === 0 || (a.tags ?? []).some((t) => selectedTags.includes(t));
-        return matchesSearch && matchesCategory && matchesType && matchesCurrency && matchesTags;
+        const matchesAnalysis =
+          selectedAnalysis.length === 0 ||
+          a.assetClass !== 'stock' ||
+          selectedAnalysis.includes(a.boughtWithoutAnalysis ? 'without' : 'analysed');
+        return matchesSearch && matchesCategory && matchesType && matchesCurrency && matchesTags && matchesAnalysis;
       })
       .sort(compareAssetsDefault);
 
@@ -1949,6 +1998,11 @@ function AssetsTab({
       sortKey === 'manual'
         ? rows
         : [...rows].sort((a, b) => {
+            // Whatever the sort, the asset-class blocks keep their fixed order (Stock, ETF, SIP,
+            // Commodities, FD/RD, Cash & Savings at the very bottom). The chosen sort only orders
+            // the holdings inside each block, so e.g. Cash & Savings never climbs above stocks.
+            const classDiff = defaultAssetClassRank(a.asset) - defaultAssetClassRank(b.asset);
+            if (classDiff !== 0) return classDiff;
             const dir = sortDir === 'asc' ? 1 : -1;
             const getVal = (r: (typeof rows)[number]): string | number => {
               switch (sortKey) {
@@ -1990,6 +2044,7 @@ function AssetsTab({
     selectedTypes,
     selectedCurrencies,
     selectedTags,
+    selectedAnalysis,
     livePrices,
     sipValues,
     liveGoldPricePerGram,
@@ -2215,6 +2270,9 @@ function AssetsTab({
                 selected={selectedTypes}
                 onChange={setSelectedTypes}
               />
+              {selectedTypes.includes('stock') && (
+                <FilterDropdown label="Analysis" placeholder="Analysis" options={analysisOptions} selected={selectedAnalysis} onChange={setSelectedAnalysis} />
+              )}
               <FilterDropdown label="Tags" placeholder="Tag" options={tagOptions} selected={selectedTags} onChange={setSelectedTags} />
               <FilterDropdown
                 label="Currency"
@@ -2284,6 +2342,9 @@ function AssetsTab({
                 selected={selectedTypes}
                 onChange={setSelectedTypes}
               />
+              {selectedTypes.includes('stock') && (
+                <FilterDropdown closeOnSelect label="Analysis" placeholder="Analysis" options={analysisOptions} selected={selectedAnalysis} onChange={setSelectedAnalysis} />
+              )}
               <FilterDropdown closeOnSelect label="Tags" placeholder="Tag" options={tagOptions} selected={selectedTags} onChange={setSelectedTags} />
               <FilterDropdown
                 closeOnSelect
@@ -2633,7 +2694,19 @@ function AssetsTab({
                     )}
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-ink leading-snug break-words">{a.name}</p>
-                      <p className="text-[11px] text-slate-600 mt-0.5 truncate">{subtitle}</p>
+                      <p className="text-[11px] text-slate-600 mt-0.5 truncate flex items-center gap-1">
+                        <span className="truncate">{subtitle}</span>
+                        {a.boughtWithoutAnalysis && (
+                          <span title="Unknown" aria-label="Unknown" className="shrink-0 inline-flex">
+                            <AlertTriangle size={13} className="text-red-500" />
+                          </span>
+                        )}
+                        {a.boughtWithoutAnalysis === false && (
+                          <span title="Known" aria-label="Known" className="shrink-0 inline-flex">
+                            <CheckCircle2 size={13} className="text-emerald-600" />
+                          </span>
+                        )}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center justify-end gap-0.5">
@@ -2816,6 +2889,12 @@ function AssetsTab({
                         </Td>
                         <Td numeric className="font-normal text-ink-2">
                           {privacyMode ? PRIVACY_DOTS : qtyLabel}
+                          {a.boughtWithoutAnalysis && (
+                            <AlertTriangle size={13} className="inline ml-1 text-red-500" aria-label="Unknown" />
+                          )}
+                          {a.boughtWithoutAnalysis === false && (
+                            <CheckCircle2 size={13} className="inline ml-1 text-emerald-600" aria-label="Known" />
+                          )}
                         </Td>
                         <Td numeric className="font-normal text-ink-2">
                           {a.avgCost ? maskPreciseAmount(a.avgCost, a.currency, privacyMode) : '—'}
@@ -3696,6 +3775,7 @@ function HoldingDetailView({
   onLogTransaction: (t: Transaction) => void | Promise<void>;
   onDeleteDividend?: (t: Transaction) => void | Promise<void>;
 }) {
+  const navigateToStock = useNavigate();
   const livePrices = useLivePricesStore((s) => s.prices);
   const sipValues = useLivePricesStore((s) => s.sipValues);
   const previousCloses = useLivePricesStore((s) => s.previousCloses);
@@ -4238,6 +4318,49 @@ function HoldingDetailView({
           </div>
         );
       })()}
+
+      {asset.symbol && (asset.assetClass === 'stock' || asset.assetClass === 'etf' || asset.assetClass === 'international_equity') && (
+        <div className="grid grid-cols-2 gap-3 pt-2">
+          {/* Both buttons share one look (same background); the colour of the outline says which is
+              which, and the one you picked keeps a thicker outline until you pick the other. */}
+          <button
+            type="button"
+            aria-pressed={asset.boughtWithoutAnalysis === true}
+            onClick={() => {
+              // Marks the holding (red warning icon in the Wealth list) and goes back to the list.
+              // It does not open the add-purchase screen; use the + button at the top for that.
+              if (asset.boughtWithoutAnalysis !== true) void onQuickUpdate({ ...asset, boughtWithoutAnalysis: true, updatedAt: Date.now() });
+              onBack();
+            }}
+            className={`flex items-center justify-center gap-2.5 rounded-2xl border-red-500 bg-surface py-4 px-3 text-ink hover:bg-surface-hover active:scale-[0.98] transition ${
+              asset.boughtWithoutAnalysis === true ? 'border-2' : 'border'
+            }`}
+          >
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-red-50 dark:bg-red-950/40">
+              <AlertTriangle size={17} strokeWidth={2.25} className="text-red-500" />
+            </span>
+            <span className="text-base font-semibold">Unknown</span>
+          </button>
+          <button
+            type="button"
+            aria-pressed={asset.boughtWithoutAnalysis === false}
+            onClick={() => {
+              // Remember the choice (false = known) so the outline stays until "Unknown" is
+              // tapped again, remove the red icon, then go back to the Wealth list.
+              if (asset.boughtWithoutAnalysis !== false) void onQuickUpdate({ ...asset, boughtWithoutAnalysis: false, updatedAt: Date.now() });
+              onBack();
+            }}
+            className={`flex items-center justify-center gap-2.5 rounded-2xl border-emerald-600 bg-surface py-4 px-3 text-ink hover:bg-surface-hover active:scale-[0.98] transition ${
+              asset.boughtWithoutAnalysis === false ? 'border-2' : 'border'
+            }`}
+          >
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-950/40">
+              <CheckCircle2 size={17} strokeWidth={2.25} className="text-emerald-600" />
+            </span>
+            <span className="text-base font-semibold">Known</span>
+          </button>
+        </div>
+      )}
 
       <Modal open={dividendToDelete !== null} onClose={() => setDividendToDelete(null)} title="Delete this dividend?">
         <p className="text-sm text-muted mb-6">

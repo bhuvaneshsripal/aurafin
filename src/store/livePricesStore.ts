@@ -233,3 +233,11 @@ export const PRICE_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 export function isPriceCacheFresh(pricesUpdatedAt: number | null, now: number = Date.now()): boolean {
   return pricesUpdatedAt !== null && now - pricesUpdatedAt <= PRICE_CACHE_MAX_AGE_MS;
 }
+
+/** Oldest saved price that may still be shown (briefly) while the first live fetch is slow.
+ *  Only used after a short startup grace period -- see useStartupGrace. The live poll then
+ *  replaces it silently; the "updated at" line shows how old the data was. */
+export const PRICE_CACHE_USABLE_MS = 7 * 24 * 60 * 60 * 1000;
+export function isPriceCacheUsable(pricesUpdatedAt: number | null, now: number = Date.now()): boolean {
+  return pricesUpdatedAt !== null && now - pricesUpdatedAt <= PRICE_CACHE_USABLE_MS;
+}

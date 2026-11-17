@@ -220,7 +220,7 @@ export default function Login() {
           >
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </button>
-          <button type="button" onClick={() => openAuth('login')} className="btn-press lp-nav-btn lp-nav-outline text-ink lp-desk-only">
+          <button type="button" onClick={() => openAuth('login')} className="btn-press lp-nav-btn lp-nav-outline lp-desk-only">
             Sign in
           </button>
           <button type="button" onClick={() => openAuth('register')} className="btn-press lp-nav-btn bg-brand-600 hover:bg-brand-700 text-white">

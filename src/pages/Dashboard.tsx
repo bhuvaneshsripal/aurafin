@@ -30,7 +30,8 @@ import { useTransactionsStore } from '../store/transactionsStore';
 import { useGoalsStore } from '../store/goalsStore';
 import LoadingDots from '../components/LoadingDots';
 import { useSnapshotsStore } from '../store/snapshotsStore';
-import { useLivePricesStore, isPriceCacheFresh } from '../store/livePricesStore';
+import { useLivePricesStore, isPriceCacheFresh, isPriceCacheUsable } from '../store/livePricesStore';
+import { useStartupGrace } from '../hooks/useStartupGrace';
 import { useUiStore } from '../store/uiStore';
 import { useSyncStatusStore } from '../store/syncStatusStore';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
@@ -125,10 +126,20 @@ export default function Dashboard() {
     isPriceCacheFresh(pricesUpdatedAt) &&
     liveEquityAssets.every((a) => livePrices[a.symbol!.trim().toUpperCase()] !== undefined);
   const sipCached = hasSipLinked && sipLinkedAssets.every((a) => sipValues[a.symbol!.trim()] !== undefined);
+  // Slow / weak connection: a saved price older than 10 minutes used to keep the headline cards
+  // on loading dots until the network answered (up to ~12 s, longer with ISIN/name lookups).
+  // After a short grace period from page load, fall back to the last saved price (up to a week
+  // old) so the numbers appear; the live poll replaces them as soon as a real quote arrives.
+  const startupGraceOver = useStartupGrace();
+  const pricesCachedStale =
+    hasLivePriced &&
+    startupGraceOver &&
+    isPriceCacheUsable(pricesUpdatedAt) &&
+    liveEquityAssets.every((a) => livePrices[a.symbol!.trim().toUpperCase()] !== undefined);
   const netWorthReady =
     assetsServerConfirmed &&
     liabilitiesServerConfirmed &&
-    (!hasLivePriced || pricesAttempted || pricesCached) &&
+    (!hasLivePriced || pricesAttempted || pricesCached || pricesCachedStale) &&
     (!hasSipLinked || sipValuesAttempted || sipCached) &&
     goldReady;
 
@@ -231,10 +242,15 @@ export default function Dashboard() {
   // XIRR: the annualised return on every dated buy, sale and installment, with today's value of
   // what is still held as the last flow. Built from the same P&L engine output as the cards above
   // (sold holdings included, so it is the lifetime return, not only the return on what is left).
-  // It does not change with the Net worth arrow toggle. Recomputed with the live prices.
+  // It does not change with the Net worth arrow toggle.
+  // It is NOT recalculated on every live price tick: the figure stays put until the refresh icon on
+  // the card is tapped. It is (re)built only when the first real prices arrive, when the holdings
+  // themselves change (a buy, a sale, an edit, switching profile), or on that manual refresh.
+  const [xirrTick, setXirrTick] = useState(0);
   const xirr = useMemo(
     () => computePortfolioXirr(portfolioPnl, livePrices, sipValues, liveGoldPricePerGram),
-    [portfolioPnl, livePrices, sipValues, liveGoldPricePerGram]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [profileAssets, netWorthReady, xirrTick]
   );
 
   // Small refresh button on the XIRR card: pulls fresh share prices, the gold rate and mutual-fund
@@ -306,6 +322,7 @@ export default function Dashboard() {
     await Promise.allSettled([equities(), gold(), sips()]).then((r) => {
       if (r.some((x) => x.status === 'rejected')) anyFailure = true;
     });
+    setXirrTick((t) => t + 1); // rebuild the XIRR from the prices just fetched
     if (anySuccess || !anyFailure) setXirrUpdatedAt(Date.now());
     if (anyFailure && !anySuccess) setXirrRefreshFailed(true);
     setXirrRefreshing(false);
@@ -923,6 +940,18 @@ function NetWorthOverTimeCard({
         }
       />
 
+      {!ready ? (
+        <div className="nw-chart-skeleton" aria-busy="true" aria-label="Loading net worth chart">
+          <Skeleton className="h-4 w-44 mb-3" />
+          <div className="relative h-[220px] rounded-xl overflow-hidden">
+            <Skeleton className="absolute inset-0 h-full w-full rounded-xl opacity-60" />
+            <svg className="absolute inset-0 h-full w-full text-slate-300 dark:text-slate-600" viewBox="0 0 300 120" preserveAspectRatio="none" aria-hidden>
+              <path d="M0 95 C40 90 60 60 100 62 S160 50 200 40 S260 20 300 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" vectorEffect="non-scaling-stroke" strokeDasharray="4 6" />
+            </svg>
+          </div>
+        </div>
+      ) : (
+      <div className="nw-chart-in">
       {data.length > 0 && (
         <div className="flex items-baseline gap-2 mb-3">
           <span className="text-xs text-muted">
@@ -1043,6 +1072,8 @@ function NetWorthOverTimeCard({
             </PinnedChartTooltip>
           )}
         </div>
+      )}
+      </div>
       )}
     </Card>
   );

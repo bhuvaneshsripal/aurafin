@@ -483,7 +483,34 @@ export default defineConfig({
       },
     }),
   ],
+  // Dev server only (`npm run dev`). Without this, Vite finds dependencies one by one while the
+  // page loads, re-bundles them, and reloads the page -- the slow first open you see on localhost.
+  // Listing the ones every signed-in screen uses pre-bundles them once, up front.
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'react-dom/client',
+      'react/jsx-runtime',
+      'react-router-dom',
+      'zustand',
+      'zustand/middleware',
+      'clsx',
+      'firebase/app',
+      'firebase/auth',
+      'firebase/firestore',
+      'firebase/analytics',
+      'recharts',
+      'lucide-react',
+      'framer-motion',
+    ],
+  },
   server: {
+    // Transform the app's entry files as soon as the server starts, so the first request
+    // doesn't wait for them.
+    warmup: {
+      clientFiles: ['./src/main.tsx', './src/App.tsx', './src/pages/Dashboard.tsx', './src/pages/Wealth.tsx'],
+    },
     // Pinned so the app always runs at the same origin. Firebase Auth
     // persistence (and all other localStorage/IndexedDB data) is scoped
     // per-origin *including the port* — if Vite falls back to a different

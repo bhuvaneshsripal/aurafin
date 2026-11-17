@@ -132,7 +132,7 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
 
   return (
     <>
-      <div className={isFab ? 'relative' : 'relative'} ref={ref}>
+      <div className={!isFab && !isHeader ? 'relative z-[2]' : 'relative'} ref={ref}>
         {menuOpen && isFab && (
           <div
             className={`fixed inset-0 z-20 ${isCenter ? 'fan-backdrop' : 'bg-slate-900/30'}`}
@@ -275,6 +275,18 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
               aria-hidden="true"
             />,
             document.body,
+          )}
+
+        {menuOpen && !isFab && !isHeader && document.getElementById('app-topbar') &&
+          createPortal(
+            // Same dim + soften, drawn INSIDE the top bar so the bar itself is dimmed too.
+            // It sits under this Add button and its menu (z-[2] above), which stay bright.
+            <div
+              className="animate-backdrop-in absolute inset-0 z-[1] bg-slate-900/30 backdrop-blur-[3px]"
+              onClick={() => setMenuOpen(false)}
+              aria-hidden="true"
+            />,
+            document.getElementById('app-topbar')!,
           )}
 
         {menuOpen && !isFab && !isHeader && (

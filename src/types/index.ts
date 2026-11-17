@@ -298,6 +298,8 @@ export interface Asset {
   investedValue?: number;
   /** Absolute profit (positive) or loss (negative) = value - investedValue. */
   pnl?: number;
+  /** True when bought via "Buy directly" (without analysing the stock first). Shows a warning icon in the list. */
+  boughtWithoutAnalysis?: boolean;
   /** P&L expressed as a percentage of investedValue. */
   pnlPercent?: number;
   /** Bank / AMC / issuer name — used for deposits, bonds, and similar instruments. */

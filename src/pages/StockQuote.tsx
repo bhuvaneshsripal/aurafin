@@ -478,8 +478,28 @@ export default function StockQuote() {
             </div>
           </div>
 
+          {/* ------------------------------------------------ buy / analyse */}
+          <div className="mt-6 grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => navigate('/wealth', { state: { startAddAsset: 'equity', startStep: 'type' } })}
+              className="flex flex-col items-center justify-center gap-0.5 rounded-2xl border border-line bg-surface py-3.5 text-ink-2 transition-colors hover:bg-surface-hover"
+            >
+              <span className="font-semibold">Buy directly</span>
+              <span className="text-[11px] text-muted">Skip analysis</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => document.getElementById('stock-analysis')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              className="flex flex-col items-center justify-center gap-0.5 rounded-2xl bg-brand-600 py-3.5 text-white transition-colors hover:bg-brand-700"
+            >
+              <span className="font-semibold">Analyse first</span>
+              <span className="text-[11px] text-white/80">Check long-term quality</span>
+            </button>
+          </div>
+
           {/* ---------------------------------------------------------- details */}
-          <div className="mt-10 space-y-12 sm:mt-12 sm:space-y-14">
+          <div id="stock-analysis" className="mt-10 scroll-mt-4 space-y-12 sm:mt-12 sm:space-y-14">
             {detailState === 'loading' && !detail ? (
               <DetailSkeleton />
             ) : detail ? (
