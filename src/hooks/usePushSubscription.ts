@@ -239,8 +239,18 @@ export async function sendTestPush(): Promise<PushTestResult> {
     const token = await auth.currentUser?.getIdToken();
     if (!token) return { ok: false, devices: 0, sent: 0, error: 'Sign in first.' };
     const res = await fetch('/api/push/test', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
-    const body = await res.json().catch(() => ({}));
-    return { devices: 0, sent: 0, ...body, ok: !!body.ok, error: body.error };
+    const text = await res.text();
+    let body: Record<string, unknown> | null = null;
+    try { body = JSON.parse(text); } catch { /* not JSON */ }
+    // The server did not answer with our JSON: the function is missing (404) or crashed (500).
+    if (!body || typeof body !== 'object' || !('devices' in body || 'server' in body || 'error' in body)) {
+      const hint =
+        res.status === 404
+          ? 'The push server route /api/push/test was not found on this deployment. Push the latest code (the api/push folder) to GitHub and redeploy on Vercel.'
+          : `The push server crashed or sent an unreadable reply. Open Vercel > your project > Logs (filter /api/push/test) to see why.`;
+      return { ok: false, devices: 0, sent: 0, error: `HTTP ${res.status}. ${hint}` };
+    }
+    return { devices: 0, sent: 0, ...(body as object), ok: !!body.ok, error: body.error as string | undefined };
   } catch (err) {
     return { ok: false, devices: 0, sent: 0, error: err instanceof Error ? err.message : 'Network error' };
   }
