@@ -1075,7 +1075,16 @@ function ClosedAppAlertsCard() {
         result.projectId && CLIENT_PROJECT_ID && result.projectId !== CLIENT_PROJECT_ID
           ? `The server is connected to a different Firebase project ("${result.projectId}") than this app ("${CLIENT_PROJECT_ID}"). Replace FIREBASE_SERVICE_ACCOUNT on Vercel with a key from "${CLIENT_PROJECT_ID}", then redeploy.`
           : `No device registered yet. (Server checked project "${result.projectId ?? '?'}", account ${result.uid?.slice(0, 6) ?? '?'}…, yours is ${uid?.slice(0, 6) ?? '?'}…) Tap again; if it repeats, send me this line.`;
-    else if (result.sent === 0) message = 'The push service rejected the message. Turn notifications off and on again, then retry.';
+    else if (result.sent === 0) {
+      const e = result.errors?.[0];
+      const why =
+        e?.status === 401 || e?.status === 403
+          ? 'The VAPID keys do not match: VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY on Vercel must be the SAME pair, and VITE_VAPID_PUBLIC_KEY must equal VAPID_PUBLIC_KEY. Fix on Vercel, redeploy, then tap the button again.'
+          : e?.status === 400
+            ? 'VAPID_SUBJECT is invalid. Set it to mailto:you@gmail.com on Vercel and redeploy.'
+            : 'Tap the button once more (it now refreshes this phone\'s registration).';
+      message = `The push service rejected the message${e ? ` (${e.host || 'push service'}, HTTP ${e.status ?? '?'}${e.body ? `: ${e.body}` : ''})` : ''}. ${why}`;
+    }
     else message = `Test sent to ${result.sent} device${result.sent === 1 ? '' : 's'}. If it did not appear, check the phone's notification settings for this app/browser.`;
   } else if (!message && enabledNow) {
     message = 'Registered.';

@@ -31,6 +31,7 @@ export default async function handler(req, res) {
     const snap = await getFirestore().collection('users').doc(uid).collection('pushSubscriptions').get();
     let sent = 0;
     let failed = 0;
+    const errors = [];
     await Promise.all(
       snap.docs.map(async (d) => {
         const sub = d.data();
@@ -44,13 +45,14 @@ export default async function handler(req, res) {
           sent++;
         } catch (err) {
           failed++;
+          errors.push({ status: err?.statusCode ?? null, body: String(err?.body ?? err?.message ?? err).slice(0, 300), host: (() => { try { return new URL(sub.endpoint).host; } catch { return ''; } })() });
           if (err?.statusCode === 404 || err?.statusCode === 410) await d.ref.delete().catch(() => {});
         }
       })
     );
     let projectId = '';
     try { projectId = String(getApp().options.projectId ?? ''); } catch { /* ignore */ }
-    return res.status(200).json({ ok: sent > 0, server, devices: snap.size, sent, failed, uid, projectId });
+    return res.status(200).json({ ok: sent > 0, server, devices: snap.size, sent, failed, errors, uid, projectId });
   } catch (err) {
     return res.status(500).json({ error: String(err?.message ?? err), server });
   }

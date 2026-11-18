@@ -52,6 +52,20 @@ export const pushSupported = () =>
   VAPID_PUBLIC_KEY !== '' &&
   VAPID_KEY_BYTES !== null;
 
+/** Subscribes, first dropping an old subscription made with a different VAPID key (the push service rejects those). */
+async function freshSubscription(reg: ServiceWorkerRegistration): Promise<PushSubscription> {
+  let sub = await reg.pushManager.getSubscription();
+  if (sub) {
+    const cur = sub.options?.applicationServerKey;
+    const same = cur && VAPID_KEY_BYTES && cur.byteLength === VAPID_KEY_BYTES.length && new Uint8Array(cur).every((b, i) => b === VAPID_KEY_BYTES![i]);
+    if (!same) {
+      try { await sub.unsubscribe(); } catch { /* ignore */ }
+      sub = null;
+    }
+  }
+  return sub ?? reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: VAPID_KEY_BYTES! });
+}
+
 /** Why push can't work on this device right now (shown in Settings), or null if it can. */
 export function pushBlocker(): string | null {
   if (typeof window === 'undefined') return 'Not available here.';
@@ -81,8 +95,7 @@ export async function enablePushNow(uid: string): Promise<string | null> {
     const perm = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
     if (perm !== 'granted') return 'Permission was not given. Allow notifications when asked, or enable them in site settings.';
     const reg = await navigator.serviceWorker.ready;
-    let sub = await reg.pushManager.getSubscription();
-    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: VAPID_KEY_BYTES! });
+    const sub = await freshSubscription(reg);
     const json = sub.toJSON();
     const ref = doc(db, 'users', uid, 'pushSubscriptions', await deviceId(sub.endpoint));
     await setDoc(
@@ -182,13 +195,7 @@ export function usePushSubscription() {
     void (async () => {
       try {
         const reg = await navigator.serviceWorker.ready;
-        let sub = await reg.pushManager.getSubscription();
-        if (!sub) {
-          sub = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: VAPID_KEY_BYTES!,
-          });
-        }
+        const sub = await freshSubscription(reg);
         if (cancelled) return;
         const json = sub.toJSON();
         const regKey = `aurafin-push-reg:${uid}`;
@@ -230,6 +237,8 @@ export type PushTestResult = {
   /** Which account / Firebase project the server looked in (for diagnosing "no device"). */
   uid?: string;
   projectId?: string;
+  failed?: number;
+  errors?: { status: number | null; body: string; host: string }[];
 };
 
 /** Asks the server to push a test notification to every device signed in to this account. */
