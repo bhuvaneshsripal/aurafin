@@ -28,6 +28,7 @@ import { fetchFxRate } from '../utils/marketPrices';
 import { CURRENCY_SYMBOLS } from '../utils/currency';
 import { loadImageFromFile } from '../utils/imageResize';
 import { formatDateTime } from '../utils/date';
+import { sendTestDigest } from '../utils/weeklyDigestApi';
 import AvatarCropModal from '../components/AvatarCropModal';
 import BasicDetailsCard from '../components/BasicDetailsCard';
 import {
@@ -1113,22 +1114,39 @@ function ClosedAppAlertsCard() {
 function NotificationsCard() {
   const prefs = useNotificationPreferencesStore((s) => s.prefs);
   const toggle = useNotificationPreferencesStore((s) => s.toggle);
+  const email = useAuthStore((s) => s.user?.email);
+  const guest = (useAuthStore((s) => s.user) as { isAnonymous?: boolean } | null)?.isAnonymous === true;
+  const [digestBusy, setDigestBusy] = useState(false);
+  const [digestMsg, setDigestMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const hints: Record<string, string> = {
+    'Weekly portfolio digest': email
+      ? `Every Saturday at 10:00 AM IST to ${email}: portfolio value, week's gainers and losers, allocation.`
+      : 'Every Saturday at 10:00 AM IST, sent to your account email.',
+    'Budget alerts': 'A bell notification when a category reaches 80% and again at 100% of its monthly budget.',
+  };
+
+  const sendNow = async () => {
+    setDigestBusy(true);
+    setDigestMsg(null);
+    const r = await sendTestDigest();
+    setDigestMsg({ ok: r.ok, text: r.message });
+    setDigestBusy(false);
+  };
 
   return (
     <Card>
-      <div className="flex items-center gap-2 mb-4">
-        <h2 className="text-sm font-semibold text-ink">Notifications</h2>
-        <span className="text-xs font-medium text-brand-600 bg-brand-50 dark:bg-brand-500/10 dark:text-brand-400 px-2 py-0.5 rounded-full">
-          Coming Soon
-        </span>
-      </div>
+      <h2 className="text-sm font-semibold text-ink mb-4">Notifications</h2>
       <div className="space-y-2">
         {NOTIFICATION_ROWS.map((row) => (
           <div
             key={row.title}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-slate-50 dark:bg-slate-800/40 px-4 py-3 opacity-60"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-slate-50 dark:bg-slate-800/40 px-4 py-3"
           >
-            <span className="text-sm font-medium text-ink">{row.title}</span>
+            <div className="min-w-0 flex-1">
+              <span className="text-sm font-medium text-ink">{row.title}</span>
+              <p className="text-xs text-muted mt-0.5">{hints[row.title]}</p>
+            </div>
             <div className="flex items-center gap-5">
               {row.channels.map(({ key, label, icon: Icon }) => (
                 <div key={key} className="flex items-center gap-2">
@@ -1138,7 +1156,6 @@ function NotificationsCard() {
                     checked={prefs[key]}
                     onChange={() => toggle(key)}
                     label={`${label} notifications for ${row.title}`}
-                    disabled
                   />
                 </div>
               ))}
@@ -1147,6 +1164,20 @@ function NotificationsCard() {
         ))}
       </div>
 
+      {!guest && (
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={sendNow}
+            disabled={digestBusy}
+            className="btn-press inline-flex items-center justify-center gap-2 rounded-xl border border-line px-4 h-10 text-sm font-medium text-ink disabled:opacity-60"
+          >
+            <Mail size={14} />
+            {digestBusy ? 'Sending…' : 'Email me this week\u2019s digest now'}
+          </button>
+          {digestMsg && <p className={`text-xs mt-3 ${digestMsg.ok ? 'text-muted' : 'text-red-500'}`}>{digestMsg.text}</p>}
+        </div>
+      )}
     </Card>
   );
 }

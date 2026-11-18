@@ -1,0 +1,26 @@
+# Every Saturday 10:00 AM IST (04:30 UTC) emails each person their weekly portfolio digest.
+# Two later runs (05:30 and 06:30 UTC) are a safety net in case GitHub's scheduler is late or
+# skips one; the server sends each person's digest only once per Saturday.
+#
+# Uses the same two secrets as push-alerts.yml: APP_URL and CRON_SECRET.
+# The server also needs SMTP_USER and SMTP_PASS on Vercel (see PUSH_SETUP.md).
+name: Weekly digest email
+
+on:
+  schedule:
+    - cron: '30 4 * * 6'
+    - cron: '30 5 * * 6'
+    - cron: '30 6 * * 6'
+  workflow_dispatch: {}
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the digest sender
+        run: |
+          code=$(curl --silent --show-error --max-time 120 -o body.txt -w '%{http_code}' \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.APP_URL }}/api/push/send?digest=1")
+          cat body.txt; echo
+          [ "$code" = "200" ] || { echo "Digest sender returned HTTP $code"; exit 1; }

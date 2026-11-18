@@ -2,7 +2,7 @@ import { SHORTCUT_HINT } from '../config/shortcuts';
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
-import { Activity, ArrowLeft, Bell, BellOff, BellRing, MoreHorizontal, Moon, Sunrise, Trash2, TrendingUp, type LucideIcon } from 'lucide-react';
+import { Activity, ArrowLeft, Bell, BellOff, BellRing, MoreHorizontal, Moon, Sunrise, Trash2, TrendingUp, Wallet, type LucideIcon } from 'lucide-react';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { IconButton } from './ui';
 import { getIstDateInfo } from '../utils/marketHours';
@@ -19,6 +19,7 @@ const KIND_META: Record<AlertKind, { icon: LucideIcon; tint: string }> = {
   market: { icon: Activity, tint: 'bg-red-500/15 text-red-500' },
   up: { icon: TrendingUp, tint: 'bg-emerald-500/15 text-emerald-600' },
   down: { icon: Activity, tint: 'bg-red-500/15 text-red-500' },
+  budget: { icon: Wallet, tint: 'bg-amber-500/15 text-amber-600' },
 };
 
 /** Instagram-style short time: now, 5m, 2h, 3d, then a date. */

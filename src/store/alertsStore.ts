@@ -1,11 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type AlertKind = 'pre-open' | 'open' | 'close' | 'market' | 'up' | 'down';
+export type AlertKind = 'pre-open' | 'open' | 'close' | 'market' | 'up' | 'down' | 'budget';
 
 /** Kinds shown in the bell list: every alert that also reaches the phone's
  *  notification bar, including each holding's up/down move. */
-export const LIST_KINDS: AlertKind[] = ['pre-open', 'open', 'close', 'market', 'up', 'down'];
+export const LIST_KINDS: AlertKind[] = ['pre-open', 'open', 'close', 'market', 'up', 'down', 'budget'];
 
 export interface AlertItem {
   id: string;

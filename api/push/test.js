@@ -10,10 +10,29 @@ import { configureWebPush, initFirebaseAdmin } from '../_lib/pushEnv.js';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getApp } from 'firebase-admin/app';
+import { runWeeklyDigest } from '../_lib/digest.js';
+import { mailConfigured } from '../_lib/mail.js';
 
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+
+  // POST /api/push/test?digest=1  ->  emails the signed-in person their weekly digest right now.
+  if (req.query?.digest) {
+    try {
+      if (!process.env.FIREBASE_SERVICE_ACCOUNT) return res.status(200).json({ ok: false, error: 'FIREBASE_SERVICE_ACCOUNT is not set on Vercel.' });
+      if (!mailConfigured()) return res.status(200).json({ ok: false, error: 'Email is not set up on the server yet: add SMTP_USER and SMTP_PASS on Vercel and redeploy (see PUSH_SETUP.md).' });
+      initFirebaseAdmin();
+      const token = String(req.headers.authorization ?? '').replace(/^Bearer /, '');
+      if (!token) return res.status(401).json({ ok: false, error: 'Sign in first' });
+      const { uid } = await getAuth().verifyIdToken(token);
+      const out = await runWeeklyDigest(getFirestore(), { onlyUid: uid, test: true });
+      const reason = Object.keys(out.skipped)[0];
+      return res.status(200).json({ ok: out.sent > 0, sent: out.sent, error: out.errors[0]?.error ?? (out.sent ? undefined : reason) });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: String(err?.message ?? err) });
+    }
+  }
   const server = {
     vapid: !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY),
     serviceAccount: !!process.env.FIREBASE_SERVICE_ACCOUNT,

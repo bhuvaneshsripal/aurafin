@@ -78,3 +78,36 @@ replaces an older one still waiting, so you get the latest, not a pile.
   `APP_URL/api/push/send` every 5 minutes with the header
   `Authorization: Bearer <CRON_SECRET>`.
 - Open the app once on the device: it re-registers itself with the push service.
+
+## Weekly portfolio digest email (Saturday 10:00 AM IST)
+Settings > Notifications > "Weekly portfolio digest". The server emails it, so it
+arrives whether or not the app is open.
+
+1. Add two more environment variables on Vercel, then **redeploy**:
+
+   | Name | Value |
+   | --- | --- |
+   | `SMTP_USER` | the mailbox that sends, e.g. `yourname@gmail.com` |
+   | `SMTP_PASS` | for Gmail, an **App password** (Google Account > Security > 2-Step Verification > App passwords). Not your normal password. |
+
+   Optional: `SMTP_HOST` (default `smtp.gmail.com`), `SMTP_PORT` (default `465`), `MAIL_FROM` (default `Aurafin <SMTP_USER>`).
+2. `.github/workflows/weekly-digest.yml` calls the server at 10:00 AM IST every
+   Saturday (plus two later safety-net runs; each person gets it once per Saturday).
+   It uses the same `APP_URL` and `CRON_SECRET` GitHub secrets as the other workflows.
+3. Test it: Settings > Notifications > **Email me this week's digest now**, or run
+   the "Weekly digest email" workflow from the Actions tab.
+
+Where the numbers come from:
+- While the app is open it saves your holdings (valued exactly like the Dashboard)
+  to Firestore. The server re-prices stocks / ETFs at send time (latest close) and
+  compares with the close one week earlier for "this week".
+- Mutual funds, SIPs, gold and deposits are shown as of your last visit to the app
+  (the email prints that date). Open the app on Friday evening or Saturday morning
+  for the freshest figures.
+- Week-over-week figures cover stocks and ETFs only and ignore units bought or sold
+  during the week.
+- The email is only sent to the account's sign-in email. Guest accounts get none.
+
+## Budget alerts
+Settings > Notifications > "Budget alerts" adds a bell notification inside the app when a
+category reaches 80% and 100% of its monthly budget (checked while the app is open).
