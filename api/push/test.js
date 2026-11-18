@@ -9,6 +9,7 @@ import webpush from 'web-push';
 import { configureWebPush, initFirebaseAdmin } from '../_lib/pushEnv.js';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getApp } from 'firebase-admin/app';
 
 
 export default async function handler(req, res) {
@@ -47,7 +48,9 @@ export default async function handler(req, res) {
         }
       })
     );
-    return res.status(200).json({ ok: sent > 0, server, devices: snap.size, sent, failed });
+    let projectId = '';
+    try { projectId = String(getApp().options.projectId ?? ''); } catch { /* ignore */ }
+    return res.status(200).json({ ok: sent > 0, server, devices: snap.size, sent, failed, uid, projectId });
   } catch (err) {
     return res.status(500).json({ error: String(err?.message ?? err), server });
   }

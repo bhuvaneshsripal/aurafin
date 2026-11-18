@@ -18,7 +18,7 @@ import { useAppLockStore } from '../store/appLockStore';
 import { useDisplaySettingsStore, FONT_MIN_SCALE, FONT_MAX_SCALE, SCREEN_MIN_SCALE, SCREEN_MAX_SCALE } from '../store/displaySettingsStore';
 import { useAlertsStore } from '../store/alertsStore';
 import { useGoldSettingsStore } from '../store/goldSettingsStore';
-import { enablePushNow, pushBlocker, sendTestPush, type PushTestResult } from '../hooks/usePushSubscription';
+import { CLIENT_PROJECT_ID, enablePushNow, pushBlocker, sendTestPush, type PushTestResult } from '../hooks/usePushSubscription';
 import { useNotificationPreferencesStore, HOLDING_MOVE_OPTIONS, type NotificationChannelKey } from '../store/notificationPreferencesStore';
 import InfoTip from '../components/ui/InfoTip';
 import PinBoxInput, { type PinBoxInputHandle } from '../components/PinBoxInput';
@@ -1070,7 +1070,11 @@ function ClosedAppAlertsCard() {
     if (result.server && (!result.server.vapid || !result.server.serviceAccount))
       message = 'This phone is registered, but the server push keys (VAPID_* / FIREBASE_SERVICE_ACCOUNT) are missing on Vercel. Add them and redeploy (see PUSH_SETUP.md).';
     else if (result.error) message = `Could not send: ${result.error}`;
-    else if (result.devices === 0) message = 'No device registered yet. Try again.';
+    else if (result.devices === 0)
+      message =
+        result.projectId && CLIENT_PROJECT_ID && result.projectId !== CLIENT_PROJECT_ID
+          ? `The server is connected to a different Firebase project ("${result.projectId}") than this app ("${CLIENT_PROJECT_ID}"). Replace FIREBASE_SERVICE_ACCOUNT on Vercel with a key from "${CLIENT_PROJECT_ID}", then redeploy.`
+          : `No device registered yet. (Server checked project "${result.projectId ?? '?'}", account ${result.uid?.slice(0, 6) ?? '?'}…, yours is ${uid?.slice(0, 6) ?? '?'}…) Tap again; if it repeats, send me this line.`;
     else if (result.sent === 0) message = 'The push service rejected the message. Turn notifications off and on again, then retry.';
     else message = `Test sent to ${result.sent} device${result.sent === 1 ? '' : 's'}. If it did not appear, check the phone's notification settings for this app/browser.`;
   } else if (!message && enabledNow) {

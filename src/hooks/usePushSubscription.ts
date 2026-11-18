@@ -41,6 +41,9 @@ async function deviceId(endpoint: string): Promise<string> {
     .join('');
 }
 
+/** The Firebase project this build of the app talks to. */
+export const CLIENT_PROJECT_ID = String(import.meta.env.VITE_FIREBASE_PROJECT_ID ?? '');
+
 export const pushSupported = () =>
   typeof window !== 'undefined' &&
   'serviceWorker' in navigator &&
@@ -224,6 +227,9 @@ export type PushTestResult = {
   devices: number;
   sent: number;
   error?: string;
+  /** Which account / Firebase project the server looked in (for diagnosing "no device"). */
+  uid?: string;
+  projectId?: string;
 };
 
 /** Asks the server to push a test notification to every device signed in to this account. */
