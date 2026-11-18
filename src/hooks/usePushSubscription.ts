@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { deleteDoc, doc, setDoc } from 'firebase/firestore';
+import { deleteDoc, doc, getDocFromServer, setDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuthStore } from '../store/authStore';
 import { useAlertsStore } from '../store/alertsStore';
@@ -72,18 +72,24 @@ export async function enablePushNow(uid: string): Promise<string | null> {
   const blocked = pushBlocker();
   if (blocked) return blocked;
   try {
+    // Turn alerts on FIRST. The background registration effect deletes this device's
+    // record whenever alerts are off, so doing this after the save could erase it again.
+    useAlertsStore.getState().setEnabled(true);
     const perm = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
     if (perm !== 'granted') return 'Permission was not given. Allow notifications when asked, or enable them in site settings.';
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
     if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: VAPID_KEY_BYTES! });
     const json = sub.toJSON();
+    const ref = doc(db, 'users', uid, 'pushSubscriptions', await deviceId(sub.endpoint));
     await setDoc(
-      doc(db, 'users', uid, 'pushSubscriptions', await deviceId(sub.endpoint)),
+      ref,
       { endpoint: sub.endpoint, keys: json.keys ?? {}, expirationTime: sub.expirationTime ?? null, userAgent: navigator.userAgent.slice(0, 200), updatedAt: Date.now() },
       { merge: true }
     );
-    try { useAlertsStore.getState().setEnabled(true); } catch { /* ignore */ }
+    // Make sure the server really has it (not just this phone's offline copy).
+    const saved = await getDocFromServer(ref).catch(() => null);
+    if (!saved?.exists()) return 'Could not save this phone to the server. Check your internet connection and try again.';
     return null;
   } catch (err) {
     return `Could not register this device: ${err instanceof Error ? err.message : String(err)}`;

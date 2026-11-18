@@ -9,7 +9,6 @@ import Modal from '../components/Modal';
 import SignUpScreen from '../components/SignUpScreen';
 import InstallBanner from '../components/InstallBanner';
 import InstallPromptModal from '../components/InstallPromptModal';
-import LoginUpdateButton from '../components/LoginUpdateButton';
 import AccessPasswordModal from '../components/AccessPasswordModal';
 
 function FieldError({ message }: { message: string }) {
@@ -225,7 +224,6 @@ export default function Login() {
             <a href="#faq">FAQ</a>
             <a href="/calculators">Calculators</a>
           </div>
-          <LoginUpdateButton />
           <button
             type="button"
             onClick={toggleTheme}
