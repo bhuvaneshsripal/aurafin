@@ -18,7 +18,7 @@ import { useAppLockStore } from '../store/appLockStore';
 import { useDisplaySettingsStore, FONT_MIN_SCALE, FONT_MAX_SCALE, SCREEN_MIN_SCALE, SCREEN_MAX_SCALE } from '../store/displaySettingsStore';
 import { useAlertsStore } from '../store/alertsStore';
 import { useGoldSettingsStore } from '../store/goldSettingsStore';
-import { pushSupported, sendTestPush, type PushTestResult } from '../hooks/usePushSubscription';
+import { enablePushNow, pushBlocker, sendTestPush, type PushTestResult } from '../hooks/usePushSubscription';
 import { useNotificationPreferencesStore, HOLDING_MOVE_OPTIONS, type NotificationChannelKey } from '../store/notificationPreferencesStore';
 import InfoTip from '../components/ui/InfoTip';
 import PinBoxInput, { type PinBoxInputHandle } from '../components/PinBoxInput';
@@ -1043,36 +1043,54 @@ const NOTIFICATION_ROWS: { title: string; channels: NotificationChannel[] }[] = 
 
 /** Lets the person check that alerts reach this phone even when the app is closed. */
 function ClosedAppAlertsCard() {
+  const uid = useAuthStore((st) => st.user?.uid);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<PushTestResult | null>(null);
-  const supported = pushSupported();
+  const [enableError, setEnableError] = useState<string | null>(null);
+  const [enabledNow, setEnabledNow] = useState(false);
+  const blocker = pushBlocker();
+  const permission = typeof Notification === 'undefined' ? 'denied' : Notification.permission;
 
+  // One tap: allow notifications, register this phone, then send a test to it.
   const run = async () => {
+    if (!uid) return;
     setBusy(true);
-    setResult(await sendTestPush());
+    setResult(null);
+    const err = await enablePushNow(uid);
+    setEnableError(err);
+    if (!err) {
+      setEnabledNow(true);
+      setResult(await sendTestPush());
+    }
     setBusy(false);
   };
 
-  let message: string | null = null;
-  if (result) {
-    if (result.server && (!result.server.vapid || !result.server.serviceAccount)) message = 'Server push keys missing.';
+  let message: string | null = enableError ?? blocker;
+  if (!message && result) {
+    if (result.server && (!result.server.vapid || !result.server.serviceAccount))
+      message = 'This phone is registered, but the server push keys (VAPID_* / FIREBASE_SERVICE_ACCOUNT) are missing on Vercel. Add them and redeploy (see PUSH_SETUP.md).';
     else if (result.error) message = `Could not send: ${result.error}`;
-    else if (result.devices === 0) message = 'No device registered.';
-    else if (result.sent === 0) message = 'Push was rejected.';
-    else message = `Sent to ${result.sent} device${result.sent === 1 ? '' : 's'}.`;
+    else if (result.devices === 0) message = 'No device registered yet. Try again.';
+    else if (result.sent === 0) message = 'The push service rejected the message. Turn notifications off and on again, then retry.';
+    else message = `Test sent to ${result.sent} device${result.sent === 1 ? '' : 's'}. If it did not appear, check the phone's notification settings for this app/browser.`;
+  } else if (!message && enabledNow) {
+    message = 'Registered.';
   }
 
   return (
     <Card>
-      <h2 className="text-sm font-semibold text-ink mb-4">Alerts when the app is closed</h2>
+      <h2 className="text-sm font-semibold text-ink mb-1">Alerts when the app is closed</h2>
+      <p className="text-xs text-muted mb-4">
+        {permission === 'granted' ? 'Notifications are allowed on this device.' : 'Tap the button to allow notifications on this phone.'}
+      </p>
       <button
         type="button"
         onClick={run}
-        disabled={busy || !supported}
+        disabled={busy || !uid}
         className="btn-press inline-flex items-center justify-center gap-2 rounded-xl border border-line px-4 h-10 text-sm font-medium text-ink disabled:opacity-60"
       >
         <Bell size={14} />
-        {busy ? 'Sending…' : 'Send a test notification'}
+        {busy ? 'Working…' : permission === 'granted' ? 'Register this phone & send a test' : 'Turn on notifications'}
       </button>
       {message && <p className="text-xs text-muted mt-3">{message}</p>}
     </Card>

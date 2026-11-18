@@ -107,7 +107,9 @@ export default function PrivacyFab() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  if (!show && !isDesktop) return null;
+  // The top bar (desktop) and the raised centre button in the bottom bar (phones)
+  // already hold this toggle, so the floating copy is off on desktop and opt-in on phones.
+  if (isDesktop || !show) return null;
 
   // Limits are measured on the full screen height (keyboard closed), so opening
   // the keyboard can never push a saved spot to somewhere else.

@@ -7,6 +7,9 @@
 //
 //   GET /api/push/send            normal run
 //   GET /api/push/send?test=1     sends a "Push is working" message to every device
+//   GET /api/push/send?weekly=1   Sunday 1 PM IST "update your bank balance" reminder
+//                                 (called by .github/workflows/weekly-balance-reminder.yml)
+//   GET /api/push/send?weekly=1&force=1   sends that reminder right now, for testing
 //
 // Needs these environment variables (see PUSH_SETUP.md):
 //   FIREBASE_SERVICE_ACCOUNT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY,
@@ -29,6 +32,8 @@ const INDEX_KEYS = ['nifty', 'sensex', 'banknifty'];
 const PRE_OPEN = [9 * 60, 9 * 60 + 15];
 const OPEN = [9 * 60 + 15, 9 * 60 + 45];
 const CLOSE = [15 * 60 + 30, 17 * 60];
+// Sunday reminder time: 1:00 PM IST. Runs up to 3 hours late (GitHub schedules can lag).
+const WEEKLY_AT = 13 * 60;
 const MARKET_HOURS = [9 * 60 + 15, 15 * 60 + 30];
 
 const fmt = (n) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -150,6 +155,27 @@ export default async function handler(req, res) {
     }
 
     const { dateKey, weekday, mins } = istNow();
+
+    // --- Weekly reminder: Sunday 1 PM IST, once per Sunday, to every device. ---
+    if (req.query?.weekly) {
+      const force = !!req.query?.force;
+      if (!force && (weekday !== 7 || mins < WEEKLY_AT || mins >= WEEKLY_AT + 180)) {
+        return res.status(200).json({ ...summary, skipped: 'not Sunday 1 PM IST' });
+      }
+      if (everyone.length === 0) return res.status(200).json({ ...summary, skipped: 'no subscribed devices' });
+      const won = force ? ['weekly'] : await claim(db, db.collection('pushState').doc('weekly'), dateKey, ['bankBalance']);
+      if (won.length) {
+        summary.sent = await pushTo(everyone, {
+          title: 'Update your bank balance',
+          body: "It's Sunday. Take a minute to update your bank balances in Aurafin.",
+          tag: `${dateKey}:bank-balance`,
+          url: '/wealth',
+          ttl: 12 * 3600,
+        });
+      }
+      return res.status(200).json(summary);
+    }
+
     if (weekday > 5) return res.status(200).json({ ...summary, skipped: 'weekend' });
     if (mins < PRE_OPEN[0] || mins >= CLOSE[1]) return res.status(200).json({ ...summary, skipped: 'outside market window' });
     if (everyone.length === 0) return res.status(200).json({ ...summary, skipped: 'no subscribed devices' });

@@ -1,4 +1,4 @@
-import { Suspense, useState, useEffect, useLayoutEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { Fragment, Suspense, useState, useEffect, useLayoutEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -155,6 +155,7 @@ import { useUrlTab } from '../hooks/useUrlTab';
 import CompanyLogo from '../components/CompanyLogo';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 const AnalyticsContent = lazyWithRetry(() => import('./Analytics'));
+const Trades = lazyWithRetry(() => import('./Trades'));
 import { useModalBackClose } from '../hooks/useModalBackClose';
 import { useUrlRestore } from '../hooks/useUrlRestore';
 import { toast } from '../store/toastStore';
@@ -174,7 +175,7 @@ import { propertyCost, rateBasedValue, summarizeProperty } from '../utils/proper
 import { computePpfNow, migrateLegacyPpf, ppfMaturityDate, ppfRate, ppfStatus, yearAdvice } from '../utils/ppf';
 import { inToast } from '../utils/toastGuard';
 
-type Tab = 'assets' | 'liabilities' | 'performs' | 'networth' | 'allocation' | 'analytics';
+type Tab = 'assets' | 'liabilities' | 'performs' | 'trades' | 'networth' | 'allocation' | 'analytics';
 const SORT_KEYS = ['manual', 'name', 'qty', 'avgCost', 'perUnit', 'invested', 'value', 'pnl', 'alloc', 'dayChange'] as const;
 type SortKey = 'manual' | 'name' | 'qty' | 'avgCost' | 'perUnit' | 'invested' | 'value' | 'pnl' | 'alloc' | 'dayChange';
 type EntryType = 'asset' | 'liability';
@@ -288,7 +289,7 @@ export default function Wealth() {
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [tab, setTab] = useUrlTab<Tab>(['assets', 'liabilities', 'performs', 'networth', 'allocation', 'analytics'], 'assets');
+  const [tab, setTab] = useUrlTab<Tab>(['assets', 'liabilities', 'performs', 'trades', 'networth', 'allocation', 'analytics'], 'assets');
   const [startCategoryKey, setStartCategoryKey] = useState<string | undefined>();
 
   const addFlow: EntryType | null =
@@ -365,6 +366,11 @@ export default function Wealth() {
         <LiabilitiesTab tab={tab} setTab={setTab} onAdd={() => openAdd('liability')} />
       )}
       {tab === 'performs' && <PerformsTab tab={tab} setTab={setTab} />}
+      {tab === 'trades' && (
+        <Suspense fallback={null}>
+          <Trades tabNav={<TabNav tab={tab} setTab={setTab} />} />
+        </Suspense>
+      )}
       {tab === 'networth' && <NetWorthTab tab={tab} setTab={setTab} />}
       {tab === 'allocation' && <AllocationTab tab={tab} setTab={setTab} />}
       {tab === 'analytics' && <AnalyticsTab tab={tab} setTab={setTab} />}
@@ -853,7 +859,8 @@ function TabNav({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
       items={[
         { key: 'assets', label: 'Assets' },
         { key: 'liabilities', label: 'Liabilities' },
-        { key: 'performs', label: 'Performs' },
+        { key: 'performs', label: 'Performance' },
+        { key: 'trades', label: 'Trades' },
         { key: 'networth', label: 'Net worth' },
         { key: 'allocation', label: 'Allocation' },
         { key: 'analytics', label: 'Analytics' },
@@ -870,12 +877,23 @@ function FilterDropdown({
   selected,
   onChange,
   closeOnSelect = false,
+  extra,
 }: {
   label: string;
   placeholder: string;
   options: { value: string; label: string; icon?: ReactNode }[];
   selected: string[];
   onChange: (next: string[]) => void;
+  /** A second group of checkboxes inside the same menu, under its own heading
+   *  (used for Type → Analysis). Its choices show as chips in the button too. */
+  extra?: {
+    /** Option value the group sits directly under (indented, like a sub-filter). */
+    afterValue: string;
+    heading: string;
+    options: { value: string; label: string; icon?: ReactNode }[];
+    selected: string[];
+    onChange: (next: string[]) => void;
+  };
   /** Close just this dropdown after an option is picked (the parent
    *  filter sheet stays open). */
   closeOnSelect?: boolean;
@@ -888,6 +906,13 @@ function FilterDropdown({
     else onChange([...selected, value]);
     if (closeOnSelect) setOpen(false);
   };
+  const toggleExtra = (value: string) => {
+    if (!extra) return;
+    if (extra.selected.includes(value)) extra.onChange(extra.selected.filter((v) => v !== value));
+    else extra.onChange([...extra.selected, value]);
+  };
+  const extraSelected = extra?.selected ?? [];
+  const anySelected = selected.length > 0 || extraSelected.length > 0;
 
   return (
     <div className="relative w-full min-w-0 sm:flex-1 sm:min-w-[150px]" ref={ref}>
@@ -898,10 +923,11 @@ function FilterDropdown({
         className="w-full min-h-9 flex items-center justify-between gap-1.5 border border-line rounded-lg px-3 py-1 bg-surface text-left hover:border-slate-300 transition-colors"
       >
         <div className="flex items-center gap-1 flex-wrap flex-1 min-w-0">
-          {selected.length === 0 ? (
+          {!anySelected ? (
             <span className="text-faint text-sm truncate">{placeholder}</span>
           ) : (
-            selected.map((v) => {
+            <>
+            {selected.map((v) => {
               const opt = options.find((o) => o.value === v);
               return (
                 <span
@@ -922,16 +948,40 @@ function FilterDropdown({
                   </span>
                 </span>
               );
-            })
+            })}
+            {extra && extraSelected.map((v) => {
+              const opt = extra.options.find((o) => o.value === v);
+              return (
+                <span
+                  key={`x-${v}`}
+                  className="inline-flex items-center gap-1 bg-primary-soft text-primary-ink text-xs font-medium pl-2 pr-1 py-0.5 rounded-md max-w-full truncate"
+                >
+                  {opt?.icon}
+                  {opt?.label ?? v}
+                  <span
+                    role="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleExtra(v);
+                    }}
+                    className="hover:bg-brand-100 dark:hover:bg-brand-800/40 rounded-sm p-0.5 shrink-0"
+                  >
+                    <X size={11} />
+                  </span>
+                </span>
+              );
+            })}
+            </>
           )}
         </div>
         <div className="flex items-center gap-1 text-slate-600 shrink-0">
-          {selected.length > 0 && (
+          {anySelected && (
             <span
               role="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onChange([]);
+                extra?.onChange([]);
               }}
               className="hover:text-slate-600"
             >
@@ -942,24 +992,40 @@ function FilterDropdown({
         </div>
       </button>
       {open && (
-        <div className="animate-menu-in absolute z-20 mt-1 w-full bg-surface border border-line rounded-xl shadow-lg max-h-56 overflow-y-auto py-1">
+        <div className="animate-menu-in absolute z-20 mt-1 w-full bg-surface border border-line rounded-xl shadow-lg max-h-72 overflow-y-auto py-1">
           {options.length === 0 ? (
             <p className="px-3 py-2 text-sm text-slate-600">No options yet</p>
           ) : (
             options.map((opt) => (
-              <label
-                key={opt.value}
-                className="flex items-center gap-2.5 px-3 py-2 text-sm text-ink-2 hover:bg-surface-hover cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  checked={selected.includes(opt.value)}
-                  onChange={() => toggleOption(opt.value)}
-                  className="h-4 w-4 rounded border-slate-300 accent-brand-600"
-                />
-                {opt.icon}
-                {opt.label}
-              </label>
+              <Fragment key={opt.value}>
+                <label className="flex items-center gap-2.5 px-3 py-2 text-sm text-ink-2 hover:bg-surface-hover cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(opt.value)}
+                    onChange={() => toggleOption(opt.value)}
+                    className="h-4 w-4 rounded border-slate-300 accent-brand-600"
+                  />
+                  {opt.icon}
+                  {opt.label}
+                </label>
+                {extra && extra.afterValue === opt.value && (
+                  <div className="ml-5 mb-1 border-l-2 border-line-soft pl-1">
+                    <p className="px-3 pt-1 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted">{extra.heading}</p>
+                    {extra.options.map((x) => (
+                      <label key={`x-${x.value}`} className="flex items-center gap-2.5 px-3 py-1.5 text-sm text-ink-2 hover:bg-surface-hover cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={extra.selected.includes(x.value)}
+                          onChange={() => toggleExtra(x.value)}
+                          className="h-4 w-4 rounded border-slate-300 accent-brand-600"
+                        />
+                        {x.icon}
+                        {x.label}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </Fragment>
             ))
           )}
         </div>
@@ -2269,10 +2335,12 @@ function AssetsTab({
                 options={typeOptions}
                 selected={selectedTypes}
                 onChange={setSelectedTypes}
+                extra={
+                  selectedTypes.includes('stock')
+                    ? { afterValue: 'stock', heading: 'Analysis', options: analysisOptions, selected: selectedAnalysis, onChange: setSelectedAnalysis }
+                    : undefined
+                }
               />
-              {selectedTypes.includes('stock') && (
-                <FilterDropdown label="Analysis" placeholder="Analysis" options={analysisOptions} selected={selectedAnalysis} onChange={setSelectedAnalysis} />
-              )}
               <FilterDropdown label="Tags" placeholder="Tag" options={tagOptions} selected={selectedTags} onChange={setSelectedTags} />
               <FilterDropdown
                 label="Currency"
@@ -2341,10 +2409,12 @@ function AssetsTab({
                 options={typeOptions}
                 selected={selectedTypes}
                 onChange={setSelectedTypes}
+                extra={
+                  selectedTypes.includes('stock')
+                    ? { afterValue: 'stock', heading: 'Analysis', options: analysisOptions, selected: selectedAnalysis, onChange: setSelectedAnalysis }
+                    : undefined
+                }
               />
-              {selectedTypes.includes('stock') && (
-                <FilterDropdown closeOnSelect label="Analysis" placeholder="Analysis" options={analysisOptions} selected={selectedAnalysis} onChange={setSelectedAnalysis} />
-              )}
               <FilterDropdown closeOnSelect label="Tags" placeholder="Tag" options={tagOptions} selected={selectedTags} onChange={setSelectedTags} />
               <FilterDropdown
                 closeOnSelect
@@ -2408,8 +2478,9 @@ function AssetsTab({
                   {!totalsReady ? (
                     <LoadingDots />
                   ) : (
-                    <span className="font-numeric text-[28px] sm:text-[32px] font-bold tracking-tight text-ink break-words animate-value-in">
-                      <SplitAmount text={maskAmount(totalCurrentValue, 'INR', privacyMode, { fractionDigits: 2 })} />
+                    <span className="font-numeric text-[26px] sm:text-[32px] font-bold tracking-tight text-ink whitespace-nowrap animate-value-in">
+                      {/* Paise are dropped on phones: the figure never splits across two lines. */}
+                      <SplitAmount text={maskAmount(totalCurrentValue, 'INR', privacyMode, { fractionDigits: 2 })} decimalClassName="text-[0.62em] font-semibold hidden sm:inline" />
                     </span>
                   )}
                 </div>
@@ -2567,7 +2638,6 @@ function AssetsTab({
             </div>
           </Card>
           )}
-
 
           {/* Compact display toggle — cycles which figure is shown per row
               in the mobile list below (mirrors the three data columns of
@@ -4321,7 +4391,8 @@ function HoldingDetailView({
       {asset.symbol && (asset.assetClass === 'stock' || asset.assetClass === 'etf' || asset.assetClass === 'international_equity') && (
         <div className="grid grid-cols-2 gap-3 pt-2">
           {/* Both buttons share one look (same background); the colour of the outline says which is
-              which, and the one you picked keeps a thicker outline until you pick the other. */}
+              which. Nothing picked yet: both are outlined. Once you pick one it gets the thick outline
+              and the other loses its outline completely, until you pick the other. */}
           <button
             type="button"
             aria-pressed={asset.boughtWithoutAnalysis === true}
@@ -4331,8 +4402,8 @@ function HoldingDetailView({
               if (asset.boughtWithoutAnalysis !== true) void onQuickUpdate({ ...asset, boughtWithoutAnalysis: true, updatedAt: Date.now() });
               onBack();
             }}
-            className={`flex items-center justify-center gap-2.5 rounded-2xl border-red-500 bg-surface py-4 px-3 text-ink hover:bg-surface-hover active:scale-[0.98] transition ${
-              asset.boughtWithoutAnalysis === true ? 'border-2' : 'border'
+            className={`flex items-center justify-center gap-2.5 rounded-2xl bg-surface py-4 px-3 text-ink hover:bg-surface-hover active:scale-[0.98] transition ${
+              asset.boughtWithoutAnalysis === true ? 'border-2 border-red-500' : asset.boughtWithoutAnalysis === false ? 'border border-transparent' : 'border border-red-500'
             }`}
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-red-50 dark:bg-red-950/40">
@@ -4349,8 +4420,8 @@ function HoldingDetailView({
               if (asset.boughtWithoutAnalysis !== false) void onQuickUpdate({ ...asset, boughtWithoutAnalysis: false, updatedAt: Date.now() });
               onBack();
             }}
-            className={`flex items-center justify-center gap-2.5 rounded-2xl border-emerald-600 bg-surface py-4 px-3 text-ink hover:bg-surface-hover active:scale-[0.98] transition ${
-              asset.boughtWithoutAnalysis === false ? 'border-2' : 'border'
+            className={`flex items-center justify-center gap-2.5 rounded-2xl bg-surface py-4 px-3 text-ink hover:bg-surface-hover active:scale-[0.98] transition ${
+              asset.boughtWithoutAnalysis === false ? 'border-2 border-emerald-600' : asset.boughtWithoutAnalysis === true ? 'border border-transparent' : 'border border-emerald-600'
             }`}
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-950/40">

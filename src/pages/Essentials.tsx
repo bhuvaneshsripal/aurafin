@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Trash2, Pencil, Check, Target, ChevronRight, ChevronDown, Shield, PiggyBank, Landmark, Pill } from 'lucide-react';
+import { Plus, Trash2, Pencil, Check, Target, ChevronRight, ChevronDown, Shield, PiggyBank, Landmark, Pill, Sparkles } from 'lucide-react';
 import { useGoalsStore } from '../store/goalsStore';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
@@ -158,13 +158,14 @@ function HealthCheck() {
   return (
     <div className="space-y-4">
       {!hasProfile && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
-          <p className="text-base font-medium text-amber-800">
-            Add your income and expenses to get a simple savings-rate score.
-          </p>
-          <p className="text-sm text-amber-700 mt-1">
-            This stays on your device until you hit save — nothing is calculated on a server.
-          </p>
+        <div className="flex items-start gap-3 rounded-2xl border border-line bg-surface px-4 py-3.5">
+          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary-ink" aria-hidden>
+            <Sparkles size={15} strokeWidth={2} />
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-ink">Add your income and expenses to get a savings-rate score</p>
+            <p className="text-[13px] text-muted mt-0.5">Stays on your device until you save. Nothing is calculated on a server.</p>
+          </div>
         </div>
       )}
 

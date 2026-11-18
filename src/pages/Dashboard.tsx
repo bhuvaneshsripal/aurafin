@@ -411,6 +411,18 @@ export default function Dashboard() {
     [transactions]
   );
 
+  // Last 12 saved snapshots, oldest first, for the small trend on the Net worth card.
+  const snapshotList = useSnapshotsStore((s) => s.snapshots);
+  const netWorthTrend = useMemo(
+    () =>
+      [...snapshotList]
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .slice(-12)
+        .map((s) => s.netWorth)
+        .filter((n): n is number => Number.isFinite(n)),
+    [snapshotList]
+  );
+
   const savedThisMonth = monthIncome - monthExpense;
   const savingsRate = monthIncome > 0 ? (savedThisMonth / monthIncome) * 100 : null;
 
@@ -419,13 +431,14 @@ export default function Dashboard() {
       <PageHeader title="Overview" />
 
       {/* KPI strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         {/* Full-width on phones so Net worth gets its own row; on desktop it
            sits in the four-column strip like the other cards. */}
-        <div className="col-span-2 lg:col-span-1">
+        <div className="col-span-2 lg:col-span-2">
           <StatCard
             dense
             hero
+            trend={netWorthTrend}
             label="Net worth"
             loading={!ready}
             value={money(hasWealth ? netWorthShown : 0)}
@@ -916,6 +929,7 @@ function NetWorthOverTimeCard({
     if (privacyMode) return PRIVACY_DOTS;
     const abs = Math.abs(v);
     if (abs >= 1e5 && abs < 1e7) return `${v < 0 ? '-' : ''}₹${(abs / 1e5).toFixed(2).replace(/\.?0+$/, '')}L`;
+    if (abs >= 1e7 && abs < 1e12) return `${v < 0 ? '-' : ''}₹${(abs / 1e7).toFixed(2).replace(/\.?0+$/, '')}Cr`;
     return formatAxisAmount(v);
   };
 

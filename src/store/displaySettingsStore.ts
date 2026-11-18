@@ -84,7 +84,7 @@ interface DisplaySettingsState {
 export const useDisplaySettingsStore = create<DisplaySettingsState>((set, get) => ({
   fontScale: DEFAULT_FONT_SCALE,
   screenScale: DEFAULT_SCREEN_SCALE,
-  floatingEye: localStorage.getItem(EYE_SHOW_KEY) !== 'false',
+  floatingEye: localStorage.getItem(EYE_SHOW_KEY) === 'true',
   eyePos: readEyePos(),
   setFloatingEye: (on) => {
     try { localStorage.setItem(EYE_SHOW_KEY, String(on)); } catch { /* best-effort */ }

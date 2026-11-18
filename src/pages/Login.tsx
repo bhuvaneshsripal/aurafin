@@ -41,6 +41,21 @@ export default function Login() {
   const [passErr, setPassErr] = useState('');
   const [open, setOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  // The menu slides down from the top edge to open and back up to close, so it stays
+  // mounted for the length of the close animation before it is removed.
+  const [menuClosing, setMenuClosing] = useState(false);
+  const closeMenu = () => {
+    if (!menuOpen || menuClosing) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setMenuOpen(false);
+      return;
+    }
+    setMenuClosing(true);
+    window.setTimeout(() => {
+      setMenuOpen(false);
+      setMenuClosing(false);
+    }, 240);
+  };
   const [googleLoading, setGoogleLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
@@ -228,18 +243,18 @@ export default function Login() {
           </button>
           <button
             type="button"
-            onClick={() => setMenuOpen((v) => !v)}
+            onClick={() => (menuOpen ? closeMenu() : setMenuOpen(true))}
             aria-label={menuOpen ? 'Close menu' : 'Open menu'}
             aria-expanded={menuOpen}
             className="btn-press lp-theme-btn lp-burger"
           >
-            {menuOpen ? <X size={22} /> : <Menu size={22} />}
+            {menuOpen && !menuClosing ? <X size={22} /> : <Menu size={22} />}
           </button>
         </nav>
         {menuOpen && (
           <>
-            <div className="lp-menu-scrim" onClick={() => setMenuOpen(false)} />
-            <div className="lp-menu bg-surface" role="menu">
+            <div className={`lp-menu-scrim${menuClosing ? ' is-closing' : ''}`} onClick={closeMenu} />
+            <div className={`lp-menu bg-surface${menuClosing ? ' is-closing' : ''}`} role="menu">
               <div className="lp-menu-top">
                 <div className="lp-brand">
                   <img src="/logo-icon.png" alt="" className="lp-brand-logo" />
@@ -247,18 +262,18 @@ export default function Login() {
                     Aurafin<span className="text-brand-500">.</span>
                   </span>
                 </div>
-                <button type="button" onClick={() => setMenuOpen(false)} aria-label="Close menu" className="btn-press lp-theme-btn">
+                <button type="button" onClick={closeMenu} aria-label="Close menu" className="btn-press lp-theme-btn">
                   <X size={22} />
                 </button>
               </div>
-              <a href="#features" onClick={() => setMenuOpen(false)}>Features</a>
-              <a href="#reviews" onClick={() => setMenuOpen(false)}>Reviews</a>
-              <a href="#privacy" onClick={() => setMenuOpen(false)}>Privacy</a>
-              <a href="#faq" onClick={() => setMenuOpen(false)}>FAQ</a>
-              <a href="/calculators">Calculators</a>
+              <a href="#features" onClick={closeMenu}>Features</a>
+              <a href="#reviews" onClick={closeMenu}>Reviews</a>
+              <a href="#privacy" onClick={closeMenu}>Privacy</a>
+              <a href="#faq" onClick={closeMenu}>FAQ</a>
+              <a href="/calculators" onClick={closeMenu}>Calculators</a>
               <div className="lp-menu-sep" />
-              <button type="button" onClick={() => { setMenuOpen(false); openAuth('login'); }}>Sign in</button>
-              <button type="button" onClick={toggleTheme}>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</button>
+              <button type="button" onClick={() => { closeMenu(); openAuth('login'); }}>Sign in</button>
+              <button type="button" onClick={() => { toggleTheme(); closeMenu(); }}>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</button>
             </div>
           </>
         )}

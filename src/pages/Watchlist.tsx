@@ -10,7 +10,8 @@ import { MAX_SAVED, readSavedStocks, readStockAlerts, toggleSavedStock, type Sav
 import { toast } from '../store/toastStore';
 import { WATCHLIST_REMOTE_EVENT } from '../utils/watchlistSync';
 import { csvCell, safeFilename, triggerDownload } from '../utils/exportCsv';
-import { fetchStockHistory, fmtNum, fmtPrice, type Exchange } from '../utils/stockDetail';
+import { fmtNum, fmtPrice } from '../utils/stockDetail';
+import { SHAPE_RETRY, SHAPE_TTL, bare, loadShape, quoteKey, shapeCache, skey, watchlistQuoteCache, type Shape } from '../utils/appWarmup';
 import {
   MAX_LISTS,
   createList,
@@ -33,12 +34,6 @@ import {
 import { inToast } from '../utils/toastGuard';
 import { visibleInterval } from '../utils/visibleInterval';
 
-const bare = (s: string) => s.replace(/\.(NS|BO)$/i, '');
-// The stock page saves BSE stocks as the bare symbol + exchange "BSE", so check both (otherwise they were priced from NSE).
-const isBse = (s: SavedStock) => s.market === 'IN' && (s.exchange === 'BSE' || /\.BO$/i.test(s.symbol));
-const quoteKey = (s: SavedStock) => (isBse(s) ? `${bare(s.symbol).toUpperCase()}.BO` : bare(s.symbol).toUpperCase());
-const skey = (s: SavedStock) => stockKey(s.market, s.symbol);
-const exchangeOf = (s: SavedStock): Exchange => (isBse(s) ? 'BSE' : 'NSE');
 
 type SortKey = 'manual' | 'name' | 'price' | 'change' | 'range';
 const ALL = 'all';
@@ -52,16 +47,6 @@ interface MarketHit {
   exchange: string; // 'NSE' | 'BSE' | 'US'
 }
 const hitQuoteKey = (h: MarketHit) => (h.market === 'IN' && h.exchange === 'BSE' ? `${h.symbol.toUpperCase()}.BO` : h.symbol.toUpperCase());
-
-/** Trend + 52-week range per stock, fetched a few at a time and kept for the session. */
-interface Shape {
-  closes: number[];
-  low: number;
-  high: number;
-}
-const shapeCache = new Map<string, { at: number; shape: Shape | null }>();
-const SHAPE_TTL = 30 * 60 * 1000;
-const SHAPE_RETRY = 2 * 60 * 1000; // a failed fetch is retried soon, not after 30 minutes
 
 function useShapes(stocks: SavedStock[]) {
   const [shapes, setShapes] = useState<Map<string, Shape>>(new Map());
@@ -81,21 +66,7 @@ function useShapes(stocks: SavedStock[]) {
     const worker = async () => {
       while (!cancelled && todo.length) {
         const s = todo.shift()!;
-        let shape: Shape | null = null;
-        try {
-          const h = await fetchStockHistory(bare(s.symbol), s.market, exchangeOf(s), '1Y');
-          const pts = h.points.filter((p) => Number.isFinite(p[4]));
-          if (pts.length > 2) {
-            shape = {
-              closes: pts.slice(-14).map((p) => p[4]),
-              low: Math.min(...pts.map((p) => (Number.isFinite(p[3]) ? p[3] : p[4]))),
-              high: Math.max(...pts.map((p) => (Number.isFinite(p[2]) ? p[2] : p[4]))),
-            };
-          }
-        } catch {
-          /* leave this row without a trend */
-        }
-        shapeCache.set(skey(s), { at: Date.now(), shape });
+        const shape = await loadShape(s);
         if (!cancelled && shape) setShapes((prev) => new Map(prev).set(skey(s), shape!));
       }
     };
@@ -114,7 +85,7 @@ export default function Watchlist() {
   const [items, setItems] = useState<SavedStock[]>(() => readSavedStocks());
   const [lists, setLists] = useState<WatchList[]>(() => readLists());
   const [notes, setNotes] = useState<Record<string, string>>(() => readNotes());
-  const [quotes, setQuotes] = useState<Map<string, LiveQuoteDetail>>(new Map());
+  const [quotes, setQuotes] = useState<Map<string, LiveQuoteDetail>>(() => new Map(watchlistQuoteCache));
   const [active, setActive] = useState<string>(() => {
     const ls = readLists();
     const first = orderLists(ls)[0];
@@ -219,6 +190,7 @@ export default function Watchlist() {
     let cancelled = false;
     fetchLiveQuotes(lookups)
       .then((got) => {
+        got.forEach((v, k) => watchlistQuoteCache.set(k, v));
         if (!cancelled) setQuotes((prev) => new Map([...prev, ...got]));
       })
       .catch(() => {});

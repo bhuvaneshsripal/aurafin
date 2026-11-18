@@ -316,11 +316,24 @@ html { scroll-behavior: smooth; }
 @media (max-width: 760px) {
   .lp-desk-only { display: none !important; }
   .lp-burger { display: inline-flex; }
-  .lp-menu-scrim { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 29; }
+  .lp-menu-scrim { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 29; animation: lp-scrim-in .3s ease-out both; }
+  .lp-menu-scrim.is-closing { animation: lp-scrim-out .24s ease-in both; }
+  .lp-menu.is-closing { animation: lp-menu-up .24s cubic-bezier(.4,0,1,1) both; }
+  /* Links drop in one after another as the panel opens. */
+  .lp-menu > a, .lp-menu > button { animation: lp-item-in .4s cubic-bezier(.22,1,.36,1) both; }
+  .lp-menu > :nth-child(2) { animation-delay: .06s; }
+  .lp-menu > :nth-child(3) { animation-delay: .09s; }
+  .lp-menu > :nth-child(4) { animation-delay: .12s; }
+  .lp-menu > :nth-child(5) { animation-delay: .15s; }
+  .lp-menu > :nth-child(6) { animation-delay: .18s; }
+  .lp-menu > :nth-child(8) { animation-delay: .22s; }
+  .lp-menu > :nth-child(9) { animation-delay: .25s; }
+  .lp-menu.is-closing > a, .lp-menu.is-closing > button { animation: none; }
   .lp-menu {
     display: flex; flex-direction: column; position: fixed; top: 0; left: 0; right: 0; z-index: 30;
     padding: env(safe-area-inset-top) 0 .5rem; box-shadow: 0 12px 28px rgba(0,0,0,.18);
-    border-radius: 0 0 .5rem .5rem; animation: lp-menu-in .18s ease-out;
+    border-radius: 0 0 1rem 1rem; animation: lp-menu-down .42s cubic-bezier(.22,1,.36,1) both;
+    transform-origin: top;
   }
   .lp-menu-top { display: flex; align-items: center; justify-content: space-between; padding: .75rem 1.25rem; }
   .lp-menu a, .lp-menu > button {
@@ -329,7 +342,14 @@ html { scroll-behavior: smooth; }
   }
   .lp-menu-sep { height: 1px; background: var(--color-line); margin: .5rem 0; }
 }
-@keyframes lp-menu-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+@keyframes lp-menu-down { from { transform: translateY(-100%); } to { transform: none; } }
+@keyframes lp-menu-up { from { transform: none; } to { transform: translateY(-100%); } }
+@keyframes lp-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes lp-scrim-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes lp-item-in { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .lp-menu, .lp-menu-scrim, .lp-menu > a, .lp-menu > button { animation: none !important; }
+}
 
 .fb-stars { display: flex; gap: 1px; margin-top: 2px; }
 .fb-stars svg { color: var(--color-line); }

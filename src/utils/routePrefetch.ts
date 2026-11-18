@@ -49,7 +49,7 @@ export function startRoutePrefetch(): () => void {
   document.addEventListener('touchstart', onIntent, { passive: true });
 
   // One chunk per idle slot, so warming never competes with the user's own taps.
-  const queue = ['/essentials', '/watchlist', '/calculators', '/indices', '/settings'];
+  const queue = ['/wealth', '/transactions', '/wealth/performance', '/essentials', '/watchlist', '/import', '/settings', '/valuation', '/indices', '/volume', '/swing', '/stock', '/calculators'];
   const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (h: number) => void };
   let handle = 0;
   let timer = 0;
@@ -60,10 +60,10 @@ export function startRoutePrefetch(): () => void {
     schedule();
   };
   const schedule = () => {
-    if (w.requestIdleCallback) handle = w.requestIdleCallback(next, { timeout: 4000 });
+    if (w.requestIdleCallback) handle = w.requestIdleCallback(next, { timeout: 1500 });
     else timer = window.setTimeout(next, 1500);
   };
-  const start = window.setTimeout(schedule, 4000);
+  const start = window.setTimeout(schedule, 1500);
   return () => {
     document.removeEventListener('pointerover', onIntent);
     document.removeEventListener('touchstart', onIntent);

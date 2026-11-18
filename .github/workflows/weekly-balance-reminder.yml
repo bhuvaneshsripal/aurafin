@@ -1,0 +1,24 @@
+# Every Sunday 1:00 PM IST (07:30 UTC) sends a phone notification asking you to
+# update your bank balances. A second run at 08:30 UTC is a safety net in case
+# GitHub's scheduler skips the first; the server sends the reminder only once.
+#
+# Uses the same two secrets as push-alerts.yml: APP_URL and CRON_SECRET.
+name: Weekly bank balance reminder
+
+on:
+  schedule:
+    - cron: '30 7 * * 0'
+    - cron: '30 8 * * 0'
+  workflow_dispatch: {}
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the push sender
+        run: |
+          code=$(curl --silent --show-error --max-time 60 -o body.txt -w '%{http_code}' \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.APP_URL }}/api/push/send?weekly=1")
+          cat body.txt; echo
+          [ "$code" = "200" ] || { echo "Push sender returned HTTP $code"; exit 1; }

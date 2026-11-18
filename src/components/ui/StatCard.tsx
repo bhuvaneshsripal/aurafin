@@ -4,6 +4,7 @@ import Card from './Card';
 import LoadingDots from '../LoadingDots';
 import { cn } from './cn';
 import DeltaChip from './DeltaChip';
+import Sparkline from './Sparkline';
 
 export interface StatCardProps {
   label: ReactNode;
@@ -28,6 +29,8 @@ export interface StatCardProps {
   /** When set, a small arrow next to the label calls this on click. The
    *  parent swaps the card's values in place (no separate panel). */
   onToggle?: () => void;
+  /** Hero only: recent values (oldest first) drawn as a small trend beside the number. */
+  trend?: number[];
   /** Arrow state for `onToggle` (points up when true). */
   toggled?: boolean;
   className?: string;
@@ -41,9 +44,9 @@ const cornerTones = {
 };
 
 /** KPI tile. Values are never truncated — long ₹ figures wrap instead of being cut off. */
-export default function StatCard({ label, value, tone = 'default', delta, deltaInCorner, cornerLabel, cornerTone = 'neutral', sublabel, icon, loading, dense, hero, onToggle, toggled, className }: StatCardProps) {
+export default function StatCard({ label, value, tone = 'default', delta, deltaInCorner, cornerLabel, cornerTone = 'neutral', sublabel, icon, loading, dense, hero, onToggle, toggled, trend, className }: StatCardProps) {
   return (
-    <Card padding="md" className={cn(dense && (hero ? '!p-5 sm:!p-5' : '!p-3 sm:!p-5'), className)}>
+    <Card padding="md" className={cn('h-full', dense && (hero ? '!p-5 sm:!p-6' : '!p-3 sm:!p-5'), className)}>
       <div className="flex items-center justify-between gap-2 min-h-6">
         <span className="text-[13px] font-medium text-muted">{label}</span>
         {onToggle && (
@@ -69,7 +72,7 @@ export default function StatCard({ label, value, tone = 'default', delta, deltaI
           </span>
         )}
       </div>
-      <div className={cn('flex items-baseline gap-2', hero ? 'mt-4 sm:mt-2 mb-1 sm:mb-0 min-h-10 sm:min-h-[28px]' : 'mt-2 min-h-[28px]')}>
+      <div className={cn('flex items-baseline gap-2', hero ? 'mt-4 sm:mt-3 mb-1 sm:mb-0 min-h-10 sm:min-h-12' : 'mt-2 min-h-[28px]', trend && trend.length > 1 && 'justify-between')}>
         {loading ? (
           <span className="h-7 flex items-center">
             <LoadingDots />
@@ -78,12 +81,15 @@ export default function StatCard({ label, value, tone = 'default', delta, deltaI
           <span
             className={cn(
               'font-numeric leading-7 font-semibold tracking-tight break-words animate-value-in',
-              hero ? 'text-[32px] leading-9 sm:text-[22px] sm:leading-7' : dense ? 'text-lg sm:text-[22px]' : 'text-xl sm:text-[22px]',
+              hero ? 'text-[32px] leading-9 sm:text-[38px] sm:leading-[44px] sm:tracking-[-0.02em]' : dense ? 'text-lg sm:text-[22px]' : 'text-xl sm:text-[22px]',
               tones[tone]
             )}
           >
             {value}
           </span>
+        )}
+        {hero && !loading && trend && trend.length > 1 && (
+          <Sparkline values={trend} label="Net worth, last saved snapshots" className="h-10 self-center shrink-0 opacity-90" />
         )}
       </div>
       {(sublabel || (!loading && delta && !deltaInCorner)) && (

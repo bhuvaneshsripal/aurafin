@@ -49,6 +49,47 @@ export const pushSupported = () =>
   VAPID_PUBLIC_KEY !== '' &&
   VAPID_KEY_BYTES !== null;
 
+/** Why push can't work on this device right now (shown in Settings), or null if it can. */
+export function pushBlocker(): string | null {
+  if (typeof window === 'undefined') return 'Not available here.';
+  const ua = navigator.userAgent;
+  const isIos = /iPhone|iPad|iPod/i.test(ua);
+  const standalone = window.matchMedia?.('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true;
+  if (isIos && !standalone) return 'On iPhone/iPad, first tap Share > "Add to Home Screen", then open Aurafin from the home-screen icon and try again.';
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined') return 'This browser does not support push notifications.';
+  if (VAPID_PUBLIC_KEY === '') return 'The app was built without VITE_VAPID_PUBLIC_KEY. Add it on Vercel and redeploy (see PUSH_SETUP.md).';
+  if (VAPID_KEY_BYTES === null) return 'VITE_VAPID_PUBLIC_KEY is not a valid public key (use the Public Key, not the Private Key), then redeploy.';
+  if (Notification.permission === 'denied') return 'Notifications are blocked for this site. Open your phone/browser site settings, allow Notifications, then come back.';
+  return null;
+}
+
+/**
+ * Called from a button tap: asks for permission (browsers only allow that from a tap),
+ * subscribes this device and saves it so the server can reach it. Returns an error
+ * message, or null on success.
+ */
+export async function enablePushNow(uid: string): Promise<string | null> {
+  const blocked = pushBlocker();
+  if (blocked) return blocked;
+  try {
+    const perm = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+    if (perm !== 'granted') return 'Permission was not given. Allow notifications when asked, or enable them in site settings.';
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: VAPID_KEY_BYTES! });
+    const json = sub.toJSON();
+    await setDoc(
+      doc(db, 'users', uid, 'pushSubscriptions', await deviceId(sub.endpoint)),
+      { endpoint: sub.endpoint, keys: json.keys ?? {}, expirationTime: sub.expirationTime ?? null, userAgent: navigator.userAgent.slice(0, 200), updatedAt: Date.now() },
+      { merge: true }
+    );
+    try { useAlertsStore.getState().setEnabled(true); } catch { /* ignore */ }
+    return null;
+  } catch (err) {
+    return `Could not register this device: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
 /** Forget this device on the server (alerts turned off, or signed out). */
 export async function removePushSubscription(uid: string): Promise<void> {
   try {

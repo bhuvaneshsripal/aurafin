@@ -1232,7 +1232,7 @@ input.global-search-input:focus,
 }
 .login-btn-google:hover:not(:disabled) {
   background:
-    linear-gradient(var(--color-slate-50), var(--color-slate-50)) padding-box,
+    linear-gradient(var(--color-surface-hover), var(--color-surface-hover)) padding-box,
     linear-gradient(90deg, #4285f4 0%, #ea4335 35%, #fbbc05 65%, #34a853 100%) border-box;
 }
 /* Try Demo: solid black outline with a soft black shadow. */
@@ -1802,3 +1802,42 @@ body[data-no-bottom-fade] [data-bottom-fade] {
 @keyframes nw-chart-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .nw-chart-in { animation: nw-chart-in 420ms cubic-bezier(.2,.7,.2,1) both; }
 @media (prefers-reduced-motion: reduce) { .nw-chart-in { animation: none; } }
+
+/* ---- Dark theme: no white native UI ------------------------------------------------
+   Browsers paint autofilled inputs with their own pale-blue/white background, and render
+   native controls (select popups, date pickers, scrollbars) light unless told the page is
+   dark. Tell them, and repaint autofill with the field's own surface colour. */
+.dark { color-scheme: dark; }
+html:not(.dark) { color-scheme: light; }
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-text-fill-color: var(--color-ink);
+  caret-color: var(--color-ink);
+  -webkit-box-shadow: 0 0 0 1000px var(--color-surface) inset !important;
+  box-shadow: 0 0 0 1000px var(--color-surface) inset !important;
+  transition: background-color 600000s 0s, color 600000s 0s;
+}
+.lf-input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--color-surface) inset, 0 0 0 1px var(--lf-focus) !important;
+  box-shadow: 0 0 0 1000px var(--color-surface) inset, 0 0 0 1px var(--lf-focus) !important;
+}
+
+/* Dark mode: hover / focus / active backgrounds that use light slate or white shades
+   (which stay light in dark mode) would flash white under the cursor. Re-point them to
+   the dark surface-hover colour unless the element already has its own `dark:` variant. */
+.dark .hover\:bg-slate-50:hover:not([class*="dark:hover:bg-"]),
+.dark .hover\:bg-slate-100:hover:not([class*="dark:hover:bg-"]),
+.dark .hover\:bg-slate-200:hover:not([class*="dark:hover:bg-"]),
+.dark .hover\:bg-white:hover:not([class*="dark:hover:bg-"]),
+.dark .hover\:bg-gray-50:hover:not([class*="dark:hover:bg-"]),
+.dark .hover\:bg-gray-100:hover:not([class*="dark:hover:bg-"]),
+.dark .focus\:bg-white:focus:not([class*="dark:focus:bg-"]),
+.dark .focus\:bg-slate-50:focus:not([class*="dark:focus:bg-"]),
+.dark .active\:bg-slate-100:active:not([class*="dark:active:bg-"]) {
+  background-color: var(--color-surface-hover);
+}

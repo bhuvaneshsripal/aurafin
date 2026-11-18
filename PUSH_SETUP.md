@@ -43,6 +43,15 @@ moves of 2% and 5%; and each person's own holdings moving 2% and 5%. Each goes
 out once a day. When the app is open and on screen it alerts by itself and the
 server's copy is skipped, so you don't get doubles.
 
+## Weekly bank balance reminder
+Every Sunday at 1:00 PM IST every registered phone gets "Update your bank
+balance" (tap opens Wealth). It runs from
+`.github/workflows/weekly-balance-reminder.yml` using the same `APP_URL` and
+`CRON_SECRET` secrets, so no extra setup. To test now, open
+`APP_URL/api/push/send?weekly=1&force=1` with the `Authorization: Bearer <CRON_SECRET>`
+header, or run the workflow from the Actions tab with "Run workflow" (that run
+only sends on Sunday 1 to 4 PM IST; use the force URL to test any time).
+
 ## Good to know
 - Turning alerts off in the app, or signing out, stops them for that device.
 - iPhone/iPad: works only after "Add to Home Screen" (iOS 16.4+).
