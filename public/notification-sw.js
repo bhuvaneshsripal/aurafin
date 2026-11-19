@@ -109,7 +109,7 @@ self.addEventListener('push', (event) => {
 
 // The browser can rotate or drop a push subscription on its own while the app is closed. The
 // server would then keep pushing to a dead address and nothing arrives until the app is opened.
-// Re-subscribe here and tell the server (api/push/resubscribe) to swap the old address for the new one.
+// Re-subscribe here and tell the server (api/push/test?resubscribe=1) to swap the old address for the new one.
 self.addEventListener('pushsubscriptionchange', (event) => {
   event.waitUntil(
     (async () => {
@@ -121,7 +121,7 @@ self.addEventListener('pushsubscriptionchange', (event) => {
           if (!key) return; // can't resubscribe without the key; the app will do it when opened
           sub = await self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
         }
-        await fetch('/api/push/resubscribe', {
+        await fetch('/api/push/test?resubscribe=1', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ oldEndpoint: oldSub ? oldSub.endpoint : null, subscription: sub.toJSON() }),
