@@ -8,6 +8,7 @@ import { useLivePricesStore, resolveLivePrice } from '../store/livePricesStore';
 import { useSyncStatusStore } from '../store/syncStatusStore';
 import { useNotificationPreferencesStore } from '../store/notificationPreferencesStore';
 import { resolveAssetValues } from '../utils/assetValues';
+import { isFullySold } from '../utils/investmentPnl';
 import { ASSET_CLASS_TO_CATEGORY, MARKET_SELECTABLE_CLASSES } from '../utils/taxonomy';
 
 /**
@@ -61,7 +62,10 @@ export function useDigestSync() {
     const hasSip = assets.some((a) => a.assetClass === 'sip');
     if (hasSip && !sipValuesAttempted) return;
 
-    const holdings = assets.slice(0, MAX_HOLDINGS).map((a) => {
+    // Fully sold-out holdings are not part of the portfolio (the Dashboard and Wealth hide them), but
+    // they keep their old "value" on record while their invested amount drops to 0. Counting them
+    // made the email's Portfolio value, Profit / loss and Net worth too high while Invested stayed right.
+    const holdings = assets.filter((a) => !isFullySold(a)).slice(0, MAX_HOLDINGS).map((a) => {
       const r = resolveAssetValues(a, livePrices, sipValues, goldPricePerGram);
       const repriceable =
         MARKET_SELECTABLE_CLASSES.has(a.assetClass) &&

@@ -111,3 +111,15 @@ Where the numbers come from:
 ## Budget alerts
 Settings > Notifications > "Budget alerts" adds a bell notification inside the app when a
 category reaches 80% and 100% of its monthly budget (checked while the app is open).
+
+## If alerts still don't arrive with the app closed
+- Every push must show a notification. The service worker now always does (before, pushes that
+  arrived while the app was open were skipped silently, and iPhone/Chrome then drop the subscription).
+- After deploying, open the app on each phone, tap **Update** (Settings > New version), then in
+  Settings tap **Send a test notification** and close the app. The push handler only changes once the
+  new version is activated.
+- Vercel > Logs: failed sends are now logged as `push failed <status> <host>`. 403 / 401 means
+  `VAPID_PUBLIC_KEY` on Vercel is not the same key as `VITE_VAPID_PUBLIC_KEY` the app was built with.
+- Android: Settings > Apps > Chrome (or the installed Aurafin) > Battery > **Unrestricted**, and don't
+  "force stop" the app. Some brands (Xiaomi, Oppo, Vivo, Samsung "sleeping apps") kill background push.
+- GitHub's 5-minute schedule is often 15+ minutes late. For on-time alerts also add a cron-job.org job.

@@ -104,6 +104,9 @@ async function pushTo(subs, payload) {
       } catch (err) {
         // The device unsubscribed / the browser dropped it: forget it.
         if (err?.statusCode === 404 || err?.statusCode === 410) await ref.delete().catch(() => {});
+        // Anything else (401/403 = VAPID keys on Vercel differ from the ones the app was built with,
+        // 413/429/5xx = push service trouble) used to vanish silently; make it visible in Vercel Logs.
+        else console.error('push failed', err?.statusCode ?? '', (() => { try { return new URL(ref.path ? sub.endpoint : '').host; } catch { return ''; } })(), String(err?.body ?? err?.message ?? err).slice(0, 200));
       }
     })
   );

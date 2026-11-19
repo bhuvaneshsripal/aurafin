@@ -32,7 +32,7 @@
       ]
     },
     {
-      "source": "/(sw-.*|sw.js|index.html|version.json|registerSW.js|manifest.webmanifest)",
+      "source": "/(sw-.*|sw.js|notification-sw.js|index.html|version.json|registerSW.js|manifest.webmanifest)",
       "headers": [
         {
           "key": "Cache-Control",
