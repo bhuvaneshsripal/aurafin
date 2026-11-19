@@ -38,6 +38,9 @@ export function useDigestSync() {
   const sipValues = useLivePricesStore((s) => s.sipValues);
   const sipValuesAttempted = useLivePricesStore((s) => s.sipValuesAttempted);
   const goldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
+  const pricesAttempted = useLivePricesStore((s) => s.pricesAttempted);
+  const goldAttempted = useLivePricesStore((s) => s.goldAttempted);
+  const goldPriceError = useLivePricesStore((s) => s.goldPriceError);
   const assetsConfirmed = useSyncStatusStore((s) => s.assetsServerConfirmed);
   const liabilitiesConfirmed = useSyncStatusStore((s) => s.liabilitiesServerConfirmed);
 
@@ -61,6 +64,14 @@ export function useDigestSync() {
     // Linked SIPs are valued from NAV history: wait until that has been tried at least once.
     const hasSip = assets.some((a) => a.assetClass === 'sip');
     if (hasSip && !sipValuesAttempted) return;
+    // Same readiness rule as the Dashboard: do not save until the live share prices (and the gold rate)
+    // have arrived. Saving earlier stored every stock at its old typed-in value and marked none of them
+    // as re-priceable, so the email showed an out-of-date Portfolio value / Profit-loss / Net worth.
+    const hasLiveEquity = assets.some((a) => !!a.symbol && (a.quantity ?? 0) > 0);
+    const everyEquityPriced = assets.every((a) => !a.symbol || !((a.quantity ?? 0) > 0) || resolveLivePrice(a.symbol, livePrices) !== undefined);
+    if (hasLiveEquity && !pricesAttempted && !everyEquityPriced) return;
+    const hasLiveGold = assets.some((a) => a.assetClass === 'gold' && (a.quantity ?? 0) > 0);
+    if (hasLiveGold && goldPricePerGram === null && !goldAttempted && !goldPriceError) return;
 
     // Fully sold-out holdings are not part of the portfolio (the Dashboard and Wealth hide them), but
     // they keep their old "value" on record while their invested amount drops to 0. Counting them
@@ -109,5 +120,5 @@ export function useDigestSync() {
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
-  }, [uid, guest, enabled, assets, liabilities, livePrices, sipValues, sipValuesAttempted, goldPricePerGram, assetsConfirmed, liabilitiesConfirmed, user?.displayName]);
+  }, [uid, guest, enabled, assets, liabilities, livePrices, sipValues, sipValuesAttempted, goldPricePerGram, pricesAttempted, goldAttempted, goldPriceError, assetsConfirmed, liabilitiesConfirmed, user?.displayName]);
 }
