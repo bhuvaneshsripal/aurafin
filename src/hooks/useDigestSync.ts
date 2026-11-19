@@ -31,6 +31,9 @@ const MAX_HOLDINGS = 500;
 export function useDigestSync() {
   const user = useAuthStore((s) => s.user);
   const enabled = useNotificationPreferencesStore((s) => s.prefs.weeklyDigestEmail);
+  // False until this account's saved switches have been read from the cloud (see useNotificationPrefsSync);
+  // writing earlier would push this device's default "on" over a switch turned off on another device.
+  const hydrated = useNotificationPreferencesStore((s) => s.hydrated);
 
   const assets = useAssetsStore((s) => s.assets);
   const liabilities = useLiabilitiesStore((s) => s.liabilities);
@@ -49,9 +52,9 @@ export function useDigestSync() {
 
   // 1) The on/off switch.
   useEffect(() => {
-    if (!uid || guest) return;
+    if (!uid || guest || !hydrated) return;
     void setDoc(doc(db, 'users', uid, 'meta', 'digestInput'), { weeklyDigestEmail: enabled }, { merge: true }).catch(() => {});
-  }, [uid, guest, enabled]);
+  }, [uid, guest, enabled, hydrated]);
 
   // 2) The portfolio.
   const lastSig = useRef('');
@@ -59,7 +62,7 @@ export function useDigestSync() {
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
-    if (!uid || guest || !enabled) return;
+    if (!uid || guest || !enabled || !hydrated) return;
     if (!assetsConfirmed || !liabilitiesConfirmed) return;
     // Linked SIPs are valued from NAV history: wait until that has been tried at least once.
     const hasSip = assets.some((a) => a.assetClass === 'sip');
@@ -90,6 +93,7 @@ export function useDigestSync() {
         value: Math.round(r.value * 100) / 100,
         invested: r.invested !== undefined ? Math.round(r.invested * 100) / 100 : null,
         repriceable,
+        updatedAt: a.updatedAt ?? 0,
         ...(repriceable ? { symbol: a.symbol!.toUpperCase(), market: a.market === 'US' ? 'US' : 'IN', qty: a.quantity } : {}),
       };
     });
@@ -99,7 +103,7 @@ export function useDigestSync() {
     // (non-stock values, quantities, the lists themselves), not on every price move.
     const sig = JSON.stringify({
       totalLiabilities,
-      h: holdings.map((h) => (h.repriceable ? [h.id, h.name, h.qty, h.invested] : [h.id, h.name, h.value, h.invested])),
+      h: holdings.map((h) => (h.repriceable ? [h.id, h.name, h.qty, h.invested, h.updatedAt] : [h.id, h.name, h.value, h.invested, h.updatedAt])),
     });
     if (sig === lastSig.current && Date.now() - lastAt.current < 6 * 3600_000) return;
 
@@ -120,5 +124,5 @@ export function useDigestSync() {
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
-  }, [uid, guest, enabled, assets, liabilities, livePrices, sipValues, sipValuesAttempted, goldPricePerGram, pricesAttempted, goldAttempted, goldPriceError, assetsConfirmed, liabilitiesConfirmed, user?.displayName]);
+  }, [uid, guest, enabled, hydrated, assets, liabilities, livePrices, sipValues, sipValuesAttempted, goldPricePerGram, pricesAttempted, goldAttempted, goldPriceError, assetsConfirmed, liabilitiesConfirmed, user?.displayName]);
 }

@@ -91,6 +91,22 @@ export async function computeDigest(input, nowMs = Date.now()) {
   const gainers = sorted.filter((h) => h.weekChange > 0).slice(0, 3);
   const losers = sorted.filter((h) => h.weekChange < 0).reverse().slice(0, 3);
 
+  // Best / worst performer by all-time return (value vs what was invested), like the app's own digest.
+  const withReturn = holdings
+    .filter((h) => typeof h.invested === 'number' && h.invested > 0 && Number.isFinite(h.value))
+    .map((h) => ({ name: h.name, pct: ((h.value - h.invested) / h.invested) * 100, pnl: h.value - h.invested }))
+    .sort((a, b) => b.pct - a.pct);
+  const best = withReturn[0] ?? null;
+  const worst = withReturn.length > 1 ? withReturn[withReturn.length - 1] : null;
+  const inProfit = withReturn.filter((h) => h.pnl > 0.005).length;
+  const inLoss = withReturn.filter((h) => h.pnl < -0.005).length;
+  // Holdings the person added or edited during the week (the app saves each holding's updatedAt).
+  const changed = holdings
+    .filter((h) => Number(h.updatedAt) > nowMs - 7 * DAY_MS)
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, 5)
+    .map((h) => ({ name: h.name, at: Number(h.updatedAt) }));
+
   const byValue = [...holdings].sort((a, b) => (b.value || 0) - (a.value || 0));
   const top = byValue.slice(0, 5);
 
@@ -112,6 +128,7 @@ export async function computeDigest(input, nowMs = Date.now()) {
     weekPct: movers.length ? weekPct : null,
     movers: movers.length,
     gainers, losers, top, allocation,
+    best, worst, inProfit, inLoss, changed,
   };
 }
 
@@ -128,36 +145,111 @@ function rowsHtml(list, mode) {
     .join('');
 }
 
+const SERIF = "Georgia,'Times New Roman',Times,serif";
+const GOLD = '#C9A227';
+const NAVY = '#0B1226';
+
+/** Public address of the app, used for the logo in the email header. */
+function appUrl() {
+  const v = process.env.APP_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL || 'aurafin-five.vercel.app';
+  return /^https?:\/\//i.test(v) ? v.replace(/\/+$/, '') : `https://${v.replace(/\/+$/, '')}`;
+}
+
 export function buildEmail(d) {
   const range = `${fmtDate(d.weekStart)} – ${fmtDate(d.asOf)}`;
-  const hello = d.name ? `Hi ${esc(String(d.name).split(' ')[0])},` : 'Hi,';
-  const weekLine =
-    d.weekChange === null
-      ? `<span style="color:#64748B;">Week-over-week move isn’t available (no stocks or ETFs with live prices).</span>`
-      : `Stocks &amp; ETFs this week: <b style="color:${tone(d.weekChange)};">${signedInr(d.weekChange)}${d.weekPct !== null ? ` (${pct(d.weekPct)})` : ''}</b>`;
-  const stat = (label, value, color = '#0F172A') =>
-    `<td width="50%" style="padding:6px;"><div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:14px;"><div style="font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.06em;">${label}</div><div style="margin-top:4px;font-size:17px;font-weight:700;color:${color};">${value}</div></div></td>`;
-  const section = (title, body) =>
-    `<tr><td style="padding:20px 32px 0 32px;"><div style="font-size:12px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">${title}</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${body}</table></td></tr>`;
-
+  const first = d.name ? esc(String(d.name).trim().split(/\s+/)[0]) : '';
   const staleDate = d.lastAppSync ? fmtDate(d.lastAppSync) : null;
-  const footnote = [
+
+  const weekAmt = d.weekChange === null ? '—' : signedInr(d.weekChange);
+  const weekPct = d.weekChange === null || d.weekPct === null ? '—' : pct(d.weekPct);
+
+  const label = (t) => `<div style="font-family:${SERIF};font-size:14px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#4B5563;">${t}</div>`;
+  const heading = (t) => `<tr><td style="padding:34px 40px 0 40px;"><div style="font-family:${SERIF};font-size:16px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#4B5563;padding-bottom:12px;border-bottom:1px solid #E5E7EB;">${t}</div></td></tr>`;
+  const statRow = (name, value, color = '#111827') =>
+    `<tr><td style="padding:18px 0;border-bottom:1px solid #E5E7EB;font-family:${SERIF};font-size:18px;color:#374151;">${name}</td><td align="right" style="padding:18px 0;border-bottom:1px solid #E5E7EB;font-family:${SERIF};font-size:18px;font-weight:700;color:${color};">${value}</td></tr>`;
+  const perfCard = (bar, title, p) =>
+    `<td width="50%" valign="top" style="padding:0 6px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-left:3px solid ${bar};"><tr><td style="padding:2px 0 2px 14px;"><div style="font-family:${SERIF};font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#6B7280;">${title}</div><div style="margin-top:6px;font-family:${SERIF};font-size:16px;font-weight:700;color:#111827;">${p ? esc(p.name) : 'N/A'}</div>${p ? `<div style="margin-top:2px;font-family:${SERIF};font-size:14px;font-weight:700;color:${tone(p.pct)};">${pct(p.pct)}</div>` : ''}</td></tr></table></td>`;
+  const lineRows = (rows) =>
+    rows.length
+      ? rows.map((r) => `<tr><td style="padding:12px 0;border-bottom:1px solid #F1F2F4;font-family:${SERIF};font-size:16px;color:#111827;">${r.left}</td><td align="right" style="padding:12px 0;border-bottom:1px solid #F1F2F4;font-family:${SERIF};font-size:16px;color:#374151;">${r.right}</td></tr>`).join('')
+      : `<tr><td style="padding:12px 0;font-family:${SERIF};font-size:15px;color:#6B7280;">Nothing to show.</td></tr>`;
+  const section = (title, rows) => `${heading(title)}<tr><td style="padding:4px 40px 0 40px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}</table></td></tr>`;
+
+  const topRows = lineRows(d.top.map((h) => {
+    const r = typeof h.invested === 'number' && h.invested > 0 ? ((h.value - h.invested) / h.invested) * 100 : null;
+    return { left: esc(h.name), right: `<b style="color:#111827;">${inr(h.value)}</b>${r === null ? '' : ` <span style="color:${tone(r)};">(${pct(r)})</span>`}` };
+  }));
+  const sectorRows = lineRows(d.allocation.map((a) => ({ left: esc(a.label), right: `<b style="color:#111827;">${a.share.toFixed(1)}%</b> <span style="color:#6B7280;">· ${inr(a.value)}</span>` })));
+  const txRows = d.changed.length
+    ? lineRows(d.changed.map((c) => ({ left: esc(c.name), right: `updated ${fmtDate(c.at)}` })))
+    : `<tr><td style="padding:12px 0;font-family:${SERIF};font-size:15px;color:#6B7280;">No changes to your holdings this week.</td></tr>`;
+
+  const insightParts = [
+    d.weekChange !== null
+      ? `Your stocks &amp; ETFs are ${d.weekChange >= 0 ? 'up' : 'down'} ${inr(Math.abs(d.weekChange))}${d.weekPct !== null ? ` (${Math.abs(d.weekPct).toFixed(2)}%)` : ''} this week.`
+      : 'A week-over-week move is not available this time (no stocks or ETFs with live prices).',
+    d.best ? `${esc(d.best.name)} is your top performer, ${pct(d.best.pct)} overall.` : '',
+    d.totalLiabilities > 0 ? `You are carrying ${inr(d.totalLiabilities)} in liabilities against ${inr(d.totalAssets)} in assets.` : '',
+  ].filter(Boolean);
+
+  const note = [
     `Stock and ETF prices are the latest market close${d.repriced ? '' : ' (live prices could not be fetched this time, so the values saved by the app were used)'}.`,
     `Mutual funds, SIPs, gold, deposits and other holdings are shown as of your last visit to Aurafin${staleDate ? ` (${staleDate})` : ''}.`,
-    `Week-over-week figures cover stocks and ETFs only and ignore units you bought or sold during the week.`,
   ];
 
-  const html = `<!doctype html><html><body style="margin:0;padding:0;background:#F1F5F9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F1F5F9;padding:24px 0;"><tr><td align="center">
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:100%;background:#fff;border-radius:16px;overflow:hidden;">
-<tr><td style="background:#0F172A;padding:28px 32px;"><div style="font-size:20px;font-weight:700;color:#fff;">Aurafin</div><div style="margin-top:14px;font-size:20px;font-weight:700;color:#fff;">${hello} here’s your week</div><div style="margin-top:4px;font-size:13px;color:#94A3B8;">${range}</div></td></tr>
-<tr><td style="padding:26px 32px 4px 32px;"><div style="font-size:12px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.06em;">Portfolio value</div><div style="margin-top:6px;font-size:32px;font-weight:700;color:#0F172A;">${inr(d.totalAssets)}</div><div style="margin-top:6px;font-size:14px;color:#475569;">${weekLine}</div></td></tr>
-<tr><td style="padding:12px 26px 0 26px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${stat('Invested', inr(d.totalInvested))}${stat('Total profit / loss', `${signedInr(d.pnl)} (${pct(d.pnlPct)})`, tone(d.pnl))}</tr><tr>${stat('Liabilities', inr(d.totalLiabilities))}${stat('Net worth', inr(d.netWorth))}</tr></table></td></tr>
-${section('Top gainers this week', rowsHtml(d.gainers, 'move'))}
-${section('Top losers this week', rowsHtml(d.losers, 'move'))}
-${section('Largest holdings', rowsHtml(d.top, 'value'))}
-${section('Allocation', d.allocation.length ? d.allocation.map((a) => `<tr><td style="padding:6px 0;font-size:14px;color:#0F172A;border-bottom:1px solid #F1F5F9;">${esc(a.label)}</td><td align="right" style="padding:6px 0;font-size:14px;color:#475569;border-bottom:1px solid #F1F5F9;">${a.share.toFixed(1)}% &middot; ${inr(a.value)}</td></tr>`).join('') : '<tr><td style="font-size:13px;color:#64748B;">No holdings yet.</td></tr>')}
-<tr><td style="padding:22px 32px 28px 32px;"><div style="font-size:12px;line-height:1.6;color:#64748B;">${footnote.map(esc).join('<br>')}</div><div style="margin-top:12px;font-size:12px;color:#94A3B8;">You get this every Saturday at 10:00 AM IST. Turn it off in Aurafin › Settings › Notifications.</div></td></tr>
+  const logo = `${appUrl()}/logo-icon.png`;
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AuraFin Weekly Digest</title></head>
+<body style="margin:0;padding:0;background:#ECEEF2;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ECEEF2;padding:28px 0;"><tr><td align="center">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:100%;background:#FFFFFF;">
+
+<tr><td style="background:${NAVY};padding:30px 40px;border-bottom:4px solid ${GOLD};">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+<td width="56" valign="middle"><img src="${logo}" width="44" height="44" alt="AuraFin" style="display:block;border:0;border-radius:10px;color:#fff;font-family:${SERIF};font-size:11px;"></td>
+<td valign="middle" style="font-family:${SERIF};font-size:28px;font-weight:700;letter-spacing:.1em;color:#FFFFFF;">AURAFIN</td>
+<td align="right" valign="middle" style="font-family:${SERIF};font-size:13px;font-weight:700;letter-spacing:.16em;color:#D9DCE3;">WEEKLY DIGEST</td>
+</tr></table></td></tr>
+
+<tr><td style="padding:40px 40px 0 40px;">
+<div style="font-family:${SERIF};font-size:26px;font-style:italic;color:#111827;line-height:1.35;">Good week${first ? `, ${first}` : ''}. Here’s where things stand.</div>
+<div style="margin-top:6px;font-family:${SERIF};font-size:13px;color:#6B7280;">${range}</div>
+</td></tr>
+
+<tr><td style="padding:30px 40px 0 40px;">
+${label('Portfolio value')}
+<div style="margin-top:8px;font-family:${SERIF};font-size:40px;font-weight:700;color:#111827;">${inr(d.totalAssets)}</div>
+<div style="margin-top:8px;font-family:${SERIF};font-size:18px;color:#374151;">This week &nbsp;<b style="color:${d.weekChange === null ? '#6B7280' : tone(d.weekChange)};">${weekAmt}</b> &nbsp;·&nbsp; <b style="color:${d.weekChange === null ? '#6B7280' : tone(d.weekChange)};">${weekPct}</b></div>
+</td></tr>
+
+<tr><td style="padding:22px 40px 0 40px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #E5E7EB;">
+${statRow('Total invested', inr(d.totalInvested))}
+${statRow('Total profit / loss', signedInr(d.pnl), tone(d.pnl))}
+${statRow('Overall return', pct(d.pnlPct), tone(d.pnlPct))}
+${d.totalLiabilities > 0 ? statRow('Liabilities', inr(d.totalLiabilities)) + statRow('Net worth', inr(d.netWorth)) : ''}
+</table></td></tr>
+
+${heading('Performance')}
+<tr><td style="padding:18px 34px 0 34px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+${perfCard('#111827', 'Best performer', d.best)}${perfCard(GOLD, 'Worst performer', d.worst)}
+</tr></table></td></tr>
+<tr><td style="padding:16px 40px 0 40px;font-family:${SERIF};font-size:15px;color:#374151;"><b style="color:#047857;">${d.inProfit}</b> holdings in profit &nbsp;·&nbsp; <b style="color:#B91C1C;">${d.inLoss}</b> in loss</td></tr>
+
+${section('Top holdings', topRows)}
+${section('Sector allocation', sectorRows)}
+${section('Weekly transactions', txRows)}
+
+<tr><td style="padding:34px 40px 0 40px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F6F6F3;border-left:4px solid ${GOLD};"><tr><td style="padding:18px 22px;">
+<div style="font-family:${SERIF};font-size:14px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#4B5563;">Insight</div>
+<div style="margin-top:8px;font-family:${SERIF};font-size:16px;line-height:1.6;color:#1F2937;">${insightParts.join(' ')}</div>
+</td></tr></table></td></tr>
+
+<tr><td style="padding:18px 40px 36px 40px;font-family:${SERIF};font-size:12px;line-height:1.6;color:#6B7280;">${note.map(esc).join('<br>')}</td></tr>
+
+<tr><td style="background:${NAVY};padding:28px 40px;text-align:center;">
+<div style="font-family:${SERIF};font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:${GOLD};">AuraFin · Your personal net worth tracker</div>
+<div style="margin-top:10px;font-family:${SERIF};font-size:12px;line-height:1.6;color:#B8BDC9;">You’re receiving this because weekly digest emails are on in your notification preferences.</div>
+</td></tr>
+
 </table></td></tr></table></body></html>`;
 
   const lines = (list, mode) => (list.length ? list.map((h) => `  ${h.name}: ${mode === 'move' ? `${signedInr(h.weekChange)} (${pct(h.weekPct)})` : inr(h.value)}`).join('\n') : '  Nothing to show.');
@@ -170,15 +262,17 @@ ${section('Allocation', d.allocation.length ? d.allocation.map((a) => `<tr><td s
     `Total profit/loss: ${signedInr(d.pnl)} (${pct(d.pnlPct)})`,
     `Liabilities: ${inr(d.totalLiabilities)}`,
     `Net worth: ${inr(d.netWorth)}`,
+    d.best ? `Best performer: ${d.best.name} (${pct(d.best.pct)})` : '',
+    d.worst ? `Worst performer: ${d.worst.name} (${pct(d.worst.pct)})` : '',
     '',
     'Top gainers this week:', lines(d.gainers, 'move'),
     'Top losers this week:', lines(d.losers, 'move'),
     'Largest holdings:', lines(d.top, 'value'),
     '',
-    ...footnote,
+    ...note,
   ].join('\n');
 
-  return { subject: `Your Aurafin weekly digest · ${range}`, html, text };
+  return { subject: 'Your Weekly Aurafin Summary', html, text };
 }
 
 /**
@@ -222,7 +316,7 @@ export async function runWeeklyDigest(db, { dateKey, onlyUid = null, test = fals
 
       const digest = await computeDigest({ ...data, name: data.name || user.displayName || '' });
       const mail = buildEmail(digest);
-      await sendMail({ to: user.email, subject: test ? `[Test] ${mail.subject}` : mail.subject, html: mail.html, text: mail.text });
+      await sendMail({ to: user.email, subject: mail.subject, html: mail.html, text: mail.text });
       summary.sent++;
     } catch (err) {
       summary.errors.push({ uid: uid.slice(0, 6), error: String(err?.message ?? err).slice(0, 300) });

@@ -37,7 +37,8 @@ interface AlertsState {
   /** Removes an earlier day's saved levels. */
   removeSession: (dayKey: string) => void;
   setSession: (dayKey: string, which: SessionName, snap: SessionSnapshot) => void;
-  add: (item: Omit<AlertItem, 'id' | 'at' | 'read'> & { at?: number }) => void;
+  /** `id` is optional: an alert given a fixed id is added only once, however many times (or on however many devices) it is raised. */
+  add: (item: Omit<AlertItem, 'id' | 'at' | 'read'> & { at?: number; id?: string }) => void;
   markAllRead: () => void;
   /** Clears every alert and the past days' history (today's snapshots are kept). */
   clear: (todayKey?: string) => void;
@@ -72,9 +73,12 @@ export const useAlertsStore = create<AlertsState>()(
           return { sessions };
         }),
       add: (item) =>
-        set((s) => ({
-          items: [{ ...item, id: crypto.randomUUID(), at: item.at ?? Date.now(), read: false }, ...s.items].slice(0, MAX_ITEMS),
-        })),
+        set((s) => {
+          if (item.id && s.items.some((i) => i.id === item.id)) return s;
+          return {
+            items: [{ ...item, id: item.id ?? crypto.randomUUID(), at: item.at ?? Date.now(), read: false }, ...s.items].slice(0, MAX_ITEMS),
+          };
+        }),
       markAllRead: () => set((s) => ({ items: s.items.map((i) => ({ ...i, read: true })) })),
       clear: (todayKey) =>
         set((s) => ({

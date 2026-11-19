@@ -167,14 +167,25 @@ function ContentPanel({
       // The bar sits below the pinned "new update" notice, if any.
       // On desktop it is pinned (sticky) above the bar, so it counts there too.
       const notice = document.getElementById('app-update-banner')?.getBoundingClientRect().height ?? 0;
-      setTop(topbar ? topbar.getBoundingClientRect().height + notice + vvTop : vvTop);
+      const next = Math.round(topbar ? topbar.getBoundingClientRect().height + notice + vvTop : vvTop);
+      setTop((prev) => (prev === next ? prev : next));
     };
     measure();
+    // The update notice is still on screen (sliding away) at the instant a panel opened from it
+    // mounts, so a single measurement kept its height forever and left a blank gap above the panel
+    // where the page and any open menus showed through. Keep following the bars while the panel is open.
+    let raf = 0;
+    const tick = () => {
+      measure();
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
     window.addEventListener('resize', measure);
     const vv = window.visualViewport;
     vv?.addEventListener('resize', measure);
     vv?.addEventListener('scroll', measure);
     return () => {
+      cancelAnimationFrame(raf);
       window.removeEventListener('resize', measure);
       vv?.removeEventListener('resize', measure);
       vv?.removeEventListener('scroll', measure);

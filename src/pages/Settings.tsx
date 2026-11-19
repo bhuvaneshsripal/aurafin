@@ -1143,9 +1143,9 @@ function NotificationsCard() {
             key={row.title}
             className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-slate-50 dark:bg-slate-800/40 px-4 py-3"
           >
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 flex items-center gap-1.5">
               <span className="text-sm font-medium text-ink">{row.title}</span>
-              <p className="text-xs text-muted mt-0.5">{hints[row.title]}</p>
+              <InfoTip label={`About ${row.title}`}>{hints[row.title]}</InfoTip>
             </div>
             <div className="flex items-center gap-5">
               {row.channels.map(({ key, label, icon: Icon }) => (

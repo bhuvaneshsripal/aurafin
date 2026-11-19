@@ -75,6 +75,10 @@ export function isInQuietHours(a: AdvancedNotificationSettings, nowMins: number)
 }
 
 const STORAGE_KEY = 'aurafin-notification-prefs';
+/** When the settings were last changed on this device (ms). Newest change wins when devices sync. */
+const UPDATED_AT_KEY = 'aurafin-notification-prefs-at';
+/** Which account the saved settings belong to, so one person's switches never leak into another's. */
+const OWNER_KEY = 'aurafin-notification-prefs-uid';
 const LAST_SENT_KEY = 'aurafin-weekly-digest-last-sent';
 
 // Both channels default to on, matching what a newly signed-up person
@@ -101,6 +105,16 @@ function loadStoredPrefs(): Record<NotificationChannelKey, boolean> {
 interface NotificationPreferencesState {
   prefs: Record<NotificationChannelKey, boolean>;
   advanced: AdvancedNotificationSettings;
+  /** Time of the last change (ms, 0 = never changed, still on defaults). */
+  updatedAt: number;
+  /** True once this account's saved settings have been read from the cloud. Nothing that writes the
+   *  settings elsewhere (the digest switch) may run before that, or it would push defaults over them. */
+  hydrated: boolean;
+  setHydrated: (hydrated: boolean) => void;
+  /** Takes the settings from the cloud copy (another device changed them). */
+  applyRemote: (prefs: Partial<Record<NotificationChannelKey, boolean>>, advanced: Partial<AdvancedNotificationSettings>, at: number) => void;
+  /** Forgets this device's settings when a different account signs in. */
+  resetForAccount: (uid: string) => void;
   setAdvanced: (patch: Partial<AdvancedNotificationSettings>) => void;
   /** IST date-key ("YYYY-MM-DD") of the last Saturday the weekly digest
    *  was actually sent for — used to send it once per week rather than
@@ -128,18 +142,83 @@ function loadStoredLastSentFor(): string | null {
   }
 }
 
+function loadStoredUpdatedAt(): number {
+  try {
+    return Number(localStorage.getItem(UPDATED_AT_KEY)) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function saveUpdatedAt(at: number) {
+  try {
+    localStorage.setItem(UPDATED_AT_KEY, String(at));
+  } catch {
+    // Best-effort.
+  }
+}
+
 export const useNotificationPreferencesStore = create<NotificationPreferencesState>((set, get) => ({
   prefs: loadStoredPrefs(),
   advanced: loadStoredAdvanced(),
+  updatedAt: loadStoredUpdatedAt(),
+  hydrated: false,
   weeklyDigestLastSentFor: loadStoredLastSentFor(),
 
   init: () => {
-    set({ prefs: loadStoredPrefs(), advanced: loadStoredAdvanced(), weeklyDigestLastSentFor: loadStoredLastSentFor() });
+    set({
+      prefs: loadStoredPrefs(),
+      advanced: loadStoredAdvanced(),
+      updatedAt: loadStoredUpdatedAt(),
+      weeklyDigestLastSentFor: loadStoredLastSentFor(),
+    });
+  },
+
+  setHydrated: (hydrated) => set({ hydrated }),
+
+  applyRemote: (prefs, advanced, at) => {
+    const nextPrefs = { ...DEFAULT_PREFS, ...get().prefs, ...prefs };
+    const nextAdvanced = { ...DEFAULT_ADVANCED, ...get().advanced, ...advanced };
+    if (!Array.isArray(nextAdvanced.holdingMoveLevels) || nextAdvanced.holdingMoveLevels.length === 0) {
+      nextAdvanced.holdingMoveLevels = [...DEFAULT_ADVANCED.holdingMoveLevels];
+    }
+    set({ prefs: nextPrefs, advanced: nextAdvanced, updatedAt: at });
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(nextPrefs));
+      localStorage.setItem(ADVANCED_KEY, JSON.stringify(nextAdvanced));
+    } catch {
+      // Best-effort.
+    }
+    saveUpdatedAt(at);
+  },
+
+  resetForAccount: (uid) => {
+    let owner: string | null = null;
+    try {
+      owner = localStorage.getItem(OWNER_KEY);
+      localStorage.setItem(OWNER_KEY, uid);
+    } catch {
+      // Best-effort.
+    }
+    if (owner === uid) return;
+    // First sign-in on this device, or a different account than before: start from the defaults
+    // (an older build saved settings without an owner, so those count as this account's).
+    if (owner === null && get().updatedAt > 0) return;
+    set({ prefs: { ...DEFAULT_PREFS }, advanced: { ...DEFAULT_ADVANCED }, updatedAt: 0 });
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(ADVANCED_KEY);
+    } catch {
+      // Best-effort.
+    }
+    saveUpdatedAt(0);
   },
 
   setAdvanced: (patch) => {
     const next = { ...get().advanced, ...patch };
-    set({ advanced: next });
+    const at = Date.now();
+    set({ advanced: next, updatedAt: at });
+    saveUpdatedAt(at);
     try {
       localStorage.setItem(ADVANCED_KEY, JSON.stringify(next));
     } catch {
@@ -149,7 +228,9 @@ export const useNotificationPreferencesStore = create<NotificationPreferencesSta
 
   toggle: (key) => {
     const next = { ...get().prefs, [key]: !get().prefs[key] };
-    set({ prefs: next });
+    const at = Date.now();
+    set({ prefs: next, updatedAt: at });
+    saveUpdatedAt(at);
     // Changes take effect immediately — persisted straight away rather
     // than waiting on a separate "Save" action.
     try {

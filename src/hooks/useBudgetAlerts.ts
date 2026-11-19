@@ -4,6 +4,7 @@ import { useTransactionsStore } from '../store/transactionsStore';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import { useAlertsStore } from '../store/alertsStore';
 import { useNotificationPreferencesStore } from '../store/notificationPreferencesStore';
+import { useAuthStore } from '../store/authStore';
 import { useSyncStatusStore } from '../store/syncStatusStore';
 import { budgetKey, canonicalCategory } from '../utils/budgetCategories';
 import { getIstDateInfo } from '../utils/marketHours';
@@ -40,6 +41,10 @@ function saveFired(month: string, keys: Set<string>) {
  */
 export function useBudgetAlerts() {
   const enabled = useNotificationPreferencesStore((s) => s.prefs.budgetAlertsInApp);
+  // Wait for the switch to be read from the cloud, so a device that has it off elsewhere never raises alerts
+  // from its own default. Guests are device-only, so there is nothing to wait for.
+  const hydrated = useNotificationPreferencesStore((s) => s.hydrated);
+  const guest = useAuthStore((s) => (s.user as { isAnonymous?: boolean } | null)?.isAnonymous === true);
   const budgets = useBudgetStore((s) => s.items);
   const transactions = useTransactionsStore((s) => s.transactions);
   const activeProfileId = useHouseholdProfilesStore((s) => s.activeProfileId);
@@ -61,7 +66,7 @@ export function useBudgetAlerts() {
   }, [transactions, activeProfileId, month]);
 
   useEffect(() => {
-    if (!enabled || !txConfirmed) return;
+    if (!enabled || !txConfirmed || !(hydrated || guest)) return;
     const fired = loadFired(month);
     let changed = false;
     for (const item of budgets) {
@@ -79,6 +84,8 @@ export function useBudgetAlerts() {
       changed = true;
       const name = canonicalCategory(item.category);
       addAlert({
+        // Same id on every device, so the alert shows once in each bell instead of repeating.
+        id: marks[marks.length - 1],
         kind: 'budget',
         title: level >= 100 ? `${name} budget exceeded` : `${name} budget at ${Math.floor(used)}%`,
         body:
@@ -88,5 +95,5 @@ export function useBudgetAlerts() {
       });
     }
     if (changed) saveFired(month, fired);
-  }, [enabled, txConfirmed, budgets, spentByCategory, month, activeProfileId, addAlert]);
+  }, [enabled, hydrated, guest, txConfirmed, budgets, spentByCategory, month, activeProfileId, addAlert]);
 }

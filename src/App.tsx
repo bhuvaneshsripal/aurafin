@@ -34,6 +34,7 @@ import { useAppWarmup } from './hooks/useAppWarmup';
 import { useLiveSipValues } from './hooks/useLiveSipValues';
 import { useLiveGoldPrice } from './hooks/useLiveGoldPrice';
 import { useDigestSync } from './hooks/useDigestSync';
+import { useNotificationPrefsSync } from './hooks/useNotificationPrefsSync';
 import { useBudgetAlerts } from './hooks/useBudgetAlerts';
 import { useMarketAlerts } from './hooks/useMarketAlerts';
 import { usePushSubscription } from './hooks/usePushSubscription';
@@ -271,6 +272,8 @@ function LivePriceSync() {
 }
 
 function WeeklyDigestSync() {
+  // Notification switches follow the account to every device.
+  useNotificationPrefsSync();
   // The Saturday email itself is sent by the server; this keeps its data and on/off switch current.
   useDigestSync();
   // In-app budget alerts (80% / 100% of a category's monthly budget).

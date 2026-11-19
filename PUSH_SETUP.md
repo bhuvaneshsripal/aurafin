@@ -112,6 +112,12 @@ Where the numbers come from:
 Settings > Notifications > "Budget alerts" adds a bell notification inside the app when a
 category reaches 80% and 100% of its monthly budget (checked while the app is open).
 
+## Notification switches sync across devices
+The Settings > Notifications switches (and the Advanced options) are saved to Firestore at
+`users/{uid}/meta/notificationPrefs`, so a change on one device appears on the others live. The most
+recent change wins. No new rules or env vars are needed (the existing `users/{uid}/...` rule covers it).
+Budget alerts use a fixed id per category / level / month, so each device shows an alert once.
+
 ## If alerts still don't arrive with the app closed
 - Every push must show a notification. The service worker now always does (before, pushes that
   arrived while the app was open were skipped silently, and iPhone/Chrome then drop the subscription).
