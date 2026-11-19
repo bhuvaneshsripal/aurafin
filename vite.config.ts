@@ -539,6 +539,9 @@ export default defineConfig({
     },
   },
   build: {
+    // The app is a PWA with everything precached, and the big libraries (3D scene, PDF, Excel, charts)
+    // are already split into their own chunks, so the default 500 kB warning is just noise.
+    chunkSizeWarningLimit: 2000,
     rolldownOptions: {
       output: {
         // Explicit chunk groups. `priority` decides who claims a shared module
