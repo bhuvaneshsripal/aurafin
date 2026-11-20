@@ -25,6 +25,7 @@ import {
   useBasicDetailsSync,
   usePendingFlush,
   assignOrphanDataToProfile,
+  useAutoNetWorthHistory,
   ALL_USER_COLLECTIONS,
 } from './hooks/useFirestoreSync';
 import { useWatchlistSync } from './hooks/useWatchlistSync';
@@ -291,8 +292,9 @@ function DataSync() {
   useBackgroundDataCache();
   // Preloads other screens' data (watchlist prices, high volume) so they open already filled.
   useAppWarmup();
-  // Net worth history is no longer recorded automatically: a snapshot is saved
-  // only when the person taps "Take Snapshot" (Wealth > Net worth, or Quick add).
+  // Records today's live net worth as the day's history point automatically, so
+  // the "Net worth over time" chart keeps building without tapping "Take Snapshot".
+  useAutoNetWorthHistory();
 
   // One-time backfill: data created before household profiles existed has
   // no profileId. While there's exactly one profile, "whose data is this"

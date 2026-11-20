@@ -50,11 +50,7 @@ import { useHouseholdProfilesStore, PROFILE_COLOURS } from '../store/householdPr
 import { useInstallPromptStore, triggerInstallPrompt } from '../store/installPromptStore';
 import type { HouseholdProfile } from '../types';
 import Modal from '../components/Modal';
-import { hardRefresh } from '../utils/hardRefresh';
 import UpdateDot from '../components/UpdateDot';
-import WhatsNewModal, { useWhatsNew } from '../components/WhatsNewModal';
-import { isNewVersionDeployed } from '../utils/updateChecks';
-import { useUpdateStore } from '../store/updateStore';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useUrlTab } from '../hooks/useUrlTab';
 import CustomSelect from '../components/CustomSelect';
@@ -2118,38 +2114,6 @@ export default function Settings() {
     initialTab && TABS.some((t) => t.key === initialTab) ? initialTab : 'basic'
   );
 
-  // The update banner sends people here with the "New version" dialog already open.
-  const [whatsNewOpen, setWhatsNewOpen] = useState(
-    () => !!(location.state as { openWhatsNew?: boolean } | null)?.openWhatsNew
-  );
-  const [updating, setUpdating] = useState(false);
-  // Opening "New version" first checks for a deployed update (spinner), then
-  // shows the release list only if one is waiting; otherwise the list is empty.
-  const pendingUpdate = useUpdateStore((s) => s.updateAvailable);
-  const [updateStatus, setUpdateStatus] = useState<'checking' | 'available' | 'uptodate'>('checking');
-  const [lastChecked, setLastChecked] = useState<Date | null>(null);
-  const [checkNonce, setCheckNonce] = useState(0); // bumped by "Check again"
-  // Fetch the release notes as soon as an update is known (not only after the dialog
-  // opens), so the list is already there when it appears.
-  const whatsNew = useWhatsNew(pendingUpdate || (whatsNewOpen && updateStatus === 'available'));
-  useEffect(() => {
-    if (!whatsNewOpen) return;
-    let cancelled = false;
-    // An update is already known (banner / red dot): show the list straight away and
-    // re-verify quietly. Otherwise a short spinner while the check runs.
-    setUpdateStatus(pendingUpdate ? 'available' : 'checking');
-    const minSpinner = new Promise((r) => window.setTimeout(r, pendingUpdate ? 0 : 250));
-    void Promise.all([isNewVersionDeployed(), minSpinner]).then(([deployed]) => {
-      if (cancelled) return;
-      setLastChecked(new Date());
-      setUpdateStatus(pendingUpdate || deployed === true ? 'available' : 'uptodate');
-    });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [whatsNewOpen, checkNonce]);
-
   // Phones show the menu first and one section at a time; desktop shows both side by side.
   // Desktop: the menu (left) and the section (right) are two separate scroll
   // areas that together fill exactly the space under the heading, so the page
@@ -2192,13 +2156,6 @@ export default function Settings() {
   // landing on some other section. Desktop ignores `open`.
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  // Forget the one-time "open the dialog" flag so a reload doesn't reopen it.
-  useEffect(() => {
-    if ((location.state as { openWhatsNew?: boolean } | null)?.openWhatsNew) {
-      navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   // Arriving straight at a section (a link, a refresh, or "go to Profiles")
   // shows that section; the entry is then tagged open=1 so Back leaves it normally.
   const [deepLinked, setDeepLinked] = useState(
@@ -2277,7 +2234,7 @@ export default function Settings() {
             })}
             <button
               type="button"
-              onClick={() => setWhatsNewOpen(true)}
+              onClick={() => navigate('/whats-new')}
               className="press-row w-full text-left px-5 h-16 border-t border-line text-[15px] font-normal text-slate-600 hover:bg-surface-hover hover:text-ink flex items-center justify-between gap-2 transition-colors"
             >
               <span className="flex items-center gap-3 min-w-0">
@@ -2316,21 +2273,6 @@ export default function Settings() {
           {tab === 'shortcuts' && <ShortcutsTab />}
         </div>
       </div>
-      <WhatsNewModal
-        open={whatsNewOpen}
-        onClose={() => setWhatsNewOpen(false)}
-        notes={whatsNew}
-        status={updateStatus}
-        lastChecked={lastChecked}
-        onRecheck={() => setCheckNonce((n) => n + 1)}
-        updating={updating}
-        onUpdate={() => {
-          setUpdating(true);
-          void hardRefresh().then((ok) => {
-            if (!ok) setUpdating(false);
-          });
-        }}
-      />
     </div>
   );
 }

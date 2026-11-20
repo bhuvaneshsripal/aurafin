@@ -532,8 +532,6 @@ export default function NotificationBell(_props: { align?: 'right' | 'left' } = 
               </div>
             )}
           </div>
-          {/* Soft fade where the list meets the bottom navigation, instead of a hard cut. */}
-          <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-[calc(80px+env(safe-area-inset-bottom))] md:bottom-0 h-14" style={{ background: 'linear-gradient(to top, var(--color-page), transparent)' }} />
         </div>
         </div>,
         document.body

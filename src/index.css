@@ -1728,11 +1728,6 @@ input.global-search-input:focus,
 .global-search-caret { animation: global-caret-blink 1s steps(1) infinite; }
 body[data-hide-eye] [data-privacy-fab] { display: none !important; }
 
-/* "What's new" page: hide the soft fade above the bottom nav (phones only render it). */
-body[data-no-bottom-fade] [data-bottom-fade] {
-  display: none;
-}
-
 /* ---- "Amounts are hidden" toast (RevealEyePrompt): slides up from the bottom,
    4-second countdown ring. ------------------------------------------------ */
 @keyframes eye-toast-in {

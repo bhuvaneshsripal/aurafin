@@ -8,8 +8,6 @@ import {
   Calculator,
   Settings,
   MessageSquare,
-  LifeBuoy,
-  Headphones,
   X,
   LineChart,
   Gem,
@@ -24,7 +22,7 @@ import { handleActiveTabTap } from '../utils/tabTap';
 import { APP_VERSION } from '../config/version';
 import UpdateDot from './UpdateDot';
 import FeedbackModal from './FeedbackModal';
-import { openSupportMail, supportContext } from '../config/support';
+import { openSupportMail } from '../config/support';
 import { useUiStore } from '../store/uiStore';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { useModalBackClose } from '../hooks/useModalBackClose';
@@ -456,17 +454,6 @@ export default function BottomNav() {
           }}
           className="md:hidden fixed bottom-0 left-0 right-0 z-40 h-[calc(80px+env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)] flex items-center justify-center pointer-events-none"
         >
-          {/* Soft fade at the bottom of the screen: page content melts into the
-              background behind the bar instead of being cut off by it. Taps pass through. */}
-          <div
-            aria-hidden
-            data-bottom-fade
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-[calc(120px+env(safe-area-inset-bottom))]"
-            style={{
-              background:
-                'linear-gradient(to top, var(--color-page) 0%, color-mix(in srgb, var(--color-page) 85%, transparent) 35%, color-mix(in srgb, var(--color-page) 40%, transparent) 70%, transparent 100%)',
-            }}
-          />
           <div
             ref={barRef}
             style={
@@ -640,36 +627,24 @@ export default function BottomNav() {
                 Feedback
               </button>
             </div>
-            <div className="px-5 pt-1 pb-3">
-              <button
-                type="button"
-                onClick={() => { setMoreOpen(false); openSupportMail('Aurafin support', supportContext()); }}
-                className="tap-scale flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 hover:bg-brand-700 px-5 py-3 text-sm font-semibold text-white transition-colors"
-              >
-                <LifeBuoy size={18} strokeWidth={2} />
-                Contact us
-              </button>
-              {/* Outlined (no fill) secondary button sitting under Contact us. */}
-              <button
-                type="button"
-                onClick={() => { setMoreOpen(false); openSupportMail('Aurafin support request', supportContext()); }}
-                className="tap-scale mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-brand-600 bg-transparent px-5 py-3 text-sm font-semibold text-brand-700 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-500/15 transition-colors"
-              >
-                <Headphones size={18} strokeWidth={2} />
-                Support
-              </button>
-            </div>
             <div className="px-5 pb-6 pt-2 text-center text-xs text-muted">
               <p className="mb-1 font-medium">Aurafin v{APP_VERSION}</p>
               Developed by Bhuvanesh S ·{' '}
-              <a
-                href="https://www.linkedin.com/in/bhuvaneshs07"
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={() => { setMoreOpen(false); openSupportMail('Aurafin support'); }}
                 className="text-primary-ink hover:underline font-medium"
               >
-                LinkedIn
-              </a>
+                Contact us
+              </button>
+              ,{' '}
+              <button
+                type="button"
+                onClick={() => { setMoreOpen(false); openSupportMail('Aurafin support'); }}
+                className="text-primary-ink hover:underline font-medium"
+              >
+                Support
+              </button>
             </div>
           </div>
         </div>

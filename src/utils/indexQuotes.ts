@@ -28,7 +28,7 @@ export type IndexQuotesState = IndexQuote[] | null | undefined;
 const LIVE_MS = 1_000; // from just before the pre-open until just after the close: every second
 const IDLE_MS = 30_000; // otherwise nothing moves, so poll lazily
 const CACHE_KEY = 'aurafin.tickerQuotes';
-/** The last levels seen *outside* the 4:30–9:15 AM reset window, i.e. the
+/** The last levels seen *outside* the 8:00–9:15 AM reset window, i.e. the
  *  previous session's close. While the strip shows 0 for the new day, a quote
  *  still equal to this is the old close; the first different one is today's. */
 const BASELINE_KEY = 'aurafin.indexBaseline';
@@ -98,6 +98,21 @@ function persist(q: IndexQuote[], force = false) {
   }
 }
 
+/** `fresh` plus, for every index missing from it, the newest earlier quote of that index. */
+function withLastKnown(fresh: IndexQuote[], earlier: IndexQuote[]): IndexQuote[] {
+  const have = new Set(fresh.map((x) => x.key));
+  const extra: IndexQuote[] = [];
+  for (const e of earlier) {
+    if (have.has(e.key)) continue;
+    have.add(e.key);
+    extra.push(e);
+  }
+  if (extra.length === 0) return fresh;
+  const order = ['nifty', 'sensex', 'banknifty'];
+  const rank = (k: string) => (order.includes(k) ? order.indexOf(k) : order.length);
+  return [...fresh, ...extra].sort((a, b) => rank(a.key) - rank(b.key));
+}
+
 function startPolling(): () => void {
   let cancelled = false;
   let timer: number | undefined;
@@ -113,7 +128,11 @@ function startPolling(): () => void {
     const hidden = document.visibilityState === 'hidden';
     if (!hidden || startedAt - lastFetchAt >= BACKGROUND_MS) {
       lastFetchAt = startedAt;
-      const q = await fetchIndexQuotes();
+      const fresh = await fetchIndexQuotes();
+      // A response can come back with only some indices (e.g. Nifty but not Sensex when one
+      // data source hiccups). Keep the last known level for any index it left out, so the
+      // strip always shows all three instead of dropping down to just NIFTY.
+      const q = fresh ? withLastKnown(fresh, [...(lastGood ?? []), ...(Array.isArray(snapshot) ? snapshot : [])]) : null;
       if (q) {
         lastGood = q;
         lastGoodAt = Date.now();

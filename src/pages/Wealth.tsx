@@ -71,7 +71,6 @@ import SectorAllocationCard from '../components/SectorAllocationCard';
 import MarketCapCard from '../components/MarketCapCard';
 import PortfolioScoreCard from '../components/PortfolioScoreCard';
 import HeaderPills from '../components/HeaderPills';
-import { dropSpikes } from '../utils/netWorthHistory';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import { upsertDoc, removeDoc, saveWealthFilters, saveWealthSort } from '../hooks/useFirestoreSync';
 import { useWealthFilterStore } from '../store/wealthFilterStore';
@@ -2011,7 +2010,7 @@ function AssetsTab({
       // Per-unit 1D change (only meaningful for symbol-priced holdings that
       // have a previous close — e.g. direct stocks; undefined for everything
       // else, which the Holdings table below renders as "—" rather than 0).
-      // Between 5:30 AM and market open (9:15 AM) IST, this is pinned to 0
+      // Between 8:00 AM and market open (9:15 AM) IST, this is pinned to 0
       // instead of showing last night's now-stale change — see
       // useDayChangeResetWindow / isDayChangeResetWindow for why.
       const previousClose = resolvePreviousClose(a.symbol, previousCloses);
@@ -8624,7 +8623,8 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   // The Snapshot history list below still shows every saved day so a bad one can be deleted.
   const { cleanAsc, spikeIds } = useMemo(() => {
     const withLive = [...sortedAsc.filter((s) => s.date !== today), ...(liveSnap ? [liveSnap] : [])];
-    const kept = dropSpikes(withLive);
+    // Nothing is filtered out: every saved day counts, so real highs are not hidden.
+    const kept = withLive;
     const keptIds = new Set(kept.map((s) => s.id));
     return {
       cleanAsc: kept.filter((s) => s.id !== 'live-today'),
@@ -9325,6 +9325,7 @@ function PerformsList({
           {rows.map((r, i) => {
             const a = r.asset;
             const up = r.percent >= 0;
+            const flat = r.percent === 0;
             return (
               <li key={a.id} className="flex items-center gap-3 px-5 py-3">
                 <span className="w-4 text-xs text-muted font-numeric">{i + 1}</span>
@@ -9336,12 +9337,12 @@ function PerformsList({
                   </p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className={`text-sm font-semibold font-numeric ${up ? 'text-positive' : 'text-negative'}`}>
-                    {up ? '+' : '−'}
+                  <p className={`text-sm font-semibold font-numeric ${flat ? 'text-muted' : up ? 'text-positive' : 'text-negative'}`}>
+                    {flat ? '' : up ? '+' : '−'}
                     {formatPercentMagnitude(r.percent)}
                   </p>
                   {r.total !== undefined && (
-                    <p className={`text-xs font-numeric ${up ? 'text-positive' : 'text-negative'}`}>
+                    <p className={`text-xs font-numeric ${flat ? 'text-muted' : up ? 'text-positive' : 'text-negative'}`}>
                       {formatSignedCurrency(r.total, a.currency)}
                     </p>
                   )}
@@ -9375,7 +9376,9 @@ function PerformsTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
       const computed = resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram);
       const previousClose = resolvePreviousClose(a.symbol, previousCloses);
       if (previousClose === undefined || !previousClose || computed.currentPrice === undefined) continue;
-      const perUnit = computed.currentPrice - previousClose;
+      // Between 8:00 AM and the open the day's move is 0: still list every
+      // holding (with 0 values) instead of an empty "waiting" card.
+      const perUnit = dayChangeResetActive ? 0 : computed.currentPrice - previousClose;
       rows.push({
         asset: a,
         percent: (perUnit / previousClose) * 100,
@@ -9395,14 +9398,14 @@ function PerformsTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
       worstAll: rows.filter((r) => r.percent < 0).reverse(),
       count: rows.length,
     };
-  }, [allAssets, activeProfileId, livePrices, previousCloses, sipValues, liveGoldPricePerGram]);
+  }, [allAssets, activeProfileId, livePrices, previousCloses, sipValues, liveGoldPricePerGram, dayChangeResetActive]);
 
   return (
     <div className="space-y-4">
       <PageHeader
         title="Performs"
         description={
-          count > 0 && !dayChangeResetActive ? (
+          count > 0 ? (
             <HeaderPills
               pills={[
                 { value: count, label: 'tracked today', tone: 'neutral' },
@@ -9414,16 +9417,12 @@ function PerformsTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
         }
       />
       <TabNav tab={tab} setTab={setTab} />
-      {count === 0 || dayChangeResetActive ? (
+      {count === 0 ? (
         <Card padding="none">
           <EmptyState
             icon={<TrendingUp size={18} />}
-            title={dayChangeResetActive ? "Waiting for today's market" : 'No day changes yet'}
-            description={
-              dayChangeResetActive
-                ? "Today's moves show up once the market opens."
-                : "Today's moves appear for stocks and funds with a live price once prices have loaded."
-            }
+            title="No day changes yet"
+            description="Today's moves appear for stocks and funds with a live price once prices have loaded."
           />
         </Card>
       ) : (

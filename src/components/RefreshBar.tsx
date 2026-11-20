@@ -14,8 +14,7 @@ export default function RefreshBar() {
 
   // Keep the line glued to the bottom of the bars for as long as it shows. The position is
   // re-read every frame (cheap, and only while active) because the "new update" notice, the
-  // network banner or a scroll can move the bars *after* the line starts; measuring only once
-  // left the line stranded across the notice.
+  // network banner or a scroll can move the bars *after* the line starts.
   useLayoutEffect(() => {
     if (!active) {
       setBox(null);
@@ -25,13 +24,10 @@ export default function RefreshBar() {
     const measure = () => {
       const bar = document.getElementById('app-topbar')?.getBoundingClientRect();
       const strip = document.getElementById('app-marquee')?.getBoundingClientRect();
-      const notice = document.getElementById('app-update-banner')?.getBoundingClientRect();
       const stripVisible = !!strip && strip.height > 0 && strip.width > 0;
-      const top = Math.max(
-        bar?.bottom ?? 56,
-        stripVisible ? strip!.bottom : 0,
-        notice && notice.height > 0 ? notice.bottom : 0
-      );
+      // Always the bottom edge of the top bar / index strip, never the "new update"
+      // notice above them (the bars sit below the notice, so they already move with it).
+      const top = Math.max(bar?.bottom ?? 56, stripVisible ? strip!.bottom : 0);
       const left = bar?.left ?? 0;
       const width = bar?.width ?? window.innerWidth;
       setBox((prev) =>

@@ -10,7 +10,7 @@ import { fetchNseAllIndices } from './nse.js';
 import { fetch } from './fetchTimeout.js';
 const INDICES = [
   { key: 'nifty', name: 'NIFTY', yahoo: ['^NSEI'], nse: 'NIFTY 50' },
-  { key: 'sensex', name: 'SENSEX', yahoo: ['^BSESN'] },
+  { key: 'sensex', name: 'SENSEX', yahoo: ['^BSESN', 'BSE-SENSEX.BO'] },
   { key: 'banknifty', name: 'BANKNIFTY', yahoo: ['^NSEBANK'], nse: 'NIFTY BANK' },
   { key: 'midcpnifty', name: 'MIDCPNIFTY', yahoo: ['NIFTY_MID_SELECT.NS', '^NSEMDCP50'], nse: 'NIFTY MIDCAP SELECT' },
   { key: 'finnifty', name: 'FINNIFTY', yahoo: ['NIFTY_FIN_SERVICE.NS', '^CNXFIN'], nse: 'NIFTY FINANCIAL SERVICES' },
@@ -22,24 +22,28 @@ const num = (v) => {
 };
 
 async function yahooQuote(symbol) {
-  try {
-    const res = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1m&range=1d`,
-      { headers: { 'User-Agent': 'Mozilla/5.0' } }
-    );
-    if (!res.ok) return null;
-    const result = (await res.json())?.chart?.result?.[0];
-    const meta = result?.meta;
-    const price = num(meta?.regularMarketPrice);
-    if (price === undefined) return null;
-    // Today's opening level = first 1-minute candle's open (lets the app
-    // back-fill "Open" even if it wasn't running at 9:15).
-    const opens = result?.indicators?.quote?.[0]?.open;
-    const open = Array.isArray(opens) ? num(opens.find((v) => num(v) !== undefined)) : undefined;
-    return { price, previousClose: num(meta?.chartPreviousClose) ?? num(meta?.previousClose), open };
-  } catch {
-    return null;
+  // Yahoo sometimes refuses one host (rate limit) while the other answers, so try both.
+  for (const host of ['query1', 'query2']) {
+    try {
+      const res = await fetch(
+        `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1m&range=1d`,
+        { headers: { 'User-Agent': 'Mozilla/5.0' } }
+      );
+      if (!res.ok) continue;
+      const result = (await res.json())?.chart?.result?.[0];
+      const meta = result?.meta;
+      const price = num(meta?.regularMarketPrice);
+      if (price === undefined) continue;
+      // Today's opening level = first 1-minute candle's open (lets the app
+      // back-fill "Open" even if it wasn't running at 9:15).
+      const opens = result?.indicators?.quote?.[0]?.open;
+      const open = Array.isArray(opens) ? num(opens.find((v) => num(v) !== undefined)) : undefined;
+      return { price, previousClose: num(meta?.chartPreviousClose) ?? num(meta?.previousClose), open };
+    } catch {
+      /* try the next host */
+    }
   }
+  return null;
 }
 
 // The top bar polls once a second per open tab; share one upstream fetch

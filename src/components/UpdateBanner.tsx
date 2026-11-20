@@ -130,10 +130,10 @@ export default function UpdateBanner() {
 
   if (!mounted) return null;
 
-  // Updating happens only from Settings: open it with the "New version" dialog showing.
+  // Updating happens only from the What's new page.
   const openSettings = () => {
     dismiss();
-    navigate('/settings', { state: { openWhatsNew: true } });
+    navigate('/whats-new');
   };
 
   return (

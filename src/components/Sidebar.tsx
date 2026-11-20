@@ -9,7 +9,6 @@ import {
   FileUp,
   Calculator,
   MessageSquare,
-  LifeBuoy,
   LineChart,
   Gem,
   Wallet,
@@ -26,7 +25,7 @@ import { useUiStore } from '../store/uiStore';
 import ProfileSwitcher from './ProfileSwitcher';
 import AppLogo from './AppLogo';
 import FeedbackModal from './FeedbackModal';
-import { openSupportMail, supportContext } from '../config/support';
+import { openSupportMail } from '../config/support';
 import UpdateDot from './UpdateDot';
 
 import { handleActiveTabTap } from '../utils/tabTap';
@@ -178,17 +177,6 @@ export default function Sidebar() {
           </button>
         </nav>
 
-        {/* A real button (not a navigation row): opens a new email to support. */}
-        <button
-          type="button"
-          onClick={() => openSupportMail('Aurafin support', supportContext())}
-          title="Contact us"
-          className="tap-scale mt-3 flex w-full items-center justify-center gap-2 h-10 px-3 rounded-xl border border-brand-600 bg-brand-50 text-[14px] font-semibold text-brand-700 hover:bg-brand-600 hover:text-white dark:bg-brand-500/15 dark:text-brand-300 dark:hover:bg-brand-600 dark:hover:text-white transition-colors"
-        >
-          <LifeBuoy size={17} strokeWidth={2} className="shrink-0" />
-          <span className="sb-label truncate">Contact us</span>
-        </button>
-
         <button
           type="button"
           onClick={toggleSidebar}
@@ -202,14 +190,21 @@ export default function Sidebar() {
 
         <p className="sb-label px-2.5 pt-3 text-xs text-faint leading-relaxed">
           Developed by Bhuvanesh S ·{' '}
-          <a
-            href="https://www.linkedin.com/in/bhuvaneshs07"
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            type="button"
+            onClick={() => openSupportMail('Aurafin support')}
             className="text-primary-ink hover:underline font-medium"
           >
-            LinkedIn
-          </a>
+            Contact us
+          </button>
+          ,{' '}
+          <button
+            type="button"
+            onClick={() => openSupportMail('Aurafin support')}
+            className="text-primary-ink hover:underline font-medium"
+          >
+            Support
+          </button>
         </p>
       </div>
       <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />

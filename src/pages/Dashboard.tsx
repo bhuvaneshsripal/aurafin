@@ -64,7 +64,6 @@ import { formatAxisAmount, formatPercentMagnitude, formatSignedCurrency, formatP
 import { ASSET_CLASS_TO_CATEGORY } from '../utils/taxonomy';
 import { listSipInstallments, resolveAssetValues } from '../utils/assetValues';
 import type { Goal, Snapshot, Transaction } from '../types';
-import { dropSpikes } from '../utils/netWorthHistory';
 
 const INVESTMENT_CLASSES = new Set([
   'stock',
@@ -412,18 +411,6 @@ export default function Dashboard() {
     [transactions]
   );
 
-  // Last 12 saved snapshots, oldest first, for the small trend on the Net worth card.
-  const snapshotList = useSnapshotsStore((s) => s.snapshots);
-  const netWorthTrend = useMemo(
-    () =>
-      [...snapshotList]
-        .sort((a, b) => a.date.localeCompare(b.date))
-        .slice(-12)
-        .map((s) => s.netWorth)
-        .filter((n): n is number => Number.isFinite(n)),
-    [snapshotList]
-  );
-
   const savedThisMonth = monthIncome - monthExpense;
   const savingsRate = monthIncome > 0 ? (savedThisMonth / monthIncome) * 100 : null;
 
@@ -439,7 +426,6 @@ export default function Dashboard() {
           <StatCard
             dense
             hero
-            trend={netWorthTrend}
             label="Net worth"
             loading={!ready}
             value={money(hasWealth ? netWorthShown : 0)}
@@ -535,8 +521,12 @@ export default function Dashboard() {
 
       {/* Performance + allocation */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2">
-          <NetWorthOverTimeCard privacyMode={privacyMode} ready={netWorthReady} liveNetWorth={householdNetWorth} allProfilesNote={!!activeProfileId} />
+        {/* Graph, then the one-line live gold price, then (on phones) Allocation below. */}
+        <div className="lg:col-span-2 flex flex-col gap-4">
+          <div className="flex-1 min-h-0">
+            <NetWorthOverTimeCard privacyMode={privacyMode} ready={netWorthReady} liveNetWorth={householdNetWorth} allProfilesNote={!!activeProfileId} />
+          </div>
+          <GoldPriceCard />
         </div>
         <AllocationCard
           data={allocation}
@@ -575,8 +565,6 @@ export default function Dashboard() {
         </div>
         <TopHoldingsCard rows={topHoldings} loading={!ready} privacyMode={privacyMode} />
       </div>
-
-      <GoldPriceCard />
 
       <PriceUpdatedLine />
 
@@ -701,10 +689,8 @@ function NetWorthOverTimeCard({
   /** A single profile is selected, but this chart always covers all profiles. */
   allProfilesNote?: boolean;
 }) {
-  // Real, stored history only — the `snapshots` collection the manual
-  // "Take Snapshot" action writes to (snapshots are never recorded
-  // automatically). Never computed/faked here: this card only ever
-  // renders points that actually exist in Firestore for this user.
+  // History comes from the `snapshots` collection (saved automatically each day by
+  // useAutoNetWorthHistory, or by the manual "Take Snapshot" button), plus today's live point.
   const snapshots = useSnapshotsStore((s) => s.snapshots);
   const [range, setRange] = useState<Range>('3M');
   const pin = usePinnedTooltip();
@@ -731,7 +717,8 @@ function NetWorthOverTimeCard({
         netWorth: liveNetWorth,
       });
     }
-    return dropSpikes([...byDate.values()]);
+    // Every saved day is shown as saved (no points are filtered out), so real highs show up.
+    return [...byDate.values()];
   }, [snapshots, ready, liveNetWorth]);
 
   const data = useMemo(() => {

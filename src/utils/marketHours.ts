@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 
 /** NSE's cash-market pre-open session starts at 9:00 AM IST and normal
- *  trading begins at 9:15 AM IST. From 5:30 AM IST — well after the
- *  previous session has settled — up to that open, we treat "1D returns"
- *  as a flat 0 instead of showing last night's now-stale change, since the
- *  exchange hasn't published today's LTP/previous-close yet. Once the
+ *  trading begins at 9:15 AM IST. The previous session's figures stay on
+ *  screen (through midnight, weekends and holidays) until 8:00 AM IST on the
+ *  next trading day; from 8:00 AM up to the open we treat "1D returns" as a
+ *  flat 0 since the exchange hasn't published today's LTP/previous-close yet. Once the
  *  market opens and fresh quotes start flowing in via useLivePrices, the
  *  real day change takes over again automatically. */
-const RESET_HOUR = 5;
-const RESET_MINUTE = 30;
+const RESET_HOUR = 8;
+const RESET_MINUTE = 0;
 const MARKET_OPEN_HOUR = 9;
 const MARKET_OPEN_MINUTE = 15;
 const MARKET_CLOSE_HOUR = 15;
@@ -104,28 +104,26 @@ export function getIstDateInfo(now: Date = new Date()): { dateKey: string; isoWe
   return { dateKey: `${year}-${month}-${day}`, isoWeekday: WEEKDAY_MAP[weekdayShort] ?? 1 };
 }
 
-/** True from 5:30 AM IST up to (not including) 9:15 AM IST — the daily
- *  window where "1D returns" / day-change figures should reset to 0.
- *  Also true all day on weekends / exchange holidays (nothing traded today). */
+/** True on a trading day from 8:00 AM IST up to (not including) 9:15 AM IST —
+ *  the daily window where "1D returns" / day-change figures show 0. */
 export function isDayChangeResetWindow(now: Date = new Date()): boolean {
   const { hour, minute } = getIstTimeOfDay(now);
   const { dateKey, isoWeekday } = getIstDateInfo(now);
-  const minutesSinceMidnight = hour * 60 + minute;
-  const marketOpen = MARKET_OPEN_HOUR * 60 + MARKET_OPEN_MINUTE;
-  // No session today (weekend or listed exchange holiday): nothing has
-  // traded today, so "1D returns" is flat (0.00) all day instead of
-  // replaying the last session's change as if it were today's.
-  const special = SPECIAL_SESSIONS[dateKey];
-  if (special) return minutesSinceMidnight < special.open; // special session: live once it opens
-  if (isoWeekday > 5 || MARKET_HOLIDAYS.has(dateKey)) return true;
-  // Monday before the open: the last session was Friday, which is stale.
-  if (isoWeekday === 1 && minutesSinceMidnight < marketOpen) return true;
+  const mins = hour * 60 + minute;
   const resetStart = RESET_HOUR * 60 + RESET_MINUTE;
-  return minutesSinceMidnight >= resetStart && minutesSinceMidnight < marketOpen;
+  // Special session (e.g. Muhurat): new day from 8:00 AM until it opens.
+  const special = SPECIAL_SESSIONS[dateKey];
+  if (special) return mins >= resetStart && mins < special.open;
+  // Weekends / exchange holidays: nothing trades, so keep showing the last
+  // session's figures (Friday's close) until 8:00 AM on the next trading day.
+  if (isoWeekday > 5 || MARKET_HOLIDAYS.has(dateKey)) return false;
+  // Trading day: before 8:00 AM the previous session's data stays; from 8:00 AM
+  // until the 9:15 open it is the "waiting for today's market" window.
+  return mins >= resetStart && mins < MARKET_OPEN_HOUR * 60 + MARKET_OPEN_MINUTE;
 }
 
 /** Reactive version of isDayChangeResetWindow — re-checks every 30s so the
- *  UI flips over right at 5:30 AM and again at market open even if nothing
+ *  UI flips over right at 8:00 AM and again at market open even if nothing
  *  else re-renders the component in between. */
 export function useDayChangeResetWindow(): boolean {
   const [active, setActive] = useState(() => isDayChangeResetWindow());
@@ -137,12 +135,12 @@ export function useDayChangeResetWindow(): boolean {
 }
 
 /** The top-bar index strip (NIFTY / SENSEX / BANKNIFTY) starts the new day
- *  earlier than the holdings' "1D returns" reset: from 4:30 AM IST. */
-const INDEX_RESET_HOUR = 4;
-const INDEX_RESET_MINUTE = 30;
+ *  at the same time as the holdings' "1D returns" reset: from 8:00 AM IST. */
+const INDEX_RESET_HOUR = 8;
+const INDEX_RESET_MINUTE = 0;
 
 /** True on a trading day (Mon–Fri, not a listed exchange holiday) from
- *  4:30 AM IST up to the 9:15 AM IST open — the window where the index strip
+ *  8:00 AM IST up to the 9:15 AM IST open — the window where the index strip
  *  shows 0 instead of yesterday's closing levels. Weekends and holidays are
  *  not reset: nothing new is about to trade, so the last close stays. */
 export function isIndexResetWindow(now: Date = new Date()): boolean {
@@ -168,7 +166,7 @@ export function isIndexPollingWindow(now: Date = new Date()): boolean {
 }
 
 /** Reactive version of isIndexResetWindow — re-checks every 30s so the strip
- *  flips to 0 at 4:30 AM and back to live values at the open without a reload. */
+ *  flips to 0 at 8:00 AM and back to live values at the open without a reload. */
 export function useIndexResetWindow(): boolean {
   const [active, setActive] = useState(() => isIndexResetWindow());
   useEffect(() => {

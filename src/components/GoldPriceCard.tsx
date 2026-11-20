@@ -1,127 +1,99 @@
-import { useState } from 'react';
-import { Coins, RefreshCw, ChevronDown } from 'lucide-react';
+import { useRef } from 'react';
+import { Coins, RefreshCw } from 'lucide-react';
 import { useLivePricesStore } from '../store/livePricesStore';
 import { goldPricePerGram22k } from '../utils/goldPrice';
 import { formatCurrency } from '../utils/currency';
 
-/** "3 min ago" / "just now" style relative time for the price timestamp. */
-function timeAgo(ts: number | null): string {
-  if (!ts) return '';
-  const seconds = Math.max(0, Math.floor((Date.now() - ts) / 1000));
-  if (seconds < 15) return 'just now';
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours} hr ago`;
-}
-
-function RateBlock({
-  label,
-  perGram,
-  accent,
-}: {
-  label: string;
-  perGram: number;
-  accent: string;
-}) {
+/** One purity in its own box: the 1 g price, with the 10 g price right under it. */
+function Rate({ label, perGram, dot }: { label: string; perGram: number; dot: string }) {
   return (
-    <div className="flex-1 rounded-xl border-2 border-amber-300 dark:border-amber-500/50 p-4">
+    <div className="shrink-0 rounded-xl border-2 border-brand-600 dark:border-brand-400 px-3 py-2 min-w-[150px]">
       <div className="flex items-center gap-1.5">
-        <span className={`w-2 h-2 rounded-full ${accent}`} />
+        <span className={`w-2 h-2 rounded-full ${dot}`} />
         <span className="text-[13px] font-medium text-muted">{label}</span>
       </div>
-      <p className="font-numeric text-xl font-semibold text-ink mt-1.5">
+      <p className="font-numeric text-base font-semibold text-ink mt-0.5">
         {formatCurrency(perGram, 'INR', { fractionDigits: 2 })}
-        <span className="text-xs font-medium text-slate-600 ml-1">/ gram</span>
+        <span className="text-xs font-medium text-muted ml-1">/ gram</span>
       </p>
-      <p className="font-numeric text-sm text-muted mt-0.5">
+      <p className="font-numeric text-xs text-muted mt-0.5">
         {formatCurrency(perGram * 10, 'INR', { fractionDigits: 0 })}
-        <span className="text-xs text-slate-600 ml-1">/ 10g</span>
+        <span className="ml-1">/ 10g</span>
       </p>
     </div>
   );
 }
 
 /**
- * Live 24K + 22K gold rate ticker, styled like the price header on a
- * digital-gold app (e.g. "Digi Gold"). 24K comes straight from the live
- * spot feed (api/market/gold.js); 22K is derived from it at the standard
- * 22/24 purity ratio — see src/utils/goldPrice.ts.
- *
- * This is a GLOBAL SPOT estimate, not an exact local jeweller quote —
- * Indian retail gold runs higher due to import duty, GST, and dealer
- * margin, and there's no free API for that. Settings > Preferences has a
- * "Gold rate adjustment %" for calibrating this toward a trusted source.
+ * Live 24K + 22K gold rate on ONE line inside a box that can be moved sideways
+ * (swipe on phones, drag or scroll on desktop) when the line is wider than the
+ * screen. 24K comes from the live spot feed; 22K is derived at the 22/24 purity
+ * ratio — see src/utils/goldPrice.ts. This is a global spot estimate, not an
+ * exact local jeweller quote (Settings > Preferences has a rate adjustment %).
  */
 export default function GoldPriceCard() {
   const price24k = useLivePricesStore((s) => s.goldPricePerGram);
-  const asOf = useLivePricesStore((s) => s.goldPriceAsOf);
   const loading = useLivePricesStore((s) => s.goldPriceLoading);
   const error = useLivePricesStore((s) => s.goldPriceError);
 
-  // Starts collapsed every time — it only opens when the person taps the
-  // chevron to expand it themselves, never automatically.
-  const [expanded, setExpanded] = useState(false);
+  // Mouse drag-to-scroll (touch screens already scroll natively).
+  const ref = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ x: number; left: number } | null>(null);
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== 'mouse' || !ref.current) return;
+    drag.current = { x: e.clientX, left: ref.current.scrollLeft };
+    ref.current.setPointerCapture(e.pointerId);
+  };
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!drag.current || !ref.current) return;
+    ref.current.scrollLeft = drag.current.left - (e.clientX - drag.current.x);
+  };
+  const endDrag = () => {
+    drag.current = null;
+  };
 
   return (
-    <div className="bg-surface border border-line rounded-2xl shadow-xs overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        aria-expanded={expanded}
-        className="w-full flex items-center justify-between gap-2 text-left px-5 py-4"
-      >
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-amber-600 bg-amber-50 dark:bg-amber-900/20 rounded-lg p-2 flex items-center justify-center shrink-0">
-            <Coins className="w-4 h-4" />
+    <div className="bg-surface border border-line rounded-2xl shadow-xs overflow-hidden px-4 py-3">
+      {/* Title row on top */}
+      <div className="flex items-center gap-2">
+        <span className="text-amber-600 bg-amber-50 dark:bg-amber-900/20 rounded-lg p-1.5 flex items-center justify-center">
+          <Coins className="w-4 h-4" />
+        </span>
+        <h3 className="text-sm font-semibold text-ink">Live gold price</h3>
+        {price24k !== null && !loading && (
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-primary-ink">
+            <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
+            Live
           </span>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-ink">Live gold price</p>
-            <p className="text-xs text-muted">India · per gram, calibrated live estimate</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {price24k !== null && !loading && (
-            <span className="flex items-center gap-1 text-xs font-medium text-primary-ink">
-              <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
-              Live
-            </span>
-          )}
-          <ChevronDown
-            className={`w-4 h-4 text-muted transition-transform duration-200 ${
-              expanded ? 'rotate-180' : ''
-            }`}
-          />
-        </div>
-      </button>
+        )}
+      </div>
 
-      {expanded && (
-        <div className="px-5 pb-5">
-          {price24k === null && loading && (
-            <div className="flex items-center gap-2 rounded-lg bg-slate-100 dark:bg-slate-800 px-3 py-3">
-              <RefreshCw className="w-3.5 h-3.5 text-slate-600 animate-spin" />
-              <span className="text-xs text-muted">Fetching live gold rate…</span>
-            </div>
-          )}
-
-          {price24k === null && !loading && error && (
-            <p className="text-sm text-slate-600">Couldn't fetch a live gold rate right now. Try again shortly.</p>
-          )}
-
-          {price24k !== null && (
-            <>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <RateBlock label="22K (916)" perGram={goldPricePerGram22k(price24k)} accent="bg-amber-300" />
-                <RateBlock label="24K (999)" perGram={price24k} accent="bg-amber-500" />
-              </div>
-              <p className="text-[11px] text-muted mt-3">
-                {error ? 'Showing last known rate · ' : ''}Updated {timeAgo(asOf)}
-              </p>
-            </>
-          )}
-        </div>
-      )}
+      {/* Movable one-line row of boxes under the title */}
+      <div
+        ref={ref}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        aria-label="Live gold price"
+        className="no-scrollbar mt-3 flex items-stretch gap-3 overflow-x-auto overscroll-x-contain whitespace-nowrap cursor-grab active:cursor-grabbing select-none"
+        style={{ touchAction: 'pan-x pan-y' }}
+      >
+        {price24k === null && loading && (
+          <span className="inline-flex items-center gap-2 text-xs text-muted shrink-0">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Fetching live gold rate…
+          </span>
+        )}
+        {price24k === null && !loading && error && (
+          <span className="text-xs text-muted shrink-0">Couldn't fetch a live gold rate right now.</span>
+        )}
+        {price24k !== null && (
+          <>
+            <Rate label="22K (916)" perGram={goldPricePerGram22k(price24k)} dot="bg-amber-300" />
+            <Rate label="24K (999)" perGram={price24k} dot="bg-amber-500" />
+          </>
+        )}
+      </div>
     </div>
   );
 }
