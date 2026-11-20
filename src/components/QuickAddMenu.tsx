@@ -2,7 +2,11 @@ import { SHORTCUT_HINT } from '../config/shortcuts';
 import { toast } from '../store/toastStore';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { hideNumber } from '../utils/privateFormat';
+import { formatPreciseCurrency } from '../utils/privateFormat';
+import { resolveAssetValues } from '../utils/assetValues';
+import { isFullySold } from '../utils/investmentPnl';
+import { computeBreakdown, BREAKDOWN_GROUPS } from '../utils/snapshotBreakdown';
+import { useLivePricesStore } from '../store/livePricesStore';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -105,6 +109,25 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
     return () => window.removeEventListener('keydown', onKey);
   }, [variant, navigate]);
 
+  // Keyboard shortcut (desktop): Ctrl+Shift+S (Cmd+Shift+S on Mac) opens the Save Net Worth
+  // Snapshot dialog from any page. Same rules as Ctrl+A above: it does nothing while typing in
+  // a field or while another dialog is open, and it closes the Add menu if that was showing.
+  useEffect(() => {
+    if (variant !== 'desktop') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.altKey || !e.shiftKey) return;
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 's') return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
+      e.preventDefault();
+      setMenuOpen(false);
+      setActive('snapshot');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [variant]);
+
   // Locks background scroll while the pill/dropdown menu is open — its
   // backdrop (fab variant) or the page behind it (desktop variant) would
   // otherwise keep scrolling underneath the open menu.
@@ -155,7 +178,7 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
           // The centre "+" shrinks with the bottom bar (--p is set by BottomNav).
           style={isCenter ? { width: 52, height: 52, scale: 'calc(1 - 0.077 * var(--p, 0))' } : undefined}
           aria-label="Quick add"
-          title={isFab || isHeader ? 'Quick add' : `Quick add (${SHORTCUT_HINT.addAsset} adds an asset)`}
+          title={isFab || isHeader ? 'Quick add' : `Quick add (${SHORTCUT_HINT.addAsset} adds an asset, ${SHORTCUT_HINT.snapshot} saves a snapshot)`}
           className={
             isHeader
               ? `fab-button${menuOpen ? ' fab-open' : ''} tap-scale mx-0.5 flex h-8 w-8 shrink-0 items-center justify-center text-white`
@@ -280,9 +303,10 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
         {menuOpen && !isFab && !isHeader && document.getElementById('app-topbar') &&
           createPortal(
             // Same dim + soften, drawn INSIDE the top bar so the bar itself is dimmed too.
+            // -bottom-px also covers the bar's 1px bottom border, which would otherwise show as a bright line.
             // It sits under this Add button and its menu (z-[2] above), which stay bright.
             <div
-              className="animate-backdrop-in absolute inset-0 z-[1] bg-slate-900/30 backdrop-blur-[3px]"
+              className="animate-backdrop-in absolute inset-x-0 top-0 -bottom-px z-[1] bg-slate-900/30 backdrop-blur-[3px]"
               onClick={() => setMenuOpen(false)}
               aria-hidden="true"
             />,
@@ -304,7 +328,7 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
             </p>
             <MenuItem icon={Coins} color="text-muted" label="Asset" hint={isHeader ? undefined : SHORTCUT_HINT.addAsset} onClick={() => open('asset')} />
             <MenuItem icon={Landmark} color="text-muted" label="Liability" onClick={() => open('liability')} />
-            <MenuItem icon={Camera} color="text-muted" label="Snapshot" onClick={() => open('snapshot')} />
+            <MenuItem icon={Camera} color="text-muted" label="Snapshot" hint={isHeader ? undefined : SHORTCUT_HINT.snapshot} onClick={() => open('snapshot')} />
           </div>
         )}
       </div>
@@ -554,9 +578,17 @@ function SnapshotForm({ onDone }: { onDone: () => void }) {
   const assets = useAssetsStore((s) => s.assets);
   const liabilities = useLiabilitiesStore((s) => s.liabilities);
   const snapshots = useSnapshotsStore((s) => s.snapshots);
-  const totalAssets = assets.reduce((s, a) => s + a.value, 0);
+  const livePrices = useLivePricesStore((s) => s.prices);
+  const sipValues = useLivePricesStore((s) => s.sipValues);
+  const liveGoldPricePerGram = useLivePricesStore((s) => s.goldPricePerGram);
+  // Current values only — the same calculation as the Overview's Net worth card:
+  // live prices applied, fully-sold holdings left out (snapshots are household-wide).
+  const totalAssets = assets
+    .filter((a) => !isFullySold(a))
+    .reduce((s, a) => s + resolveAssetValues(a, livePrices, sipValues, liveGoldPricePerGram).value, 0);
   const totalLiabilities = liabilities.reduce((s, l) => s + l.outstanding, 0);
   const netWorth = totalAssets - totalLiabilities;
+  const breakdown = computeBreakdown(assets, livePrices, sipValues, liveGoldPricePerGram);
 
   const today = toIsoDate();
   // Reuse today's snapshot if one was already saved today, instead of
@@ -573,6 +605,7 @@ function SnapshotForm({ onDone }: { onDone: () => void }) {
       netWorth,
       totalAssets,
       totalLiabilities,
+      breakdown,
     };
     await upsertDoc(user, 'snapshots', snapshot);
     onDone();
@@ -588,15 +621,21 @@ function SnapshotForm({ onDone }: { onDone: () => void }) {
       <div className="bg-slate-50 dark:bg-slate-700 rounded-lg p-4 text-sm space-y-1">
         <div className="flex justify-between">
           <span className="text-slate-500">Total Assets</span>
-          <span className="font-medium text-ink">{hideNumber(totalAssets.toLocaleString(undefined, { useGrouping: true }))}</span>
+          <span className="font-medium text-ink">{formatPreciseCurrency(totalAssets)}</span>
         </div>
+        {BREAKDOWN_GROUPS.filter((g) => breakdown[g.key]).map((g) => (
+          <div key={g.key} className="flex justify-between pl-3 text-xs">
+            <span className="text-slate-500">{g.label}</span>
+            <span className="text-ink">{formatPreciseCurrency(breakdown[g.key])}</span>
+          </div>
+        ))}
         <div className="flex justify-between">
           <span className="text-slate-500">Total Liabilities</span>
-          <span className="font-medium text-ink">{hideNumber(totalLiabilities.toLocaleString(undefined, { useGrouping: true }))}</span>
+          <span className="font-medium text-ink">{formatPreciseCurrency(totalLiabilities)}</span>
         </div>
         <div className="flex justify-between border-t border-slate-200 dark:border-slate-600 pt-1 mt-1">
           <span className="text-slate-500">Net Worth</span>
-          <span className="font-semibold text-ink">{hideNumber(netWorth.toLocaleString(undefined, { useGrouping: true }))}</span>
+          <span className="font-semibold text-ink">{formatPreciseCurrency(netWorth)}</span>
         </div>
       </div>
       <button onClick={submit} className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-4 text-sm font-medium rounded-lg transition-colors w-full bg-brand-600 hover:bg-brand-700 text-white">

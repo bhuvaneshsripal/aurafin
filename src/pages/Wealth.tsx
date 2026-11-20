@@ -60,6 +60,7 @@ import { AreaGradient, ChartTooltipCard, isoToMs, liveEndDot, makeTickFormatter,
 import { newId } from '../utils/id';
 import { goldPricePerGram22k } from '../utils/goldPrice';
 import { computeHoldingPnl, isFullySold } from '../utils/investmentPnl';
+import { computeBreakdown, BREAKDOWN_GROUPS } from '../utils/snapshotBreakdown';
 import { fifoMatch, summariseFy, financialYearOf, taxGroupOf, TAX_RULES } from '../utils/capitalGains';
 import { useAnalyticsSettingsStore } from '../store/analyticsSettingsStore';
 import { useSyncStatusStore } from '../store/syncStatusStore';
@@ -68,6 +69,9 @@ import { useAuthStore } from '../store/authStore';
 import { useUiStore } from '../store/uiStore';
 import SectorAllocationCard from '../components/SectorAllocationCard';
 import MarketCapCard from '../components/MarketCapCard';
+import PortfolioScoreCard from '../components/PortfolioScoreCard';
+import HeaderPills from '../components/HeaderPills';
+import { dropSpikes } from '../utils/netWorthHistory';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import { upsertDoc, removeDoc, saveWealthFilters, saveWealthSort } from '../hooks/useFirestoreSync';
 import { useWealthFilterStore } from '../store/wealthFilterStore';
@@ -102,6 +106,8 @@ import {
   TrendArrow,
   ConcentricRings,
   RequiredMark,
+  ContentSkeleton,
+  PageSkeleton,
 } from '../components/ui';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import CurrencySelect from '../components/CurrencySelect';
@@ -367,7 +373,7 @@ export default function Wealth() {
       )}
       {tab === 'performs' && <PerformsTab tab={tab} setTab={setTab} />}
       {tab === 'trades' && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<PageSkeleton />}>
           <Trades tabNav={<TabNav tab={tab} setTab={setTab} />} />
         </Suspense>
       )}
@@ -2275,7 +2281,24 @@ function AssetsTab({
     <div className={`space-y-4${listReturning ? ' animate-list-return' : ''}`}>
       <PageHeader
         title="Assets"
-        description={`${activeAssetCount} ${activeAssetCount === 1 ? 'asset' : 'assets'}`}
+        description={
+          <HeaderPills
+            pills={[
+              { value: activeAssetCount, label: activeAssetCount === 1 ? 'asset' : 'assets' },
+              { value: privacyMode ? PRIVACY_DOTS : formatPreciseCurrency(totalCurrentValue), label: 'current value', tone: 'neutral' },
+              ...(totalInvested > 0
+                ? [
+                    {
+                      value: privacyMode ? PRIVACY_DOTS : `${rawSignedCurrency(totalPnl, 'INR', 0)} (${rawPercentMagnitude(totalPnlPercent)})`,
+                      label: 'overall P&L',
+                      tone: (totalPnl >= 0 ? 'brand' : 'red') as 'brand' | 'red',
+                      valueTone: (totalPnl >= 0 ? 'positive' : 'negative') as 'positive' | 'negative',
+                    },
+                  ]
+                : []),
+            ]}
+          />
+        }
         actions={
           <>
             <div className="relative flex-1 min-w-[140px] sm:flex-none sm:w-56">
@@ -8587,24 +8610,45 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
     return [...byDate.values()];
   }, [snapshots]);
 
+  // Today's live numbers (the same ones as the cards above), once they are trustworthy.
+  const liveSnap = useMemo<Snapshot | null>(
+    () =>
+      sortedAsc.length > 0 && wealthDataKnown
+        ? { id: 'live-today', date: today, netWorth, totalAssets, totalLiabilities }
+        : null,
+    [sortedAsc, wealthDataKnown, today, netWorth, totalAssets, totalLiabilities]
+  );
+  // Saved snapshots without the clearly-bad readings (a day or two that jumps far off the line and
+  // straight back — e.g. saved while a price had not loaded). Same rule as the Overview chart, so
+  // the chart, the high, the best/worst month and the 1D/1W/1M cards all agree with each other.
+  // The Snapshot history list below still shows every saved day so a bad one can be deleted.
+  const { cleanAsc, spikeIds } = useMemo(() => {
+    const withLive = [...sortedAsc.filter((s) => s.date !== today), ...(liveSnap ? [liveSnap] : [])];
+    const kept = dropSpikes(withLive);
+    const keptIds = new Set(kept.map((s) => s.id));
+    return {
+      cleanAsc: kept.filter((s) => s.id !== 'live-today'),
+      spikeIds: new Set(sortedAsc.filter((s) => s.date !== today && !keptIds.has(s.id)).map((s) => s.id)),
+    };
+  }, [sortedAsc, today, liveSnap]);
+
   const [range, setRange] = useState<NetWorthRange>('ALL');
   const data = useMemo(() => {
     let base: Snapshot[];
-    if (range === 'ALL') base = sortedAsc;
+    if (range === 'ALL') base = cleanAsc;
     else {
       const months = range === '3M' ? 3 : range === '6M' ? 6 : 12;
       const cutoff = new Date();
       cutoff.setMonth(cutoff.getMonth() - months);
       const iso = toIsoDate(cutoff);
-      base = sortedAsc.filter((s) => s.date >= iso);
+      base = cleanAsc.filter((s) => s.date >= iso);
     }
     // The line always ends on TODAY'S LIVE numbers (the same ones as the cards above). Before, it
     // stopped at the last saved snapshot, so the chart's latest value could disagree with the
     // Assets / Net worth cards until a new snapshot was taken.
-    if (sortedAsc.length === 0 || !wealthDataKnown) return base;
-    const live: Snapshot = { id: 'live-today', date: today, netWorth, totalAssets, totalLiabilities };
-    return [...base.filter((s) => s.date !== today), live];
-  }, [sortedAsc, range, wealthDataKnown, today, netWorth, totalAssets, totalLiabilities]);
+    if (!liveSnap) return base;
+    return [...base.filter((s) => s.date !== today), liveSnap];
+  }, [cleanAsc, range, liveSnap, today]);
 
   const historyDesc = useMemo(() => [...sortedAsc].reverse(), [sortedAsc]);
 
@@ -8662,23 +8706,27 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   );
 
   // All-time high and how far today is below it.
-  const peak = useMemo(
-    () => (sortedAsc.length ? sortedAsc.reduce((b, s) => (s.netWorth > b.netWorth ? s : b)) : null),
-    [sortedAsc]
-  );
+  // Includes today's live value, so the high can be today (and then "At the high" names today's date).
+  const peak = useMemo(() => {
+    const pool = liveSnap ? [...cleanAsc, liveSnap] : cleanAsc;
+    return pool.length ? pool.reduce((b, s) => (s.netWorth > b.netWorth ? s : b)) : null;
+  }, [cleanAsc, liveSnap]);
   const belowPeakPct = peak && peak.netWorth > 0 ? ((netWorth - peak.netWorth) / peak.netWorth) * 100 : 0;
 
   // Change from today's live net worth versus the last snapshot on or before each date.
   const periodChanges = useMemo(() => {
-    if (sortedAsc.length === 0) return [];
+    if (cleanAsc.length === 0) return [];
     const onOrBefore = (iso: string) => {
       let found: Snapshot | undefined;
-      for (const sn of sortedAsc) {
+      for (const sn of cleanAsc) {
         if (sn.date <= iso) found = sn;
         else break;
       }
       return found;
     };
+    // A snapshot only counts as "the value N ago" when it is close to that date. Before, with no
+    // snapshot in the last 10 days, 1D and 1W both silently compared against an 11-day-old one.
+    const gapDays = (a: string, b: string) => Math.round((isoToMs(a) - isoToMs(b)) / DAY_MS);
     const daysAgo = (n: number) => {
       const d = new Date();
       d.setDate(d.getDate() - n);
@@ -8689,21 +8737,25 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
       d.setMonth(d.getMonth() - n);
       return d;
     };
-    const targets: [string, Date][] = [
-      ['1D', daysAgo(1)],
-      ['1W', daysAgo(7)],
-      ['1M', monthsAgo(1)],
-      ['3M', monthsAgo(3)],
-      ['YTD', new Date(new Date().getFullYear() - 1, 11, 31)],
-      ['1Y', monthsAgo(12)],
+    // [label, target date, furthest the snapshot may be before it (days)]
+    const targets: [string, Date, number][] = [
+      ['1D', daysAgo(1), 2],
+      ['1W', daysAgo(7), 3],
+      ['1M', monthsAgo(1), 7],
+      ['3M', monthsAgo(3), 14],
+      ['YTD', new Date(new Date().getFullYear() - 1, 11, 31), 14],
+      ['1Y', monthsAgo(12), 30],
     ];
-    return targets.map(([label, d]) => {
-      const base = onOrBefore(toIsoDate(d));
-      if (!base) return { label, delta: undefined as number | undefined, pct: undefined as number | undefined };
+    return targets.map(([label, d, tol]) => {
+      const iso = toIsoDate(d);
+      const base = onOrBefore(iso);
+      if (!base || gapDays(iso, base.date) > tol) {
+        return { label, delta: undefined as number | undefined, pct: undefined as number | undefined, since: undefined as string | undefined };
+      }
       const delta = netWorth - base.netWorth;
-      return { label, delta, pct: base.netWorth > 0 ? (delta / base.netWorth) * 100 : undefined };
+      return { label, delta, pct: base.netWorth > 0 ? (delta / base.netWorth) * 100 : undefined, since: base.date as string | undefined };
     });
-  }, [sortedAsc, netWorth]);
+  }, [cleanAsc, netWorth]);
 
   const exportHistory = () => {
     exportToCsv(
@@ -8713,6 +8765,9 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
         Assets: Math.round(sn.totalAssets * 100) / 100,
         Liabilities: Math.round(sn.totalLiabilities * 100) / 100,
         'Net worth': Math.round(sn.netWorth * 100) / 100,
+        ...Object.fromEntries(
+          BREAKDOWN_GROUPS.map((g) => [g.label, Math.round((sn.breakdown?.[g.key] ?? 0) * 100) / 100])
+        ),
       }))
     );
   };
@@ -8736,6 +8791,7 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
         netWorth,
         totalAssets,
         totalLiabilities,
+        breakdown: computeBreakdown(assets, livePrices, sipValues, liveGoldPricePerGram),
       };
       await upsertDoc(user, 'snapshots', snap);
     } catch (err) {
@@ -8960,7 +9016,10 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
               <div key={pc.label} className="rounded-lg bg-surface-muted px-3 py-2.5">
                 <p className="text-xs text-muted">{pc.label}</p>
                 {pc.delta === undefined ? (
-                  <p className="font-numeric text-sm font-semibold text-faint mt-0.5">—</p>
+                  <>
+                    <p className="font-numeric text-sm font-semibold text-faint mt-0.5">—</p>
+                    <p className="text-[11px] text-muted">no snapshot then</p>
+                  </>
                 ) : (
                   <>
                     <p className={`font-numeric text-sm font-semibold mt-0.5 ${pc.delta >= 0 ? 'text-positive' : 'text-negative'}`}>
@@ -8969,6 +9028,7 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
                     <p className={`font-numeric text-[11px] ${pc.delta >= 0 ? 'text-positive' : 'text-negative'}`}>
                       {pc.pct !== undefined ? `${pc.pct >= 0 ? '+' : '−'}${formatPercentMagnitude(pc.pct, 1)}` : ''}
                     </p>
+                    {pc.since && <p className="text-[11px] text-muted">vs {formatDate(pc.since)}</p>}
                   </>
                 )}
               </div>
@@ -9100,6 +9160,11 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
                     <div className="min-w-0 flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-3">
                       <span className="text-sm font-medium text-ink min-w-0 max-w-full truncate">{formatDate(snap.date)}</span>
                       {isBaseline && <Badge variant="neutral">Baseline</Badge>}
+                      {spikeIds.has(snap.id) && (
+                        <span title="This day jumps far off the line and comes straight back, so it is left out of the chart and the stats. Delete it if it was saved from a wrong price.">
+                          <Badge variant="warning">Looks off</Badge>
+                        </span>
+                      )}
                     </div>
                     <span className="ml-auto font-numeric text-sm font-semibold text-ink shrink-0">
                       {maskPreciseAmount(snap.netWorth, 'INR', privacyMode)}
@@ -9130,6 +9195,7 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
                           {maskPreciseAmount(snap.totalLiabilities, 'INR', privacyMode)}
                         </p>
                       </div>
+                      <SnapshotBreakdown snap={snap} privacyMode={privacyMode} />
                     </div>
                   )}
                 </div>
@@ -9152,6 +9218,49 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
           </>
         }
       />
+    </div>
+  );
+}
+
+/** Per-category split of a snapshot's assets (stocks, SIP, commodities, …), shown when its row is expanded. */
+function SnapshotBreakdown({ snap, privacyMode }: { snap: Snapshot; privacyMode: boolean }) {
+  const rows = BREAKDOWN_GROUPS.filter((g) => (snap.breakdown?.[g.key] ?? 0) !== 0);
+  if (!snap.breakdown || rows.length === 0) {
+    return (
+      <p className="col-span-2 text-xs text-muted px-1">
+        Category split wasn't recorded for this snapshot. Re-take today's snapshot to include it.
+      </p>
+    );
+  }
+  const total = rows.reduce((s, g) => s + (snap.breakdown![g.key] ?? 0), 0);
+  return (
+    <div className="col-span-2 rounded-lg bg-surface-muted px-3 py-2.5">
+      <p className="text-xs text-muted mb-2">Assets by category</p>
+      <div className="flex h-1.5 w-full overflow-hidden rounded-full mb-2.5">
+        {rows.map((g) => (
+          <span
+            key={g.key}
+            style={{ width: `${(((snap.breakdown![g.key] ?? 0) / total) * 100).toFixed(2)}%`, background: g.color }}
+          />
+        ))}
+      </div>
+      <ul className="space-y-1.5">
+        {rows.map((g) => {
+          const v = snap.breakdown![g.key] ?? 0;
+          return (
+            <li key={g.key} className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full shrink-0" style={{ background: g.color }} />
+              <span className="text-ink">{g.label}</span>
+              <span className="ml-auto text-xs text-muted font-numeric">
+                {privacyMode ? PRIVACY_DOTS : `${((v / total) * 100).toFixed(1)}%`}
+              </span>
+              <span className="font-numeric font-medium text-ink w-28 text-right">
+                {maskPreciseAmount(v, 'INR', privacyMode)}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -9290,7 +9399,20 @@ function PerformsTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Performs" />
+      <PageHeader
+        title="Performs"
+        description={
+          count > 0 && !dayChangeResetActive ? (
+            <HeaderPills
+              pills={[
+                { value: count, label: 'tracked today', tone: 'neutral' },
+                { value: bestAll.length, label: 'up', tone: 'brand', valueTone: 'positive' },
+                { value: worstAll.length, label: 'down', tone: 'red', valueTone: 'negative' },
+              ]}
+            />
+          ) : undefined
+        }
+      />
       <TabNav tab={tab} setTab={setTab} />
       {count === 0 || dayChangeResetActive ? (
         <Card padding="none">
@@ -9315,11 +9437,27 @@ function PerformsTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
 }
 
 function AnalyticsTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
+  const { allocItems, currency } = useAnalyticsData();
+  const privacyMode = useUiStore((s) => s.privacyMode);
+  const totalValue = allocItems.reduce((s, i) => s + Math.max(0, i.value), 0);
   return (
     <div className="space-y-4">
-      <PageHeader title="Analytics" />
+      <PageHeader
+        title="Analytics"
+        description={
+          allocItems.length > 0 ? (
+            <HeaderPills
+              pills={[
+                { value: allocItems.length, label: allocItems.length === 1 ? 'holding' : 'holdings' },
+                { value: maskPreciseAmount(totalValue, currency, privacyMode), label: 'analysed', tone: 'neutral' },
+                { value: currency, label: 'view', tone: 'amber' },
+              ]}
+            />
+          ) : undefined
+        }
+      />
       <TabNav tab={tab} setTab={setTab} />
-      <Suspense fallback={null}>
+      <Suspense fallback={<ContentSkeleton />}>
         <AnalyticsContent />
       </Suspense>
     </div>
@@ -9329,12 +9467,30 @@ function AnalyticsTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
 function AllocationTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   // Same numbers as Analytics → Rebalance: active profile, fully sold holdings
   // dropped, "exclude from allocation" respected, one currency at a time.
-  const { allocItems, currency, currencies } = useAnalyticsData();
+  const { allocItems, currency, currencies, livePrices, sipValues, gold } = useAnalyticsData();
   const { categories } = useMemo(() => buildCategoryBreakdown(allocItems), [allocItems]);
+  const privacyMode = useUiStore((s) => s.privacyMode);
+  const allocTotal = allocItems.reduce((s, i) => s + Math.max(0, i.value), 0);
+  const topCategory = categories[0];
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Allocation" />
+      <PageHeader
+        title="Allocation"
+        description={
+          categories.length > 0 ? (
+            <HeaderPills
+              pills={[
+                { value: categories.length, label: categories.length === 1 ? 'category' : 'categories' },
+                { value: maskPreciseAmount(allocTotal, currency, privacyMode), label: 'allocated', tone: 'neutral' },
+                ...(topCategory
+                  ? [{ value: privacyMode ? PRIVACY_DOTS : `${topCategory.pct.toFixed(1)}%`, label: `in ${topCategory.label}`, tone: 'amber' as const }]
+                  : []),
+              ]}
+            />
+          ) : undefined
+        }
+      />
 
       <TabNav tab={tab} setTab={setTab} />
 
@@ -9349,6 +9505,7 @@ function AllocationTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) 
       ) : (
         <>
           <AllocationChart categories={categories} currency={currency} />
+          <PortfolioScoreCard items={allocItems} currency={currency} livePrices={livePrices} sipValues={sipValues} gold={gold} />
           <SectorAllocationCard items={allocItems} currency={currency} />
           <MarketCapCard items={allocItems} currency={currency} />
           {currencies.length > 1 && (

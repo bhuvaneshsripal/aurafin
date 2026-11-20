@@ -4,6 +4,7 @@ import { useNetworkQuality, type NetworkQuality } from '../hooks/useNetworkQuali
 import { useExitPresence } from '../hooks/useExitPresence';
 import { useSwipeDismiss } from '../hooks/useSwipeDismiss';
 import { inToast } from '../utils/toastGuard';
+import { useBottomSlot } from '../store/bottomSlotStore';
 
 const COPY: Record<Exclude<NetworkQuality, 'good'>, { title: string; body: string }> = {
   low: { title: 'Low network connection', body: 'Some features may work slowly or not at all.' },
@@ -26,7 +27,10 @@ export default function NetworkBanner() {
     if (quality === 'good') setDismissedFor(null);
   }, [quality]);
 
-  const show = quality !== 'good' && dismissedFor !== quality;
+  const wanted = quality !== 'good' && dismissedFor !== quality;
+  // Lowest priority: toasts and the eye prompt go first, then this returns.
+  const myTurn = useBottomSlot('network-banner', wanted, 0);
+  const show = wanted && myTurn;
   // Keep the last message around while the exit animation plays.
   const [last, setLast] = useState<Exclude<NetworkQuality, 'good'>>('low');
   useEffect(() => {
@@ -59,7 +63,8 @@ export default function NetworkBanner() {
     return () => document.removeEventListener('pointerdown', onDown, true);
   }, [show, quality]);
 
-  if (!mounted) return null;
+  // Preempted by a toast / prompt: vanish at once so the two never overlap.
+  if (!mounted || (wanted && !myTurn)) return null;
   const { flung } = swipe;
 
   const kind = quality !== 'good' ? quality : last;

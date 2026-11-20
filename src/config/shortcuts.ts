@@ -13,6 +13,7 @@ export interface ShortcutItem {
 export const SHORTCUT_HINT = {
   search: 'Ctrl+K',
   addAsset: 'Ctrl+A',
+  snapshot: 'Ctrl+Shift+S',
   notifications: 'Alt+N',
   privacy: 'Ctrl+M',
 } as const;
@@ -40,6 +41,7 @@ export const SHORTCUT_GROUPS: { title: string; items: ShortcutItem[] }[] = [
     items: [
       { label: 'Search', description: 'Search Aurafin. Press again to close it.', keys: ['Ctrl', 'K'] },
       { label: 'Add asset', description: 'Open the Add Asset page.', keys: ['Ctrl', 'A'] },
+      { label: 'Save snapshot', description: "Open Save Net Worth Snapshot to record today's net worth.", keys: ['Ctrl', 'Shift', 'S'] },
       { label: 'Notifications', description: 'Open or close the notifications panel.', keys: ['Alt', 'N'] },
       { label: 'Hide / show amounts', description: 'Switch the eye on or off to hide your numbers.', keys: ['Ctrl', 'M'] },
       { label: 'Close pop-up', description: 'Close search, notifications or any open dialog.', keys: ['Esc'] },

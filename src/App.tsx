@@ -54,7 +54,7 @@ import LockScreen from './components/LockScreen';
 import { hideBootShell } from './utils/bootShell';
 import InstallPromptModal from './components/InstallPromptModal';
 import ErrorBoundary from './components/ErrorBoundary';
-import { Skeleton } from './components/ui/LoadingState';
+import { PageSkeleton } from './components/ui/LoadingState';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 import { startRoutePrefetch } from './utils/routePrefetch';
 import type { Asset, Liability, Goal, Transaction, Snapshot, BudgetItem, FinancialProfile, HouseholdProfile } from './types';
@@ -105,38 +105,7 @@ const Onboarding = lazyWithRetry(() => import('./pages/Onboarding'));
 // While a lazy-loaded page is still downloading, show a page-shaped skeleton
 // (title, stat cards, list rows) instead of an empty screen. Pages that load
 // quickly never show it for more than a blink; slow ones look "loading", not broken.
-function RouteFallback() {
-  return (
-    <div role="status" aria-label="Loading" className="space-y-5">
-      <div className="space-y-2">
-        <Skeleton className="h-7 w-40" />
-        <Skeleton className="h-3.5 w-64 max-w-full" />
-      </div>
-      <div className="flex gap-5 overflow-hidden">
-        {[0, 1, 2, 3, 4].map((i) => (
-          <Skeleton key={i} className="h-5 w-20 shrink-0" />
-        ))}
-      </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {[0, 1, 2, 3].map((i) => (
-          <Skeleton key={i} className="h-24 rounded-2xl" />
-        ))}
-      </div>
-      <div className="space-y-3 rounded-2xl border border-line bg-surface p-4">
-        {[0, 1, 2, 3, 4].map((i) => (
-          <div key={i} className="flex items-center gap-3">
-            <Skeleton className="h-9 w-9 rounded-full shrink-0" />
-            <div className="flex-1 space-y-2">
-              <Skeleton className="h-3.5 w-1/3" />
-              <Skeleton className="h-3 w-1/5" />
-            </div>
-            <Skeleton className="h-4 w-20" />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+const RouteFallback = PageSkeleton;
 
 function AppShell() {
   const location = useLocation();

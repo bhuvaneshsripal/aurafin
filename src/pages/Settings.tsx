@@ -1873,7 +1873,7 @@ function ShortcutsTab() {
       <div className="flex items-center gap-1.5 px-1 text-xs text-muted">
         <InfoTip size={16} label="About keyboard shortcuts">
           Shortcuts work on a computer with a keyboard. On a Mac, use Cmd in place of Ctrl (Cmd+Q is kept by the
-          browser, so Settings has no shortcut there). Ctrl+A and Alt+N are ignored while you are typing in a box, and
+          browser, so Settings has no shortcut there). Ctrl+A, Ctrl+Shift+S and Alt+N are ignored while you are typing in a box, and
           no shortcut fires while a dialog is open.
         </InfoTip>
         <span>About shortcuts</span>

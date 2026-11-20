@@ -584,6 +584,8 @@ export interface Snapshot {
   netWorth: number;
   totalAssets: number;
   totalLiabilities: number;
+  /** Current value per group (stocks, mutual_funds, sip, commodities, …) at the time of saving. Absent on older snapshots. */
+  breakdown?: Record<string, number>;
 }
 
 export interface UserProfile {

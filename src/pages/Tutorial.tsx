@@ -357,7 +357,7 @@ const guides: Guide[] = [
       { title: 'Holdings', text: 'Each row shows current value, what you invested and your return. Columns can show returns, market price with the 1-day change, or average price.' },
       { title: 'Add', text: 'Starts the Add asset flow. Shortcut: Ctrl+A. Free accounts can track up to 30 assets.' },
     ],
-    advanced: ['Assets can be in different currencies, and include stocks, mutual funds, gold, EPF, PPF, property and deposits.', 'On a stock holding you can record buys and sells. The Tax tab uses these lots to build your capital-gains report.', 'Property assets track area, ownership share, value per sq ft, rent and growth per year.', 'Use Alt+W to jump to Wealth.'],
+    advanced: ['Assets can be in different currencies, and include stocks, mutual funds, gold, EPF, PPF, property and deposits.', 'On a stock holding you can record buys and sells. The Tax tab uses these lots to build your capital-gains report.', 'Property assets track area, ownership share, value per sq ft, rent and growth per year.', 'Use Alt+W to jump to Wealth, and Ctrl+Shift+S to save a net worth snapshot from any page.'],
   },
   {
     id: 'analytics', title: 'Wealth › Analytics', icon: <PieChart size={16} />, path: '/wealth?tab=analytics',

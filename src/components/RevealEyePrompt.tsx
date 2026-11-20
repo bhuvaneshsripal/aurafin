@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { EyeOff } from 'lucide-react';
 import { useUiStore } from '../store/uiStore';
 import { useAppLockStore } from '../store/appLockStore';
+import { useBottomSlot } from '../store/bottomSlotStore';
 
 // sessionStorage is wiped when the app/tab is really closed, so the nudge
 // shows once per fresh open — not on every refresh or page change.
@@ -36,6 +37,8 @@ export default function RevealEyePrompt() {
   const locked = useAppLockStore((s) => s.locked);
   const [open, setOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  // Wait for the bottom slot if a toast / banner is showing; never overlap it.
+  const active = useBottomSlot('reveal-eye-prompt', open, 1);
 
   // Appear once the app is unlocked and the amounts are hidden.
   useEffect(() => {
@@ -59,7 +62,7 @@ export default function RevealEyePrompt() {
   // down once a second, and the toast hides itself when time is up.
   const [secs, setSecs] = useState(VISIBLE_SECONDS);
   useEffect(() => {
-    if (!open) return;
+    if (!open || !active) return;
     setSecs(VISIBLE_SECONDS);
     const tick = window.setInterval(() => setSecs((n) => Math.max(1, n - 1)), 1000);
     const done = window.setTimeout(close, VISIBLE_SECONDS * 1000);
@@ -68,7 +71,7 @@ export default function RevealEyePrompt() {
       window.clearTimeout(done);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, active]);
 
   // Opening the eye some other way also clears it.
   useEffect(() => {
@@ -76,7 +79,7 @@ export default function RevealEyePrompt() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [privacyMode]);
 
-  if (!open) return null;
+  if (!open || !active) return null;
 
   return (
     <div className="fixed left-0 right-0 z-[90] flex justify-center px-4 pointer-events-none bottom-[calc(env(safe-area-inset-bottom)+96px)] md:bottom-6">

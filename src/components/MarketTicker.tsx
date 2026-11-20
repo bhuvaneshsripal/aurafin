@@ -60,7 +60,7 @@ function renderItems(quotes: IndexQuote[] | null | undefined, resetWindow = fals
     const pct = reset ? 0 : change !== undefined && q?.previousClose ? (change / q.previousClose) * 100 : undefined;
     const up = (change ?? 0) >= 0;
     return (
-      <div key={key} className="flex items-baseline gap-1.5 @min-[900px]:gap-2 h-5 shrink-0">
+      <div key={key} className="flex items-baseline gap-1.5 h-5 shrink-0">
         <span className="font-semibold text-ink-2">{name}</span>
         {q ? (
           <>
@@ -89,10 +89,10 @@ export default function MarketTicker() {
   const items = renderItems(quotes, reset);
 
   // Static strip, always the full "NAME  level  ±points (±pct%)", spread evenly.
-  // On narrower headers the text and gaps step down so all three still fit.
+  // Font size is fixed so it never changes between pages.
   return (
     <div className="@container flex-1 min-w-0 h-5" aria-label="Market indices">
-      <div className="h-5 overflow-hidden flex items-center justify-between gap-x-4 whitespace-nowrap text-sm @max-[900px]:text-[13px] @max-[780px]:text-xs leading-5">
+      <div className="h-5 overflow-hidden flex items-center justify-between gap-x-4 whitespace-nowrap text-[13px] leading-5">
         {items}
       </div>
     </div>

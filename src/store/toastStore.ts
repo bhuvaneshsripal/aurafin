@@ -17,6 +17,7 @@ export interface Toast {
 
 const TOAST_LIFETIME_MS = 4500;
 const MAX_VISIBLE = 3;
+const MAX_QUEUED_BOTTOM = 6;
 
 interface ToastState {
   toasts: Toast[];
@@ -32,10 +33,24 @@ export const useToastStore = create<ToastState>((set, get) => ({
     // Don't stack identical notices (e.g. several saves in a row).
     if (get().toasts.some((t) => t.message === message && t.placement === placement)) return;
     const id = nextId++;
-    set((s) => ({ toasts: [...s.toasts, { id, message, tone, placement, action, lifetimeMs }].slice(-MAX_VISIBLE) }));
-    window.setTimeout(() => {
-      if (get().toasts.some((t) => t.id === id)) get().dismiss(id);
-    }, lifetimeMs);
+    set((s) => {
+      const next = [...s.toasts, { id, message, tone, placement, action, lifetimeMs }];
+      // Top toasts stack (newest 3). Bottom toasts queue and show one at a time,
+      // so keep a longer backlog of those.
+      const keep = (p: ToastPlacement, max: number) => {
+        const mine = next.filter((t) => t.placement === p);
+        return new Set(mine.slice(-max).map((t) => t.id));
+      };
+      const topKeep = keep('top', MAX_VISIBLE);
+      const botKeep = keep('bottom', MAX_QUEUED_BOTTOM);
+      return { toasts: next.filter((t) => (t.placement === 'top' ? topKeep : botKeep).has(t.id)) };
+    });
+    // Bottom toasts start their timer when they actually appear (see Toaster).
+    if (placement === 'top') {
+      window.setTimeout(() => {
+        if (get().toasts.some((t) => t.id === id)) get().dismiss(id);
+      }, lifetimeMs);
+    }
   },
   dismiss: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 }));

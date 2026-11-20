@@ -26,7 +26,7 @@ function RateBlock({
   accent: string;
 }) {
   return (
-    <div className="flex-1 rounded-xl border border-line-soft p-4">
+    <div className="flex-1 rounded-xl border-2 border-amber-300 dark:border-amber-500/50 p-4">
       <div className="flex items-center gap-1.5">
         <span className={`w-2 h-2 rounded-full ${accent}`} />
         <span className="text-[13px] font-medium text-muted">{label}</span>
@@ -112,8 +112,8 @@ export default function GoldPriceCard() {
           {price24k !== null && (
             <>
               <div className="flex flex-col sm:flex-row gap-3">
-                <RateBlock label="24K (999)" perGram={price24k} accent="bg-amber-500" />
                 <RateBlock label="22K (916)" perGram={goldPricePerGram22k(price24k)} accent="bg-amber-300" />
+                <RateBlock label="24K (999)" perGram={price24k} accent="bg-amber-500" />
               </div>
               <p className="text-[11px] text-muted mt-3">
                 {error ? 'Showing last known rate · ' : ''}Updated {timeAgo(asOf)}

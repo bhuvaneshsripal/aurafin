@@ -14,6 +14,7 @@ import { useSnapshotsStore } from '../store/snapshotsStore';
 import { useLivePricesStore, isPriceCacheFresh } from '../store/livePricesStore';
 import { resolveAssetValues } from '../utils/assetValues';
 import { isFullySold } from '../utils/investmentPnl';
+import { computeBreakdown, breakdownsEqual } from '../utils/snapshotBreakdown';
 import { toIsoDate } from '../utils/date';
 import { readBackup, writeBackup } from '../utils/dataBackup';
 import { allPending, applyPending, confirmPending, pendingFor, pendingItem, recordPending } from '../utils/pendingWrites';
@@ -608,6 +609,7 @@ export function useAutoNetWorthHistory() {
       .reduce((sum, a) => sum + resolveAssetValues(a, livePrices, sipValues, goldPricePerGram).value, 0);
     const totalLiabilities = liabilities.reduce((sum, l) => sum + l.outstanding, 0);
     const netWorth = totalAssets - totalLiabilities;
+    const breakdown = computeBreakdown(assets, livePrices, sipValues, goldPricePerGram);
 
     const today = toIsoDate();
     const existing = snapshots.find((s) => s.date === today);
@@ -618,7 +620,8 @@ export function useAutoNetWorthHistory() {
       existing &&
       same(existing.netWorth, netWorth) &&
       same(existing.totalAssets, totalAssets) &&
-      same(existing.totalLiabilities, totalLiabilities)
+      same(existing.totalLiabilities, totalLiabilities) &&
+      breakdownsEqual(existing.breakdown, breakdown)
     ) {
       return;
     }
@@ -635,6 +638,7 @@ export function useAutoNetWorthHistory() {
       netWorth,
       totalAssets,
       totalLiabilities,
+      breakdown,
     };
     addOrUpdate(entry);
     if (structural || now - lastWriteRef.current >= 60_000) {

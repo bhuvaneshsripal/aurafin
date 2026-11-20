@@ -6,6 +6,7 @@ import { cn } from '../components/ui/cn';
 import { useAssetsStore } from '../store/assetsStore';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import { useUiStore } from '../store/uiStore';
+import HeaderPills from '../components/HeaderPills';
 import { PRIVACY_DOTS, maskPreciseAmount, formatSignedCurrency } from '../utils/currency';
 import { toIsoDate } from '../utils/date';
 import { buildActivityFeed, computeHoldingPnl, type ActivityEntry } from '../utils/investmentPnl';
@@ -75,7 +76,19 @@ export default function Trades({ tabNav }: { tabNav?: ReactNode } = {}) {
     <div className="space-y-5">
       <PageHeader
         title="Trades"
-        description="Your buys and sells, from the lots you've recorded."
+        description={
+          <>
+            <HeaderPills
+              pills={[
+                { value: buys.length, label: buys.length === 1 ? 'buy' : 'buys', tone: 'brand' },
+                { value: sells.length, label: sells.length === 1 ? 'sell' : 'sells', tone: 'red' },
+                ...(sells.length > 0
+                  ? [{ value: signed(realized), label: 'realised', tone: (realized >= 0 ? 'brand' : 'red') as 'brand' | 'red', valueTone: (realized >= 0 ? 'positive' : 'negative') as 'positive' | 'negative' }]
+                  : []),
+              ]}
+            />
+          </>
+        }
         actions={<SegmentedControl<Range> size="sm" value={range} onChange={setRange} items={RANGES} />}
       />
       {tabNav}

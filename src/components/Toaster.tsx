@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useToastStore, type Toast, type ToastTone } from '../store/toastStore';
-import { useNetworkStore } from '../store/networkStore';
+import { useBottomSlot } from '../store/bottomSlotStore';
 import { useSwipeDismiss } from '../hooks/useSwipeDismiss';
 
 const TONE_CLASSES: Record<ToastTone, string> = {
@@ -78,18 +78,38 @@ function SwipeToast({ id, tone, message, edge, action, lifetimeMs }: { id: numbe
   );
 }
 
+/** A bottom toast waits for its turn in the shared bottom slot, so it never
+ *  overlaps another bottom notice. Its timer only starts once it is showing. */
+function BottomToast({ t }: { t: Toast }) {
+  const dismiss = useToastStore((s) => s.dismiss);
+  const active = useBottomSlot(`toast-${t.id}`, true);
+  useEffect(() => {
+    if (!active) return;
+    const timer = window.setTimeout(() => dismiss(t.id), t.lifetimeMs);
+    return () => window.clearTimeout(timer);
+  }, [active, dismiss, t.id, t.lifetimeMs]);
+  if (!active) return null;
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      data-toast-root
+      className="fixed left-0 right-0 z-[71] flex flex-col items-center gap-2 px-4 pointer-events-none bottom-[calc(80px_+_env(safe-area-inset-bottom)_+_12px)] md:bottom-4"
+    >
+      <SwipeToast id={t.id} tone={t.tone} message={t.message} edge="down" action={t.action} lifetimeMs={t.lifetimeMs} />
+    </div>
+  );
+}
+
 /** Renders active toasts. Top ones sit clear of the notch; bottom ones sit
  *  above the nav bar (and above the network banner while that is showing).
  *  Tap one, or swipe it away, to dismiss it. */
 export default function Toaster() {
   const toasts = useToastStore((s) => s.toasts);
-  const quality = useNetworkStore((s) => s.quality);
 
   if (toasts.length === 0) return null;
   const top = toasts.filter((t) => t.placement === 'top');
   const bottom = toasts.filter((t) => t.placement === 'bottom');
-  // The network banner lives in the same bottom slot; stack above it.
-  const lift = quality !== 'good' ? 84 : 0;
 
   return (
     <>
@@ -107,19 +127,9 @@ export default function Toaster() {
           ))}
         </div>
       )}
-      {bottom.length > 0 && (
-        <div
-          role="status"
-          aria-live="polite"
-          data-toast-root
-          className="fixed left-0 right-0 z-[71] flex flex-col items-center gap-2 px-4 pointer-events-none bottom-[calc(80px_+_env(safe-area-inset-bottom)_+_12px_+_var(--lift))] md:bottom-[calc(16px_+_var(--lift))]"
-          style={{ ['--lift' as string]: `${lift}px` }}
-        >
-          {bottom.map((t) => (
-            <SwipeToast key={t.id} id={t.id} tone={t.tone} message={t.message} edge="down" action={t.action} lifetimeMs={t.lifetimeMs} />
-          ))}
-        </div>
-      )}
+      {bottom.map((t) => (
+        <BottomToast key={t.id} t={t} />
+      ))}
     </>
   );
 }

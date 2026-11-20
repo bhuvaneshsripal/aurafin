@@ -12,7 +12,7 @@ export { default as Badge } from './Badge';
 export type { BadgeVariant } from './Badge';
 export { default as PageHeader } from './PageHeader';
 export { default as EmptyState } from './EmptyState';
-export { default as LoadingState, Skeleton, CardSkeleton } from './LoadingState';
+export { default as LoadingState, Skeleton, CardSkeleton, ContentSkeleton, PageSkeleton } from './LoadingState';
 export { default as DeltaChip, TrendArrow } from './DeltaChip';
 export { default as Sparkline } from './Sparkline';
 export { default as ProgressRing } from './ProgressRing';
