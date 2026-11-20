@@ -502,6 +502,13 @@ function PortfolioPerformanceChart({
 // Holdings / Sold tables
 // ---------------------------------------------------------------------------
 
+/** Latest sale date (YYYY-MM-DD) of a holding, or '' when none is recorded. */
+function latestSaleDate(h: HoldingPnl): string {
+  let latest = '';
+  for (const sale of h.sales) if (sale.date && sale.date > latest) latest = sale.date;
+  return latest;
+}
+
 function SoldRow({
   h,
   currency,
@@ -537,7 +544,7 @@ function SoldRow({
       <td className={`py-3 pr-3 text-right font-numeric text-[13px] font-semibold ${signClass(h.realizedPnl)}`}>{moneyLabel(h.realizedPnl, currency, privacy)}</td>
       <td className={`py-3 pr-3 text-right font-numeric text-[13px] font-semibold ${signClass(h.realizedPnlPercent)}`}>{pctLabel(h.realizedPnlPercent)}</td>
       <td className="py-3 pr-3 text-right text-[12.5px] text-muted">{formatShortDate(h.buyLots[0]?.date)}</td>
-      <td className="py-3 pl-3 text-[12.5px] text-muted">{formatShortDate(h.sales[h.sales.length - 1]?.date)}</td>
+      <td className="py-3 pl-3 text-[12.5px] text-muted">{formatShortDate(latestSaleDate(h) || undefined)}</td>
       <td className="py-3 pl-1 text-right">
         <button
           type="button"
@@ -1166,8 +1173,12 @@ export default function InvestmentPnL() {
         .filter((h) => h.totalSoldQty > 0),
     [assets, livePrices, sipValues, goldPricePerGram]
   );
+  // Most recently sold first (by each holding's latest sale date; undated sales go last).
   const filteredSold = useMemo(
-    () => soldRecords.filter((h) => matchesType(h) && matchesSearch(h) && matchesPerformance(h) && matchesPosition(h)),
+    () =>
+      soldRecords
+        .filter((h) => matchesType(h) && matchesSearch(h) && matchesPerformance(h) && matchesPosition(h))
+        .sort((a, b) => latestSaleDate(b).localeCompare(latestSaleDate(a))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [soldRecords, typeFilter, search, performanceFilter, positionFilter]
   );

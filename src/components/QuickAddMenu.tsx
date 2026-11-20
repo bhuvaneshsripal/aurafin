@@ -25,6 +25,7 @@ import { useSnapshotsStore } from '../store/snapshotsStore';
 import { useHouseholdProfilesStore } from '../store/householdProfilesStore';
 import { upsertDoc } from '../hooks/useFirestoreSync';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
+import { useTopbarMenuFlag } from '../hooks/useTopbarMenuFlag';
 import { buttonClasses, DateInput, inputClasses, RequiredMark } from './ui';
 import Modal from './Modal';
 import type { Asset, Snapshot, Transaction, TransactionType } from '../types';
@@ -132,6 +133,8 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
   // backdrop (fab variant) or the page behind it (desktop variant) would
   // otherwise keep scrolling underneath the open menu.
   useBodyScrollLock(menuOpen);
+  // Lets the dropdown + its dim layer show above an open page panel (see index.css).
+  useTopbarMenuFlag(menuOpen);
 
   const open = (action: QuickAction) => {
     // Asset and Liability get the full Wealth page add flow (category ->
@@ -293,7 +296,7 @@ export default function QuickAddMenu({ variant = 'desktop' }: { variant?: 'deskt
             // under the sticky top bar (z-30), so the Add button and its menu
             // stay bright and clickable; a click anywhere on the dim closes it.
             <div
-              className="animate-backdrop-in fixed inset-0 z-[29] bg-slate-900/30 backdrop-blur-[3px]"
+              className="topbar-menu-backdrop animate-backdrop-in fixed inset-0 z-[29] bg-slate-900/30 backdrop-blur-[3px]"
               onClick={() => setMenuOpen(false)}
               aria-hidden="true"
             />,

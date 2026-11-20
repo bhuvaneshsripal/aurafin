@@ -1,6 +1,19 @@
 import type { ReactNode } from 'react';
 
-const CONTACT_EMAIL = 'sribhuvi6264@gmail.com';
+import { openSupportMail } from '../config/support';
+
+/** Link-styled button that opens a new email to support (the address itself is never shown on screen). */
+function SupportLink({ subject }: { subject: string }) {
+  return (
+    <button
+      type="button"
+      onClick={() => openSupportMail(subject)}
+      className="text-brand-600 underline hover:text-brand-700"
+    >
+      contact support
+    </button>
+  );
+}
 const UPDATED = '24 October 2026';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -52,8 +65,7 @@ function Privacy() {
       <Section title="Your choices">
         <p>
           You can edit or delete entries in the app at any time, and sign out whenever you like. To request a
-          copy of your data or deletion of your account and all stored data, email{' '}
-          <a className="text-brand-600 underline" href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
+          copy of your data or deletion of your account and all stored data, <SupportLink subject="Aurafin data request" />.
         </p>
       </Section>
       <Section title="Children">
@@ -61,8 +73,7 @@ function Privacy() {
       </Section>
       <Section title="Changes and contact">
         <p>
-          We may update this policy and will change the date above when we do. Questions:{' '}
-          <a className="text-brand-600 underline" href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
+          We may update this policy and will change the date above when we do. Questions? <SupportLink subject="Aurafin question" />.
         </p>
       </Section>
     </>
@@ -104,8 +115,7 @@ function Terms() {
       <Section title="Privacy and contact">
         <p>
           See our <a className="text-brand-600 underline" href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a> for how data is
-          handled. Questions:{' '}
-          <a className="text-brand-600 underline" href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
+          handled. Questions? <SupportLink subject="Aurafin question" />.
         </p>
       </Section>
     </>

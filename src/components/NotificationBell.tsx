@@ -11,6 +11,7 @@ import { useAlertsStore, LIST_KINDS, type AlertKind } from '../store/alertsStore
 import { toast } from '../store/toastStore';
 import { showSystemNotification } from '../hooks/useMarketAlerts';
 import { inToast } from '../utils/toastGuard';
+import { useTopbarMenuFlag } from '../hooks/useTopbarMenuFlag';
 
 const KIND_META: Record<AlertKind, { icon: LucideIcon; tint: string }> = {
   'pre-open': { icon: Sunrise, tint: 'bg-amber-500/15 text-amber-600' },
@@ -203,6 +204,8 @@ export default function NotificationBell(_props: { align?: 'right' | 'left' } = 
   const hideCard = useAlertsStore((s) => s.hideCard);
   const [open, setOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  // Show the panel above any open page panel instead of behind it (see index.css).
+  useTopbarMenuFlag(open);
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
   const menuRef = useRef<HTMLDivElement>(null);
   const [perm, setPerm] = useState<NotificationPermission | 'unsupported'>(
@@ -380,7 +383,7 @@ export default function NotificationBell(_props: { align?: 'right' | 'left' } = 
 
       {open && createPortal(
         <div
-          className="animate-backdrop-in fixed right-0 bottom-0 z-[25] bg-slate-900/40 flex justify-end"
+          className="topbar-menu-backdrop animate-backdrop-in fixed right-0 bottom-0 z-[25] bg-slate-900/40 flex justify-end"
           style={{ top: box.top, left: box.left }}
           onClick={() => setOpen(false)}
         >

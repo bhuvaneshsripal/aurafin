@@ -1,3 +1,4 @@
+import { useTopbarMenuFlag } from '../hooks/useTopbarMenuFlag';
 import RefreshBar from './RefreshBar';
 import { SHORTCUT_HINT } from '../config/shortcuts';
 import { useEffect, useRef, useState } from 'react';
@@ -37,6 +38,8 @@ export default function TopHeader() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  // Profile / overflow menus must show above an open page panel, not behind it.
+  useTopbarMenuFlag(profileOpen || mobileMenuOpen);
 
   // Logs out immediately (no confirmation). Fades a full-screen overlay in
   // first, then flips the real auth state — so leaving the app reads as a

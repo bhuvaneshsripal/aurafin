@@ -87,10 +87,10 @@ arrives whether or not the app is open.
 
    | Name | Value |
    | --- | --- |
-   | `SMTP_USER` | the mailbox that sends, e.g. `yourname@gmail.com` |
-   | `SMTP_PASS` | for Gmail, an **App password** (Google Account > Security > 2-Step Verification > App passwords). Not your normal password. |
+   | `SMTP_USER` | the mailbox that sends: `aurafinsupport@gmail.com` (the digest arrives from **Aurafin**) |
+   | `SMTP_PASS` | the **App password** of `aurafinsupport@gmail.com` (Google Account > Security > 2-Step Verification > App passwords). Not your normal password. |
 
-   Optional: `SMTP_HOST` (default `smtp.gmail.com`), `SMTP_PORT` (default `465`), `MAIL_FROM` (default `Aurafin <SMTP_USER>`).
+   Optional: `SMTP_HOST` (default `smtp.gmail.com`), `SMTP_PORT` (default `465`), `MAIL_FROM` (sender address, default `SMTP_USER`; the display name is always "Aurafin").
 2. `.github/workflows/weekly-digest.yml` calls the server at 10:00 AM IST every
    Saturday (plus two later safety-net runs; each person gets it once per Saturday).
    It uses the same `APP_URL` and `CRON_SECRET` GitHub secrets as the other workflows.

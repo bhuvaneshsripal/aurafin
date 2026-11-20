@@ -1,3 +1,4 @@
+import { openSupportMail } from '../config/support';
 import { useEffect, useState } from 'react';
 import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -606,6 +607,7 @@ export default function LoginLanding({ onSignup, onDemo, demoLoading, demoError 
             <h4>Legal</h4>
             <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
             <a href="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a>
+            <button type="button" onClick={() => openSupportMail('Aurafin support')}>Support</button>
           </div>
         </div>
         <div className="fb-footer-base">© 2026 Aurafin · Made in India</div>

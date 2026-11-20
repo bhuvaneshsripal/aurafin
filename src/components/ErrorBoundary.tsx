@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { openSupportMail, supportContext } from '../config/support';
 
 interface Props {
   children: ReactNode;
@@ -56,6 +57,18 @@ export default class ErrorBoundary extends Component<Props, State> {
               Reload
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() =>
+              openSupportMail(
+                'Aurafin problem report',
+                `Something went wrong on this page.\nError: ${this.state.error?.message ?? ''}${supportContext()}`
+              )
+            }
+            className="text-sm font-medium text-brand-600 hover:underline"
+          >
+            Contact support
+          </button>
         </div>
       );
     }

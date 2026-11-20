@@ -1,5 +1,6 @@
 import { Card, PageHeader } from '../components/ui';
 import FeedbackPanel from '../components/FeedbackPanel';
+import { openSupportMail, supportContext } from '../config/support';
 
 export default function Feedback() {
   return (
@@ -8,6 +9,17 @@ export default function Feedback() {
       <Card padding="lg" className="max-w-xl">
         <FeedbackPanel />
       </Card>
+      <p className="max-w-xl text-sm text-muted">
+        Need help with something?{' '}
+        <button
+          type="button"
+          onClick={() => openSupportMail('Aurafin support', supportContext())}
+          className="font-medium text-brand-600 hover:underline"
+        >
+          Contact support
+        </button>
+        .
+      </p>
     </div>
   );
 }

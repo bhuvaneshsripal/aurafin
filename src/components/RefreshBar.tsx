@@ -12,18 +12,35 @@ export default function RefreshBar() {
   const active = useRefreshBarStore((s) => s.active);
   const [box, setBox] = useState<{ top: number; left: number; width: number } | null>(null);
 
+  // Keep the line glued to the bottom of the bars for as long as it shows. The position is
+  // re-read every frame (cheap, and only while active) because the "new update" notice, the
+  // network banner or a scroll can move the bars *after* the line starts; measuring only once
+  // left the line stranded across the notice.
   useLayoutEffect(() => {
-    if (!active) return;
+    if (!active) {
+      setBox(null);
+      return;
+    }
+    let raf = 0;
     const measure = () => {
       const bar = document.getElementById('app-topbar')?.getBoundingClientRect();
       const strip = document.getElementById('app-marquee')?.getBoundingClientRect();
+      const notice = document.getElementById('app-update-banner')?.getBoundingClientRect();
       const stripVisible = !!strip && strip.height > 0 && strip.width > 0;
-      const top = Math.max(bar?.bottom ?? 56, stripVisible ? strip!.bottom : 0);
-      setBox({ top, left: bar?.left ?? 0, width: bar?.width ?? window.innerWidth });
+      const top = Math.max(
+        bar?.bottom ?? 56,
+        stripVisible ? strip!.bottom : 0,
+        notice && notice.height > 0 ? notice.bottom : 0
+      );
+      const left = bar?.left ?? 0;
+      const width = bar?.width ?? window.innerWidth;
+      setBox((prev) =>
+        prev && prev.top === top && prev.left === left && prev.width === width ? prev : { top, left, width }
+      );
+      raf = requestAnimationFrame(measure);
     };
     measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    return () => cancelAnimationFrame(raf);
   }, [active]);
 
   if (!active || !box) return null;

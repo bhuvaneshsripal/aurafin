@@ -1101,6 +1101,17 @@ html[data-vv-pan] #app-marquee {
   }
 }
 
+/* A top-bar menu (Add, notifications, profile) opened while a page panel (What's new, edit
+   asset...) is showing: the panel is z-50, so without this the menu and its dim layer render
+   BEHIND it and only a sliver peeks out. While such a menu is open, lift the bar (and the menu's
+   dim layer, just under it) above the panel. Set by useTopbarMenuFlag; gone when the menu closes. */
+html[data-panel-open][data-topbar-menu] #app-topbar {
+  z-index: 60;
+}
+html[data-panel-open][data-topbar-menu] .topbar-menu-backdrop {
+  z-index: 55 !important;
+}
+
 /* Global search box: no green focus ring/border (overrides the global input:focus style). */
 input.global-search-input,
 input.global-search-input:focus,
