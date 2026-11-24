@@ -5,6 +5,25 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
+    // View-only share links (Settings > Shared access). The document id is a long random token, so
+    // only someone holding the link can open it: a single document may be read by anyone, but the
+    // collection can never be listed. Only the owner can create, change or delete a share.
+    match /shares/{token} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if request.auth != null
+        && token.size() >= 20
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.payload is string
+        && request.resource.data.payload.size() < 950000;
+      allow update: if request.auth != null
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.payload is string
+        && request.resource.data.payload.size() < 950000;
+      allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+    }
+
     // In-app feedback: any signed-in user (guests included) may SEND their own
     // message, but nobody can read, edit or delete feedback from the app.
     // You read it in the Firebase console (Firestore Database > feedback).

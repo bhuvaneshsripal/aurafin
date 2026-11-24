@@ -3,6 +3,9 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import { ArrowLeft, ChevronRight, Database, FileText, KeyRound, LockKeyhole, RefreshCw, Share2, SlidersHorizontal, Sparkles, UserRound, Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, Eye, EyeOff, Minus, Type, Maximize, Pencil, Download, Upload, Mail, Bell, Keyboard } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import { useShareStore } from '../store/shareStore';
+import { useToastStore } from '../store/toastStore';
+import { createShareLink, revokeShareLink, shareUrl } from '../utils/shareLink';
 import { SHORTCUT_GROUPS } from '../config/shortcuts';
 import { useAvatarStore } from '../store/avatarStore';
 import { useAvatarUrl } from '../hooks/useAvatarUrl';
@@ -40,7 +43,6 @@ import Modal from '../components/Modal';
 import UpdateDot from '../components/UpdateDot';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useUrlTab } from '../hooks/useUrlTab';
-import CustomSelect from '../components/CustomSelect';
 import { PageHeader, Button, RequiredMark } from '../components/ui';
 import type { ReportSectionKey } from '../components/PortfolioPdfReport';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
@@ -503,46 +505,147 @@ function InstallAppCard() {
 }
 
 function SharedAccessCard() {
+  const user = useAuthStore((s) => s.user);
+  const token = useShareStore((s) => s.token);
+  const ready = useShareStore((s) => s.ready);
+  const name = useDisplayName('');
+  const push = useToastStore((s) => s.push);
+  const [busy, setBusy] = useState<'create' | 'renew' | 'stop' | null>(null);
+  const [confirmStop, setConfirmStop] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const guest = !user || user.isAnonymous === true;
+  const link = token ? shareUrl(token) : '';
+
+  const create = async (kind: 'create' | 'renew') => {
+    if (!user || busy) return;
+    setBusy(kind);
+    try {
+      await createShareLink(user.uid, name, token);
+      push(kind === 'renew' ? 'New link created. The old one no longer works.' : 'View-only link created.', 'success');
+    } catch (err) {
+      push(err instanceof Error ? err.message : "Couldn't create the link. Check your connection and try again.", 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const stop = async () => {
+    if (!user || busy) return;
+    setBusy('stop');
+    try {
+      await revokeShareLink(user.uid, token);
+      setConfirmStop(false);
+      push('Sharing stopped. The link no longer works.', 'success');
+    } catch {
+      push("Couldn't stop sharing. Check your connection and try again.", 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch {
+      // Older browsers / insecure context: select the text in a temporary field instead.
+      const ta = document.createElement('textarea');
+      ta.value = link;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+      } catch {
+        /* the person can still select the link by hand */
+      }
+      ta.remove();
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <Card>
       <div className="flex gap-3">
         <Users size={20} className="text-slate-700 dark:text-slate-300 shrink-0 mt-0.5" />
         <div className="flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-sm font-semibold text-ink flex items-center gap-1.5">
-              Shared Access
-              <InfoTip>
-                Share your financial data with up to 5 trusted people — spouse, financial advisor, CA, or anyone you choose. Each person gets View Only or Full Access. This feature is on the way — check back soon.
-              </InfoTip>
-            </h2>
-            <span className="text-xs font-medium text-brand-600 bg-brand-50 dark:bg-brand-500/10 dark:text-brand-400 px-2 py-0.5 rounded-full">
-              Coming Soon
-            </span>
-          </div>
+          <h2 className="text-sm font-semibold text-ink flex items-center gap-1.5">
+            Shared Access
+            <InfoTip>
+              Create a link and send it to anyone (spouse, advisor, CA). They can only look at your portfolio. They cannot edit, add or delete anything, and they do not need an account. Stop sharing at any time and the link dies immediately.
+            </InfoTip>
+          </h2>
+          <p className="text-xs text-muted mt-1">
+            Anyone with the link can view your net worth, holdings, loans and goals. They cannot change anything.
+          </p>
         </div>
       </div>
 
-      <div className="mt-4 flex flex-col sm:flex-row gap-3 opacity-50 pointer-events-none">
-        <input
-          type="email"
-          disabled
-          placeholder="their.email@example.com"
-          className="flex-1 border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm placeholder:text-slate-600"
-        />
-        <CustomSelect
-          disabled
-          value="view"
-          onChange={() => {}}
-          options={[{ value: 'view', label: 'View Only' }]}
-          className="border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm"
-        />
-        <button
-          disabled
-          className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap"
-        >
-          Send Invite
-        </button>
-      </div>
+      {guest ? (
+        <p className="mt-4 text-sm text-muted">Sign in with an account (not guest mode) to create a view-only link.</p>
+      ) : !ready ? (
+        <p className="mt-4 text-sm text-muted">Loading…</p>
+      ) : !token ? (
+        <div className="mt-4">
+          <Button onClick={() => void create('create')} loading={busy === 'create'} leftIcon={<Share2 size={15} />}>
+            Create view-only link
+          </Button>
+        </div>
+      ) : (
+        <div className="mt-4 space-y-3">
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              readOnly
+              value={link}
+              onFocus={(e) => e.currentTarget.select()}
+              aria-label="View-only link"
+              className="flex-1 min-w-0 border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm"
+            />
+            <Button onClick={() => void copy()} leftIcon={copied ? <Check size={15} /> : <Share2 size={15} />}>
+              {copied ? 'Copied' : 'Copy link'}
+            </Button>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+            <a href={link} target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline">
+              Preview
+            </a>
+            <button
+              type="button"
+              onClick={() => void create('renew')}
+              disabled={busy !== null}
+              className="text-slate-600 dark:text-slate-300 hover:underline disabled:opacity-50"
+            >
+              {busy === 'renew' ? 'Creating…' : 'Create a new link'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmStop(true)}
+              disabled={busy !== null}
+              className="text-red-600 hover:underline disabled:opacity-50"
+            >
+              Stop sharing
+            </button>
+          </div>
+          <p className="text-xs text-muted">
+            The shared page updates by itself while you use Aurafin. Making a new link stops the old one.
+          </p>
+        </div>
+      )}
+
+      <Modal open={confirmStop} onClose={() => setConfirmStop(false)} title="Stop sharing?">
+        <div className="space-y-4">
+          <p className="text-sm text-ink-2">The link will stop working right away for everyone who has it.</p>
+          <div className="flex gap-2 justify-end">
+            <Button variant="secondary" onClick={() => setConfirmStop(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={() => void stop()} loading={busy === 'stop'}>
+              Stop sharing
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </Card>
   );
 }

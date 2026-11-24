@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, deleteField, writeBatch, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { revokeShareLinkForUser } from '../utils/shareLink';
 import { useAuthStore } from '../store/authStore';
 import { useAvatarStore } from '../store/avatarStore';
 import { useAppLockStore, readGuestAppLock } from '../store/appLockStore';
@@ -1131,6 +1132,8 @@ export async function deleteAllUserData(uidOrUser: string | { uid: string; isAno
     clearGuestData(uid);
     return;
   }
+  // A wiped account must not keep a live view-only link to its old figures.
+  await revokeShareLinkForUser(uid);
   for (const collectionName of ALL_USER_COLLECTIONS) {
     const colRef = collection(db, 'users', uid, collectionName);
     const snap = await getDocs(colRef);

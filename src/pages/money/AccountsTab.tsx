@@ -374,11 +374,11 @@ export default function AccountsTab({ open, onOpenChange }: AccountsTabProps) {
         )}
       </div>
 
-      <Modal open={open} onClose={() => onOpenChange(false)} title="Add Account" widthClassName="max-w-lg">
+      <Modal open={open} onClose={() => onOpenChange(false)} title="Add Account" widthClassName="max-w-lg" closeOnBackdrop={false}>
         <AccountForm onSave={handleSave} />
       </Modal>
 
-      <Modal open={!!editingRow} onClose={() => setEditingRow(null)} title="Edit Account" widthClassName="max-w-lg">
+      <Modal open={!!editingRow} onClose={() => setEditingRow(null)} title="Edit Account" widthClassName="max-w-lg" closeOnBackdrop={false}>
         {editingRow && (
           <AccountForm
             initial={{
@@ -553,7 +553,11 @@ function AccountForm({
           <input
             type="number"
             value={openingBalance}
-            onChange={(e) => setOpeningBalance(e.target.value)}
+            onChange={(e) => {
+              setOpeningBalance(e.target.value);
+              // Changing the balance means it is as of today (the date can still be changed by hand).
+              setBalanceAsOf(toIsoDate());
+            }}
             className={inputClass}
             placeholder="0"
           />

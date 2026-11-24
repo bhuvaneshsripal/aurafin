@@ -40,6 +40,9 @@ interface ModalProps {
   /** With `contentPanel`: no gap, rounding, border or backdrop around the
    *  panel, so it sits flush against the sidebar and top bar like a page. */
   flush?: boolean;
+  /** Centered dialog only: set false so clicking the dimmed area outside does NOT close it
+   *  (forms where a stray click would lose what was typed). X, Escape and Back still close. */
+  closeOnBackdrop?: boolean;
 }
 
 /** True on phone-width screens; follows rotation/resize. */
@@ -289,6 +292,7 @@ export default function Modal({
   footer,
   fullScreenOnMobile = false,
   flush = false,
+  closeOnBackdrop = true,
 }: ModalProps) {
   const isMobile = useIsMobile();
   const barsBottom = useBarsBottom(open && fullScreenOnMobile && isMobile);
@@ -377,7 +381,7 @@ export default function Modal({
     <div
       className={`${closing ? 'animate-backdrop-out' : 'animate-backdrop-in'} fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-[3px] px-4 py-4`}
       style={visible ? { top: visible.top, bottom: 'auto', height: visible.height } : undefined}
-      onClick={onClose}
+      onClick={closeOnBackdrop ? onClose : undefined}
     >
       <div
         className={`${closing ? 'animate-menu-out' : 'animate-dialog-in'} bg-surface border border-line shadow-xl w-full ${widthClassName} max-h-[88dvh] max-h-[88vh] flex flex-col`}

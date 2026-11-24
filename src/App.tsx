@@ -29,6 +29,7 @@ import {
   ALL_USER_COLLECTIONS,
 } from './hooks/useFirestoreSync';
 import { useWatchlistSync } from './hooks/useWatchlistSync';
+import { useShareSync } from './hooks/useShareSync';
 import { useLivePrices } from './hooks/useLivePrices';
 import { useBackgroundDataCache } from './hooks/useBackgroundDataCache';
 import { useAppWarmup } from './hooks/useAppWarmup';
@@ -67,6 +68,7 @@ const LegalPage = lazyWithRetry(() => import('./pages/LegalPage'));
 const PublicCalculators = lazyWithRetry(() => import('./pages/PublicCalculators'));
 const ResetPinPage = lazyWithRetry(() => import('./pages/ResetPinPage'));
 const ResetPasswordPage = lazyWithRetry(() => import('./pages/ResetPasswordPage'));
+const SharedView = lazyWithRetry(() => import('./pages/SharedView'));
 const dashboardImport = () => import('./pages/Dashboard');
 const Dashboard = lazyWithRetry(dashboardImport);
 // Start downloading the default route's code right away, in parallel with
@@ -286,6 +288,8 @@ function DataSync() {
   useAppLockSync();
   useWealthFilterSync();
   useWatchlistSync();
+  // Keeps the view-only share link (Settings > Shared access) current while it is switched on.
+  useShareSync();
   useBasicDetailsSync();
   useFloatingEyeSync();
   // Pushes saves made while the network was weak/offline once it returns.
@@ -411,6 +415,8 @@ export default function App() {
   // "Reset PIN" / "Reset Password" buttons in the emails: work in any browser, signed in or not.
   const resetPinPage = legalPath === '/reset-pin';
   const resetPasswordPage = legalPath === '/reset-password';
+  // View-only link from Settings > Shared access: opens for anyone, signed in or not, and can only read.
+  const shareToken = /^\/share\/([A-Za-z0-9_-]{20,})$/.exec(legalPath)?.[1] ?? null;
   const user = useAuthStore((s) => s.user);
   const loading = useAuthStore((s) => s.loading);
   const init = useAuthStore((s) => s.init);
@@ -434,12 +440,13 @@ export default function App() {
 
   useEffect(() => {
     // Signed-out or legal pages have no Overview to wait for: drop the shell straight away.
-    if (legalKind || resetPinPage || resetPasswordPage || (!loading && !user)) hideBootShell();
-  }, [legalKind, resetPinPage, resetPasswordPage, loading, user]);
+    if (legalKind || resetPinPage || resetPasswordPage || shareToken || (!loading && !user)) hideBootShell();
+  }, [legalKind, resetPinPage, resetPasswordPage, shareToken, loading, user]);
 
   if (legalKind) return <Suspense fallback={null}><LegalPage kind={legalKind} /></Suspense>;
   if (resetPinPage) return <Suspense fallback={null}><ResetPinPage /></Suspense>;
   if (resetPasswordPage) return <Suspense fallback={null}><ResetPasswordPage /></Suspense>;
+  if (shareToken) return <Suspense fallback={null}><SharedView token={shareToken} /></Suspense>;
 
   if (loading) {
     return null;
