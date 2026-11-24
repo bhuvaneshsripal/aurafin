@@ -170,25 +170,25 @@ export default function UpdateBanner() {
           <p className="text-[12.5px] leading-snug text-[#5b6a80] dark:text-slate-400 mt-1">
             {updateFailed ? "Couldn't update. Check your connection and try again." : 'A new version is ready.'}
           </p>
-          <div className="mt-2.5 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={updateNow}
-              disabled={updating}
-              className="tap-scale inline-flex h-9 items-center justify-center gap-1.5 rounded-full bg-[#0a9a4b] px-5 text-[13.5px] font-semibold text-white shadow-sm hover:bg-[#088a43] disabled:opacity-70 transition-colors"
-            >
-              {updating && <RefreshCw size={14} className="animate-spin" />}
-              {updating ? 'Updating…' : 'Update'}
-            </button>
-            <button
-              type="button"
-              onClick={dismiss}
-              disabled={updating}
-              className="tap-scale inline-flex h-9 items-center justify-center rounded-full border border-[#d5e0db] dark:border-white/15 px-5 text-[13.5px] font-semibold text-[#3d4b5f] dark:text-slate-200 hover:bg-[#f2f6f4] dark:hover:bg-white/5 disabled:opacity-60 transition-colors"
-            >
-              Later
-            </button>
-          </div>
+        </div>
+        <div className="shrink-0 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={updateNow}
+            disabled={updating}
+            className="tap-scale inline-flex h-9 items-center justify-center gap-1.5 rounded-full bg-[#0a9a4b] px-4 sm:px-5 text-[13.5px] font-semibold text-white shadow-sm hover:bg-[#088a43] disabled:opacity-70 transition-colors"
+          >
+            {updating && <RefreshCw size={14} className="animate-spin" />}
+            {updating ? 'Updating…' : 'Update'}
+          </button>
+          <button
+            type="button"
+            onClick={dismiss}
+            disabled={updating}
+            className="tap-scale inline-flex h-9 items-center justify-center rounded-full border border-[#d5e0db] dark:border-white/15 px-4 sm:px-5 text-[13.5px] font-semibold text-[#3d4b5f] dark:text-slate-200 hover:bg-[#f2f6f4] dark:hover:bg-white/5 disabled:opacity-60 transition-colors"
+          >
+            Later
+          </button>
         </div>
       </div>
     </div>

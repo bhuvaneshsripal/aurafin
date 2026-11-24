@@ -417,9 +417,6 @@ function AppLockCard() {
           >
             Save PIN
           </button>
-          <p className="text-xs text-muted text-center">
-            3 wrong tries signs you out. Log in again to set a new PIN.
-          </p>
         </div>
       </Modal>
 
@@ -447,7 +444,6 @@ function AppLockCard() {
               Disable
             </button>
           </div>
-          <p className="text-xs text-muted text-center">3 wrong tries signs you out.</p>
         </div>
       </Modal>
     </Card>
