@@ -281,7 +281,7 @@ ${section('Weekly transactions', txRows)}
  *    and release the claim again if building or sending fails so the next call retries.
  *  - `test` (the Settings button) and `force` skip that claim.
  */
-export async function runWeeklyDigest(db, { dateKey, onlyUid = null, test = false, force = false }) {
+export async function runWeeklyDigest(db, { dateKey, onlyUid = null, test = false, force = false, precomputed = null }) {
   const summary = { users: 0, sent: 0, skipped: {}, errors: [] };
   const skip = (why) => { summary.skipped[why] = (summary.skipped[why] ?? 0) + 1; };
 
@@ -307,17 +307,22 @@ export async function runWeeklyDigest(db, { dateKey, onlyUid = null, test = fals
       if (!test && !force) {
         claimed = await db.runTransaction(async (tx) => {
           const s = await tx.get(stateRef);
-          if (s.exists && s.data().sentFor === dateKey) return false;
+          const st = s.exists ? s.data() : {};
+          if (st.sentOk === dateKey) return false; // really delivered
+          // Another run claimed it a moment ago and is still working: leave it. A claim that was
+          // never completed (the run was killed or timed out) is retried after 10 minutes.
+          if (st.sentFor === dateKey && Date.now() - (st.claimedAt ?? 0) < 10 * 60_000) return false;
           tx.set(stateRef, { sentFor: dateKey, claimedAt: Date.now() }, { merge: true });
           return true;
         });
         if (!claimed) { skip('already sent this Saturday'); continue; }
       }
 
-      const digest = await computeDigest({ ...data, name: data.name || user.displayName || '' });
+      const digest = precomputed?.get(uid) ?? (await computeDigest({ ...data, name: data.name || user.displayName || '' }));
       const mail = buildEmail(digest);
       await sendMail({ to: user.email, subject: mail.subject, html: mail.html, text: mail.text });
       summary.sent++;
+      if (claimed) await stateRef.set({ sentOk: dateKey }, { merge: true }).catch(() => {});
     } catch (err) {
       summary.errors.push({ uid: uid.slice(0, 6), error: String(err?.message ?? err).slice(0, 300) });
       if (claimed) await stateRef.set({ sentFor: null }, { merge: true }).catch(() => {});

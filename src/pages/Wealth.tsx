@@ -2282,14 +2282,16 @@ function AssetsTab({
         title="Assets"
         description={
           <HeaderPills
+            singleLine
             pills={[
               { value: activeAssetCount, label: activeAssetCount === 1 ? 'asset' : 'assets' },
-              { value: privacyMode ? PRIVACY_DOTS : formatPreciseCurrency(totalCurrentValue), label: 'current value', tone: 'neutral' },
+              { value: privacyMode ? PRIVACY_DOTS : formatPreciseCurrency(totalCurrentValue), label: 'current value', shortLabel: 'value', tone: 'neutral' },
               ...(totalInvested > 0
                 ? [
                     {
                       value: privacyMode ? PRIVACY_DOTS : `${rawSignedCurrency(totalPnl, 'INR', 0)} (${rawPercentMagnitude(totalPnlPercent)})`,
                       label: 'overall P&L',
+                      shortLabel: 'P&L',
                       tone: (totalPnl >= 0 ? 'brand' : 'red') as 'brand' | 'red',
                       valueTone: (totalPnl >= 0 ? 'positive' : 'negative') as 'positive' | 'negative',
                     },
@@ -9407,6 +9409,7 @@ function PerformsTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
         description={
           count > 0 ? (
             <HeaderPills
+              singleLine
               pills={[
                 { value: count, label: 'tracked today', tone: 'neutral' },
                 { value: bestAll.length, label: 'up', tone: 'brand', valueTone: 'positive' },
@@ -9446,6 +9449,7 @@ function AnalyticsTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
         description={
           allocItems.length > 0 ? (
             <HeaderPills
+              singleLine
               pills={[
                 { value: allocItems.length, label: allocItems.length === 1 ? 'holding' : 'holdings' },
                 { value: maskPreciseAmount(totalValue, currency, privacyMode), label: 'analysed', tone: 'neutral' },
@@ -9479,6 +9483,7 @@ function AllocationTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) 
         description={
           categories.length > 0 ? (
             <HeaderPills
+              singleLine
               pills={[
                 { value: categories.length, label: categories.length === 1 ? 'category' : 'categories' },
                 { value: maskPreciseAmount(allocTotal, currency, privacyMode), label: 'allocated', tone: 'neutral' },

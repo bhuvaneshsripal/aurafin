@@ -54,7 +54,7 @@ function LivePrice({ value }: { value: number }) {
 function renderItems(quotes: IndexQuote[] | null | undefined, resetWindow = false) {
   return ORDER.map(({ key, name }) => {
     const q = Array.isArray(quotes) ? quotes.find((x) => x.key === key) : undefined;
-    if (Array.isArray(quotes) && !q) return null; // index unavailable — skip rather than show a dash
+    // An index with no level yet still shows its name with a dash, so NIFTY, SENSEX and BANKNIFTY are always all there.
     const reset = resetWindow && !!q && isStaleIndexQuote(q);
     const change = reset ? 0 : q?.previousClose !== undefined ? q.price - q.previousClose : undefined;
     const pct = reset ? 0 : change !== undefined && q?.previousClose ? (change / q.previousClose) * 100 : undefined;

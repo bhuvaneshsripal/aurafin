@@ -53,6 +53,15 @@
   "functions": {
     "api/market/valuation.js": {
       "maxDuration": 30
+    },
+    "api/push/send.js": {
+      "maxDuration": 60
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/push/send?digest=1",
+      "schedule": "0 5 * * 6"
+    }
+  ]
 }

@@ -1,11 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useRegisterSW } from 'virtual:pwa-register/react';
-import { X } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { useExitPresence } from '../hooks/useExitPresence';
 import { useUpdateStore } from '../store/updateStore';
 import { useSwipeDismiss } from '../hooks/useSwipeDismiss';
 import { fetchDeployedBuildId, startUpdateChecks } from '../utils/updateChecks';
+import { hardRefresh } from '../utils/hardRefresh';
 
 const DISMISSED_KEY = 'aurafin-dismissed-update';
 function readDismissed(): string | null {
@@ -31,13 +31,11 @@ function SparkleIcon({ size = 26 }: { size?: number }) {
 }
 
 /** Top notice shown when a newer version of the app has been deployed.
- *  It only informs: there is no update button here. Tapping the message opens
- *  Settings > New version, which is the one place the update is applied, so
- *  nothing changes under the user mid-task. The app checks for a new deploy every 10 seconds while it is
- *  on screen and immediately whenever it comes back to the foreground (see
- *  utils/updateChecks). */
+ *  Two buttons: "Update" installs it right here and reloads onto the page you are on (your data and
+ *  login are untouched), and "Later" puts the notice away until a different build is deployed. The
+ *  app checks for a new deploy every 10 seconds while it is on screen and immediately whenever it
+ *  comes back to the foreground (see utils/updateChecks). */
 export default function UpdateBanner() {
-  const navigate = useNavigate();
   // True as soon as the version ping sees a newer deploy, before the new service worker has finished installing.
   const [stale, setStale] = useState(false);
   // Which deployed build the notice is about, and which one the user already dismissed.
@@ -45,6 +43,8 @@ export default function UpdateBanner() {
   const [deployedId, setDeployedId] = useState<string | null>(null);
   const [idReady, setIdReady] = useState(false);
   const [dismissedId, setDismissedId] = useState<string | null>(readDismissed);
+  const [updating, setUpdating] = useState(false);
+  const [updateFailed, setUpdateFailed] = useState(false);
   const stopChecksRef = useRef<(() => void) | null>(null);
   const {
     needRefresh: [needRefresh],
@@ -130,10 +130,17 @@ export default function UpdateBanner() {
 
   if (!mounted) return null;
 
-  // Updating happens only from the What's new page.
-  const openSettings = () => {
-    dismiss();
-    navigate('/whats-new');
+  // Installs the new version right from the notice and stays on the current page.
+  const updateNow = () => {
+    if (updating) return;
+    setUpdating(true);
+    setUpdateFailed(false);
+    void hardRefresh({ keepPage: true }).then((ok) => {
+      if (!ok) {
+        setUpdating(false);
+        setUpdateFailed(true); // offline / server unreachable: nothing was cleared, try again later
+      }
+    });
   };
 
   return (
@@ -158,26 +165,31 @@ export default function UpdateBanner() {
         >
           <SparkleIcon size={26} />
         </span>
-        {/* Tapping the message goes to Settings, where the update is applied. */}
-        <button
-          type="button"
-          onClick={openSettings}
-          aria-label="Open Settings to update"
-          className="min-w-0 flex-1 text-left"
-        >
+        <div className="min-w-0 flex-1">
           <p className="text-[15px] font-bold leading-tight text-[#0b2420] dark:text-white">New AuraFin update</p>
           <p className="text-[12.5px] leading-snug text-[#5b6a80] dark:text-slate-400 mt-1">
-            Open Settings to update
+            {updateFailed ? "Couldn't update. Check your connection and try again." : 'A new version is ready.'}
           </p>
-        </button>
-        <button
-          type="button"
-          onClick={dismiss}
-          aria-label="Dismiss"
-          className="tap-scale shrink-0 h-8 w-8 inline-flex items-center justify-center rounded-lg text-[#6b7a90] hover:text-[#0b2420] dark:hover:text-white transition-colors"
-        >
-          <X size={20} strokeWidth={1.75} />
-        </button>
+          <div className="mt-2.5 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={updateNow}
+              disabled={updating}
+              className="tap-scale inline-flex h-9 items-center justify-center gap-1.5 rounded-full bg-[#0a9a4b] px-5 text-[13.5px] font-semibold text-white shadow-sm hover:bg-[#088a43] disabled:opacity-70 transition-colors"
+            >
+              {updating && <RefreshCw size={14} className="animate-spin" />}
+              {updating ? 'Updating…' : 'Update'}
+            </button>
+            <button
+              type="button"
+              onClick={dismiss}
+              disabled={updating}
+              className="tap-scale inline-flex h-9 items-center justify-center rounded-full border border-[#d5e0db] dark:border-white/15 px-5 text-[13.5px] font-semibold text-[#3d4b5f] dark:text-slate-200 hover:bg-[#f2f6f4] dark:hover:bg-white/5 disabled:opacity-60 transition-colors"
+            >
+              Later
+            </button>
+          </div>
+        </div>
       </div>
     </div>
     </>

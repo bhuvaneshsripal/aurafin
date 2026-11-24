@@ -419,13 +419,14 @@ export default function Dashboard() {
       <PageHeader title="Overview" />
 
       {/* KPI strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-[1.25fr_1fr_1fr_1fr] gap-3 sm:gap-4">
         {/* Full-width on phones so Net worth gets its own row; on desktop it
            sits in the four-column strip like the other cards. */}
-        <div className="col-span-2 lg:col-span-2">
+        <div className="col-span-2 lg:col-span-1">
           <StatCard
             dense
             hero
+            compact
             label="Net worth"
             loading={!ready}
             value={money(hasWealth ? netWorthShown : 0)}
@@ -436,12 +437,14 @@ export default function Dashboard() {
         </div>
         <StatCard
           dense
+          medium
           label="Total invested"
           loading={!ready}
           value={money(hasWealth ? investedShown : 0)}
         />
         <StatCard
           dense
+          medium
           label="Profit / loss"
           loading={!ready}
           deltaInCorner
@@ -457,6 +460,7 @@ export default function Dashboard() {
         <div className="col-span-2 lg:col-span-1">
           <StatCard
             dense
+            medium
             label={
               <span className="inline-flex items-center gap-1">
                 XIRR

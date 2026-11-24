@@ -62,7 +62,8 @@ export function useDigestSync() {
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
-    if (!uid || guest || !enabled || !hydrated) return;
+    // Saved even when the digest email is off: the automatic Saturday net-worth snapshot uses it too.
+    if (!uid || guest || !hydrated) return;
     if (!assetsConfirmed || !liabilitiesConfirmed) return;
     // Linked SIPs are valued from NAV history: wait until that has been tried at least once.
     const hasSip = assets.some((a) => a.assetClass === 'sip');

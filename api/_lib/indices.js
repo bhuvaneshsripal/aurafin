@@ -22,25 +22,29 @@ const num = (v) => {
 };
 
 async function yahooQuote(symbol) {
-  // Yahoo sometimes refuses one host (rate limit) while the other answers, so try both.
-  for (const host of ['query1', 'query2']) {
-    try {
-      const res = await fetch(
-        `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1m&range=1d`,
-        { headers: { 'User-Agent': 'Mozilla/5.0' } }
-      );
-      if (!res.ok) continue;
-      const result = (await res.json())?.chart?.result?.[0];
-      const meta = result?.meta;
-      const price = num(meta?.regularMarketPrice);
-      if (price === undefined) continue;
-      // Today's opening level = first 1-minute candle's open (lets the app
-      // back-fill "Open" even if it wasn't running at 9:15).
-      const opens = result?.indicators?.quote?.[0]?.open;
-      const open = Array.isArray(opens) ? num(opens.find((v) => num(v) !== undefined)) : undefined;
-      return { price, previousClose: num(meta?.chartPreviousClose) ?? num(meta?.previousClose), open };
-    } catch {
-      /* try the next host */
+  // Yahoo sometimes refuses one host (rate limit) or one request shape while another answers, so try
+  // both hosts, each with the 1-minute chart (gives today's open) and then a plain daily chart.
+  const shapes = ['interval=1m&range=1d', 'interval=1d&range=5d'];
+  for (const shape of shapes) {
+    for (const host of ['query1', 'query2']) {
+      try {
+        const res = await fetch(
+          `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?${shape}`,
+          { headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' } }
+        );
+        if (!res.ok) continue;
+        const result = (await res.json())?.chart?.result?.[0];
+        const meta = result?.meta;
+        const price = num(meta?.regularMarketPrice);
+        if (price === undefined) continue;
+        // Today's opening level = first 1-minute candle's open (lets the app
+        // back-fill "Open" even if it wasn't running at 9:15).
+        const opens = result?.indicators?.quote?.[0]?.open;
+        const open = Array.isArray(opens) ? num(opens.find((v) => num(v) !== undefined)) : undefined;
+        return { price, previousClose: num(meta?.chartPreviousClose) ?? num(meta?.previousClose), open };
+      } catch {
+        /* try the next host / shape */
+      }
     }
   }
   return null;
@@ -49,6 +53,7 @@ async function yahooQuote(symbol) {
 // The top bar polls once a second per open tab; share one upstream fetch
 // between all callers inside that window instead of hammering Yahoo/NSE.
 const CACHE_MS = 1000;
+const lastKnown = new Map(); // key -> { at, quote }
 let cached = null; // { at, promise }
 
 /** Returns the indices that could be fetched (in display order), or null if none could. */
@@ -89,6 +94,17 @@ async function fetchIndicesUncached() {
       if (!results[i]) results[i] = await yahooBySymbols(idx.yahoo);
     })
   );
+
+  // Remember each good level; if a source hiccups for one index, reuse its last level (up to 12 hours
+  // old) instead of dropping it from the top bar. (Lasts as long as this server process does.)
+  const nowMs = Date.now();
+  INDICES.forEach((idx, i) => {
+    if (results[i]) lastKnown.set(idx.key, { at: nowMs, quote: results[i] });
+    else {
+      const k = lastKnown.get(idx.key);
+      if (k && nowMs - k.at < 12 * 3600_000) results[i] = k.quote;
+    }
+  });
 
   const out = INDICES.flatMap((idx, i) => (results[i] ? [{ key: idx.key, name: idx.name, ...results[i] }] : []));
   return out.length ? out : null;

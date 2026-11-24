@@ -129,3 +129,16 @@ Budget alerts use a fixed id per category / level / month, so each device shows 
 - Android: Settings > Apps > Chrome (or the installed Aurafin) > Battery > **Unrestricted**, and don't
   "force stop" the app. Some brands (Xiaomi, Oppo, Vivo, Samsung "sleeping apps") kill background push.
 - GitHub's 5-minute schedule is often 15+ minutes late. For on-time alerts also add a cron-job.org job.
+
+## Automatic weekly snapshot (Saturday 10:00 AM IST)
+The same Saturday run that sends the digest email first records a net-worth snapshot for every account,
+so the "Net worth over time" chart gets a point each week even if the app was never opened. It needs no
+extra setup (no SMTP, no new secrets) and works whether or not the digest email is switched on.
+
+- One snapshot per person per Saturday (`users/{uid}/snapshots/auto-<date>`). It is skipped if a snapshot
+  for that date already exists, so repeated runs never duplicate it. Opening the app later that day updates
+  the same entry with live values.
+- Values come from what the app last saved (`users/{uid}/meta/digestInput`): stocks / ETFs are re-priced at
+  the latest close; mutual funds, SIPs, gold and deposits are as of the last visit to the app.
+- Test it now: call `APP_URL/api/push/send?digest=1&force=1` with `Authorization: Bearer <CRON_SECRET>`.
+  The JSON reply has a `snapshots` section (`saved`, `skipped`, `errors`).

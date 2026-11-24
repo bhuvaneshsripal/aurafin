@@ -168,10 +168,10 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
         const seen = new Set<string>();
         const indian = new Set((inRes ?? []).map((r) => bareSymbol(r.symbol).toUpperCase()));
         const hits: StockHit[] = [
-          ...(inRes ?? []).slice(0, 5).map((r) => ({ symbol: r.symbol, name: r.name, market: 'IN' as const, exch: r.exchDisp })),
+          ...(inRes ?? []).slice(0, 6).map((r) => ({ symbol: r.symbol, name: r.name, market: 'IN' as const, exch: r.exchDisp })),
           ...(usRes ?? [])
             .filter((r) => !/\.(NS|BO)$/i.test(r.symbol) && !indian.has(r.symbol.toUpperCase()))
-            .slice(0, 3)
+            .slice(0, 4)
             .map((r) => ({ symbol: r.symbol, name: r.name, market: 'US' as const, exch: r.exchDisp })),
         ].filter((h) => {
           const k = `${h.market}:${bareSymbol(h.symbol).toUpperCase()}`;
@@ -182,12 +182,11 @@ export default function GlobalSearch({ variant = 'icon' }: { variant?: 'icon' | 
         setStocks(hits);
         setStocksState('done');
       };
+      // Indian matches always come first and are shown the moment they arrive; the other
+      // markets are then added below them (never instead of them, and never above them).
       const inRes = await inP;
       if (cancelled) return;
-      if (inRes !== null && inRes.length >= 3) {
-        publish(inRes, []);
-        return;
-      }
+      if (inRes !== null && inRes.length > 0) publish(inRes, []);
       const usRes = await usP;
       if (cancelled) return;
       publish(inRes, usRes);

@@ -24,6 +24,10 @@ export interface StatCardProps {
   loading?: boolean;
   /** Larger value for the one number the page is about (Net worth). */
   hero?: boolean;
+  /** Net worth card: a slightly smaller hero number so the strip looks balanced. */
+  compact?: boolean;
+  /** Mid-size card: a bigger value (and padding) on desktop than a plain `dense` tile. */
+  medium?: boolean;
   /** Phones: smaller padding/value and no sublabel, so a strip of KPIs stays short. */
   dense?: boolean;
   /** When set, a small arrow next to the label calls this on click. The
@@ -44,9 +48,9 @@ const cornerTones = {
 };
 
 /** KPI tile. Values are never truncated — long ₹ figures wrap instead of being cut off. */
-export default function StatCard({ label, value, tone = 'default', delta, deltaInCorner, cornerLabel, cornerTone = 'neutral', sublabel, icon, loading, dense, hero, onToggle, toggled, trend, className }: StatCardProps) {
+export default function StatCard({ label, value, tone = 'default', delta, deltaInCorner, cornerLabel, cornerTone = 'neutral', sublabel, icon, loading, dense, hero, compact, medium, onToggle, toggled, trend, className }: StatCardProps) {
   return (
-    <Card padding="md" className={cn('h-full', dense && (hero ? '!p-5 sm:!p-6' : '!p-3 sm:!p-5'), className)}>
+    <Card padding="md" className={cn('h-full', dense && (hero ? '!p-5 sm:!p-6' : medium ? '!p-3 sm:!p-6' : '!p-3 sm:!p-5'), className)}>
       <div className="flex items-center justify-between gap-2 min-h-6">
         <span className="text-[13px] font-medium text-muted">{label}</span>
         {onToggle && (
@@ -81,7 +85,15 @@ export default function StatCard({ label, value, tone = 'default', delta, deltaI
           <span
             className={cn(
               'font-numeric leading-7 font-semibold tracking-tight break-words animate-value-in',
-              hero ? 'text-[32px] leading-9 sm:text-[38px] sm:leading-[44px] sm:tracking-[-0.02em]' : dense ? 'text-lg sm:text-[22px]' : 'text-xl sm:text-[22px]',
+              hero
+                ? compact
+                  ? 'text-[28px] leading-9 sm:text-[30px] sm:leading-[38px] sm:tracking-[-0.02em]'
+                  : 'text-[32px] leading-9 sm:text-[38px] sm:leading-[44px] sm:tracking-[-0.02em]'
+                : medium
+                  ? 'text-xl sm:text-[26px] sm:leading-8'
+                  : dense
+                    ? 'text-lg sm:text-[22px]'
+                    : 'text-xl sm:text-[22px]',
               tones[tone]
             )}
           >

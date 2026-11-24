@@ -10,7 +10,8 @@
 //   GET /api/push/send?weekly=1   Sunday 1 PM IST "update your bank balance" reminder
 //                                 (called by .github/workflows/weekly-balance-reminder.yml)
 //   GET /api/push/send?weekly=1&force=1   sends that reminder right now, for testing
-//   GET /api/push/send?digest=1   Saturday 10 AM IST weekly portfolio digest EMAIL (called by
+//   GET /api/push/send?digest=1   Saturday 10 AM IST weekly portfolio digest EMAIL + automatic weekly
+//                                 net-worth snapshot (called by
 //                                 .github/workflows/weekly-digest.yml; needs SMTP_USER / SMTP_PASS)
 //   GET /api/push/send?digest=1&force=1   sends the digest to everyone right now, for testing
 //
@@ -25,6 +26,7 @@ import { configureWebPush, initFirebaseAdmin } from '../_lib/pushEnv.js';
 import { fetchIndices } from '../_lib/indices.js';
 import { resolveQuote } from '../_lib/quote.js';
 import { runWeeklyDigest } from '../_lib/digest.js';
+import { runWeeklySnapshots } from '../_lib/weeklySnapshot.js';
 import { mailConfigured } from '../_lib/mail.js';
 
 export const config = { maxDuration: 60 };
@@ -40,7 +42,7 @@ const CLOSE = [15 * 60 + 30, 17 * 60];
 // Sunday reminder time: 1:00 PM IST. Runs up to 3 hours late (GitHub schedules can lag).
 const WEEKLY_AT = 13 * 60;
 const MARKET_HOURS = [9 * 60 + 15, 15 * 60 + 30];
-// Weekly digest email: Saturday 10:00 AM IST, may run up to 6 hours late (GitHub schedules can lag).
+// Weekly digest email: Saturday 10:00 AM IST, may run up to 12 hours late (GitHub schedules can lag or skip).
 const DIGEST_AT = 10 * 60;
 
 const fmt = (n) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -136,15 +138,28 @@ export default async function handler(req, res) {
     try {
       const force = !!req.query?.force;
       const { dateKey, weekday, mins } = istNow();
-      if (!force && (weekday !== 6 || mins < DIGEST_AT || mins >= DIGEST_AT + 360)) {
+      if (!force && (weekday !== 6 || mins < DIGEST_AT || mins >= DIGEST_AT + 720)) {
         return res.status(200).json({ skipped: 'not Saturday 10 AM IST' });
       }
+      // 1) Weekly net-worth snapshot for everyone: needs no mail settings, and a failure here
+      //    must never stop the emails below.
+      let snapshots = null;
+      let precomputed = null;
+      try {
+        const r = await runWeeklySnapshots(getDb(), { dateKey });
+        snapshots = r.summary;
+        precomputed = r.digests;
+      } catch (err) {
+        console.error('weekly snapshot failed', err);
+        snapshots = { error: String(err?.message ?? err).slice(0, 300) };
+      }
+      // 2) Weekly digest email.
       if (!mailConfigured()) {
         console.error('digest: SMTP_USER / SMTP_PASS are not set on Vercel, then redeploy');
-        return res.status(500).json({ error: 'SMTP_USER / SMTP_PASS are not set' });
+        return res.status(500).json({ error: 'SMTP_USER / SMTP_PASS are not set', snapshots });
       }
-      const summary = await runWeeklyDigest(getDb(), { dateKey, force });
-      return res.status(summary.errors.length && !summary.sent ? 500 : 200).json(summary);
+      const summary = await runWeeklyDigest(getDb(), { dateKey, force, precomputed });
+      return res.status(summary.errors.length && !summary.sent ? 500 : 200).json({ ...summary, snapshots });
     } catch (err) {
       console.error('digest failed', err);
       return res.status(500).json({ error: String(err?.message ?? err) });

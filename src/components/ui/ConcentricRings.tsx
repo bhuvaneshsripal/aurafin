@@ -68,6 +68,12 @@ export default function ConcentricRings({
     return { rings: shown.map((i) => ({ ...i, pct: total > 0 ? (i.value / total) * 100 : 0 })), sum: total };
   }, [items, maxRings]);
 
+  // Hooks must run on every render, so these sit above the early return below (they used to sit under
+  // it, which crashed the chart when it went from "no data" to "has data").
+  const touchDownAt = useRef(0);
+  const releaseTimer = useRef(0);
+  useEffect(() => () => window.clearTimeout(releaseTimer.current), []);
+
   if (rings.length === 0 || sum <= 0) return null;
 
   // Geometry in a fixed 200×200 viewBox; the SVG scales to `size`.
@@ -89,9 +95,6 @@ export default function ConcentricRings({
   // Touch: the highlighted ring shows while the finger is on it and clears when
   // the finger lifts (a quick tap keeps it for a moment). A mouse already clears
   // it on mouse-leave.
-  const touchDownAt = useRef(0);
-  const releaseTimer = useRef(0);
-  useEffect(() => () => window.clearTimeout(releaseTimer.current), []);
   const touchPress = (e: ReactPointerEvent, key: string) => {
     if (e.pointerType === 'mouse') return;
     window.clearTimeout(releaseTimer.current);
