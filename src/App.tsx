@@ -65,6 +65,8 @@ import type { Asset, Liability, Goal, Transaction, Snapshot, BudgetItem, Financi
 const Login = lazyWithRetry(() => import('./pages/Login'));
 const LegalPage = lazyWithRetry(() => import('./pages/LegalPage'));
 const PublicCalculators = lazyWithRetry(() => import('./pages/PublicCalculators'));
+const ResetPinPage = lazyWithRetry(() => import('./pages/ResetPinPage'));
+const ResetPasswordPage = lazyWithRetry(() => import('./pages/ResetPasswordPage'));
 const dashboardImport = () => import('./pages/Dashboard');
 const Dashboard = lazyWithRetry(dashboardImport);
 // Start downloading the default route's code right away, in parallel with
@@ -406,6 +408,9 @@ export default function App() {
   // Public policy pages: reachable signed-out (and by Google's verification bot).
   const legalPath = window.location.pathname.replace(/\/+$/, '');
   const legalKind = legalPath === '/privacy' ? 'privacy' : legalPath === '/terms' ? 'terms' : null;
+  // "Reset PIN" / "Reset Password" buttons in the emails: work in any browser, signed in or not.
+  const resetPinPage = legalPath === '/reset-pin';
+  const resetPasswordPage = legalPath === '/reset-password';
   const user = useAuthStore((s) => s.user);
   const loading = useAuthStore((s) => s.loading);
   const init = useAuthStore((s) => s.init);
@@ -429,10 +434,12 @@ export default function App() {
 
   useEffect(() => {
     // Signed-out or legal pages have no Overview to wait for: drop the shell straight away.
-    if (legalKind || (!loading && !user)) hideBootShell();
-  }, [legalKind, loading, user]);
+    if (legalKind || resetPinPage || resetPasswordPage || (!loading && !user)) hideBootShell();
+  }, [legalKind, resetPinPage, resetPasswordPage, loading, user]);
 
   if (legalKind) return <Suspense fallback={null}><LegalPage kind={legalKind} /></Suspense>;
+  if (resetPinPage) return <Suspense fallback={null}><ResetPinPage /></Suspense>;
+  if (resetPasswordPage) return <Suspense fallback={null}><ResetPasswordPage /></Suspense>;
 
   if (loading) {
     return null;

@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { useUiStore } from '../store/uiStore';
 import { toast } from '../store/toastStore';
 import { LOGO_SRC } from '../config/logo';
+import ForgotPinPanel from './ForgotPinPanel';
 
 const KEY_CLASS =
   'aspect-square w-full rounded-2xl border border-line bg-surface shadow-xs select-none hover:bg-surface-hover transition-colors duration-100 focus-visible:outline-2 focus-visible:outline-brand-600';
@@ -15,6 +16,10 @@ export default function LockScreen() {
   const unlock = useAppLockStore((s) => s.unlock);
   const [pin, setPinInput] = useState('');
   const [shake, setShake] = useState(false);
+  // "Forgot PIN?" opens the email-code reset in place of the keypad. Guests have no email, so they don't get it.
+  const user = useAuthStore((s) => s.user);
+  const canReset = !!user?.email && (user as { isAnonymous?: boolean }).isAnonymous !== true;
+  const [resetOpen, setResetOpen] = useState(false);
   const [, setChecking] = useState(false);
   // Refs mirror the state so very fast typing never reads a stale value
   // (two quick taps used to land in the same render and drop a digit).
@@ -183,12 +188,14 @@ export default function LockScreen() {
       setPin('');
       setShake(false);
       busyRef.current = false;
+    } else {
+      setResetOpen(false);
     }
   }, [locked, setPin]);
 
   // Physical keyboard support (desktop/laptop)
   useEffect(() => {
-    if (!locked) return;
+    if (!locked || resetOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key.length === 1 && e.key >= '0' && e.key <= '9') {
@@ -205,9 +212,17 @@ export default function LockScreen() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [locked, pressDigit, pressBackspace, submitPin, animateKey]);
+  }, [locked, resetOpen, pressDigit, pressBackspace, submitPin, animateKey]);
 
   if (!shouldRender) return null;
+
+  if (resetOpen) {
+    return (
+      <div className="font-luxury fixed inset-0 z-[100] flex flex-col justify-center bg-page px-6 py-8 overflow-y-auto overflow-x-hidden">
+        <ForgotPinPanel onBack={() => setResetOpen(false)} />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -287,7 +302,9 @@ export default function LockScreen() {
           ))}
         </div>
 
-        {pinAttemptError && (
+        {/* The red shake already says "wrong PIN", so the "Incorrect PIN. N attempts left." line is not shown.
+            Other messages (low network, signing out after too many tries) still are. */}
+        {pinAttemptError && !pinAttemptError.startsWith('Incorrect PIN') && (
           <p role="alert" className="font-luxury text-sm text-red-500 mt-3">
             {pinAttemptError}
           </p>
@@ -353,6 +370,16 @@ export default function LockScreen() {
             <Delete size={22} />
           </button>
         </div>
+
+        {canReset && (
+          <button
+            type="button"
+            onClick={() => setResetOpen(true)}
+            className="mt-6 text-sm font-medium text-brand-600 hover:underline focus-visible:outline-2 focus-visible:outline-brand-600"
+          >
+            Forgot PIN?
+          </button>
+        )}
       </div>
     </div>
   );

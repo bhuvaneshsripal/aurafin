@@ -24,6 +24,7 @@ import webpush from 'web-push';
 import { getFirestore } from 'firebase-admin/firestore';
 import { configureWebPush, initFirebaseAdmin } from '../_lib/pushEnv.js';
 import { fetchIndices } from '../_lib/indices.js';
+import { MARKET_HOLIDAYS } from '../_lib/marketHolidays.js';
 import { resolveQuote } from '../_lib/quote.js';
 import { runWeeklyDigest } from '../_lib/digest.js';
 import { runWeeklySnapshots } from '../_lib/weeklySnapshot.js';
@@ -222,6 +223,7 @@ export default async function handler(req, res) {
     }
 
     if (weekday > 5) return res.status(200).json({ ...summary, skipped: 'weekend' });
+    if (MARKET_HOLIDAYS.has(dateKey)) return res.status(200).json({ ...summary, skipped: 'exchange holiday' });
     if (mins < PRE_OPEN[0] || mins >= CLOSE[1]) return res.status(200).json({ ...summary, skipped: 'outside market window' });
     if (everyone.length === 0) return res.status(200).json({ ...summary, skipped: 'no subscribed devices' });
 

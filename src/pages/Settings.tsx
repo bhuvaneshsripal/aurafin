@@ -1,14 +1,7 @@
 import { useState, useEffect, useRef, Suspense, type ReactNode } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
-import {
-  updatePassword,
-  linkWithCredential,
-  reauthenticateWithCredential,
-  sendPasswordResetEmail,
-  EmailAuthProvider,
-} from 'firebase/auth';
-import { ArrowLeft, ChevronRight, Database, FileText, KeyRound, LockKeyhole, RefreshCw, Share2, SlidersHorizontal, Sparkles, UserRound, Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, HelpCircle, Eye, EyeOff, Minus, Type, Maximize, Pencil, Download, Upload, Mail, Bell, Keyboard } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Database, FileText, KeyRound, LockKeyhole, RefreshCw, Share2, SlidersHorizontal, Sparkles, UserRound, Lock, Smartphone, Users, Check, ShieldCheck, Trash2, AlertTriangle, Plus, Eye, EyeOff, Minus, Type, Maximize, Pencil, Download, Upload, Mail, Bell, Keyboard } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { SHORTCUT_GROUPS } from '../config/shortcuts';
 import { useAvatarStore } from '../store/avatarStore';
@@ -22,21 +15,15 @@ import { CLIENT_PROJECT_ID, enablePushNow, pushBlocker, sendTestPush, type PushT
 import { useNotificationPreferencesStore, HOLDING_MOVE_OPTIONS, type NotificationChannelKey } from '../store/notificationPreferencesStore';
 import InfoTip from '../components/ui/InfoTip';
 import PinBoxInput, { type PinBoxInputHandle } from '../components/PinBoxInput';
-import { auth } from '../firebase/config';
 import CurrencySelect from '../components/CurrencySelect';
 import { fetchFxRate } from '../utils/marketPrices';
 import { CURRENCY_SYMBOLS } from '../utils/currency';
 import { loadImageFromFile } from '../utils/imageResize';
 import { formatDateTime } from '../utils/date';
 import { sendTestDigest } from '../utils/weeklyDigestApi';
+import { sendResetLink } from '../utils/pinReset';
 import AvatarCropModal from '../components/AvatarCropModal';
 import BasicDetailsCard from '../components/BasicDetailsCard';
-import {
-  SECURITY_QUESTIONS,
-  saveSecurityAnswer,
-  getSecurityQuestion,
-  verifySecurityAnswer,
-} from '../utils/securityQuestion';
 import { deleteAllUserData, upsertDoc, removeDoc, saveAvatar, assignOrphanDataToProfile, reassignProfileData, setDefaultProfile, bulkUpsertDocs } from '../hooks/useFirestoreSync';
 import { useAssetsStore } from '../store/assetsStore';
 import { useLiabilitiesStore } from '../store/liabilitiesStore';
@@ -201,301 +188,72 @@ function ProfileHeader() {
 
 function SetPasswordCard() {
   const user = useAuthStore((s) => s.user);
-  // `user` may briefly be the cached optimistic profile (uid/email only)
-  // right after a refresh, before Firebase confirms the full session and
-  // fills in fields like providerData. Fall back to `false` until then -
-  // it self-corrects the moment onAuthStateChanged resolves.
+  // `user` may briefly be the cached optimistic profile (uid/email only) right after a refresh, before
+  // Firebase confirms the full session and fills in providerData; it self-corrects once that resolves.
   const hasPasswordProvider = (user && 'providerData' in user ? user.providerData : []).some(
     (p) => p.providerId === 'password'
   );
-
-  const [hasSecurityQuestion, setHasSecurityQuestion] = useState<boolean | null>(null);
-  const [mode, setMode] = useState<'form' | 'forgot' | 'forgot-sent'>('form');
-
-  const [oldPassword, setOldPassword] = useState('');
-  const [showOldPassword, setShowOldPassword] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [securityQuestion, setSecurityQuestion] = useState<string>(SECURITY_QUESTIONS[0]);
-  const [securityAnswer, setSecurityAnswer] = useState('');
-
-  const [forgotQuestion, setForgotQuestion] = useState('');
-  const [forgotAnswer, setForgotAnswer] = useState('');
-  const [forgotError, setForgotError] = useState('');
-  const [forgotStatus, setForgotStatus] = useState<'idle' | 'checking' | 'sending'>('idle');
-
-  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const [maskedEmail, setMaskedEmail] = useState('');
+  const [cooldown, setCooldown] = useState(0);
   const [error, setError] = useState('');
 
-  // Once a password is already set, check whether a recovery question was
-  // saved for it (older accounts may not have one yet) so "Forgot password?"
-  // only shows up when it'll actually work.
   useEffect(() => {
-    if (!hasPasswordProvider || !user) {
-      setHasSecurityQuestion(null);
-      return;
-    }
-    getSecurityQuestion(user.uid)
-      .then((q) => setHasSecurityQuestion(!!q))
-      .catch(() => setHasSecurityQuestion(false));
-  }, [hasPasswordProvider, user]);
+    if (cooldown <= 0) return;
+    const id = window.setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => window.clearTimeout(id);
+  }, [cooldown]);
 
-  // Firebase itself rejects anything under 6 characters server-side, so the
-  // client-side check has to match — otherwise the button looks "eligible"
-  // (every field filled in, nothing visibly wrong) but the save silently
-  // fails with a generic error once it reaches Firebase.
-  const lengthValid = newPassword.length >= 6;
-  const passwordsMatch = newPassword.length > 0 && newPassword === confirmPassword;
-  const oldPasswordOk = hasPasswordProvider ? oldPassword.length > 0 : true;
-  const securityAnswerOk = hasPasswordProvider ? true : securityAnswer.trim().length > 0;
-  const valid = lengthValid && passwordsMatch && oldPasswordOk && securityAnswerOk;
-
-  const save = async () => {
-    if (!auth.currentUser || !auth.currentUser.email) return;
-    if (!valid) {
-      // Give a specific reason instead of just doing nothing — a disabled
-      // button with no explanation reads as broken.
-      setError(
-        hasPasswordProvider && !oldPasswordOk
-          ? 'Enter your current password.'
-          : !lengthValid
-            ? 'New password must be at least 6 characters.'
-            : !passwordsMatch
-              ? 'New password and confirmation do not match.'
-              : !securityAnswerOk
-                ? 'Please answer the security question.'
-                : 'Please fill in all fields.'
-      );
-      return;
-    }
-    setStatus('saving');
+  const send = async () => {
+    if (state === 'sending') return;
+    setState('sending');
     setError('');
-    try {
-      if (hasPasswordProvider) {
-        // Re-authenticate with the old password first — this both proves
-        // it's really them and satisfies Firebase's "recent login" rule
-        // for changing a password, instead of forcing a full sign-out.
-        const oldCredential = EmailAuthProvider.credential(auth.currentUser.email, oldPassword);
-        await reauthenticateWithCredential(auth.currentUser, oldCredential);
-        await updatePassword(auth.currentUser, newPassword);
-      } else {
-        // Google-only account so far — link an email/password credential so
-        // they can also sign in with email + password from now on.
-        const credential = EmailAuthProvider.credential(auth.currentUser.email, newPassword);
-        await linkWithCredential(auth.currentUser, credential);
-        await saveSecurityAnswer(auth.currentUser.uid, securityQuestion, securityAnswer);
-        setHasSecurityQuestion(true);
-      }
-      setStatus('saved');
-      setOldPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setSecurityAnswer('');
-      setTimeout(() => setStatus('idle'), 2000);
-    } catch (err) {
-      setStatus('error');
-      const code = (err as { code?: string })?.code;
-      setError(
-        code === 'auth/invalid-credential' || code === 'auth/wrong-password'
-          ? 'Old password is incorrect.'
-          : code === 'auth/requires-recent-login'
-            ? 'Please sign out and sign in again before changing your password.'
-            : code === 'auth/credential-already-in-use' || code === 'auth/email-already-in-use'
-              ? 'This email is already linked to another sign-in method.'
-              : code === 'auth/weak-password'
-                ? 'That password is too weak. Use at least 6 characters.'
-                : 'Could not set password. Please try again.'
-      );
-    }
-  };
-
-  const openForgot = async () => {
-    if (!user) return;
-    setMode('forgot');
-    setForgotAnswer('');
-    setForgotError('');
-    const q = await getSecurityQuestion(user.uid);
-    setForgotQuestion(q ?? '');
-  };
-
-  const verifyForgotAnswer = async () => {
-    if (!user?.email || !forgotAnswer.trim()) return;
-    setForgotStatus('checking');
-    setForgotError('');
-    try {
-      const ok = await verifySecurityAnswer(user.uid, forgotAnswer);
-      if (!ok) {
-        setForgotError("That answer doesn't match. Try again.");
-        setForgotStatus('idle');
-        return;
-      }
-      setForgotStatus('sending');
-      await sendPasswordResetEmail(auth, user.email);
-      setMode('forgot-sent');
-    } catch {
-      setForgotError('Something went wrong. Please try again.');
-    } finally {
-      setForgotStatus('idle');
+    const res = await sendResetLink('password');
+    if (res.ok) {
+      setMaskedEmail(res.email ?? user?.email ?? 'your email');
+      setCooldown(res.cooldown ?? 60);
+      setState('sent');
+    } else {
+      setError(res.error ?? 'Could not send the email. Please try again.');
+      setState('idle');
     }
   };
 
   return (
     <Card>
-      <h2 className="text-sm font-semibold text-ink mb-4 flex items-center gap-1.5">
-        Set Password
-        <InfoTip>
-          {hasPasswordProvider
-            ? 'Update the password you use to sign in with email and password. Pick something you don’t use anywhere else.'
-            : 'Set a password so you can also sign in with email and password, in addition to Google. Your Google sign-in keeps working.'}
-        </InfoTip>
-      </h2>
+      <h2 className="text-sm font-semibold text-ink">{hasPasswordProvider ? 'Change Password' : 'Set Password'}</h2>
+      <p className="text-sm text-muted mt-1">
+        {hasPasswordProvider
+          ? 'We\u2019ll email you a link to choose a new password for signing in with email and password.'
+          : 'Set a password so you can also sign in with email and password, in addition to Google. We\u2019ll email you a link to choose it.'}
+      </p>
 
-      {mode === 'form' && (
-        <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {hasPasswordProvider && (
-              <div className="sm:col-span-2">
-                <label className="block text-xs text-muted mb-1.5">Current Password<RequiredMark /></label>
-                <div className="relative">
-                  <input
-                    type={showOldPassword ? 'text' : 'password'}
-                    value={oldPassword}
-                    onChange={(e) => setOldPassword(e.target.value)}
-                    placeholder="Enter your current password"
-                    className="w-full border border-line bg-white dark:bg-slate-800 text-ink rounded-lg pl-3 pr-10 py-2 text-sm placeholder:text-slate-600 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowOldPassword((v) => !v)}
-                    aria-label={showOldPassword ? 'Hide password' : 'Show password'}
-                    className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-600 hover:text-slate-600 dark:hover:text-slate-300"
-                  >
-                    {showOldPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-              </div>
-            )}
-            <div>
-              <label className="block text-xs text-muted mb-1.5">New Password<RequiredMark /></label>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Min 6 characters"
-                className="w-full border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm placeholder:text-slate-600 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-muted mb-1.5">Confirm New Password<RequiredMark /></label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Re-enter new password"
-                className="w-full border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm placeholder:text-slate-600 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
-              />
-            </div>
-
-            {!hasPasswordProvider && (
-              <>
-                <div>
-                  <label className="block text-xs text-muted mb-1.5">
-                    Security Question<RequiredMark />
-                  </label>
-                  <CustomSelect
-                    value={securityQuestion}
-                    onChange={setSecurityQuestion}
-                    className="w-full border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                    options={SECURITY_QUESTIONS.map((q) => ({ value: q, label: q }))}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-muted mb-1.5">Answer<RequiredMark /></label>
-                  <input
-                    value={securityAnswer}
-                    onChange={(e) => setSecurityAnswer(e.target.value)}
-                    placeholder="Your answer"
-                    className="w-full border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm placeholder:text-slate-600 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  />
-                  <p className="text-xs text-muted mt-1.5">
-                    Used to recover your password later if you forget it.
-                  </p>
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="flex items-center gap-4 mt-4">
-            <button
-              onClick={save}
-              disabled={status === 'saving'}
-              className="bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium"
-            >
-              {status === 'saving' ? 'Setting...' : status === 'saved' ? 'Password Set' : 'Set Password'}
-            </button>
-            {hasPasswordProvider && hasSecurityQuestion && (
-              <button
-                onClick={openForgot}
-                className="text-xs text-muted font-medium hover:text-brand-600 dark:hover:text-brand-400"
-              >
-                Forgot your password?
-              </button>
-            )}
-          </div>
-          {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
-        </>
-      )}
-
-      {mode === 'forgot' && (
-        <div className="max-w-sm">
-          <div className="flex items-start gap-2 mb-4">
-            <HelpCircle size={16} className="text-slate-600 shrink-0 mt-0.5" />
-            <p className="text-sm text-ink-2">{forgotQuestion}</p>
-          </div>
-          <label className="block text-xs text-muted mb-1.5">Your Answer<RequiredMark /></label>
-          <input
-            value={forgotAnswer}
-            onChange={(e) => setForgotAnswer(e.target.value)}
-            placeholder="Answer"
-            autoFocus
-            className="w-full border border-line bg-white dark:bg-slate-800 text-ink rounded-lg px-3 py-2 text-sm placeholder:text-slate-600 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
-          />
-          {forgotError && <p className="text-xs text-red-500 mt-2">{forgotError}</p>}
-          <div className="flex gap-3 mt-4">
-            <button
-              onClick={() => setMode('form')}
-              className="border border-line text-ink-2 px-4 py-2 rounded-lg text-sm font-medium hover:bg-surface-hover"
-            >
-              Back
-            </button>
-            <button
-              onClick={verifyForgotAnswer}
-              disabled={!forgotAnswer.trim() || forgotStatus !== 'idle'}
-              className="bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium"
-            >
-              {forgotStatus === 'idle' ? 'Verify' : 'Checking...'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {mode === 'forgot-sent' && (
-        <div className="max-w-sm">
-          <div className="flex items-center gap-1.5 mb-2">
-            <ShieldCheck size={16} className="text-brand-600" />
-            <span className="text-sm font-medium text-brand-600">Reset link sent</span>
-          </div>
-          <p className="text-sm text-slate-600 dark:text-slate-300">
-            Check <strong>{user?.email}</strong> for a link to set a new password.
+      {state === 'sent' ? (
+        <div className="mt-4">
+          <p className="text-[15px] text-ink">
+            Check your inbox for a link to set your password. It expires in 1 hour.
           </p>
+          <p className="text-xs text-muted mt-1">Sent to {maskedEmail}. Check spam if you don&apos;t see it.</p>
           <button
-            onClick={() => setMode('form')}
-            className="mt-4 border border-line text-ink-2 px-4 py-2 rounded-lg text-sm font-medium hover:bg-surface-hover"
+            type="button"
+            disabled={cooldown > 0}
+            onClick={() => void send()}
+            className="mt-3 text-sm font-medium text-brand-600 disabled:text-muted disabled:cursor-not-allowed"
           >
-            Back
+            {cooldown > 0 ? `Email me again in ${cooldown}s` : 'Email me again'}
           </button>
         </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => void send()}
+          disabled={state === 'sending'}
+          className="mt-4 bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white px-5 py-2 rounded-lg text-sm font-medium"
+        >
+          {state === 'sending' ? 'Sending…' : 'Email me a link'}
+        </button>
       )}
+      {error && <p role="alert" className="text-xs text-red-500 mt-2">{error}</p>}
     </Card>
   );
 }

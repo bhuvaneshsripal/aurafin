@@ -3,7 +3,7 @@ import { useAssetsStore } from '../store/assetsStore';
 import { useAuthStore } from '../store/authStore';
 import { useAlertsStore, type AlertKind } from '../store/alertsStore';
 import { resolveLivePrice, resolvePreviousClose, useLivePricesStore } from '../store/livePricesStore';
-import { getIstDateInfo, getIstTimeOfDay, isMarketOpen } from '../utils/marketHours';
+import { getIstDateInfo, getIstTimeOfDay, isMarketOpen, MARKET_HOLIDAYS } from '../utils/marketHours';
 import { formatCurrency } from '../utils/currency';
 import { fetchIndexQuotes, getRecentIndexQuotes, type IndexQuote } from '../utils/indexQuotes';
 import { drainPushInbox } from '../utils/pushInbox';
@@ -257,9 +257,10 @@ export function useMarketAlerts() {
         const { dateKey, isoWeekday } = getIstDateInfo();
         const { hour, minute } = getIstTimeOfDay();
         const mins = hour * 60 + minute;
-        // No session on weekends (exchange holidays also keep prices flat,
-        // so move alerts naturally stay quiet).
-        if (isoWeekday > 5) return;
+        // No session on weekends or listed NSE/BSE holidays. Without the holiday
+        // check the 3:30 PM "Market closed" / catch-up "Market update" alerts fired
+        // on holidays, showing the previous trading day's move as if it were today's.
+        if (isoWeekday > 5 || MARKET_HOLIDAYS.has(dateKey)) return;
         const inWin = (w: number[]) => mins >= w[0] && mins < w[1];
         const adv = useNotificationPreferencesStore.getState().advanced;
         const sessionOn = { pre: adv.sessionPreOpen, open: adv.sessionOpen, close: adv.sessionClose };

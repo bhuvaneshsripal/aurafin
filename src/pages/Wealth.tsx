@@ -8254,16 +8254,12 @@ function LiabilitiesTab({
       <PageHeader
         title="Liabilities"
         description={
-          <span className="flex flex-wrap items-center gap-2 mt-1.5">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-1 text-xs text-muted">
-              <span className="h-1.5 w-1.5 rounded-full bg-brand-600 dark:bg-brand-400" />
-              <b className="font-semibold text-ink">{liabilities.length}</b> active
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-1 text-xs text-muted">
-              <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-              <b className="font-semibold text-ink">{formatPreciseCurrency(liabilities.reduce((s, l) => s + l.outstanding, 0))}</b> outstanding
-            </span>
-          </span>
+          <HeaderPills
+            pills={[
+              { value: liabilities.length, label: 'active' },
+              { value: formatPreciseCurrency(liabilities.reduce((s, l) => s + l.outstanding, 0)), label: 'outstanding', tone: 'red' },
+            ]}
+          />
         }
         actions={
           <Button onClick={onAdd} leftIcon={<Plus size={16} />} className="w-full sm:w-auto">
@@ -8824,15 +8820,12 @@ function NetWorthTab({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
         title="Net worth"
         description={
           snapshots.length > 0 ? (
-            <span className="flex flex-wrap items-center gap-2 mt-1.5">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-1 text-xs text-muted">
-                <span className="h-1.5 w-1.5 rounded-full bg-brand-600 dark:bg-brand-400" />
-                <b className="font-semibold text-ink">{sortedAsc.length}</b> snapshot{sortedAsc.length === 1 ? '' : 's'}
-              </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-1 text-xs text-muted">
-                Tracking since <b className="font-semibold text-ink">{trackingSinceLabel}</b>
-              </span>
-            </span>
+            <HeaderPills
+              pills={[
+                { value: sortedAsc.length, label: sortedAsc.length === 1 ? 'snapshot' : 'snapshots' },
+                { prefix: 'Tracking since', value: trackingSinceLabel, noDot: true },
+              ]}
+            />
           ) : (
             'Everything you own and owe, in one view.'
           )
